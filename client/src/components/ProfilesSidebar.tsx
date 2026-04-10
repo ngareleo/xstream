@@ -1,6 +1,6 @@
 import { Box, Text } from "@chakra-ui/react";
 import { useNovaEventing } from "@nova/react";
-import { type FC, type MouseEvent } from "react";
+import React, { type FC, type MouseEvent } from "react";
 import { graphql, useFragment } from "react-relay";
 
 import type { ProfilesSidebar_library$key } from "../relay/__generated__/ProfilesSidebar_library.graphql.js";

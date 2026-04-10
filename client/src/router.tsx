@@ -1,5 +1,5 @@
 import { Box, Spinner } from "@chakra-ui/react";
-import { lazy, Suspense } from "react";
+import React, { lazy, Suspense } from "react";
 import { createBrowserRouter } from "react-router-dom";
 
 const ProfilesPage = lazy(() =>

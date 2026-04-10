@@ -1,5 +1,5 @@
 import { Box, Button, Heading, Text } from "@chakra-ui/react";
-import { type FC, useState } from "react";
+import React, { type FC, useState } from "react";
 import { graphql, useLazyLoadQuery, useMutation } from "react-relay";
 
 import { LibraryGrid } from "../components/LibraryGrid.js";

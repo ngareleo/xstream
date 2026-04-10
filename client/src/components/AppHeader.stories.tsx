@@ -1,11 +1,11 @@
-import { MemoryRouter } from "react-router-dom";
 import type { Meta, StoryObj } from "storybook-react-rsbuild";
 
 import { AppHeader } from "./AppHeader.js";
 
 /**
  * AppHeader renders the top navigation bar with the logo and tab links.
- * Stories use MemoryRouter to control which route appears active.
+ * Stories use the global preview's MemoryRouter via `parameters.router.initialEntries`
+ * to control which tab appears active.
  */
 
 const meta: Meta<typeof AppHeader> = {
@@ -18,31 +18,13 @@ export default meta;
 type Story = StoryObj<typeof AppHeader>;
 
 export const ProfilesActive: Story = {
-  decorators: [
-    (Story) => (
-      <MemoryRouter initialEntries={["/"]}>
-        <Story />
-      </MemoryRouter>
-    ),
-  ],
+  parameters: { router: { initialEntries: ["/"] } },
 };
 
 export const SetupActive: Story = {
-  decorators: [
-    (Story) => (
-      <MemoryRouter initialEntries={["/setup"]}>
-        <Story />
-      </MemoryRouter>
-    ),
-  ],
+  parameters: { router: { initialEntries: ["/setup"] } },
 };
 
 export const LibraryActive: Story = {
-  decorators: [
-    (Story) => (
-      <MemoryRouter initialEntries={["/library"]}>
-        <Story />
-      </MemoryRouter>
-    ),
-  ],
+  parameters: { router: { initialEntries: ["/library"] } },
 };

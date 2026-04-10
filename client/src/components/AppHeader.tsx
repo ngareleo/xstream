@@ -1,5 +1,5 @@
 import { Box, Text } from "@chakra-ui/react";
-import { type FC } from "react";
+import React, { type FC } from "react";
 import { Link, useLocation } from "react-router-dom";
 
 interface NavTab {

@@ -1,17 +1,15 @@
-import { mapEventMetadata, NovaEventingProvider } from "@nova/react";
-import type { EventWrapper } from "@nova/types";
 import { graphql } from "react-relay";
 import type { Meta, StoryObj } from "storybook-react-rsbuild";
 
 import type { MediaListItemStoryQuery } from "../relay/__generated__/MediaListItemStoryQuery.graphql.js";
+import { withLayout } from "../storybook/withLayout.js";
+import { withNovaEventing } from "../storybook/withNovaEventing.js";
 import { MediaListItem } from "./MediaListItem.js";
 
 /**
  * MediaListItem is a single row in the media list view. Clicking the row
  * bubbles a VideoSelected Nova event; clicking the play button bubbles VideoPlay.
  */
-
-const noopEventing = { bubble: (_e: EventWrapper): Promise<void> => Promise.resolve() };
 
 const STORY_QUERY = graphql`
   query MediaListItemStoryQuery($videoId: ID!) @relay_test_operation {
@@ -40,15 +38,7 @@ const meta: Meta<typeof MediaListItem> = {
       },
     },
   },
-  decorators: [
-    (Story) => (
-      <NovaEventingProvider eventing={noopEventing} reactEventMapper={mapEventMetadata}>
-        <div style={{ maxWidth: 800 }}>
-          <Story />
-        </div>
-      </NovaEventingProvider>
-    ),
-  ],
+  decorators: [withNovaEventing, withLayout({ maxWidth: 800 })],
 };
 
 export default meta;

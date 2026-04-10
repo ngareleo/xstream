@@ -264,6 +264,23 @@ Import `FC` as a type: `import { type FC } from "react"`. Pages and inner compon
 - Stories test visual states, not behaviour; keep them free of application logic
 - Add `play` functions (from `@storybook/test`) to verify interactive states
 
+**Storybook shared decorators (`client/src/storybook/`):**
+- `withNovaEventing` — wraps a story in a no-op `NovaEventingProvider`. Required for any component that calls `useNovaEventing()`. Import and add to `meta.decorators`; do not inline `noopEventing` + `NovaEventingProvider` in individual story files.
+- `withLayout(style)` — wraps a story in a plain `<div>` with the given CSS styles. Use for width/height constraints (e.g. `withLayout({ width: 380 })`). Never write inline JSX decorators in story files — the classic Babel transform used by Storybook requires `React` to be in scope for any JSX in story files, but the shared decorator files already import it.
+
+**React Router in Storybook (React Router v6):**
+- The global Storybook preview (`client/.storybook/preview.tsx`) already wraps every story in a `MemoryRouter`. Components using `useLocation`, `useNavigate`, or `Link` work automatically.
+- To control the active route in a story, set `parameters.router.initialEntries` — an array of path strings (e.g. `["/setup"]`). The preview reads this parameter and passes it to `MemoryRouter`.
+- Do NOT add a second `MemoryRouter` in a story decorator — React Router v6 throws if two routers are nested.
+- `createRoutesStub` from `react-router` is a v7 API and is not available in this project (v6).
+
+Example — AppHeader story with Setup tab active:
+```ts
+export const SetupActive: Story = {
+  parameters: { router: { initialEntries: ["/setup"] } },
+};
+```
+
 ---
 
 ## Future Direction — Rust Server Rewrite

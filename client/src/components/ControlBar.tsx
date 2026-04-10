@@ -1,6 +1,6 @@
 import { Badge, Box, IconButton, Slider, Stack, Text } from "@chakra-ui/react";
 import { useNovaEventing } from "@nova/react";
-import { type FC, type MouseEvent, type RefObject } from "react";
+import React, { type FC, type MouseEvent, type RefObject } from "react";
 import { graphql, useFragment } from "react-relay";
 
 import { useVideoSync } from "../hooks/useVideoSync.js";

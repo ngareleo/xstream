@@ -1,6 +1,6 @@
 import { mapEventMetadata, NovaEventingProvider } from "@nova/react";
 import type { EventWrapper } from "@nova/types";
-import { useRef } from "react";
+import React, { useRef } from "react";
 import { graphql } from "react-relay";
 import type { Meta, StoryObj } from "storybook-react-rsbuild";
 

@@ -1,5 +1,5 @@
 import { Badge, Box, Text } from "@chakra-ui/react";
-import { type FC } from "react";
+import React, { type FC } from "react";
 import { graphql, useFragment } from "react-relay";
 import { useNavigate } from "react-router-dom";
 

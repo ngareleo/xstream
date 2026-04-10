@@ -1,5 +1,5 @@
 import { Box, Spinner, Text } from "@chakra-ui/react";
-import { type FC, Suspense } from "react";
+import React, { type FC, Suspense } from "react";
 import { graphql, useLazyLoadQuery, useMutation } from "react-relay";
 
 import { AppHeader } from "../components/AppHeader.js";

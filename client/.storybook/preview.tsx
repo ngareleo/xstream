@@ -8,15 +8,18 @@ import { withRelay } from "../src/storybook/withRelay.js";
 const preview: Preview = {
   decorators: [
     withRelay,
-    (Story) => (
-      <MemoryRouter>
-        <ChakraProvider value={defaultSystem}>
-          <Suspense fallback={<div style={{ padding: 16, color: "#aaa" }}>Loading…</div>}>
-            <Story />
-          </Suspense>
-        </ChakraProvider>
-      </MemoryRouter>
-    ),
+    (Story, context) => {
+      const initialEntries: string[] = context.parameters.router?.initialEntries ?? ["/"];
+      return (
+        <MemoryRouter initialEntries={initialEntries}>
+          <ChakraProvider value={defaultSystem}>
+            <Suspense fallback={<div style={{ padding: 16, color: "#aaa" }}>Loading…</div>}>
+              <Story />
+            </Suspense>
+          </ChakraProvider>
+        </MemoryRouter>
+      );
+    },
   ],
   parameters: {
     controls: {

@@ -1,17 +1,15 @@
-import { mapEventMetadata, NovaEventingProvider } from "@nova/react";
-import type { EventWrapper } from "@nova/types";
 import { graphql } from "react-relay";
 import type { Meta, StoryObj } from "storybook-react-rsbuild";
 
 import type { MediaGridItemStoryQuery } from "../relay/__generated__/MediaGridItemStoryQuery.graphql.js";
+import { withLayout } from "../storybook/withLayout.js";
+import { withNovaEventing } from "../storybook/withNovaEventing.js";
 import { MediaGridItem } from "./MediaGridItem.js";
 
 /**
  * MediaGridItem is a card in the grid view. Clicking the card bubbles a
  * VideoSelected Nova event; clicking the play overlay bubbles VideoPlay.
  */
-
-const noopEventing = { bubble: (_e: EventWrapper): Promise<void> => Promise.resolve() };
 
 const STORY_QUERY = graphql`
   query MediaGridItemStoryQuery($videoId: ID!) @relay_test_operation {
@@ -40,15 +38,7 @@ const meta: Meta<typeof MediaGridItem> = {
       },
     },
   },
-  decorators: [
-    (Story) => (
-      <NovaEventingProvider eventing={noopEventing} reactEventMapper={mapEventMetadata}>
-        <div style={{ width: 240 }}>
-          <Story />
-        </div>
-      </NovaEventingProvider>
-    ),
-  ],
+  decorators: [withNovaEventing, withLayout({ width: 240 })],
 };
 
 export default meta;

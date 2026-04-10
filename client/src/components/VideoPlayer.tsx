@@ -1,7 +1,7 @@
 import { Box, Text } from "@chakra-ui/react";
 import { NovaEventingInterceptor } from "@nova/react";
 import type { EventWrapper } from "@nova/types";
-import { type FC, useCallback, useRef, useState } from "react";
+import React, { type FC, useCallback, useRef, useState } from "react";
 import { graphql, useFragment } from "react-relay";
 
 import type { JobProgress } from "../hooks/useJobSubscription.js";

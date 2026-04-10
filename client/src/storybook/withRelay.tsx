@@ -13,6 +13,12 @@
  * addon's approach and avoids the timing issues that arise with commitPayload
  * + env.lookup outside of React.
  *
+ * The mock environment is created inside a React component (RelayProvider)
+ * using useRef, so it is created exactly once per component instance. This
+ * prevents React 18 Concurrent Mode from seeing a new environment on each
+ * render pass (which would reset the store and cause useFragment to return
+ * null).
+ *
  * Usage (story file):
  *   parameters: {
  *     relay: {
@@ -23,7 +29,7 @@
  *     },
  *   }
  */
-import React from "react";
+import React, { useRef } from "react";
 import type { GraphQLTaggedNode } from "react-relay";
 import { RelayEnvironmentProvider, useLazyLoadQuery } from "react-relay";
 import { createMockEnvironment, MockPayloadGenerator } from "relay-test-utils";
@@ -46,13 +52,7 @@ interface RelayStoryProps {
 }
 
 function RelayStory({ Story, context, relay }: RelayStoryProps): React.ReactElement {
-  const {
-    query,
-    variables = {},
-    mockResolvers: _mockResolvers,
-    getReferenceEntry,
-    getReferenceEntries,
-  } = relay;
+  const { query, variables = {}, getReferenceEntry, getReferenceEntries } = relay;
 
   // useLazyLoadQuery fires against the mock network, which was pre-loaded with
   // a resolver via env.mock.queueOperationResolver. The mock resolves
@@ -65,34 +65,59 @@ function RelayStory({ Story, context, relay }: RelayStoryProps): React.ReactElem
       ? [getReferenceEntry(result)]
       : [];
 
-  const storyArgs = { ...context.args, ...Object.fromEntries(entries) };
-  return <Story {...storyArgs} />;
+  // Mutate context.args directly so Storybook's internal `hookified` wrapper
+  // (which calls the story function with context.args) picks up the relay
+  // fragment refs. Spreading them as JSX props on <Story> is not enough —
+  // hookified reads from context.args, not from the element's own props.
+  Object.assign(context.args, Object.fromEntries(entries));
+
+  return <Story />;
+}
+
+interface RelayProviderProps {
+  Story: React.ComponentType<Record<string, unknown>>;
+  context: StoryContext;
+  relay: RelayParameters;
+}
+
+/**
+ * Stable wrapper component that owns the mock environment lifetime.
+ * useRef ensures the environment is created exactly once per component
+ * instance, preventing React 18 Concurrent Mode from creating a fresh
+ * empty store on every render pass.
+ */
+function RelayProvider({ Story, context, relay }: RelayProviderProps): React.ReactElement {
+  const { query, variables = {}, mockResolvers = {} } = relay;
+
+  const envRef = useRef<ReturnType<typeof createMockEnvironment> | null>(null);
+  if (envRef.current === null) {
+    const env = createMockEnvironment();
+    env.mock.queueOperationResolver((operation) =>
+      MockPayloadGenerator.generate(
+        operation,
+        mockResolvers as Parameters<typeof MockPayloadGenerator.generate>[1]
+      )
+    );
+    env.mock.queuePendingOperation(query, variables);
+    envRef.current = env;
+  }
+
+  return (
+    <RelayEnvironmentProvider environment={envRef.current}>
+      <RelayStory Story={Story} context={context} relay={relay} />
+    </RelayEnvironmentProvider>
+  );
 }
 
 export const withRelay: Decorator = (Story, context) => {
   const relay = context.parameters?.relay as RelayParameters | undefined;
   if (!relay) return <Story />;
 
-  const { query, variables = {}, mockResolvers = {} } = relay;
-
-  // Build the mock environment and pre-load the resolver so the network
-  // resolves synchronously when useLazyLoadQuery fires inside RelayStory.
-  const env = createMockEnvironment();
-  env.mock.queueOperationResolver((operation) =>
-    MockPayloadGenerator.generate(
-      operation,
-      mockResolvers as Parameters<typeof MockPayloadGenerator.generate>[1]
-    )
-  );
-  env.mock.queuePendingOperation(query, variables);
-
   return (
-    <RelayEnvironmentProvider environment={env}>
-      <RelayStory
-        Story={Story as React.ComponentType<Record<string, unknown>>}
-        context={context}
-        relay={relay}
-      />
-    </RelayEnvironmentProvider>
+    <RelayProvider
+      Story={Story as React.ComponentType<Record<string, unknown>>}
+      context={context}
+      relay={relay}
+    />
   );
 };

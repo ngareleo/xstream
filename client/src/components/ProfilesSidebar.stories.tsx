@@ -1,17 +1,15 @@
-import { mapEventMetadata, NovaEventingProvider } from "@nova/react";
-import type { EventWrapper } from "@nova/types";
 import { graphql } from "react-relay";
 import type { Meta, StoryObj } from "storybook-react-rsbuild";
 
 import type { ProfilesSidebarStoryQuery } from "../relay/__generated__/ProfilesSidebarStoryQuery.graphql.js";
+import { withLayout } from "../storybook/withLayout.js";
+import { withNovaEventing } from "../storybook/withNovaEventing.js";
 import { ProfilesSidebar } from "./ProfilesSidebar.js";
 
 /**
  * ProfilesSidebar shows library nav cards in the left pane of the Profiles page.
  * Clicking a card bubbles a LibrarySelected Nova event.
  */
-
-const noopEventing = { bubble: (_e: EventWrapper): Promise<void> => Promise.resolve() };
 
 const STORY_QUERY = graphql`
   query ProfilesSidebarStoryQuery($libraryId: ID!) @relay_test_operation {
@@ -44,15 +42,7 @@ const meta: Meta<typeof ProfilesSidebar> = {
       },
     },
   },
-  decorators: [
-    (Story) => (
-      <NovaEventingProvider eventing={noopEventing} reactEventMapper={mapEventMetadata}>
-        <div style={{ width: 260 }}>
-          <Story />
-        </div>
-      </NovaEventingProvider>
-    ),
-  ],
+  decorators: [withNovaEventing, withLayout({ width: 260 })],
 };
 
 export default meta;

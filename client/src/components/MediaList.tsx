@@ -1,5 +1,5 @@
 import { Box, SimpleGrid, Text } from "@chakra-ui/react";
-import { type FC, useState } from "react";
+import React, { type FC, useState } from "react";
 import { graphql, useFragment } from "react-relay";
 
 import type { MediaList_library$key } from "../relay/__generated__/MediaList_library.graphql.js";

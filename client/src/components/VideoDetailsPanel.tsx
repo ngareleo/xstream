@@ -1,6 +1,6 @@
 import { Box, Text } from "@chakra-ui/react";
 import { useNovaEventing } from "@nova/react";
-import { type FC, type MouseEvent } from "react";
+import React, { type FC, type MouseEvent } from "react";
 import { graphql, useFragment } from "react-relay";
 
 import type { VideoDetailsPanel_video$key } from "../relay/__generated__/VideoDetailsPanel_video.graphql.js";

@@ -1,5 +1,5 @@
 import { SimpleGrid } from "@chakra-ui/react";
-import { type FC } from "react";
+import React, { type FC } from "react";
 import { graphql, useFragment } from "react-relay";
 
 import type { LibraryGrid_library$key } from "../relay/__generated__/LibraryGrid_library.graphql";

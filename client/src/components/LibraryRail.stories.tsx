@@ -1,17 +1,15 @@
-import { mapEventMetadata, NovaEventingProvider } from "@nova/react";
-import type { EventWrapper } from "@nova/types";
 import { graphql } from "react-relay";
 import type { Meta, StoryObj } from "storybook-react-rsbuild";
 
 import type { LibraryRailStoryQuery } from "../relay/__generated__/LibraryRailStoryQuery.graphql.js";
+import { withLayout } from "../storybook/withLayout.js";
+import { withNovaEventing } from "../storybook/withNovaEventing.js";
 import { LibraryRail } from "./LibraryRail.js";
 
 /**
  * LibraryRail renders a narrow icon-rail sidebar for library selection.
  * Clicking an icon bubbles a LibraryRailSelected Nova event.
  */
-
-const noopEventing = { bubble: (_e: EventWrapper): Promise<void> => Promise.resolve() };
 
 const STORY_QUERY = graphql`
   query LibraryRailStoryQuery($libraryId: ID!) @relay_test_operation {
@@ -40,15 +38,7 @@ const meta: Meta<typeof LibraryRail> = {
       },
     },
   },
-  decorators: [
-    (Story) => (
-      <NovaEventingProvider eventing={noopEventing} reactEventMapper={mapEventMetadata}>
-        <div style={{ height: 400, display: "flex" }}>
-          <Story />
-        </div>
-      </NovaEventingProvider>
-    ),
-  ],
+  decorators: [withNovaEventing, withLayout({ height: 400, display: "flex" })],
 };
 
 export default meta;

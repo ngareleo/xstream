@@ -1,7 +1,7 @@
 import { Box, Text } from "@chakra-ui/react";
 import { NovaEventingInterceptor } from "@nova/react";
 import type { EventWrapper } from "@nova/types";
-import { type FC, useCallback, useState } from "react";
+import React, { type FC, useCallback, useState } from "react";
 import { graphql, useLazyLoadQuery } from "react-relay";
 import { useNavigate } from "react-router-dom";
 

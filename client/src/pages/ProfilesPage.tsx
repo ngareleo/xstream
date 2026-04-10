@@ -1,5 +1,5 @@
 import { Box, Spinner } from "@chakra-ui/react";
-import { type FC, Suspense } from "react";
+import React, { type FC, Suspense } from "react";
 
 import { ProfilesPageContent } from "./ProfilesPageContent.js";
 

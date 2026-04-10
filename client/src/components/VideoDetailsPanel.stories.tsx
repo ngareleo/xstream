@@ -1,17 +1,15 @@
-import { mapEventMetadata, NovaEventingProvider } from "@nova/react";
-import type { EventWrapper } from "@nova/types";
 import { graphql } from "react-relay";
 import type { Meta, StoryObj } from "storybook-react-rsbuild";
 
 import type { VideoDetailsPanelStoryQuery } from "../relay/__generated__/VideoDetailsPanelStoryQuery.graphql.js";
+import { withLayout } from "../storybook/withLayout.js";
+import { withNovaEventing } from "../storybook/withNovaEventing.js";
 import { VideoDetailsPanel } from "./VideoDetailsPanel.js";
 
 /**
  * VideoDetailsPanel shows video metadata and actions in the right pane of the
  * Profiles page. Clicking "Play Video" bubbles a VideoPlay Nova event.
  */
-
-const noopEventing = { bubble: (_e: EventWrapper): Promise<void> => Promise.resolve() };
 
 const STORY_QUERY = graphql`
   query VideoDetailsPanelStoryQuery($videoId: ID!) @relay_test_operation {
@@ -43,15 +41,7 @@ const meta: Meta<typeof VideoDetailsPanel> = {
       },
     },
   },
-  decorators: [
-    (Story) => (
-      <NovaEventingProvider eventing={noopEventing} reactEventMapper={mapEventMetadata}>
-        <div style={{ width: 380 }}>
-          <Story />
-        </div>
-      </NovaEventingProvider>
-    ),
-  ],
+  decorators: [withNovaEventing, withLayout({ width: 380 })],
 };
 
 export default meta;
