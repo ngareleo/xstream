@@ -1,7 +1,7 @@
 import { Box, Text } from "@chakra-ui/react";
 import { NovaEventingInterceptor } from "@nova/react";
 import type { EventWrapper } from "@nova/types";
-import React, { type FC, useCallback, useState } from "react";
+import React, { type FC, Suspense, useCallback, useState } from "react";
 import { graphql, useLazyLoadQuery } from "react-relay";
 import { useNavigate } from "react-router-dom";
 
@@ -22,7 +22,7 @@ import {
   isVideoDetailsPanelPlayEvent,
   type VideoDetailsPanelPlayData,
 } from "../components/VideoDetailsPanel.events.js";
-import { VideoDetailsPanel } from "../components/VideoDetailsPanel.js";
+import { VideoDetailsPanel } from "../components/VideoDetailsPanelAsync.js";
 import type { ProfilesPageContentQuery } from "../relay/__generated__/ProfilesPageContentQuery.graphql.js";
 
 const PROFILES_QUERY = graphql`
@@ -121,9 +121,14 @@ export const ProfilesPageContent: FC = () => {
             </Box>
           )}
 
-          {/* Right — details panel */}
+          {/* Right — details panel (lazy chunk; Suspense hides the flash while the JS loads) */}
           {selectedVideoKey && (
-            <VideoDetailsPanel video={selectedVideoKey} onClose={() => setSelectedVideoId(null)} />
+            <Suspense fallback={null}>
+              <VideoDetailsPanel
+                video={selectedVideoKey}
+                onClose={() => setSelectedVideoId(null)}
+              />
+            </Suspense>
           )}
         </Box>
       </NovaEventingInterceptor>

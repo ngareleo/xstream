@@ -27,6 +27,9 @@ jobs:
       - name: Type-check
         run: bun run lint
 
+      - name: Validate GraphQL SDL
+        run: bun run check:schema
+
       - name: Test
         run: bun run test
 
@@ -64,6 +67,9 @@ jobs:
 
       - name: Generate Relay artifacts
         run: bun run relay
+
+      - name: Check Relay artifacts are up to date
+        run: git diff --exit-code src/relay/__generated__
 
       - name: Build Storybook
         run: bun run build-storybook

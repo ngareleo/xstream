@@ -2,8 +2,8 @@ import React, { type FC, Suspense } from "react";
 import { graphql, useLazyLoadQuery } from "react-relay";
 import { useNavigate, useParams } from "react-router-dom";
 
-import { PlayerSidebar } from "../components/PlayerSidebar.js";
-import { VideoPlayer } from "../components/VideoPlayer.js";
+import { PlayerSidebar } from "../components/PlayerSidebarAsync.js";
+import { VideoPlayer } from "../components/VideoPlayerAsync.js";
 import type { PlayerPageQuery } from "../relay/__generated__/PlayerPageQuery.graphql.js";
 
 const VIDEO_QUERY = graphql`
@@ -51,7 +51,7 @@ const PlayerContent: FC<{ videoId: string }> = ({ videoId }) => {
         fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif",
       }}
     >
-      {/* Header */}
+      {/* Header — renders immediately from Relay data, before player chunks load */}
       <div
         style={{
           height: 60,
@@ -65,7 +65,6 @@ const PlayerContent: FC<{ videoId: string }> = ({ videoId }) => {
           zIndex: 10,
         }}
       >
-        {/* Left: back button + title */}
         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
           <button
             onClick={() => navigate(-1)}
@@ -112,7 +111,6 @@ const PlayerContent: FC<{ videoId: string }> = ({ videoId }) => {
           </span>
         </div>
 
-        {/* Right: nav tabs */}
         <nav style={{ display: "flex", gap: 8 }}>
           <span
             style={{
@@ -129,16 +127,29 @@ const PlayerContent: FC<{ videoId: string }> = ({ videoId }) => {
         </nav>
       </div>
 
-      {/* Body: video area + sidebar */}
-      <div style={{ flex: 1, display: "flex", minHeight: 0 }}>
-        {/* Video area */}
-        <div style={{ flex: 1, position: "relative", background: "#000" }}>
-          <VideoPlayer video={data.video} />
+      {/* Body — deferred: VideoPlayer and PlayerSidebar are lazy chunks */}
+      <Suspense
+        fallback={
+          <div style={{ flex: 1, display: "flex", minHeight: 0 }}>
+            <div style={{ flex: 1, background: "#000" }} />
+            <div
+              style={{
+                width: 360,
+                flexShrink: 0,
+                background: "#141420",
+                borderLeft: "1px solid #2a2a40",
+              }}
+            />
+          </div>
+        }
+      >
+        <div style={{ flex: 1, display: "flex", minHeight: 0 }}>
+          <div style={{ flex: 1, position: "relative", background: "#000" }}>
+            <VideoPlayer video={data.video} />
+          </div>
+          <PlayerSidebar video={data.video} />
         </div>
-
-        {/* Sidebar */}
-        <PlayerSidebar video={data.video} />
-      </div>
+      </Suspense>
     </div>
   );
 };
