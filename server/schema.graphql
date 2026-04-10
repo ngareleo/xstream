@@ -17,6 +17,7 @@ enum MediaType {
 type Library implements Node {
   id: ID!
   name: String!
+  path: String!
   mediaType: MediaType!
   videos(first: Int, after: String): VideoConnection!
 }

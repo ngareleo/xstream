@@ -20,6 +20,7 @@ export const typeDefs = /* GraphQL */ `
   type Library implements Node {
     id: ID!
     name: String!
+    path: String!
     mediaType: MediaType!
     # MAX_PAGE_SIZE = 100 (enforced server-side regardless of this default)
     videos(first: Int = 20, after: String): VideoConnection!

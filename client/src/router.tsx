@@ -2,14 +2,20 @@ import { Box, Spinner } from "@chakra-ui/react";
 import { lazy, Suspense } from "react";
 import { createBrowserRouter } from "react-router-dom";
 
-const LibraryPage = lazy(() =>
-  import("./pages/LibraryPage.js").then((m) => ({ default: m.LibraryPage }))
+const ProfilesPage = lazy(() =>
+  import("./pages/ProfilesPage.js").then((m) => ({ default: m.ProfilesPage }))
 );
 const PlayerPage = lazy(() =>
   import("./pages/PlayerPage.js").then((m) => ({ default: m.PlayerPage }))
 );
+const SetupPage = lazy(() =>
+  import("./pages/SetupPage.js").then((m) => ({ default: m.SetupPage }))
+);
+const LibraryPage = lazy(() =>
+  import("./pages/LibraryPage.js").then((m) => ({ default: m.LibraryPage }))
+);
 
-function PageLoader() {
+function PageLoader(): JSX.Element {
   return (
     <Box display="flex" justifyContent="center" alignItems="center" minH="100vh">
       <Spinner size="xl" />
@@ -20,6 +26,22 @@ function PageLoader() {
 export const router: ReturnType<typeof createBrowserRouter> = createBrowserRouter([
   {
     path: "/",
+    element: (
+      <Suspense fallback={<PageLoader />}>
+        <ProfilesPage />
+      </Suspense>
+    ),
+  },
+  {
+    path: "/setup",
+    element: (
+      <Suspense fallback={<PageLoader />}>
+        <SetupPage />
+      </Suspense>
+    ),
+  },
+  {
+    path: "/library",
     element: (
       <Suspense fallback={<PageLoader />}>
         <LibraryPage />

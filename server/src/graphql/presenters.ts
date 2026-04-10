@@ -17,6 +17,7 @@ import { toGlobalId } from "./relay.js";
 export interface GQLLibrary {
   id: string;
   name: string;
+  path: string;
   mediaType: string;
   /** Internal row — available to sub-resolvers via parent argument */
   _raw: LibraryRow;
@@ -51,6 +52,7 @@ export function presentLibrary(row: LibraryRow): GQLLibrary {
   return {
     id: toGlobalId("Library", row.id),
     name: row.name,
+    path: row.path,
     mediaType: internalMediaTypeToGql(row.media_type),
     _raw: row,
   };

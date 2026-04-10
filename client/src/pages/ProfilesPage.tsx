@@ -1,9 +1,9 @@
 import { Box, Spinner } from "@chakra-ui/react";
 import { type FC, Suspense } from "react";
 
-import { LibraryPageContent } from "./LibraryPageContent.js";
+import { ProfilesPageContent } from "./ProfilesPageContent.js";
 
-export const LibraryPage: FC = () => {
+export const ProfilesPage: FC = () => {
   return (
     <Suspense
       fallback={
@@ -12,7 +12,7 @@ export const LibraryPage: FC = () => {
         </Box>
       }
     >
-      <LibraryPageContent />
+      <ProfilesPageContent />
     </Suspense>
   );
 };
