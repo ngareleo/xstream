@@ -162,11 +162,16 @@ export async function handleStream(req: Request): Promise<Response> {
     },
   });
 
-  return new Response(stream, {
-    headers: {
-      "Content-Type": "application/octet-stream",
-      "Cache-Control": "no-store",
-      "Access-Control-Allow-Origin": "*",
-    },
-  });
+  const headers: Record<string, string> = {
+    "Content-Type": "application/octet-stream",
+    "Cache-Control": "no-store",
+  };
+
+  // Restrict CORS in production: the stream endpoint is consumed by the same
+  // origin as the app, so there is no reason to allow cross-origin access in prod.
+  if (process.env.NODE_ENV !== "production") {
+    headers["Access-Control-Allow-Origin"] = "http://localhost:5173";
+  }
+
+  return new Response(stream, { headers });
 }

@@ -1,4 +1,3 @@
-const MIME_TYPE = 'video/mp4; codecs="avc1.640033,mp4a.40.2"';
 const FORWARD_BUFFER_TARGET_S = 20;
 const FORWARD_BUFFER_RESUME_S = 15;
 const BACK_BUFFER_KEEP_S = 5;
@@ -26,7 +25,7 @@ export class BufferManager {
     this.onResume = onResume;
   }
 
-  init(): Promise<void> {
+  init(mimeType: string): Promise<void> {
     return new Promise((resolve, reject) => {
       this.mediaSource = new MediaSource();
       this.videoEl.src = URL.createObjectURL(this.mediaSource);
@@ -35,7 +34,7 @@ export class BufferManager {
         "sourceopen",
         () => {
           try {
-            this.sourceBuffer = this.mediaSource!.addSourceBuffer(MIME_TYPE);
+            this.sourceBuffer = this.mediaSource!.addSourceBuffer(mimeType);
             this.sourceBuffer.mode = "sequence";
             resolve();
           } catch (err) {

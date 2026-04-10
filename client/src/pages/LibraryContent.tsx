@@ -1,4 +1,5 @@
 import { Box, Button, Heading, Text } from "@chakra-ui/react";
+import { useState } from "react";
 import { graphql, useLazyLoadQuery, useMutation } from "react-relay";
 
 import { LibraryGrid } from "../components/LibraryGrid.js";
@@ -25,11 +26,26 @@ const SCAN_MUTATION = graphql`
 `;
 
 export function LibraryContent(): JSX.Element {
-  const data = useLazyLoadQuery<LibraryContentQuery>(LIBRARIES_QUERY, {});
+  // Incrementing fetchKey forces useLazyLoadQuery to refetch from the network,
+  // picking up new videos that the scanLibraries mutation discovered.
+  const [fetchKey, setFetchKey] = useState(0);
+  const data = useLazyLoadQuery<LibraryContentQuery>(
+    LIBRARIES_QUERY,
+    {},
+    {
+      fetchKey,
+      fetchPolicy: fetchKey > 0 ? "network-only" : "store-or-network",
+    }
+  );
   const [scan, isScanning] = useMutation<LibraryContentScanMutation>(SCAN_MUTATION);
 
   const handleScan = () => {
-    scan({ variables: {} });
+    scan({
+      variables: {},
+      onCompleted() {
+        setFetchKey((k) => k + 1);
+      },
+    });
   };
 
   return (

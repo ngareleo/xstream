@@ -6,7 +6,7 @@ import type { VideoPlayerStartTranscodeMutation } from "../relay/__generated__/V
 import { BufferManager } from "../services/BufferManager.js";
 import { StreamingService } from "../services/StreamingService.js";
 import type { Resolution } from "../types.js";
-import { DISPLAY_TO_GQL } from "../types.js";
+import { DISPLAY_TO_GQL, RESOLUTION_MIME_TYPE } from "../types.js";
 
 type StartTranscodeFn = (config: UseMutationConfig<VideoPlayerStartTranscodeMutation>) => void;
 
@@ -70,7 +70,7 @@ export function useVideoPlayback(
             bufferRef.current = buffer;
 
             try {
-              await buffer.init();
+              await buffer.init(RESOLUTION_MIME_TYPE[res]);
             } catch (err) {
               setError(`MSE init failed: ${(err as Error).message}`);
               setStatus("idle");

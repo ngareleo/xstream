@@ -91,5 +91,12 @@ export function encodeCursor(offset: number): string {
 
 export function decodeCursor(cursor: string): number {
   const decoded = Buffer.from(cursor, "base64").toString("utf8");
-  return parseInt(decoded.replace("offset:", ""), 10);
+  if (!decoded.startsWith("offset:")) {
+    throw new Error(`Invalid pagination cursor: "${cursor}"`);
+  }
+  const value = parseInt(decoded.slice("offset:".length), 10);
+  if (!Number.isFinite(value) || value < 0) {
+    throw new Error(`Invalid pagination cursor offset in: "${cursor}"`);
+  }
+  return value;
 }

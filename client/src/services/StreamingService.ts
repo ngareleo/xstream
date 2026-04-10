@@ -25,6 +25,12 @@ export class StreamingService {
       return;
     }
 
+    if (!response.ok) {
+      const text = await response.text().catch(() => "");
+      onError(new Error(`Stream request failed: ${response.status}${text ? ` — ${text}` : ""}`));
+      return;
+    }
+
     if (!response.body) {
       onError(new Error("No response body"));
       return;
