@@ -21,6 +21,7 @@ const VIDEO_FRAGMENT = graphql`
     durationSeconds
     videoStream {
       height
+      width
     }
   }
 `;
@@ -56,7 +57,7 @@ export const ControlBar: FC<Props> = ({ video, videoRef, resolution, status, isV
   const [resMenuOpen, setResMenuOpen] = useState(false);
   const [showVolumeSlider, setShowVolumeSlider] = useState(false);
 
-  const maxResolution = maxResolutionForHeight(data.videoStream?.height);
+  const maxResolution = maxResolutionForHeight(data.videoStream?.height, data.videoStream?.width);
   const availableResolutions = ALL_RESOLUTIONS.filter(
     (r) => RESOLUTION_ORDER[r] <= RESOLUTION_ORDER[maxResolution]
   );

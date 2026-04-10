@@ -13,6 +13,7 @@ const VIDEO_FRAGMENT = graphql`
     durationSeconds
     videoStream {
       height
+      width
     }
   }
 `;
@@ -24,7 +25,7 @@ interface Props {
 export const VideoCard: FC<Props> = ({ video }) => {
   const data = useFragment(VIDEO_FRAGMENT, video);
   const navigate = useNavigate();
-  const label = resolutionLabel(data.videoStream?.height);
+  const label = resolutionLabel(data.videoStream?.height, data.videoStream?.width);
 
   return (
     <Box

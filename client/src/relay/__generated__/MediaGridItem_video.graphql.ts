@@ -1,5 +1,5 @@
 /**
- * @generated SignedSource<<63e1f3fc3d476f5dfa9a302273513ada>>
+ * @generated SignedSource<<022d3d641d6177552e392270a7139538>>
  * @lightSyntaxTransform
  * @nogrep
  */
@@ -17,6 +17,7 @@ export type MediaGridItem_video$data = {
   readonly title: string;
   readonly videoStream: {
     readonly height: number;
+    readonly width: number;
   } | null | undefined;
   readonly " $fragmentType": "MediaGridItem_video";
 };
@@ -73,6 +74,13 @@ const node: ReaderFragment = {
           "kind": "ScalarField",
           "name": "height",
           "storageKey": null
+        },
+        {
+          "alias": null,
+          "args": null,
+          "kind": "ScalarField",
+          "name": "width",
+          "storageKey": null
         }
       ],
       "storageKey": null
@@ -82,6 +90,6 @@ const node: ReaderFragment = {
   "abstractKey": null
 };
 
-(node as any).hash = "78df6fd7c4a27062a7eb138e2c2d203a";
+(node as any).hash = "1ce26360aaf9124acd55914f77068c8f";
 
 export default node;

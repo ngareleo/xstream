@@ -1,5 +1,5 @@
 /**
- * @generated SignedSource<<64dc0a4b2a79acac508a2783121d0454>>
+ * @generated SignedSource<<7a087842cc5c907a55b8b2990af1bfdd>>
  * @lightSyntaxTransform
  * @nogrep
  */
@@ -154,6 +154,13 @@ return {
                             "kind": "ScalarField",
                             "name": "height",
                             "storageKey": null
+                          },
+                          {
+                            "alias": null,
+                            "args": null,
+                            "kind": "ScalarField",
+                            "name": "width",
+                            "storageKey": null
                           }
                         ],
                         "storageKey": null
@@ -173,12 +180,12 @@ return {
     ]
   },
   "params": {
-    "cacheID": "06c8d3b5a75a2e8b76b4c6382b0c3ab8",
+    "cacheID": "d92d6aae15cc263cf90586df5762887f",
     "id": null,
     "metadata": {},
     "name": "LibraryPageContentQuery",
     "operationKind": "query",
-    "text": "query LibraryPageContentQuery {\n  libraries {\n    id\n    name\n    ...LibraryRail_library\n    ...LibraryGrid_library\n  }\n}\n\nfragment LibraryGrid_library on Library {\n  videos(first: 50) {\n    edges {\n      node {\n        id\n        ...VideoCard_video\n      }\n    }\n  }\n}\n\nfragment LibraryRail_library on Library {\n  id\n  name\n  mediaType\n}\n\nfragment VideoCard_video on Video {\n  id\n  title\n  durationSeconds\n  videoStream {\n    height\n  }\n}\n"
+    "text": "query LibraryPageContentQuery {\n  libraries {\n    id\n    name\n    ...LibraryRail_library\n    ...LibraryGrid_library\n  }\n}\n\nfragment LibraryGrid_library on Library {\n  videos(first: 50) {\n    edges {\n      node {\n        id\n        ...VideoCard_video\n      }\n    }\n  }\n}\n\nfragment LibraryRail_library on Library {\n  id\n  name\n  mediaType\n}\n\nfragment VideoCard_video on Video {\n  id\n  title\n  durationSeconds\n  videoStream {\n    height\n    width\n  }\n}\n"
   }
 };
 })();

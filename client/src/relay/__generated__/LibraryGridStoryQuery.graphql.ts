@@ -1,5 +1,5 @@
 /**
- * @generated SignedSource<<fa2e70377acf118597787c53758f3c4f>>
+ * @generated SignedSource<<3d2b9570e5db958f3c288ada3e18645c>>
  * @lightSyntaxTransform
  * @nogrep
  */
@@ -56,6 +56,12 @@ v4 = {
   "nullable": false,
   "plural": false,
   "type": "ID"
+},
+v5 = {
+  "enumValues": null,
+  "nullable": false,
+  "plural": false,
+  "type": "Int"
 };
 return {
   "fragment": {
@@ -174,6 +180,13 @@ return {
                                 "kind": "ScalarField",
                                 "name": "height",
                                 "storageKey": null
+                              },
+                              {
+                                "alias": null,
+                                "args": null,
+                                "kind": "ScalarField",
+                                "name": "width",
+                                "storageKey": null
                               }
                             ],
                             "storageKey": null
@@ -198,7 +211,7 @@ return {
     ]
   },
   "params": {
-    "cacheID": "59acc61e55d5198ee16dbb18c48cacdb",
+    "cacheID": "3f85cab59704a30859e6c8ce698a791b",
     "id": null,
     "metadata": {
       "relayTestingSelectionTypeInfo": {
@@ -242,17 +255,13 @@ return {
           "plural": false,
           "type": "VideoStreamInfo"
         },
-        "node.videos.edges.node.videoStream.height": {
-          "enumValues": null,
-          "nullable": false,
-          "plural": false,
-          "type": "Int"
-        }
+        "node.videos.edges.node.videoStream.height": (v5/*: any*/),
+        "node.videos.edges.node.videoStream.width": (v5/*: any*/)
       }
     },
     "name": "LibraryGridStoryQuery",
     "operationKind": "query",
-    "text": "query LibraryGridStoryQuery(\n  $libraryId: ID!\n) {\n  node(id: $libraryId) {\n    __typename\n    ... on Library {\n      ...LibraryGrid_library\n    }\n    id\n  }\n}\n\nfragment LibraryGrid_library on Library {\n  videos(first: 50) {\n    edges {\n      node {\n        id\n        ...VideoCard_video\n      }\n    }\n  }\n}\n\nfragment VideoCard_video on Video {\n  id\n  title\n  durationSeconds\n  videoStream {\n    height\n  }\n}\n"
+    "text": "query LibraryGridStoryQuery(\n  $libraryId: ID!\n) {\n  node(id: $libraryId) {\n    __typename\n    ... on Library {\n      ...LibraryGrid_library\n    }\n    id\n  }\n}\n\nfragment LibraryGrid_library on Library {\n  videos(first: 50) {\n    edges {\n      node {\n        id\n        ...VideoCard_video\n      }\n    }\n  }\n}\n\nfragment VideoCard_video on Video {\n  id\n  title\n  durationSeconds\n  videoStream {\n    height\n    width\n  }\n}\n"
   }
 };
 })();

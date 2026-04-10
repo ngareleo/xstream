@@ -1,5 +1,5 @@
 /**
- * @generated SignedSource<<b2be295af6c52a1e679837d3c4bf6c30>>
+ * @generated SignedSource<<968c7b3567fe948e19492a595ccf2a8e>>
  * @lightSyntaxTransform
  * @nogrep
  */
@@ -15,6 +15,7 @@ export type ControlBar_video$data = {
   readonly title: string;
   readonly videoStream: {
     readonly height: number;
+    readonly width: number;
   } | null | undefined;
   readonly " $fragmentType": "ControlBar_video";
 };
@@ -57,6 +58,13 @@ const node: ReaderFragment = {
           "kind": "ScalarField",
           "name": "height",
           "storageKey": null
+        },
+        {
+          "alias": null,
+          "args": null,
+          "kind": "ScalarField",
+          "name": "width",
+          "storageKey": null
         }
       ],
       "storageKey": null
@@ -66,6 +74,6 @@ const node: ReaderFragment = {
   "abstractKey": null
 };
 
-(node as any).hash = "168247599181915f14103b7ea52fc5da";
+(node as any).hash = "81e40d9d310e9373e4dacf347887e54b";
 
 export default node;

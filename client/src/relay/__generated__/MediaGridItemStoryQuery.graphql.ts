@@ -1,5 +1,5 @@
 /**
- * @generated SignedSource<<ac0944c5be9d9ac6775c272b660d7506>>
+ * @generated SignedSource<<3af64e3e5e1ff54f8f84ebdfbd36208c>>
  * @lightSyntaxTransform
  * @nogrep
  */
@@ -127,6 +127,13 @@ return {
                 "kind": "ScalarField",
                 "name": "height",
                 "storageKey": null
+              },
+              {
+                "alias": null,
+                "args": null,
+                "kind": "ScalarField",
+                "name": "width",
+                "storageKey": null
               }
             ],
             "storageKey": null
@@ -137,7 +144,7 @@ return {
     ]
   },
   "params": {
-    "cacheID": "178deb457f727bdabca7cd91f0f2a605",
+    "cacheID": "aa0d79b028f94c0c7e3886a66005581f",
     "id": null,
     "metadata": {
       "relayTestingSelectionTypeInfo": {
@@ -172,12 +179,13 @@ return {
           "plural": false,
           "type": "VideoStreamInfo"
         },
-        "video.videoStream.height": (v2/*: any*/)
+        "video.videoStream.height": (v2/*: any*/),
+        "video.videoStream.width": (v2/*: any*/)
       }
     },
     "name": "MediaGridItemStoryQuery",
     "operationKind": "query",
-    "text": "query MediaGridItemStoryQuery(\n  $videoId: ID!\n) {\n  video(id: $videoId) {\n    ...MediaGridItem_video\n    id\n  }\n}\n\nfragment MediaGridItem_video on Video {\n  id\n  title\n  durationSeconds\n  fileSizeBytes\n  videoStream {\n    height\n  }\n}\n"
+    "text": "query MediaGridItemStoryQuery(\n  $videoId: ID!\n) {\n  video(id: $videoId) {\n    ...MediaGridItem_video\n    id\n  }\n}\n\nfragment MediaGridItem_video on Video {\n  id\n  title\n  durationSeconds\n  fileSizeBytes\n  videoStream {\n    height\n    width\n  }\n}\n"
   }
 };
 })();

@@ -1,5 +1,5 @@
 /**
- * @generated SignedSource<<257d84616c88ff637a736d37b24997aa>>
+ * @generated SignedSource<<9fe3b4ee1fd4e914bcb3b90c88eac0f1>>
  * @lightSyntaxTransform
  * @nogrep
  */
@@ -138,6 +138,13 @@ return {
                 "alias": null,
                 "args": null,
                 "kind": "ScalarField",
+                "name": "width",
+                "storageKey": null
+              },
+              {
+                "alias": null,
+                "args": null,
+                "kind": "ScalarField",
                 "name": "codec",
                 "storageKey": null
               }
@@ -150,7 +157,7 @@ return {
     ]
   },
   "params": {
-    "cacheID": "d3576148c10af5b8f55743cac53af8f7",
+    "cacheID": "fca21e2a313aa53eaaab5a328c691adb",
     "id": null,
     "metadata": {
       "relayTestingSelectionTypeInfo": {
@@ -181,12 +188,13 @@ return {
           "type": "VideoStreamInfo"
         },
         "video.videoStream.codec": (v3/*: any*/),
-        "video.videoStream.height": (v2/*: any*/)
+        "video.videoStream.height": (v2/*: any*/),
+        "video.videoStream.width": (v2/*: any*/)
       }
     },
     "name": "VideoDetailsPanelStoryQuery",
     "operationKind": "query",
-    "text": "query VideoDetailsPanelStoryQuery(\n  $videoId: ID!\n) {\n  video(id: $videoId) {\n    ...VideoDetailsPanel_video\n    id\n  }\n}\n\nfragment VideoDetailsPanel_video on Video {\n  id\n  title\n  durationSeconds\n  fileSizeBytes\n  videoStream {\n    height\n    codec\n  }\n}\n"
+    "text": "query VideoDetailsPanelStoryQuery(\n  $videoId: ID!\n) {\n  video(id: $videoId) {\n    ...VideoDetailsPanel_video\n    id\n  }\n}\n\nfragment VideoDetailsPanel_video on Video {\n  id\n  title\n  durationSeconds\n  fileSizeBytes\n  videoStream {\n    height\n    width\n    codec\n  }\n}\n"
   }
 };
 })();

@@ -1,5 +1,5 @@
 /**
- * @generated SignedSource<<070d23da5b172c7b14c696cd18e27bcd>>
+ * @generated SignedSource<<6324dcf090f0bb20d2617d23e031c2f0>>
  * @lightSyntaxTransform
  * @nogrep
  */
@@ -15,6 +15,7 @@ export type PlayerSidebar_video$data = {
   readonly title: string;
   readonly videoStream: {
     readonly height: number;
+    readonly width: number;
   } | null | undefined;
   readonly " $fragmentType": "PlayerSidebar_video";
 };
@@ -57,6 +58,13 @@ const node: ReaderFragment = {
           "kind": "ScalarField",
           "name": "height",
           "storageKey": null
+        },
+        {
+          "alias": null,
+          "args": null,
+          "kind": "ScalarField",
+          "name": "width",
+          "storageKey": null
         }
       ],
       "storageKey": null
@@ -66,6 +74,6 @@ const node: ReaderFragment = {
   "abstractKey": null
 };
 
-(node as any).hash = "e4337239a23ec53f823ed7fab3be377f";
+(node as any).hash = "93e73a5a6434f4aaaa0ab92db18dd272";
 
 export default node;

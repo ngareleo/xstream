@@ -33,7 +33,7 @@ export const typeDefs = /* GraphQL */ `
     title: String!
     filename: String!
     durationSeconds: Float!
-    fileSizeBytes: Int!
+    fileSizeBytes: Float!
     bitrate: Int!
     library: Library!
     videoStream: VideoStreamInfo

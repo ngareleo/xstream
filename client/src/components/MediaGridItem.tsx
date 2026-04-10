@@ -15,6 +15,7 @@ const VIDEO_FRAGMENT = graphql`
     fileSizeBytes
     videoStream {
       height
+      width
     }
   }
 `;
@@ -26,7 +27,7 @@ interface Props {
 export const MediaGridItem: FC<Props> = ({ video }) => {
   const data = useFragment(VIDEO_FRAGMENT, video);
   const { bubble } = useNovaEventing();
-  const label = resolutionLabel(data.videoStream?.height);
+  const label = resolutionLabel(data.videoStream?.height, data.videoStream?.width);
 
   const handleClick = (e: MouseEvent): void => {
     void bubble({ reactEvent: e, event: createVideoSelectedEvent(data.id) });

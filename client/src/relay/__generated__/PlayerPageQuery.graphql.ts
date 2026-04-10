@@ -1,5 +1,5 @@
 /**
- * @generated SignedSource<<07f62067eeb4855aaf33d6a04abbd18f>>
+ * @generated SignedSource<<53ef0cbe9dd39a428fa77f5c374178e2>>
  * @lightSyntaxTransform
  * @nogrep
  */
@@ -115,6 +115,13 @@ return {
                 "kind": "ScalarField",
                 "name": "height",
                 "storageKey": null
+              },
+              {
+                "alias": null,
+                "args": null,
+                "kind": "ScalarField",
+                "name": "width",
+                "storageKey": null
               }
             ],
             "storageKey": null
@@ -132,12 +139,12 @@ return {
     ]
   },
   "params": {
-    "cacheID": "5d11ae7ffa33824460a315656704b070",
+    "cacheID": "714b875cb7abda6e0ae555e1d6562f3d",
     "id": null,
     "metadata": {},
     "name": "PlayerPageQuery",
     "operationKind": "query",
-    "text": "query PlayerPageQuery(\n  $id: ID!\n) {\n  video(id: $id) {\n    title\n    ...VideoPlayer_video\n    ...PlayerSidebar_video\n    id\n  }\n}\n\nfragment ControlBar_video on Video {\n  title\n  durationSeconds\n  videoStream {\n    height\n  }\n}\n\nfragment PlayerSidebar_video on Video {\n  title\n  durationSeconds\n  videoStream {\n    height\n  }\n}\n\nfragment VideoPlayer_video on Video {\n  id\n  videoStream {\n    height\n  }\n  ...ControlBar_video\n}\n"
+    "text": "query PlayerPageQuery(\n  $id: ID!\n) {\n  video(id: $id) {\n    title\n    ...VideoPlayer_video\n    ...PlayerSidebar_video\n    id\n  }\n}\n\nfragment ControlBar_video on Video {\n  title\n  durationSeconds\n  videoStream {\n    height\n    width\n  }\n}\n\nfragment PlayerSidebar_video on Video {\n  title\n  durationSeconds\n  videoStream {\n    height\n    width\n  }\n}\n\nfragment VideoPlayer_video on Video {\n  id\n  videoStream {\n    height\n    width\n  }\n  ...ControlBar_video\n}\n"
   }
 };
 })();

@@ -27,6 +27,7 @@ const VIDEO_FRAGMENT = graphql`
     id
     videoStream {
       height
+      width
     }
     ...ControlBar_video
   }
@@ -45,7 +46,7 @@ export const VideoPlayer: FC<Props> = ({ video }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const nativeMax = maxResolutionForHeight(data.videoStream?.height);
+  const nativeMax = maxResolutionForHeight(data.videoStream?.height, data.videoStream?.width);
   const [resolution, setResolution] = useState<Resolution>(nativeMax);
   const [activeJobId, setActiveJobId] = useState<string | null>(null);
   const [jobProgress, setJobProgress] = useState<JobProgress | null>(null);
@@ -130,16 +131,17 @@ export const VideoPlayer: FC<Props> = ({ video }) => {
         controls={false}
       />
 
-      {/* Big play overlay — shown in idle state */}
+      {/* Big play overlay — shown in idle state; clicking starts playback */}
       {status === "idle" && (
         <div
+          onClick={handlePlay}
           style={{
             position: "absolute",
             inset: 0,
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            pointerEvents: "none",
+            cursor: "pointer",
           }}
         >
           <div

@@ -174,11 +174,34 @@ async function watchSegments(job: ActiveJob, segmentDir: string, initPath: strin
       const filename = event.filename;
       if (!filename) continue;
 
-      // HLS fMP4 mode writes init.mp4 before any media segments
+      // HLS fMP4 mode writes init.mp4 before any media segments.
+      // The inotify event fires on file creation (before ffmpeg finishes writing),
+      // so we stat-poll until the file has content before marking it ready.
       if (filename === "init.mp4" && !job.initSegmentPath) {
-        job.initSegmentPath = initPath;
-        console.log(`[chunker] Init segment ready for job ${job.id.slice(0, 8)}`);
-        notifySubscribers(job);
+        let initSize = 0;
+        for (let i = 0; i < 40; i++) {
+          try {
+            const s = await stat(initPath);
+            if (s.size > 0) {
+              initSize = s.size;
+              break;
+            }
+          } catch {
+            // file not yet visible
+          }
+          await Bun.sleep(50);
+        }
+        if (initSize > 0) {
+          job.initSegmentPath = initPath;
+          console.log(
+            `[chunker] Init segment ready for job ${job.id.slice(0, 8)} (${initSize} bytes)`
+          );
+          notifySubscribers(job);
+        } else {
+          console.warn(
+            `[chunker] Init segment for job ${job.id.slice(0, 8)} still empty after polling — skipping`
+          );
+        }
         continue;
       }
 

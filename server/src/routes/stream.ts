@@ -173,10 +173,11 @@ export async function handleStream(req: Request): Promise<Response> {
     "Cache-Control": "no-store",
   };
 
-  // Restrict CORS in production: the stream endpoint is consumed by the same
-  // origin as the app, so there is no reason to allow cross-origin access in prod.
+  // In development the client is served by Vite which proxies /stream/ requests,
+  // so technically no CORS header is needed. Using a wildcard here is safe for dev
+  // and avoids breakage when Vite picks an alternate port (e.g. 5174).
   if (process.env.NODE_ENV !== "production") {
-    headers["Access-Control-Allow-Origin"] = "http://localhost:5173";
+    headers["Access-Control-Allow-Origin"] = "*";
   }
 
   return new Response(stream, { headers });

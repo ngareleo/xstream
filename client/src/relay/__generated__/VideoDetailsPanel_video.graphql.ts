@@ -1,5 +1,5 @@
 /**
- * @generated SignedSource<<8d3afa96f991eb8f8b7006100ad2c0a0>>
+ * @generated SignedSource<<06aa4d7bb84cf9b8d932114e82fdf051>>
  * @lightSyntaxTransform
  * @nogrep
  */
@@ -18,6 +18,7 @@ export type VideoDetailsPanel_video$data = {
   readonly videoStream: {
     readonly codec: string;
     readonly height: number;
+    readonly width: number;
   } | null | undefined;
   readonly " $fragmentType": "VideoDetailsPanel_video";
 };
@@ -79,6 +80,13 @@ const node: ReaderFragment = {
           "alias": null,
           "args": null,
           "kind": "ScalarField",
+          "name": "width",
+          "storageKey": null
+        },
+        {
+          "alias": null,
+          "args": null,
+          "kind": "ScalarField",
           "name": "codec",
           "storageKey": null
         }
@@ -90,6 +98,6 @@ const node: ReaderFragment = {
   "abstractKey": null
 };
 
-(node as any).hash = "fc3decde42dd8522406ec68ee39ce172";
+(node as any).hash = "5c2cacce77da78e936c08bf1767aa61b";
 
 export default node;

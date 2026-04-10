@@ -1,5 +1,5 @@
 /**
- * @generated SignedSource<<64b55ac845cce051c5cea5c9a37c5b3f>>
+ * @generated SignedSource<<9f0216671f8c09a7010ce98a89eaaaec>>
  * @lightSyntaxTransform
  * @nogrep
  */
@@ -37,7 +37,13 @@ v1 = [
     "name": "id",
     "variableName": "videoId"
   }
-];
+],
+v2 = {
+  "enumValues": null,
+  "nullable": false,
+  "plural": false,
+  "type": "Int"
+};
 return {
   "fragment": {
     "argumentDefinitions": (v0/*: any*/),
@@ -114,6 +120,13 @@ return {
                 "kind": "ScalarField",
                 "name": "height",
                 "storageKey": null
+              },
+              {
+                "alias": null,
+                "args": null,
+                "kind": "ScalarField",
+                "name": "width",
+                "storageKey": null
               }
             ],
             "storageKey": null
@@ -124,7 +137,7 @@ return {
     ]
   },
   "params": {
-    "cacheID": "a4cd8ff3fa1100217107a19abd3530c2",
+    "cacheID": "eeffaed40798bd8b540f62cd67bc2db5",
     "id": null,
     "metadata": {
       "relayTestingSelectionTypeInfo": {
@@ -158,17 +171,13 @@ return {
           "plural": false,
           "type": "VideoStreamInfo"
         },
-        "video.videoStream.height": {
-          "enumValues": null,
-          "nullable": false,
-          "plural": false,
-          "type": "Int"
-        }
+        "video.videoStream.height": (v2/*: any*/),
+        "video.videoStream.width": (v2/*: any*/)
       }
     },
     "name": "VideoCardStoryQuery",
     "operationKind": "query",
-    "text": "query VideoCardStoryQuery(\n  $videoId: ID!\n) {\n  video(id: $videoId) {\n    ...VideoCard_video\n    id\n  }\n}\n\nfragment VideoCard_video on Video {\n  id\n  title\n  durationSeconds\n  videoStream {\n    height\n  }\n}\n"
+    "text": "query VideoCardStoryQuery(\n  $videoId: ID!\n) {\n  video(id: $videoId) {\n    ...VideoCard_video\n    id\n  }\n}\n\nfragment VideoCard_video on Video {\n  id\n  title\n  durationSeconds\n  videoStream {\n    height\n    width\n  }\n}\n"
   }
 };
 })();

@@ -1,5 +1,5 @@
 /**
- * @generated SignedSource<<f59a361a72896818d13496884c434503>>
+ * @generated SignedSource<<66ee142dd9612a0f343e9155386a5b2c>>
  * @lightSyntaxTransform
  * @nogrep
  */
@@ -17,6 +17,7 @@ export type MediaListItem_video$data = {
   readonly title: string;
   readonly videoStream: {
     readonly height: number;
+    readonly width: number;
   } | null | undefined;
   readonly " $fragmentType": "MediaListItem_video";
 };
@@ -73,6 +74,13 @@ const node: ReaderFragment = {
           "kind": "ScalarField",
           "name": "height",
           "storageKey": null
+        },
+        {
+          "alias": null,
+          "args": null,
+          "kind": "ScalarField",
+          "name": "width",
+          "storageKey": null
         }
       ],
       "storageKey": null
@@ -82,6 +90,6 @@ const node: ReaderFragment = {
   "abstractKey": null
 };
 
-(node as any).hash = "4a37e151db1ffb5236fad62e846c7e1e";
+(node as any).hash = "5f153a97b4f3864bc579b2e0e65368a4";
 
 export default node;

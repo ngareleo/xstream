@@ -1,5 +1,5 @@
 /**
- * @generated SignedSource<<782e3198747292a075ce21afce33cda1>>
+ * @generated SignedSource<<5a2922aa495de9d4ddfa8352dee4e814>>
  * @lightSyntaxTransform
  * @nogrep
  */
@@ -37,7 +37,13 @@ v1 = [
     "name": "id",
     "variableName": "videoId"
   }
-];
+],
+v2 = {
+  "enumValues": null,
+  "nullable": false,
+  "plural": false,
+  "type": "Int"
+};
 return {
   "fragment": {
     "argumentDefinitions": (v0/*: any*/),
@@ -107,6 +113,13 @@ return {
                 "kind": "ScalarField",
                 "name": "height",
                 "storageKey": null
+              },
+              {
+                "alias": null,
+                "args": null,
+                "kind": "ScalarField",
+                "name": "width",
+                "storageKey": null
               }
             ],
             "storageKey": null
@@ -124,7 +137,7 @@ return {
     ]
   },
   "params": {
-    "cacheID": "2701300830be33da0c64849f8de40abe",
+    "cacheID": "1edd3eca0f4ffe1acea01c5b091c3062",
     "id": null,
     "metadata": {
       "relayTestingSelectionTypeInfo": {
@@ -158,17 +171,13 @@ return {
           "plural": false,
           "type": "VideoStreamInfo"
         },
-        "video.videoStream.height": {
-          "enumValues": null,
-          "nullable": false,
-          "plural": false,
-          "type": "Int"
-        }
+        "video.videoStream.height": (v2/*: any*/),
+        "video.videoStream.width": (v2/*: any*/)
       }
     },
     "name": "PlayerSidebarStoryQuery",
     "operationKind": "query",
-    "text": "query PlayerSidebarStoryQuery(\n  $videoId: ID!\n) {\n  video(id: $videoId) {\n    ...PlayerSidebar_video\n    id\n  }\n}\n\nfragment PlayerSidebar_video on Video {\n  title\n  durationSeconds\n  videoStream {\n    height\n  }\n}\n"
+    "text": "query PlayerSidebarStoryQuery(\n  $videoId: ID!\n) {\n  video(id: $videoId) {\n    ...PlayerSidebar_video\n    id\n  }\n}\n\nfragment PlayerSidebar_video on Video {\n  title\n  durationSeconds\n  videoStream {\n    height\n    width\n  }\n}\n"
   }
 };
 })();

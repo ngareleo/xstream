@@ -10,6 +10,7 @@ const VIDEO_FRAGMENT = graphql`
     durationSeconds
     videoStream {
       height
+      width
     }
   }
 `;
@@ -21,7 +22,7 @@ interface Props {
 export const PlayerSidebar: FC<Props> = ({ video }) => {
   const data = useFragment(VIDEO_FRAGMENT, video);
 
-  const resolution = maxResolutionForHeight(data.videoStream?.height);
+  const resolution = maxResolutionForHeight(data.videoStream?.height, data.videoStream?.width);
 
   return (
     <div
@@ -125,7 +126,7 @@ export const PlayerSidebar: FC<Props> = ({ video }) => {
             fontWeight: 600,
           }}
         >
-          {resolution.toUpperCase()}
+          {resolution}
         </div>
       </div>
     </div>

@@ -1,5 +1,5 @@
 /**
- * @generated SignedSource<<bdbb66648c1da0c57eae182a1e0f7a47>>
+ * @generated SignedSource<<11a6267fc3d469ea7a9303838f5e56c2>>
  * @lightSyntaxTransform
  * @nogrep
  */
@@ -202,6 +202,13 @@ return {
                                 "kind": "ScalarField",
                                 "name": "height",
                                 "storageKey": null
+                              },
+                              {
+                                "alias": null,
+                                "args": null,
+                                "kind": "ScalarField",
+                                "name": "width",
+                                "storageKey": null
                               }
                             ],
                             "storageKey": null
@@ -225,7 +232,7 @@ return {
     ]
   },
   "params": {
-    "cacheID": "0803a666980993738256166088e436b4",
+    "cacheID": "0b6843b712f8b266aafb229cf17d5498",
     "id": null,
     "metadata": {
       "relayTestingSelectionTypeInfo": {
@@ -272,12 +279,13 @@ return {
           "type": "VideoStreamInfo"
         },
         "node.videos.edges.node.videoStream.height": (v5/*: any*/),
+        "node.videos.edges.node.videoStream.width": (v5/*: any*/),
         "node.videos.totalCount": (v5/*: any*/)
       }
     },
     "name": "MediaListStoryQuery",
     "operationKind": "query",
-    "text": "query MediaListStoryQuery(\n  $libraryId: ID!\n) {\n  node(id: $libraryId) {\n    __typename\n    ... on Library {\n      ...MediaList_library\n    }\n    id\n  }\n}\n\nfragment MediaGridItem_video on Video {\n  id\n  title\n  durationSeconds\n  fileSizeBytes\n  videoStream {\n    height\n  }\n}\n\nfragment MediaListItem_video on Video {\n  id\n  title\n  durationSeconds\n  fileSizeBytes\n  videoStream {\n    height\n  }\n}\n\nfragment MediaList_library on Library {\n  id\n  name\n  videos(first: 50) {\n    totalCount\n    edges {\n      node {\n        id\n        ...MediaListItem_video\n        ...MediaGridItem_video\n      }\n    }\n  }\n}\n"
+    "text": "query MediaListStoryQuery(\n  $libraryId: ID!\n) {\n  node(id: $libraryId) {\n    __typename\n    ... on Library {\n      ...MediaList_library\n    }\n    id\n  }\n}\n\nfragment MediaGridItem_video on Video {\n  id\n  title\n  durationSeconds\n  fileSizeBytes\n  videoStream {\n    height\n    width\n  }\n}\n\nfragment MediaListItem_video on Video {\n  id\n  title\n  durationSeconds\n  fileSizeBytes\n  videoStream {\n    height\n    width\n  }\n}\n\nfragment MediaList_library on Library {\n  id\n  name\n  videos(first: 50) {\n    totalCount\n    edges {\n      node {\n        id\n        ...MediaListItem_video\n        ...MediaGridItem_video\n      }\n    }\n  }\n}\n"
   }
 };
 })();

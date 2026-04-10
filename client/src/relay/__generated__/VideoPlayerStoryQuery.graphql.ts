@@ -1,5 +1,5 @@
 /**
- * @generated SignedSource<<2b5a538302e3c15535967f90d99c66fb>>
+ * @generated SignedSource<<1da88c644840f486b90754fd41c35e6e>>
  * @lightSyntaxTransform
  * @nogrep
  */
@@ -37,7 +37,13 @@ v1 = [
     "name": "id",
     "variableName": "videoId"
   }
-];
+],
+v2 = {
+  "enumValues": null,
+  "nullable": false,
+  "plural": false,
+  "type": "Int"
+};
 return {
   "fragment": {
     "argumentDefinitions": (v0/*: any*/),
@@ -100,6 +106,13 @@ return {
                 "kind": "ScalarField",
                 "name": "height",
                 "storageKey": null
+              },
+              {
+                "alias": null,
+                "args": null,
+                "kind": "ScalarField",
+                "name": "width",
+                "storageKey": null
               }
             ],
             "storageKey": null
@@ -124,7 +137,7 @@ return {
     ]
   },
   "params": {
-    "cacheID": "412e1253de5c4dc70519821ed7a1ee71",
+    "cacheID": "394dc121eed393b80bb10ecad9a6bdac",
     "id": null,
     "metadata": {
       "relayTestingSelectionTypeInfo": {
@@ -158,17 +171,13 @@ return {
           "plural": false,
           "type": "VideoStreamInfo"
         },
-        "video.videoStream.height": {
-          "enumValues": null,
-          "nullable": false,
-          "plural": false,
-          "type": "Int"
-        }
+        "video.videoStream.height": (v2/*: any*/),
+        "video.videoStream.width": (v2/*: any*/)
       }
     },
     "name": "VideoPlayerStoryQuery",
     "operationKind": "query",
-    "text": "query VideoPlayerStoryQuery(\n  $videoId: ID!\n) {\n  video(id: $videoId) {\n    ...VideoPlayer_video\n    id\n  }\n}\n\nfragment ControlBar_video on Video {\n  title\n  durationSeconds\n  videoStream {\n    height\n  }\n}\n\nfragment VideoPlayer_video on Video {\n  id\n  videoStream {\n    height\n  }\n  ...ControlBar_video\n}\n"
+    "text": "query VideoPlayerStoryQuery(\n  $videoId: ID!\n) {\n  video(id: $videoId) {\n    ...VideoPlayer_video\n    id\n  }\n}\n\nfragment ControlBar_video on Video {\n  title\n  durationSeconds\n  videoStream {\n    height\n    width\n  }\n}\n\nfragment VideoPlayer_video on Video {\n  id\n  videoStream {\n    height\n    width\n  }\n  ...ControlBar_video\n}\n"
   }
 };
 })();

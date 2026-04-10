@@ -1,5 +1,5 @@
 /**
- * @generated SignedSource<<df56611002360e43118c8bde2dbfe4e0>>
+ * @generated SignedSource<<bc87abc3633ff0f073505248cb5b05e9>>
  * @lightSyntaxTransform
  * @nogrep
  */
@@ -37,7 +37,13 @@ v1 = [
     "name": "id",
     "variableName": "videoId"
   }
-];
+],
+v2 = {
+  "enumValues": null,
+  "nullable": false,
+  "plural": false,
+  "type": "Int"
+};
 return {
   "fragment": {
     "argumentDefinitions": (v0/*: any*/),
@@ -107,6 +113,13 @@ return {
                 "kind": "ScalarField",
                 "name": "height",
                 "storageKey": null
+              },
+              {
+                "alias": null,
+                "args": null,
+                "kind": "ScalarField",
+                "name": "width",
+                "storageKey": null
               }
             ],
             "storageKey": null
@@ -124,7 +137,7 @@ return {
     ]
   },
   "params": {
-    "cacheID": "d7daf0ae5a9bb18a545948d705ba5af8",
+    "cacheID": "e54d4ade601ea1f916f14b832a63f377",
     "id": null,
     "metadata": {
       "relayTestingSelectionTypeInfo": {
@@ -158,17 +171,13 @@ return {
           "plural": false,
           "type": "VideoStreamInfo"
         },
-        "video.videoStream.height": {
-          "enumValues": null,
-          "nullable": false,
-          "plural": false,
-          "type": "Int"
-        }
+        "video.videoStream.height": (v2/*: any*/),
+        "video.videoStream.width": (v2/*: any*/)
       }
     },
     "name": "ControlBarStoryQuery",
     "operationKind": "query",
-    "text": "query ControlBarStoryQuery(\n  $videoId: ID!\n) {\n  video(id: $videoId) {\n    ...ControlBar_video\n    id\n  }\n}\n\nfragment ControlBar_video on Video {\n  title\n  durationSeconds\n  videoStream {\n    height\n  }\n}\n"
+    "text": "query ControlBarStoryQuery(\n  $videoId: ID!\n) {\n  video(id: $videoId) {\n    ...ControlBar_video\n    id\n  }\n}\n\nfragment ControlBar_video on Video {\n  title\n  durationSeconds\n  videoStream {\n    height\n    width\n  }\n}\n"
   }
 };
 })();

@@ -15,6 +15,7 @@ const VIDEO_FRAGMENT = graphql`
     fileSizeBytes
     videoStream {
       height
+      width
       codec
     }
   }
@@ -44,7 +45,7 @@ interface Props {
 export const VideoDetailsPanel: FC<Props> = ({ video, onClose }) => {
   const data = useFragment(VIDEO_FRAGMENT, video);
   const { bubble } = useNovaEventing();
-  const label = resolutionLabel(data.videoStream?.height);
+  const label = resolutionLabel(data.videoStream?.height, data.videoStream?.width);
 
   const handlePlay = (e: MouseEvent): void => {
     void bubble({ reactEvent: e, event: createVideoDetailsPanelPlayEvent(data.id) });

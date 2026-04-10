@@ -1,5 +1,5 @@
 /**
- * @generated SignedSource<<06c33c725f25e34a02e57a4b5e713d1e>>
+ * @generated SignedSource<<045787fcd909cb3ac5d906d0855e0925>>
  * @lightSyntaxTransform
  * @nogrep
  */
@@ -16,6 +16,7 @@ export type VideoCard_video$data = {
   readonly title: string;
   readonly videoStream: {
     readonly height: number;
+    readonly width: number;
   } | null | undefined;
   readonly " $fragmentType": "VideoCard_video";
 };
@@ -65,6 +66,13 @@ const node: ReaderFragment = {
           "kind": "ScalarField",
           "name": "height",
           "storageKey": null
+        },
+        {
+          "alias": null,
+          "args": null,
+          "kind": "ScalarField",
+          "name": "width",
+          "storageKey": null
         }
       ],
       "storageKey": null
@@ -74,6 +82,6 @@ const node: ReaderFragment = {
   "abstractKey": null
 };
 
-(node as any).hash = "e6d9935152d331ce551a2aed35cb48d0";
+(node as any).hash = "7c9580f56cf2c620ea445aa5e6bb66c1";
 
 export default node;

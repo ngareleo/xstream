@@ -1,5 +1,5 @@
 /**
- * @generated SignedSource<<43571690195c9d1bcd356fe89eefd312>>
+ * @generated SignedSource<<2a08153d86bf1d38afceb04109109059>>
  * @lightSyntaxTransform
  * @nogrep
  */
@@ -127,6 +127,13 @@ return {
                 "kind": "ScalarField",
                 "name": "height",
                 "storageKey": null
+              },
+              {
+                "alias": null,
+                "args": null,
+                "kind": "ScalarField",
+                "name": "width",
+                "storageKey": null
               }
             ],
             "storageKey": null
@@ -137,7 +144,7 @@ return {
     ]
   },
   "params": {
-    "cacheID": "3c1fc063966bc75565b78b2678ecba8b",
+    "cacheID": "b5b6b478900d74723ee2a43880ba549e",
     "id": null,
     "metadata": {
       "relayTestingSelectionTypeInfo": {
@@ -172,12 +179,13 @@ return {
           "plural": false,
           "type": "VideoStreamInfo"
         },
-        "video.videoStream.height": (v2/*: any*/)
+        "video.videoStream.height": (v2/*: any*/),
+        "video.videoStream.width": (v2/*: any*/)
       }
     },
     "name": "MediaListItemStoryQuery",
     "operationKind": "query",
-    "text": "query MediaListItemStoryQuery(\n  $videoId: ID!\n) {\n  video(id: $videoId) {\n    ...MediaListItem_video\n    id\n  }\n}\n\nfragment MediaListItem_video on Video {\n  id\n  title\n  durationSeconds\n  fileSizeBytes\n  videoStream {\n    height\n  }\n}\n"
+    "text": "query MediaListItemStoryQuery(\n  $videoId: ID!\n) {\n  video(id: $videoId) {\n    ...MediaListItem_video\n    id\n  }\n}\n\nfragment MediaListItem_video on Video {\n  id\n  title\n  durationSeconds\n  fileSizeBytes\n  videoStream {\n    height\n    width\n  }\n}\n"
   }
 };
 })();
