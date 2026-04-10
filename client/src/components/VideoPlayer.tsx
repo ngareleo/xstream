@@ -1,7 +1,10 @@
 import { Box, Text } from "@chakra-ui/react";
-import { type FC, useCallback, useRef, useState } from "react";
+import { mapEventMetadata, NovaEventingProvider } from "@nova/react";
+import type { EventWrapper } from "@nova/types";
+import { type FC, useCallback, useMemo, useRef, useState } from "react";
 import { graphql, useFragment } from "react-relay";
 
+import { ControlBarEventTypes, type ResolutionChangedData } from "../events.js";
 import type { JobProgress } from "../hooks/useJobSubscription.js";
 import { useJobSubscription } from "../hooks/useJobSubscription.js";
 import { useVideoPlayback } from "../hooks/useVideoPlayback.js";
@@ -54,6 +57,22 @@ export const VideoPlayer: FC<Props> = ({ video }) => {
     startPlayback(resolution);
   }, [resolution, startPlayback]);
 
+  const eventing = useMemo(
+    () => ({
+      bubble: async (wrapper: EventWrapper): Promise<void> => {
+        const { event } = wrapper;
+        if (event.originator !== "ControlBar") return;
+        if (event.type === ControlBarEventTypes.PLAY_REQUESTED) {
+          handlePlay();
+        } else if (event.type === ControlBarEventTypes.RESOLUTION_CHANGED && event.data) {
+          const { resolution: res } = event.data() as ResolutionChangedData;
+          handleResolutionChange(res);
+        }
+      },
+    }),
+    [handlePlay, handleResolutionChange]
+  );
+
   const progressLabel =
     status === "loading" && jobProgress && jobProgress.totalSegments != null
       ? `Transcoding ${jobProgress.completedSegments}/${jobProgress.totalSegments}`
@@ -92,14 +111,9 @@ export const VideoPlayer: FC<Props> = ({ video }) => {
         </Box>
       )}
 
-      <ControlBar
-        video={data}
-        videoRef={videoRef}
-        resolution={resolution}
-        status={status}
-        onPlay={handlePlay}
-        onResolutionChange={handleResolutionChange}
-      />
+      <NovaEventingProvider eventing={eventing} reactEventMapper={mapEventMetadata}>
+        <ControlBar video={data} videoRef={videoRef} resolution={resolution} status={status} />
+      </NovaEventingProvider>
     </Box>
   );
 };

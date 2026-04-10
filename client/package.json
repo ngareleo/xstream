@@ -17,13 +17,15 @@
   "dependencies": {
     "@chakra-ui/react": "^3.2.0",
     "@emotion/react": "^11.13.0",
+    "@nova/react": "^2.9.2",
+    "@nova/types": "^1.7.1",
+    "graphql": "^16.9.0",
+    "graphql-ws": "^5.16.0",
     "react": "^18.3.0",
     "react-dom": "^18.3.0",
     "react-relay": "^20.1.1",
-    "relay-runtime": "^20.1.1",
     "react-router-dom": "^6.26.0",
-    "graphql": "^16.9.0",
-    "graphql-ws": "^5.16.0"
+    "relay-runtime": "^20.1.1"
   },
   "devDependencies": {
     "@chromatic-com/storybook": "^5.1.1",

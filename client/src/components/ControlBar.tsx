@@ -1,7 +1,9 @@
 import { Badge, Box, IconButton, Slider, Stack, Text } from "@chakra-ui/react";
-import { type FC, type RefObject } from "react";
+import { useNovaEventing } from "@nova/react";
+import { type FC, type MouseEvent, type RefObject } from "react";
 import { graphql, useFragment } from "react-relay";
 
+import { CONTROL_BAR_ORIGINATOR, ControlBarEventTypes } from "../events.js";
 import { useVideoSync } from "../hooks/useVideoSync.js";
 import type { ControlBar_video$key } from "../relay/__generated__/ControlBar_video.graphql.js";
 import type { Resolution } from "../types.js";
@@ -23,28 +25,23 @@ interface Props {
   videoRef: RefObject<HTMLVideoElement | null>;
   resolution: Resolution;
   status: "idle" | "loading" | "playing";
-  onPlay: () => void;
-  onResolutionChange: (res: Resolution) => void;
 }
 
-export const ControlBar: FC<Props> = ({
-  video,
-  videoRef,
-  resolution,
-  status,
-  onPlay,
-  onResolutionChange,
-}) => {
+export const ControlBar: FC<Props> = ({ video, videoRef, resolution, status }) => {
   const data = useFragment(VIDEO_FRAGMENT, video);
   const { currentTime, isPlaying } = useVideoSync(videoRef);
+  const { bubble } = useNovaEventing();
 
   const maxResolution = maxResolutionForHeight(data.videoStream?.height);
 
-  const togglePlayPause = () => {
+  const togglePlayPause = (reactEvent: MouseEvent) => {
     const el = videoRef.current;
     if (!el) return;
     if (status === "idle") {
-      onPlay();
+      void bubble({
+        reactEvent,
+        event: { originator: CONTROL_BAR_ORIGINATOR, type: ControlBarEventTypes.PLAY_REQUESTED },
+      });
       return;
     }
     if (el.paused) void el.play();
@@ -55,6 +52,17 @@ export const ControlBar: FC<Props> = ({
     const el = videoRef.current;
     if (!el) return;
     el.currentTime = value[0];
+  };
+
+  const handleResolutionClick = (reactEvent: MouseEvent, r: Resolution) => {
+    void bubble({
+      reactEvent,
+      event: {
+        originator: CONTROL_BAR_ORIGINATOR,
+        type: ControlBarEventTypes.RESOLUTION_CHANGED,
+        data: () => ({ resolution: r }),
+      },
+    });
   };
 
   const availableResolutions = ALL_RESOLUTIONS.filter(
@@ -113,7 +121,7 @@ export const ControlBar: FC<Props> = ({
               cursor="pointer"
               colorPalette={resolution === r ? "blue" : "gray"}
               variant={resolution === r ? "solid" : "outline"}
-              onClick={() => onResolutionChange(r)}
+              onClick={(e) => handleResolutionClick(e, r)}
               px={2}
               py={1}
               fontSize="xs"

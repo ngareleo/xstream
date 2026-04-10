@@ -1,3 +1,5 @@
+import { mapEventMetadata, NovaEventingProvider } from "@nova/react";
+import type { EventWrapper } from "@nova/types";
 import { useRef } from "react";
 import { graphql } from "react-relay";
 import type { Meta, StoryObj } from "storybook-react-rsbuild";
@@ -14,6 +16,10 @@ import { ControlBar } from "./ControlBar.js";
  * Stories use @imchhh/storybook-addon-relay to supply mock fragment data.
  * The addon injects the fragment key as the `video` prop automatically via
  * getReferenceEntry.
+ *
+ * NovaEventingProvider is required because ControlBar uses useNovaEventing()
+ * internally to bubble play and resolution-change events instead of accepting
+ * callback props.
  */
 
 const STORY_QUERY = graphql`
@@ -24,10 +30,15 @@ const STORY_QUERY = graphql`
   }
 `;
 
+const noopEventing = {
+  bubble: (_event: EventWrapper): Promise<void> => Promise.resolve(),
+};
+
 /**
  * Thin wrapper: receives the fragment key that the addon injects and renders
- * ControlBar with static playback props. This lets us control `resolution` and
- * `status` via Storybook args while Relay provides the video data.
+ * ControlBar inside a NovaEventingProvider with static playback props. This
+ * lets us control `resolution` and `status` via Storybook args while Relay
+ * provides the video data.
  */
 interface WrapperProps {
   video: ControlBar_video$key;
@@ -36,20 +47,13 @@ interface WrapperProps {
 }
 
 function ControlBarWrapper({ video, resolution, status }: WrapperProps): JSX.Element {
-  // useFragment here so that ControlBar receives the already-read data shape
-  // (ControlBar itself calls useFragment internally — this is just for the key)
   const videoRef = useRef<HTMLVideoElement>(null);
   return (
     <div style={{ position: "relative", width: "100%", maxWidth: 960, background: "#000" }}>
       <video ref={videoRef} style={{ display: "none" }} />
-      <ControlBar
-        video={video}
-        videoRef={videoRef}
-        resolution={resolution}
-        status={status}
-        onPlay={() => {}}
-        onResolutionChange={() => {}}
-      />
+      <NovaEventingProvider eventing={noopEventing} reactEventMapper={mapEventMetadata}>
+        <ControlBar video={video} videoRef={videoRef} resolution={resolution} status={status} />
+      </NovaEventingProvider>
     </div>
   );
 }
