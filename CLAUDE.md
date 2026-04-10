@@ -129,7 +129,7 @@ tmp/
 4. Use the field in a fragment or query in the client
 
 ### Add a new SQLite table
-1. Add `CREATE TABLE IF NOT EXISTS ...` to `server/src/db/migrate.ts` (idempotent — no down migrations)
+1. Add `CREATE TABLE IF NOT EXISTS ...` to `server/src/db/migrate.ts` — use individual `db.run()` calls inside `db.transaction()()`, not `db.exec()` (deprecated in bun:sqlite)
 2. Create `server/src/db/queries/<table>.ts` with typed query functions
 3. Import and use those functions from services or resolvers
 
@@ -151,6 +151,7 @@ Edit `mediaFiles.json` — add an entry with `name`, `path`, `mediaType` (`movie
 **Hooks (see `client/src/hooks/`):**
 - `useVideoPlayback(videoRef, videoId, onJobCreated?)` — owns the full MSE + StreamingService + BufferManager pipeline including `START_TRANSCODE_MUTATION`; returns `{ status, error, startPlayback }`
 - `useVideoSync(videoRef)` — syncs `currentTime` and `isPlaying` from a `<video>` element using `requestAnimationFrame`; returns `{ currentTime, isPlaying }`
+- `useJobSubscription(jobId, onProgress)` — subscribes to `transcodeJobUpdated` for the given job ID and calls `onProgress` on each update; pass `null` to unsubscribe
 - New hooks belong in `client/src/hooks/`. Component files should contain only the component, its Relay fragment/mutation tags, and prop types.
 
 **Nova eventing (`@nova/react`) — component→parent communication:**
@@ -192,8 +193,19 @@ const { bubble } = useNovaEventing();
 
 void bubble({
   reactEvent,    // the React SyntheticEvent from the user interaction
-  event: { originator: MY_ORIGINATOR, type: MyEventTypes.SOMETHING_HAPPENED, data: () => ({ value }) },
+  event: createSomethingHappenedEvent(value),
 });
+```
+
+Use factory functions and type guards from the colocated `.events.ts` file — never build event objects inline at the call site:
+```ts
+// ControlBar.events.ts
+export function createSomethingHappenedEvent(value: string): NovaEvent<SomethingHappenedData> {
+  return { originator: MY_ORIGINATOR, type: MyEventTypes.SOMETHING_HAPPENED, data: () => ({ value }) };
+}
+export function isSomethingHappenedEvent(wrapper: EventWrapper): boolean {
+  return wrapper.event.originator === MY_ORIGINATOR && wrapper.event.type === MyEventTypes.SOMETHING_HAPPENED;
+}
 ```
 
 In the parent that handles the events (`NovaEventingInterceptor`):
@@ -207,9 +219,8 @@ const interceptor = useCallback(async (wrapper, _forwardEvent) => {
       const { value } = wrapper.event.data() as SomethingHappenedData;
       // handle it
     }
-    return undefined; // consumed — stop bubbling
   }
-  return wrapper; // unrecognised — forward to next interceptor / root provider
+  return wrapper; // always forward — only stop bubbling if forwarding causes an unwanted side effect
 }, [deps]);
 
 <NovaEventingInterceptor interceptor={interceptor}>
@@ -232,6 +243,7 @@ Event files are colocated with their component (`ControlBar.events.ts` next to `
 - Components receive fragment keys (`$key`), not raw data props
 - The GraphQL schema is the single source of truth for types — import from relay-generated artifacts or `src/types.ts`, never redefine locally
 - Fragment naming: `<ComponentName>_<propName>` (e.g. `VideoCard_video`)
+- **Operation naming**: the graphql tag's operation name must start with the containing module's filename. In `useVideoPlayback.ts`, the mutation must be `useVideoPlaybackStartTranscodeMutation`; in `PlayerPage.tsx`, the query must be `PlayerPageQuery`. relay-compiler enforces this and will error on mismatches.
 
 **Component definition style — always use `React.FC`:**
 ```tsx

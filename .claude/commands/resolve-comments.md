@@ -41,7 +41,8 @@ Work through each comment. For each:
 1. Read the comment carefully
 2. Identify the full scope (which files are affected)
 3. Implement the change across all affected files
-4. Do not mark a comment as resolved until the change is complete
+4. **Post a GH reply on the thread** explaining what was done and in which commit — this is mandatory, not optional. Do not mark a comment as resolved without replying.
+5. Do not mark a comment as resolved until the change and the reply are both complete
 
 ## Step 5 — reply and resolve
 

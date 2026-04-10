@@ -65,15 +65,16 @@ tvke is split into two workspaces: a Bun server and a Vite/React client. The ser
 
 | Component | File | Responsibility |
 |---|---|---|
-| Entry | `src/main.tsx` | Mounts providers: Relay, Chakra, Router |
+| Entry | `src/main.tsx` | Mounts providers: Relay, Chakra, `NovaEventingProvider` (`AppEventing`), Router |
 | Router | `src/router.tsx` | `/` → LibraryPage, `/play/:videoId` → PlayerPage |
 | Relay env | `src/relay/environment.ts` | HTTP fetch + WebSocket subscribe network layer |
 | Library page | `src/pages/LibraryPage.tsx` | Queries all libraries, renders grids, triggers rescan |
 | Player page | `src/pages/PlayerPage.tsx` | Loads video metadata, renders VideoPlayer |
 | Library grid | `src/components/LibraryGrid.tsx` | Relay fragment over a Library's videos connection |
 | Video card | `src/components/VideoCard.tsx` | Relay fragment, clickable tile with title + duration |
-| Video player | `src/components/VideoPlayer.tsx` | Orchestrates startTranscode mutation, StreamingService, BufferManager |
-| Control bar | `src/components/ControlBar.tsx` | Seek slider, play/pause, resolution selector |
+| Video player | `src/components/VideoPlayer.tsx` | `NovaEventingInterceptor` for ControlBar events; delegates MSE + transcoding to `useVideoPlayback` |
+| Control bar | `src/components/ControlBar.tsx` | Seek slider, play/pause, resolution selector; raises events via `useNovaEventing().bubble()` |
+| Control bar events | `src/components/ControlBar.events.ts` | Event type constants, factory functions, and type guards for ControlBar events |
 | Streaming service | `src/services/StreamingService.ts` | Fetch loop, length-prefix frame parser, pause/resume/cancel |
 | Buffer manager | `src/services/BufferManager.ts` | MSE SourceBuffer wrapper, sliding window eviction, back-pressure |
 

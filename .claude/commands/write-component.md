@@ -45,8 +45,30 @@ export function MyComponent({ id, title }: { id: string; title: string }) { ... 
 ### Hooks
 - Stateful side-effect logic (timers, event listeners, refs, async pipelines, MSE orchestration) goes in `client/src/hooks/` — never inline in a component file
 - Existing hooks:
-  - `useVideoPlayback(videoRef, videoId, startTranscode)` → `{ status, error, startPlayback }`
+  - `useVideoPlayback(videoRef, videoId, onJobCreated?)` → `{ status, error, startPlayback }`
   - `useVideoSync(videoRef)` → `{ currentTime, isPlaying }`
+  - `useJobSubscription(jobId, onProgress)` — subscribes to `transcodeJobUpdated`; pass `null` to unsubscribe
+
+### Nova eventing — for components that raise events
+
+If the component raises events (user interactions that propagate up to an ancestor), use `@nova/react` instead of callback props:
+
+1. Create a colocated `<ComponentName>.events.ts` file with:
+   - `ORIGINATOR` constant (`"ComponentName"`)
+   - `EventTypes` const object with event name strings
+   - Factory functions: `createXxxEvent(payload): NovaEvent<PayloadType>`
+   - Type guards: `isXxxEvent(wrapper: EventWrapper): boolean`
+2. In the component, call `useNovaEventing().bubble()` with the factory function — never build event objects inline
+3. In the parent that handles events, use `NovaEventingInterceptor` with a `useCallback` interceptor that always `return wrapper` (forward) unless forwarding causes a specific unwanted side effect
+4. Stories for components using `useNovaEventing()` must wrap with a no-op `NovaEventingProvider`:
+   ```tsx
+   const noopEventing = { bubble: (_e: EventWrapper): Promise<void> => Promise.resolve() };
+   <NovaEventingProvider eventing={noopEventing} reactEventMapper={mapEventMetadata}>
+     <MyComponent ... />
+   </NovaEventingProvider>
+   ```
+
+Do not use callback props (`onPlay`, `onChange`) for events that should propagate — use `bubble()`.
 
 ## Checklist before finishing
 
@@ -58,6 +80,9 @@ export function MyComponent({ id, title }: { id: string; title: string }) { ... 
 - [ ] Formatting helpers in `src/utils/`, not in the component
 - [ ] Side-effect logic in `src/hooks/`, not in the component
 - [ ] Run `bun relay` from `client/` if any graphql tag was added or changed
+- [ ] If the component raises events: colocated `.events.ts` file exists with factory functions + type guards
+- [ ] If the component raises events: uses `bubble()` not callback props
+- [ ] If the component raises events: stories wrap with no-op `NovaEventingProvider`
 
 ## Stories — every component must have a story
 
@@ -67,7 +92,7 @@ Use `@imchhh/storybook-addon-relay` for all Relay fragment components:
 
 ```tsx
 import { graphql } from "react-relay";
-import type { Meta, StoryObj } from "@storybook/react-vite";
+import type { Meta, StoryObj } from "storybook-react-rsbuild";
 import { MyComponent } from "./MyComponent.js";
 import type { MyComponentStoryQuery } from "../relay/__generated__/MyComponentStoryQuery.graphql.js";
 
