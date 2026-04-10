@@ -10,4 +10,8 @@ export default defineConfig({
       "/stream": "http://localhost:3001",
     },
   },
+  test: {
+    environment: "node",
+    include: ["src/**/*.test.ts"],
+  },
 });

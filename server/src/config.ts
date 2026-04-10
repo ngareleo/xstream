@@ -14,7 +14,8 @@ const root = resolve(import.meta.dir, "../..");
 const dev: AppConfig = {
   port: 3001,
   segmentDir: resolve(root, "tmp/segments"),
-  dbPath: resolve(root, "tmp/tvke.db"),
+  // Allow DB_PATH override so integration tests can use a temp database
+  dbPath: process.env.DB_PATH ?? resolve(root, "tmp/tvke.db"),
   mediaConfigPath: resolve(root, "mediaFiles.json"),
 };
 
