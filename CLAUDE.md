@@ -136,6 +136,21 @@ Edit `mediaFiles.json` — add an entry with `name`, `path`, `mediaType` (`movie
 
 ---
 
+## Future Direction — Rust Server Rewrite
+
+The Bun/JS server is a **prototype** used to validate the architecture quickly. Once the design is proven, the server will be rewritten in Rust for performance gains (critical at 4K bitrates). The React/Relay client is intended to remain **completely untouched** across this rewrite.
+
+GraphQL and the binary stream endpoint are the stable contracts between server and client. When porting to Rust:
+
+- The **GraphQL schema SDL** must be identical — same types, field names, enum values, and nullability
+- **Global ID encoding** must match: `base64("TypeName:localId")` — Relay's cache depends on this
+- **`/stream/:jobId` binary framing** must match: 4-byte big-endian uint32 length prefix + raw fMP4 bytes, init segment always first — documented in `docs/streaming-protocol.md`
+- **WebSocket subscriptions** must use the `graphql-ws` subprotocol (not the legacy `subscriptions-transport-ws`)
+
+Do not couple the client to anything server-implementation-specific. All client↔server communication must go through the GraphQL endpoint or the `/stream/` binary endpoint.
+
+---
+
 ## What Not To Do
 
 - **No ORM** — SQLite is accessed with raw `bun:sqlite` prepared statements only
