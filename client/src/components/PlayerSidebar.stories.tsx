@@ -54,7 +54,7 @@ export const Default: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await expect(canvas.getByText("Mad Max: Fury Road (2015)")).toBeInTheDocument();
-    await expect(canvas.getByText("4K")).toBeInTheDocument();
+    await expect(canvas.getByText("4k")).toBeInTheDocument();
   },
 };
 

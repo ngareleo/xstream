@@ -6,8 +6,8 @@ dist/
 *.db-shm
 *.db-wal
 
-# relay compiler artifacts are committed
-# (remove the line below if you want to gitignore them instead)
+# relay-compiler artifacts — generated at dev/CI startup, not committed
+client/src/relay/__generated__/
 
 *storybook.log
 storybook-static
