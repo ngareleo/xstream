@@ -1,13 +1,21 @@
 import type { Preview } from "@storybook/react-vite";
 import { ChakraProvider, defaultSystem } from "@chakra-ui/react";
-import React from "react";
+import React, { Suspense } from "react";
+import { MemoryRouter } from "react-router-dom";
+
+import { withRelay } from "../src/storybook/withRelay.js";
 
 const preview: Preview = {
   decorators: [
+    withRelay,
     (Story) => (
-      <ChakraProvider value={defaultSystem}>
-        <Story />
-      </ChakraProvider>
+      <MemoryRouter>
+        <ChakraProvider value={defaultSystem}>
+          <Suspense fallback={<div style={{ padding: 16, color: "#aaa" }}>Loading…</div>}>
+            <Story />
+          </Suspense>
+        </ChakraProvider>
+      </MemoryRouter>
     ),
   ],
   parameters: {

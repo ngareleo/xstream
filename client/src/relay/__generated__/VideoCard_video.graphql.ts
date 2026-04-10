@@ -8,15 +8,18 @@
 /* eslint-disable */
 // @ts-nocheck
 
-import { ReaderFragment } from 'relay-runtime';
+import { ReaderFragment } from "relay-runtime";
 import { FragmentRefs } from "relay-runtime";
 export type VideoCard_video$data = {
   readonly durationSeconds: number;
   readonly id: string;
   readonly title: string;
-  readonly videoStream: {
-    readonly height: number;
-  } | null | undefined;
+  readonly videoStream:
+    | {
+        readonly height: number;
+      }
+    | null
+    | undefined;
   readonly " $fragmentType": "VideoCard_video";
 };
 export type VideoCard_video$key = {
@@ -25,53 +28,53 @@ export type VideoCard_video$key = {
 };
 
 const node: ReaderFragment = {
-  "argumentDefinitions": [],
-  "kind": "Fragment",
-  "metadata": null,
-  "name": "VideoCard_video",
-  "selections": [
+  argumentDefinitions: [],
+  kind: "Fragment",
+  metadata: null,
+  name: "VideoCard_video",
+  selections: [
     {
-      "alias": null,
-      "args": null,
-      "kind": "ScalarField",
-      "name": "id",
-      "storageKey": null
+      alias: null,
+      args: null,
+      kind: "ScalarField",
+      name: "id",
+      storageKey: null,
     },
     {
-      "alias": null,
-      "args": null,
-      "kind": "ScalarField",
-      "name": "title",
-      "storageKey": null
+      alias: null,
+      args: null,
+      kind: "ScalarField",
+      name: "title",
+      storageKey: null,
     },
     {
-      "alias": null,
-      "args": null,
-      "kind": "ScalarField",
-      "name": "durationSeconds",
-      "storageKey": null
+      alias: null,
+      args: null,
+      kind: "ScalarField",
+      name: "durationSeconds",
+      storageKey: null,
     },
     {
-      "alias": null,
-      "args": null,
-      "concreteType": "VideoStreamInfo",
-      "kind": "LinkedField",
-      "name": "videoStream",
-      "plural": false,
-      "selections": [
+      alias: null,
+      args: null,
+      concreteType: "VideoStreamInfo",
+      kind: "LinkedField",
+      name: "videoStream",
+      plural: false,
+      selections: [
         {
-          "alias": null,
-          "args": null,
-          "kind": "ScalarField",
-          "name": "height",
-          "storageKey": null
-        }
+          alias: null,
+          args: null,
+          kind: "ScalarField",
+          name: "height",
+          storageKey: null,
+        },
       ],
-      "storageKey": null
-    }
+      storageKey: null,
+    },
   ],
-  "type": "Video",
-  "abstractKey": null
+  type: "Video",
+  abstractKey: null,
 };
 
 (node as any).hash = "e6d9935152d331ce551a2aed35cb48d0";

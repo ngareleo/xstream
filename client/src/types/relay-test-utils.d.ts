@@ -31,6 +31,7 @@ declare module "relay-test-utils" {
     queueOperationResolver(
       resolver: (operation: OperationDescriptor) => { data: Record<string, unknown> }
     ): void;
+    queuePendingOperation(query: unknown, variables: Record<string, unknown>): void;
     getAllOperations(): OperationDescriptor[];
     resolveMostRecentOperation(
       resolver: (operation: OperationDescriptor) => { data: Record<string, unknown> }

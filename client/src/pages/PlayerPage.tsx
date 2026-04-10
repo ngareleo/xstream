@@ -9,12 +9,6 @@ import type { PlayerPageQuery } from "../relay/__generated__/PlayerPageQuery.gra
 const VIDEO_QUERY = graphql`
   query PlayerPageQuery($id: ID!) {
     video(id: $id) {
-      id
-      title
-      durationSeconds
-      videoStream {
-        height
-      }
       ...VideoPlayer_video
     }
   }

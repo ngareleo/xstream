@@ -21,7 +21,8 @@ interface UseVideoPlaybackResult {
 export function useVideoPlayback(
   videoRef: RefObject<HTMLVideoElement | null>,
   videoId: string,
-  startTranscode: StartTranscodeFn
+  startTranscode: StartTranscodeFn,
+  onJobCreated?: (jobId: string | null) => void
 ): UseVideoPlaybackResult {
   const streamingRef = useRef<StreamingService | null>(null);
   const bufferRef = useRef<BufferManager | null>(null);
@@ -29,11 +30,15 @@ export function useVideoPlayback(
   const [status, setStatus] = useState<PlaybackStatus>("idle");
   const [error, setError] = useState<string | null>(null);
 
+  const onJobCreatedRef = useRef(onJobCreated);
+  onJobCreatedRef.current = onJobCreated;
+
   const teardown = useCallback(() => {
     streamingRef.current?.cancel();
     bufferRef.current?.teardown();
     streamingRef.current = null;
     bufferRef.current = null;
+    onJobCreatedRef.current?.(null);
   }, []);
 
   const startPlayback = useCallback(
@@ -53,7 +58,9 @@ export function useVideoPlayback(
           ] as Parameters<StartTranscodeFn>[0]["variables"]["resolution"],
         },
         onCompleted: (response) => {
-          const rawJobId = atob(response.startTranscode.id).replace("TranscodeJob:", "");
+          const jobGlobalId = response.startTranscode.id;
+          const rawJobId = atob(jobGlobalId).replace("TranscodeJob:", "");
+          onJobCreatedRef.current?.(jobGlobalId);
           void (async () => {
             const buffer = new BufferManager(
               videoEl,

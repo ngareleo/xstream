@@ -8,7 +8,7 @@
 /* eslint-disable */
 // @ts-nocheck
 
-import { ReaderFragment } from 'relay-runtime';
+import { ReaderFragment } from "relay-runtime";
 import { FragmentRefs } from "relay-runtime";
 export type LibraryGrid_library$data = {
   readonly videos: {
@@ -27,65 +27,65 @@ export type LibraryGrid_library$key = {
 };
 
 const node: ReaderFragment = {
-  "argumentDefinitions": [],
-  "kind": "Fragment",
-  "metadata": null,
-  "name": "LibraryGrid_library",
-  "selections": [
+  argumentDefinitions: [],
+  kind: "Fragment",
+  metadata: null,
+  name: "LibraryGrid_library",
+  selections: [
     {
-      "alias": null,
-      "args": [
+      alias: null,
+      args: [
         {
-          "kind": "Literal",
-          "name": "first",
-          "value": 50
-        }
+          kind: "Literal",
+          name: "first",
+          value: 50,
+        },
       ],
-      "concreteType": "VideoConnection",
-      "kind": "LinkedField",
-      "name": "videos",
-      "plural": false,
-      "selections": [
+      concreteType: "VideoConnection",
+      kind: "LinkedField",
+      name: "videos",
+      plural: false,
+      selections: [
         {
-          "alias": null,
-          "args": null,
-          "concreteType": "VideoEdge",
-          "kind": "LinkedField",
-          "name": "edges",
-          "plural": true,
-          "selections": [
+          alias: null,
+          args: null,
+          concreteType: "VideoEdge",
+          kind: "LinkedField",
+          name: "edges",
+          plural: true,
+          selections: [
             {
-              "alias": null,
-              "args": null,
-              "concreteType": "Video",
-              "kind": "LinkedField",
-              "name": "node",
-              "plural": false,
-              "selections": [
+              alias: null,
+              args: null,
+              concreteType: "Video",
+              kind: "LinkedField",
+              name: "node",
+              plural: false,
+              selections: [
                 {
-                  "alias": null,
-                  "args": null,
-                  "kind": "ScalarField",
-                  "name": "id",
-                  "storageKey": null
+                  alias: null,
+                  args: null,
+                  kind: "ScalarField",
+                  name: "id",
+                  storageKey: null,
                 },
                 {
-                  "args": null,
-                  "kind": "FragmentSpread",
-                  "name": "VideoCard_video"
-                }
+                  args: null,
+                  kind: "FragmentSpread",
+                  name: "VideoCard_video",
+                },
               ],
-              "storageKey": null
-            }
+              storageKey: null,
+            },
           ],
-          "storageKey": null
-        }
+          storageKey: null,
+        },
       ],
-      "storageKey": "videos(first:50)"
-    }
+      storageKey: "videos(first:50)",
+    },
   ],
-  "type": "Library",
-  "abstractKey": null
+  type: "Library",
+  abstractKey: null,
 };
 
 (node as any).hash = "88a0b561fffda2a8836314abbd9792df";
