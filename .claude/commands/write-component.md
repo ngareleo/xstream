@@ -59,6 +59,64 @@ export function MyComponent({ id, title }: { id: string; title: string }) { ... 
 - [ ] Side-effect logic in `src/hooks/`, not in the component
 - [ ] Run `bun relay` from `client/` if any graphql tag was added or changed
 
+## Stories — every component must have a story
+
+Stories live alongside the component in `<ComponentName>.stories.tsx`.
+
+Use `@imchhh/storybook-addon-relay` for all Relay fragment components:
+
+```tsx
+import { graphql } from "react-relay";
+import type { Meta, StoryObj } from "@storybook/react-vite";
+import { MyComponent } from "./MyComponent.js";
+import type { MyComponentStoryQuery } from "../relay/__generated__/MyComponentStoryQuery.graphql.js";
+
+const STORY_QUERY = graphql`
+  query MyComponentStoryQuery($id: ID!) @relay_test_operation {
+    node(id: $id) {
+      ... on MyType {
+        ...MyComponent_item
+      }
+    }
+  }
+`;
+
+const meta: Meta<typeof MyComponent> = {
+  title: "Components/MyComponent",
+  component: MyComponent,
+  parameters: {
+    relay: {
+      query: STORY_QUERY,
+      variables: { id: "MyType:mock" },
+      getReferenceEntry: (result: MyComponentStoryQuery["response"]) => ["item", result.node],
+      mockResolvers: { MyType: () => ({ /* fields the fragment reads */ }) },
+    },
+  },
+};
+export default meta;
+```
+
+**Story rules:**
+- Mark story queries with `@relay_test_operation` — the addon requires it
+- `getReferenceEntry` must return `[propName, fragmentKey]` matching the component's prop name
+- Each visual variant is a named `StoryObj` export with its own `parameters.relay` override
+- Stories test **visual states only** — no application logic inside story files
+- Add `play` functions to verify interactive states (hover, error overlay, empty state):
+
+```tsx
+import { userEvent, within, expect } from "@storybook/test";
+
+export const Hovered: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.hover(canvas.getByRole("article"));
+    await expect(canvas.getByText("Play")).toBeVisible();
+  },
+};
+```
+
+Run `bun relay` from `client/` after adding or changing any `graphql` tag in a stories file.
+
 ## After writing
 
 If any `graphql` tag was added or changed:

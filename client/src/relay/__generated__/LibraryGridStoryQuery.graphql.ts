@@ -1,5 +1,5 @@
 /**
- * @generated SignedSource<<fcab1de85f4040ce7c7087965b5adf50>>
+ * @generated SignedSource<<fa2e70377acf118597787c53758f3c4f>>
  * @lightSyntaxTransform
  * @nogrep
  */
@@ -44,6 +44,18 @@ v2 = {
   "kind": "ScalarField",
   "name": "id",
   "storageKey": null
+},
+v3 = {
+  "enumValues": null,
+  "nullable": false,
+  "plural": false,
+  "type": "String"
+},
+v4 = {
+  "enumValues": null,
+  "nullable": false,
+  "plural": false,
+  "type": "ID"
 };
 return {
   "fragment": {
@@ -188,7 +200,56 @@ return {
   "params": {
     "cacheID": "59acc61e55d5198ee16dbb18c48cacdb",
     "id": null,
-    "metadata": {},
+    "metadata": {
+      "relayTestingSelectionTypeInfo": {
+        "node": {
+          "enumValues": null,
+          "nullable": true,
+          "plural": false,
+          "type": "Node"
+        },
+        "node.__typename": (v3/*: any*/),
+        "node.id": (v4/*: any*/),
+        "node.videos": {
+          "enumValues": null,
+          "nullable": false,
+          "plural": false,
+          "type": "VideoConnection"
+        },
+        "node.videos.edges": {
+          "enumValues": null,
+          "nullable": false,
+          "plural": true,
+          "type": "VideoEdge"
+        },
+        "node.videos.edges.node": {
+          "enumValues": null,
+          "nullable": false,
+          "plural": false,
+          "type": "Video"
+        },
+        "node.videos.edges.node.durationSeconds": {
+          "enumValues": null,
+          "nullable": false,
+          "plural": false,
+          "type": "Float"
+        },
+        "node.videos.edges.node.id": (v4/*: any*/),
+        "node.videos.edges.node.title": (v3/*: any*/),
+        "node.videos.edges.node.videoStream": {
+          "enumValues": null,
+          "nullable": true,
+          "plural": false,
+          "type": "VideoStreamInfo"
+        },
+        "node.videos.edges.node.videoStream.height": {
+          "enumValues": null,
+          "nullable": false,
+          "plural": false,
+          "type": "Int"
+        }
+      }
+    },
     "name": "LibraryGridStoryQuery",
     "operationKind": "query",
     "text": "query LibraryGridStoryQuery(\n  $libraryId: ID!\n) {\n  node(id: $libraryId) {\n    __typename\n    ... on Library {\n      ...LibraryGrid_library\n    }\n    id\n  }\n}\n\nfragment LibraryGrid_library on Library {\n  videos(first: 50) {\n    edges {\n      node {\n        id\n        ...VideoCard_video\n      }\n    }\n  }\n}\n\nfragment VideoCard_video on Video {\n  id\n  title\n  durationSeconds\n  videoStream {\n    height\n  }\n}\n"
@@ -196,6 +257,6 @@ return {
 };
 })();
 
-(node as any).hash = "75005cb4f6e8b64ee3f647ee375f2737";
+(node as any).hash = "9fae4188c92b7d8c12e32dbf0dae70b1";
 
 export default node;

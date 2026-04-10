@@ -159,8 +159,12 @@ Edit `mediaFiles.json` — add an entry with `name`, `path`, `mediaType` (`movie
 
 **Storybook rule — every component must have a story:**
 - Stories live in `<ComponentName>.stories.tsx` alongside the component
-- Relay fragment components use `relay-test-utils` (`createMockEnvironment` + `MockPayloadGenerator`) with a story query (`<ComponentName>StoryQuery`) to provide mock data — run `bun relay` in `client/` after adding a story query
-- Stories test visual states, not behaviour; keep them simple and free of application logic
+- Relay fragment components use **`@imchhh/storybook-addon-relay`** — add `parameters.relay` with a `@relay_test_operation` query, `getReferenceEntry`, and `mockResolvers`. The addon handles the mock environment automatically.
+- Do NOT use `createMockEnvironment` / `RelayEnvironmentProvider` directly — use the addon instead
+- Story queries must have `@relay_test_operation` directive; run `bun relay` from `client/` after adding/changing a story query
+- Each visual variant is a named export with its own `parameters.relay.mockResolvers` override
+- Stories test visual states, not behaviour; keep them free of application logic
+- Add `play` functions (from `@storybook/test`) to verify interactive states
 
 ---
 

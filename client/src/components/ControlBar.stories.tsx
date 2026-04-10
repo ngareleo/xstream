@@ -1,43 +1,48 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { Suspense, useRef, useMemo } from "react";
-import { graphql, useLazyLoadQuery, RelayEnvironmentProvider } from "react-relay";
-import { createMockEnvironment, MockPayloadGenerator } from "relay-test-utils";
+import { useRef } from "react";
+import { graphql } from "react-relay";
 import { ControlBar } from "./ControlBar.js";
 import type { ControlBarStoryQuery } from "../relay/__generated__/ControlBarStoryQuery.graphql.js";
+import type { ControlBar_video$key } from "../relay/__generated__/ControlBar_video.graphql.js";
 
 /**
  * ControlBar is the playback UI: seek bar, play/pause, time display, title,
- * and resolution badges. It reads video metadata (title, duration, resolution
- * cap) via a Relay fragment and live state via useVideoSync.
+ * and resolution badges. It reads video metadata via a Relay fragment and live
+ * state via useVideoSync.
  *
- * Stories seed a mock Relay environment via relay-test-utils so no server is needed.
+ * Stories use @imchhh/storybook-addon-relay to supply mock fragment data.
+ * The addon injects the fragment key as the `video` prop automatically via
+ * getReferenceEntry.
  */
 
 const STORY_QUERY = graphql`
-  query ControlBarStoryQuery($videoId: ID!) {
+  query ControlBarStoryQuery($videoId: ID!) @relay_test_operation {
     video(id: $videoId) {
       ...ControlBar_video
     }
   }
 `;
 
-interface StoryArgs {
-  title: string;
-  durationSeconds: number;
-  height: number;
+/**
+ * Thin wrapper: receives the fragment key that the addon injects and renders
+ * ControlBar with static playback props. This lets us control `resolution` and
+ * `status` via Storybook args while Relay provides the video data.
+ */
+interface WrapperProps {
+  video: ControlBar_video$key;
   resolution: "240p" | "360p" | "480p" | "720p" | "1080p" | "4k";
   status: "idle" | "loading" | "playing";
 }
 
-function ControlBarLoader({ resolution, status }: Pick<StoryArgs, "resolution" | "status">) {
-  const data = useLazyLoadQuery<ControlBarStoryQuery>(STORY_QUERY, { videoId: "Video:mock" });
+function ControlBarWrapper({ video, resolution, status }: WrapperProps): JSX.Element {
+  // useFragment here so that ControlBar receives the already-read data shape
+  // (ControlBar itself calls useFragment internally — this is just for the key)
   const videoRef = useRef<HTMLVideoElement>(null);
-  if (!data.video) return null;
   return (
     <div style={{ position: "relative", width: "100%", maxWidth: 960, background: "#000" }}>
       <video ref={videoRef} style={{ display: "none" }} />
       <ControlBar
-        video={data.video}
+        video={video}
         videoRef={videoRef}
         resolution={resolution}
         status={status}
@@ -48,50 +53,105 @@ function ControlBarLoader({ resolution, status }: Pick<StoryArgs, "resolution" |
   );
 }
 
-function ControlBarStory({ title, durationSeconds, height, resolution, status }: StoryArgs) {
-  const env = useMemo(() => {
-    const e = createMockEnvironment();
-    e.mock.queueOperationResolver((op) =>
-      MockPayloadGenerator.generate(op, {
-        Video() {
-          return { title, durationSeconds, videoStream: { height } };
-        },
-      })
-    );
-    return e;
-  }, [title, durationSeconds, height]);
-
-  return (
-    <RelayEnvironmentProvider environment={env}>
-      <Suspense fallback={null}>
-        <ControlBarLoader resolution={resolution} status={status} />
-      </Suspense>
-    </RelayEnvironmentProvider>
-  );
-}
-
-const meta: Meta<StoryArgs> = {
+const meta: Meta<WrapperProps> = {
   title: "Components/ControlBar",
-  component: ControlBarStory as never,
-  parameters: { layout: "fullscreen" },
+  component: ControlBarWrapper,
+  parameters: {
+    layout: "fullscreen",
+    relay: {
+      query: STORY_QUERY,
+      variables: { videoId: "Video:mock" },
+      getReferenceEntry: (result: ControlBarStoryQuery["response"]) => ["video", result.video],
+      mockResolvers: {
+        Video: () => ({
+          title: "Mad Max: Fury Road (2015)",
+          durationSeconds: 7200,
+          videoStream: { height: 2160 },
+        }),
+      },
+    },
+  },
   args: {
-    title: "Mad Max: Fury Road (2015)",
-    durationSeconds: 7200,
-    height: 2160,
     resolution: "1080p",
     status: "playing",
   },
 };
 
 export default meta;
-type Story = StoryObj<StoryArgs>;
+type Story = StoryObj<WrapperProps>;
 
 export const Playing: Story = {};
+
 export const Idle: Story = { args: { status: "idle" } };
+
 export const Loading: Story = { args: { status: "loading" } };
-export const CappedAt1080p: Story = { args: { height: 1080, resolution: "1080p" } };
-export const CappedAt720p: Story = { args: { height: 720, resolution: "720p" } };
-export const LongTitle: Story = {
-  args: { title: "One Battle After Another: The Director's Cut Extended Edition (2025)" },
+
+export const CappedAt1080p: Story = {
+  args: { resolution: "1080p" },
+  parameters: {
+    relay: {
+      query: STORY_QUERY,
+      variables: { videoId: "Video:mock" },
+      getReferenceEntry: (result: ControlBarStoryQuery["response"]) => ["video", result.video],
+      mockResolvers: {
+        Video: () => ({
+          title: "Mad Max: Fury Road (2015)",
+          durationSeconds: 7200,
+          videoStream: { height: 1080 },
+        }),
+      },
+    },
+  },
 };
-export const ShortVideo: Story = { args: { durationSeconds: 90 } };
+
+export const CappedAt720p: Story = {
+  args: { resolution: "720p" },
+  parameters: {
+    relay: {
+      query: STORY_QUERY,
+      variables: { videoId: "Video:mock" },
+      getReferenceEntry: (result: ControlBarStoryQuery["response"]) => ["video", result.video],
+      mockResolvers: {
+        Video: () => ({
+          title: "Mad Max: Fury Road (2015)",
+          durationSeconds: 7200,
+          videoStream: { height: 720 },
+        }),
+      },
+    },
+  },
+};
+
+export const LongTitle: Story = {
+  parameters: {
+    relay: {
+      query: STORY_QUERY,
+      variables: { videoId: "Video:mock" },
+      getReferenceEntry: (result: ControlBarStoryQuery["response"]) => ["video", result.video],
+      mockResolvers: {
+        Video: () => ({
+          title: "One Battle After Another: The Director's Cut Extended Edition (2025)",
+          durationSeconds: 7200,
+          videoStream: { height: 2160 },
+        }),
+      },
+    },
+  },
+};
+
+export const ShortVideo: Story = {
+  parameters: {
+    relay: {
+      query: STORY_QUERY,
+      variables: { videoId: "Video:mock" },
+      getReferenceEntry: (result: ControlBarStoryQuery["response"]) => ["video", result.video],
+      mockResolvers: {
+        Video: () => ({
+          title: "Mad Max: Fury Road (2015)",
+          durationSeconds: 90,
+          videoStream: { height: 2160 },
+        }),
+      },
+    },
+  },
+};

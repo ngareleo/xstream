@@ -1,29 +1,25 @@
 /**
  * GraphQL API integration tests.
  *
- * These tests spin up the real yoga handler against a temp SQLite database
- * and verify end-to-end behavior: DB → resolvers → GraphQL response.
+ * These tests spin up the real yoga handler against the shared test SQLite
+ * database (DB_PATH set by src/test/setup.ts preload) and verify end-to-end
+ * behavior: DB → resolvers → GraphQL response.
+ *
+ * Use unique IDs (gql-lib1, gql-vid1, …) to avoid collisions with other test
+ * files that share this database.
  *
  * Run with: bun test src/graphql/graphql.integration.test.ts
- * (DB_PATH is set in beforeAll to an isolated temp file)
  */
-import { describe, test, expect, beforeAll, afterAll } from "bun:test";
-import { mkdirSync, rmSync } from "fs";
-import { join } from "path";
+import { describe, test, expect, beforeAll } from "bun:test";
 
-const TEST_DIR = `/tmp/tvke-test-${Date.now()}`;
-
-// Must be set before any import that triggers getDb() / config
-process.env.DB_PATH = join(TEST_DIR, "test.db");
-
-// These imports must come AFTER the env var is set
+// These imports must come AFTER DB_PATH is set (handled by the preload)
 const { yoga } = await import("../routes/graphql.js");
 const { getDb } = await import("../db/index.js");
 const { upsertLibrary } = await import("../db/queries/libraries.js");
 const { upsertVideo } = await import("../db/queries/videos.js");
 const { toGlobalId } = await import("./relay.js");
 
-function gql(query: string, variables?: Record<string, unknown>) {
+function gql(query: string, variables?: Record<string, unknown>): ReturnType<typeof yoga.fetch> {
   return yoga.fetch(
     new Request("http://localhost/graphql", {
       method: "POST",
@@ -34,23 +30,22 @@ function gql(query: string, variables?: Record<string, unknown>) {
 }
 
 beforeAll(() => {
-  mkdirSync(TEST_DIR, { recursive: true });
   // Opening the DB triggers migrations
   getDb();
 
-  // Seed test data
+  // Seed test data with unique IDs so this file doesn't collide with other test files
   upsertLibrary({
-    id: "lib1",
+    id: "gql-lib1",
     name: "Test Library",
-    path: "/tmp/test-library",
+    path: "/tmp/gql-test-library",
     media_type: "movies",
     env: "dev",
   });
 
   upsertVideo({
-    id: "vid1",
-    library_id: "lib1",
-    path: "/tmp/test-library/movie.mp4",
+    id: "gql-vid1",
+    library_id: "gql-lib1",
+    path: "/tmp/gql-test-library/movie.mp4",
     filename: "movie.mp4",
     title: "Test Movie",
     duration_seconds: 120,
@@ -58,10 +53,6 @@ beforeAll(() => {
     bitrate: 5000000,
     scanned_at: new Date().toISOString(),
   });
-});
-
-afterAll(() => {
-  rmSync(TEST_DIR, { recursive: true, force: true });
 });
 
 describe("GraphQL API", () => {
@@ -72,24 +63,26 @@ describe("GraphQL API", () => {
     expect(body.data.__schema.queryType.name).toBe("Query");
   });
 
-  test("libraries query returns seeded library", async () => {
+  test("libraries query includes seeded library", async () => {
     const res = await gql("{ libraries { id name } }");
     const body = (await res.json()) as { data: { libraries: { id: string; name: string }[] } };
     expect(res.status).toBe(200);
-    expect(body.data.libraries).toHaveLength(1);
-    expect(body.data.libraries[0].name).toBe("Test Library");
+    const names = body.data.libraries.map((l) => l.name);
+    expect(names).toContain("Test Library");
   });
 
   test("library id is a valid Relay global ID", async () => {
-    const res = await gql("{ libraries { id } }");
-    const body = (await res.json()) as { data: { libraries: { id: string }[] } };
-    const [lib] = body.data.libraries;
-    const decoded = Buffer.from(lib.id, "base64").toString("utf8");
-    expect(decoded).toBe("Library:lib1");
+    const globalId = toGlobalId("Library", "gql-lib1");
+    const res = await gql(`query ($id: ID!) { node(id: $id) { id ... on Library { name } } }`, {
+      id: globalId,
+    });
+    const body = (await res.json()) as { data: { node: { id: string } } };
+    const decoded = Buffer.from(body.data.node.id, "base64").toString("utf8");
+    expect(decoded).toBe("Library:gql-lib1");
   });
 
   test("node query resolves a Library by global ID", async () => {
-    const globalId = toGlobalId("Library", "lib1");
+    const globalId = toGlobalId("Library", "gql-lib1");
     const res = await gql(`query ($id: ID!) { node(id: $id) { id ... on Library { name } } }`, {
       id: globalId,
     });
@@ -99,7 +92,7 @@ describe("GraphQL API", () => {
   });
 
   test("video query returns a video by global ID", async () => {
-    const globalId = toGlobalId("Video", "vid1");
+    const globalId = toGlobalId("Video", "gql-vid1");
     const res = await gql(`query ($id: ID!) { video(id: $id) { id title durationSeconds } }`, {
       id: globalId,
     });

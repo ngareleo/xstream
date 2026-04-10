@@ -2,27 +2,11 @@
  * Integration tests for the transcode_jobs DB query functions.
  * Uses a temp SQLite database to verify the actual SQL is correct.
  */
-import { describe, test, expect, beforeAll, afterAll } from "bun:test";
-import { mkdirSync, rmSync } from "fs";
-import { join } from "path";
-import { tmpdir } from "os";
+// DB_PATH is set by src/test/setup.ts (Bun preload) — do not override it here.
+import { describe, test, expect, beforeAll } from "bun:test";
 
-const TEST_DIR = join(tmpdir(), `tvke-jobs-test-${Date.now()}`);
-mkdirSync(TEST_DIR, { recursive: true });
-process.env.DB_PATH = join(TEST_DIR, "test.db");
-
-// Import AFTER setting DB_PATH so the config picks it up
 const { insertJob, updateJobStatus, getJobById, getInterruptedJobs } = await import("./jobs.js");
 const { getDb } = await import("../index.js");
-
-afterAll(() => {
-  try {
-    getDb().close();
-  } catch {
-    /* already closed */
-  }
-  rmSync(TEST_DIR, { recursive: true, force: true });
-});
 
 beforeAll(() => {
   // Seed parent rows required by foreign key constraints

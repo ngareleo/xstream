@@ -1,5 +1,5 @@
 /**
- * @generated SignedSource<<64b55ac845cce051c5cea5c9a37c5b3f>>
+ * @generated SignedSource<<2b5a538302e3c15535967f90d99c66fb>>
  * @lightSyntaxTransform
  * @nogrep
  */
@@ -10,17 +10,17 @@
 
 import { ConcreteRequest } from 'relay-runtime';
 import { FragmentRefs } from "relay-runtime";
-export type VideoCardStoryQuery$variables = {
+export type VideoPlayerStoryQuery$variables = {
   videoId: string;
 };
-export type VideoCardStoryQuery$data = {
+export type VideoPlayerStoryQuery$data = {
   readonly video: {
-    readonly " $fragmentSpreads": FragmentRefs<"VideoCard_video">;
+    readonly " $fragmentSpreads": FragmentRefs<"VideoPlayer_video">;
   } | null | undefined;
 };
-export type VideoCardStoryQuery = {
-  response: VideoCardStoryQuery$data;
-  variables: VideoCardStoryQuery$variables;
+export type VideoPlayerStoryQuery = {
+  response: VideoPlayerStoryQuery$data;
+  variables: VideoPlayerStoryQuery$variables;
 };
 
 const node: ConcreteRequest = (function(){
@@ -43,7 +43,7 @@ return {
     "argumentDefinitions": (v0/*: any*/),
     "kind": "Fragment",
     "metadata": null,
-    "name": "VideoCardStoryQuery",
+    "name": "VideoPlayerStoryQuery",
     "selections": [
       {
         "alias": null,
@@ -56,7 +56,7 @@ return {
           {
             "args": null,
             "kind": "FragmentSpread",
-            "name": "VideoCard_video"
+            "name": "VideoPlayer_video"
           }
         ],
         "storageKey": null
@@ -69,7 +69,7 @@ return {
   "operation": {
     "argumentDefinitions": (v0/*: any*/),
     "kind": "Operation",
-    "name": "VideoCardStoryQuery",
+    "name": "VideoPlayerStoryQuery",
     "selections": [
       {
         "alias": null,
@@ -89,20 +89,6 @@ return {
           {
             "alias": null,
             "args": null,
-            "kind": "ScalarField",
-            "name": "title",
-            "storageKey": null
-          },
-          {
-            "alias": null,
-            "args": null,
-            "kind": "ScalarField",
-            "name": "durationSeconds",
-            "storageKey": null
-          },
-          {
-            "alias": null,
-            "args": null,
             "concreteType": "VideoStreamInfo",
             "kind": "LinkedField",
             "name": "videoStream",
@@ -117,6 +103,20 @@ return {
               }
             ],
             "storageKey": null
+          },
+          {
+            "alias": null,
+            "args": null,
+            "kind": "ScalarField",
+            "name": "title",
+            "storageKey": null
+          },
+          {
+            "alias": null,
+            "args": null,
+            "kind": "ScalarField",
+            "name": "durationSeconds",
+            "storageKey": null
           }
         ],
         "storageKey": null
@@ -124,7 +124,7 @@ return {
     ]
   },
   "params": {
-    "cacheID": "a4cd8ff3fa1100217107a19abd3530c2",
+    "cacheID": "412e1253de5c4dc70519821ed7a1ee71",
     "id": null,
     "metadata": {
       "relayTestingSelectionTypeInfo": {
@@ -166,13 +166,13 @@ return {
         }
       }
     },
-    "name": "VideoCardStoryQuery",
+    "name": "VideoPlayerStoryQuery",
     "operationKind": "query",
-    "text": "query VideoCardStoryQuery(\n  $videoId: ID!\n) {\n  video(id: $videoId) {\n    ...VideoCard_video\n    id\n  }\n}\n\nfragment VideoCard_video on Video {\n  id\n  title\n  durationSeconds\n  videoStream {\n    height\n  }\n}\n"
+    "text": "query VideoPlayerStoryQuery(\n  $videoId: ID!\n) {\n  video(id: $videoId) {\n    ...VideoPlayer_video\n    id\n  }\n}\n\nfragment ControlBar_video on Video {\n  title\n  durationSeconds\n  videoStream {\n    height\n  }\n}\n\nfragment VideoPlayer_video on Video {\n  id\n  videoStream {\n    height\n  }\n  ...ControlBar_video\n}\n"
   }
 };
 })();
 
-(node as any).hash = "fec3342266fc41b91c85188deda826c4";
+(node as any).hash = "534e2a0f9db1a064dae8bae01cb27d6a";
 
 export default node;

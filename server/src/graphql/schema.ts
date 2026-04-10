@@ -21,7 +21,8 @@ export const typeDefs = /* GraphQL */ `
     id: ID!
     name: String!
     mediaType: MediaType!
-    videos(first: Int, after: String): VideoConnection!
+    # MAX_PAGE_SIZE = 100 (enforced server-side regardless of this default)
+    videos(first: Int = 20, after: String): VideoConnection!
   }
 
   # ── Video ────────────────────────────────────────────────────────────────────

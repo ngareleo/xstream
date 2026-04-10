@@ -1,5 +1,5 @@
 /**
- * @generated SignedSource<<ddfb93aeba6dab6a08f06e1c2cb500b3>>
+ * @generated SignedSource<<df56611002360e43118c8bde2dbfe4e0>>
  * @lightSyntaxTransform
  * @nogrep
  */
@@ -126,7 +126,46 @@ return {
   "params": {
     "cacheID": "d7daf0ae5a9bb18a545948d705ba5af8",
     "id": null,
-    "metadata": {},
+    "metadata": {
+      "relayTestingSelectionTypeInfo": {
+        "video": {
+          "enumValues": null,
+          "nullable": true,
+          "plural": false,
+          "type": "Video"
+        },
+        "video.durationSeconds": {
+          "enumValues": null,
+          "nullable": false,
+          "plural": false,
+          "type": "Float"
+        },
+        "video.id": {
+          "enumValues": null,
+          "nullable": false,
+          "plural": false,
+          "type": "ID"
+        },
+        "video.title": {
+          "enumValues": null,
+          "nullable": false,
+          "plural": false,
+          "type": "String"
+        },
+        "video.videoStream": {
+          "enumValues": null,
+          "nullable": true,
+          "plural": false,
+          "type": "VideoStreamInfo"
+        },
+        "video.videoStream.height": {
+          "enumValues": null,
+          "nullable": false,
+          "plural": false,
+          "type": "Int"
+        }
+      }
+    },
     "name": "ControlBarStoryQuery",
     "operationKind": "query",
     "text": "query ControlBarStoryQuery(\n  $videoId: ID!\n) {\n  video(id: $videoId) {\n    ...ControlBar_video\n    id\n  }\n}\n\nfragment ControlBar_video on Video {\n  title\n  durationSeconds\n  videoStream {\n    height\n  }\n}\n"
@@ -134,6 +173,6 @@ return {
 };
 })();
 
-(node as any).hash = "ee3ff1f98d38476c922a4794f1f12734";
+(node as any).hash = "29c96fc34fac15157e64c4e7c19040aa";
 
 export default node;
