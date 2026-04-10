@@ -1,8 +1,11 @@
 import { useRef, useEffect, useState, useCallback } from "react";
 import { Box, Text } from "@chakra-ui/react";
 import { useFragment, useMutation, graphql } from "react-relay";
-import type { VideoPlayer_video$key } from "../relay/__generated__/VideoPlayer_video.graphql";
-import type { VideoPlayerStartTranscodeMutation } from "../relay/__generated__/VideoPlayerStartTranscodeMutation.graphql";
+import type { VideoPlayer_video$key } from "../relay/__generated__/VideoPlayer_video.graphql.js";
+import type { VideoPlayerStartTranscodeMutation } from "../relay/__generated__/VideoPlayerStartTranscodeMutation.graphql.js";
+import type { Resolution } from "../types.js";
+import { DISPLAY_TO_GQL } from "../types.js";
+import { maxResolutionForHeight } from "../utils/formatters.js";
 import { ControlBar } from "./ControlBar.js";
 import { StreamingService } from "../services/StreamingService.js";
 import { BufferManager } from "../services/BufferManager.js";
@@ -26,26 +29,6 @@ const START_TRANSCODE_MUTATION = graphql`
   }
 `;
 
-type Resolution = "240p" | "360p" | "480p" | "720p" | "1080p" | "4k";
-
-const GQL_RESOLUTION: Record<Resolution, string> = {
-  "240p": "RESOLUTION_240P",
-  "360p": "RESOLUTION_360P",
-  "480p": "RESOLUTION_480P",
-  "720p": "RESOLUTION_720P",
-  "1080p": "RESOLUTION_1080P",
-  "4k": "RESOLUTION_4K",
-};
-
-function maxResolution(height: number | null | undefined): Resolution {
-  if (!height || height < 360) return "240p";
-  if (height < 480) return "360p";
-  if (height < 720) return "480p";
-  if (height < 1080) return "720p";
-  if (height < 2160) return "1080p";
-  return "4k";
-}
-
 interface Props {
   video: VideoPlayer_video$key;
 }
@@ -58,7 +41,7 @@ export function VideoPlayer({ video }: Props) {
   const streamingRef = useRef<StreamingService | null>(null);
   const bufferRef = useRef<BufferManager | null>(null);
 
-  const nativeMax = maxResolution(data.videoStream?.height);
+  const nativeMax = maxResolutionForHeight(data.videoStream?.height);
   const [resolution, setResolution] = useState<Resolution>(nativeMax);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<"idle" | "loading" | "playing">("idle");
@@ -79,7 +62,7 @@ export function VideoPlayer({ video }: Props) {
     setStatus("loading");
 
     startTranscode({
-      variables: { videoId: data.id, resolution: GQL_RESOLUTION[res] },
+      variables: { videoId: data.id, resolution: DISPLAY_TO_GQL[res] as Parameters<typeof startTranscode>[0]["variables"]["resolution"] },
       onCompleted: async (response) => {
         const rawJobId = atob(response.startTranscode.id).replace("TranscodeJob:", "");
 
@@ -128,16 +111,13 @@ export function VideoPlayer({ video }: Props) {
 
   const handleResolutionChange = useCallback((res: Resolution) => {
     setResolution(res);
-    if (status === "playing") {
-      startPlayback(res);
-    }
+    if (status === "playing") startPlayback(res);
   }, [status, startPlayback]);
 
   const handlePlay = useCallback(() => {
     startPlayback(resolution);
   }, [resolution, startPlayback]);
 
-  // Cleanup on unmount
   useEffect(() => () => teardown(), [teardown]);
 
   return (

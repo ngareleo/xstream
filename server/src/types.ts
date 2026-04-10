@@ -25,7 +25,11 @@ export interface MediaLibraryEntry {
   path: string;
   mediaType: MediaType;
   env: "dev" | "prod";
+  /** File extensions to scan. Defaults to DEFAULT_VIDEO_EXTENSIONS if omitted. */
+  videoExtensions?: string[];
 }
+
+export const DEFAULT_VIDEO_EXTENSIONS = [".mp4", ".mkv", ".mov", ".avi", ".m4v", ".webm", ".ts"];
 
 export interface MediaFilesConfig {
   libraries: MediaLibraryEntry[];

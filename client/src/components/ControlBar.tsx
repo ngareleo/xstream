@@ -1,13 +1,8 @@
 import { useRef, useEffect, useState, RefObject } from "react";
 import { Box, Text, IconButton, Slider, Badge, Stack } from "@chakra-ui/react";
-
-type Resolution = "240p" | "360p" | "480p" | "720p" | "1080p" | "4k";
-
-const ALL_RESOLUTIONS: Resolution[] = ["240p", "360p", "480p", "720p", "1080p", "4k"];
-
-const RESOLUTION_ORDER: Record<Resolution, number> = {
-  "240p": 0, "360p": 1, "480p": 2, "720p": 3, "1080p": 4, "4k": 5,
-};
+import type { Resolution } from "../types.js";
+import { ALL_RESOLUTIONS, RESOLUTION_ORDER } from "../types.js";
+import { formatDuration } from "../utils/formatters.js";
 
 interface Props {
   videoRef: RefObject<HTMLVideoElement | null>;
@@ -20,14 +15,6 @@ interface Props {
   onResolutionChange: (res: Resolution) => void;
 }
 
-function formatTime(s: number): string {
-  const h = Math.floor(s / 3600);
-  const m = Math.floor((s % 3600) / 60);
-  const sec = Math.floor(s % 60);
-  if (h > 0) return `${h}:${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
-  return `${m}:${String(sec).padStart(2, "0")}`;
-}
-
 export function ControlBar({ videoRef, title, durationSeconds, resolution, maxResolution, status, onPlay, onResolutionChange }: Props) {
   const [currentTime, setCurrentTime] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -37,11 +24,11 @@ export function ControlBar({ videoRef, title, durationSeconds, resolution, maxRe
     const video = videoRef.current;
     if (!video) return;
 
-    const onPlay = () => setIsPlaying(true);
-    const onPause = () => setIsPlaying(false);
+    const onPlayEvt = () => setIsPlaying(true);
+    const onPauseEvt = () => setIsPlaying(false);
 
-    video.addEventListener("play", onPlay);
-    video.addEventListener("pause", onPause);
+    video.addEventListener("play", onPlayEvt);
+    video.addEventListener("pause", onPauseEvt);
 
     const tick = () => {
       setCurrentTime(video.currentTime);
@@ -50,8 +37,8 @@ export function ControlBar({ videoRef, title, durationSeconds, resolution, maxRe
     rafRef.current = requestAnimationFrame(tick);
 
     return () => {
-      video.removeEventListener("play", onPlay);
-      video.removeEventListener("pause", onPause);
+      video.removeEventListener("play", onPlayEvt);
+      video.removeEventListener("pause", onPauseEvt);
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
     };
   }, [videoRef]);
@@ -76,7 +63,6 @@ export function ControlBar({ videoRef, title, durationSeconds, resolution, maxRe
 
   return (
     <Box bg="gray.900" px={4} py={3}>
-      {/* Seek bar */}
       <Slider.Root
         value={[currentTime]}
         min={0}
@@ -93,7 +79,6 @@ export function ControlBar({ videoRef, title, durationSeconds, resolution, maxRe
 
       <Stack direction="row" align="center" justify="space-between">
         <Stack direction="row" align="center" gap={3}>
-          {/* Play/pause */}
           <IconButton
             aria-label={isPlaying ? "Pause" : "Play"}
             variant="ghost"
@@ -104,19 +89,15 @@ export function ControlBar({ videoRef, title, durationSeconds, resolution, maxRe
           >
             {isPlaying ? "⏸" : "▶"}
           </IconButton>
-
-          {/* Time */}
           <Text color="gray.300" fontSize="sm">
-            {formatTime(currentTime)} / {formatTime(durationSeconds)}
+            {formatDuration(currentTime)} / {formatDuration(durationSeconds)}
           </Text>
         </Stack>
 
-        {/* Title */}
         <Text color="white" fontSize="sm" fontWeight="medium" flex={1} textAlign="center" px={4} lineClamp={1}>
           {title}
         </Text>
 
-        {/* Resolution picker */}
         <Stack direction="row" gap={1}>
           {availableResolutions.map((r) => (
             <Badge

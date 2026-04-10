@@ -8,11 +8,10 @@ import { upsertLibrary, getAllLibraries } from "../db/queries/libraries.js";
 import { upsertVideo, replaceVideoStreams } from "../db/queries/videos.js";
 import { loadMediaConfig } from "../config.js";
 import type { LibraryRow, VideoRow, VideoStreamRow, MediaLibraryEntry } from "../types.js";
+import { DEFAULT_VIDEO_EXTENSIONS } from "../types.js";
 
 ffmpeg.setFfmpegPath(ffmpegInstaller.path);
 ffmpeg.setFfprobePath(ffprobeInstaller.path);
-
-const VIDEO_EXTENSIONS = new Set([".mp4", ".mkv", ".mov", ".avi", ".m4v", ".webm", ".ts"]);
 
 function sha1(input: string): string {
   return createHash("sha1").update(input).digest("hex");
@@ -34,7 +33,7 @@ async function probeVideo(filePath: string): Promise<ffmpeg.FfprobeData> {
   });
 }
 
-async function walkDirectory(dir: string): Promise<string[]> {
+async function walkDirectory(dir: string, extensions: Set<string>): Promise<string[]> {
   const results: string[] = [];
   let entries;
   try {
@@ -47,9 +46,9 @@ async function walkDirectory(dir: string): Promise<string[]> {
   for (const entry of entries) {
     const fullPath = join(dir, entry.name);
     if (entry.isDirectory()) {
-      const nested = await walkDirectory(fullPath);
+      const nested = await walkDirectory(fullPath, extensions);
       results.push(...nested);
-    } else if (entry.isFile() && VIDEO_EXTENSIONS.has(extname(entry.name).toLowerCase())) {
+    } else if (entry.isFile() && extensions.has(extname(entry.name).toLowerCase())) {
       results.push(fullPath);
     }
   }
@@ -67,7 +66,10 @@ async function scanLibraryEntry(entry: MediaLibraryEntry): Promise<LibraryRow> {
   };
   upsertLibrary(libraryRow);
 
-  const filePaths = await walkDirectory(entry.path);
+  const extensions = new Set(
+    (entry.videoExtensions ?? DEFAULT_VIDEO_EXTENSIONS).map((e) => e.toLowerCase())
+  );
+  const filePaths = await walkDirectory(entry.path, extensions);
   console.log(`[scanner] Found ${filePaths.length} video(s) in "${entry.name}"`);
 
   for (const filePath of filePaths) {

@@ -132,7 +132,21 @@ tmp/
 Edit `RESOLUTION_PROFILES` in `server/src/config.ts` and the `Resolution` enum in `server/src/types.ts`. Also update the `GQL_TO_RESOLUTION` / `RESOLUTION_TO_GQL` maps in `server/src/graphql/mappers.ts` and the schema enum in `schema.ts`.
 
 ### Add a new media library
-Edit `mediaFiles.json` — add an entry with `name`, `path`, `mediaType` (`movies` | `tvShows`), and `env` (`dev` | `prod`). The server picks it up on next startup or when `scanLibraries` mutation is called.
+Edit `mediaFiles.json` — add an entry with `name`, `path`, `mediaType` (`movies` | `tvShows`), `env` (`dev` | `prod`), and optionally `videoExtensions` (array of lowercase extensions, e.g. `[".mp4", ".mkv"]`). The server picks it up on next startup or when `scanLibraries` mutation is called.
+
+### Add a new client component with data
+1. Define a `graphql` fragment in the component file (`fragment ComponentName_prop on TypeName { ... }`)
+2. Import the generated `$key` type from `relay/__generated__/`
+3. Accept the `$key` as a prop; call `useFragment` inside the component
+4. Spread the fragment in the parent query or parent fragment
+5. Run `bun relay` from `client/`
+6. Put any formatting/computation helpers in `client/src/utils/`, not in the component file
+
+**Relay rules (see `docs/relay.md` for full detail):**
+- `useLazyLoadQuery` only in `src/pages/` — never in components
+- Components receive fragment keys (`$key`), not raw data props
+- The GraphQL schema is the single source of truth for types — import from relay-generated artifacts or `src/types.ts`, never redefine locally
+- Fragment naming: `<ComponentName>_<propName>` (e.g. `VideoCard_video`)
 
 ---
 

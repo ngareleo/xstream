@@ -4,19 +4,22 @@
       "name": "My Videos",
       "path": "/home/dag/Videos",
       "mediaType": "movies",
-      "env": "dev"
+      "env": "dev",
+      "videoExtensions": [".mp4", ".mkv", ".mov", ".avi", ".m4v", ".webm", ".ts"]
     },
     {
       "name": "Movies",
       "path": "/mnt/storage/Movies",
       "mediaType": "movies",
-      "env": "prod"
+      "env": "prod",
+      "videoExtensions": [".mp4", ".mkv", ".mov", ".avi", ".m4v", ".webm", ".ts"]
     },
     {
       "name": "TV Shows",
       "path": "/mnt/storage/TV",
       "mediaType": "tvShows",
-      "env": "prod"
+      "env": "prod",
+      "videoExtensions": [".mp4", ".mkv", ".mov", ".avi", ".m4v", ".webm", ".ts"]
     }
   ]
 }

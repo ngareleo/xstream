@@ -1,7 +1,8 @@
 import { Box, Text, Badge } from "@chakra-ui/react";
 import { useFragment, graphql } from "react-relay";
 import { useNavigate } from "react-router-dom";
-import type { VideoCard_video$key } from "../relay/__generated__/VideoCard_video.graphql";
+import type { VideoCard_video$key } from "../relay/__generated__/VideoCard_video.graphql.js";
+import { formatDuration, resolutionLabel } from "../utils/formatters.js";
 
 const VIDEO_FRAGMENT = graphql`
   fragment VideoCard_video on Video {
@@ -18,26 +19,10 @@ interface Props {
   video: VideoCard_video$key;
 }
 
-function formatDuration(seconds: number): string {
-  const h = Math.floor(seconds / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-  const s = Math.floor(seconds % 60);
-  if (h > 0) return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
-  return `${m}:${String(s).padStart(2, "0")}`;
-}
-
-function resolutionLabel(height: number | null | undefined): string {
-  if (!height) return "";
-  if (height >= 2160) return "4K";
-  if (height >= 1080) return "1080p";
-  if (height >= 720) return "720p";
-  if (height >= 480) return "480p";
-  return `${height}p`;
-}
-
 export function VideoCard({ video }: Props) {
   const data = useFragment(VIDEO_FRAGMENT, video);
   const navigate = useNavigate();
+  const label = resolutionLabel(data.videoStream?.height);
 
   return (
     <Box
@@ -50,8 +35,7 @@ export function VideoCard({ video }: Props) {
       onClick={() => navigate(`/play/${data.id}`)}
       p={3}
     >
-      {/* Placeholder thumbnail */}
-      <Box bg="gray.700" borderRadius="sm" aspect-ratio="16/9" mb={2} h="100px" display="flex" alignItems="center" justifyContent="center">
+      <Box bg="gray.700" borderRadius="sm" mb={2} h="100px" display="flex" alignItems="center" justifyContent="center">
         <Text fontSize="2xl">▶</Text>
       </Box>
 
@@ -61,9 +45,7 @@ export function VideoCard({ video }: Props) {
 
       <Box display="flex" justifyContent="space-between" alignItems="center" mt={1}>
         <Text fontSize="xs" color="gray.400">{formatDuration(data.durationSeconds)}</Text>
-        {data.videoStream?.height && (
-          <Badge size="sm" colorPalette="blue">{resolutionLabel(data.videoStream.height)}</Badge>
-        )}
+        {label && <Badge size="sm" colorPalette="blue">{label}</Badge>}
       </Box>
     </Box>
   );
