@@ -66,7 +66,7 @@ One row per codec stream within a video file. A typical file has one video strea
 
 ### `transcode_jobs`
 
-One row per unique transcode request (keyed by video path + resolution + time range). Jobs persist across server restarts. Any job found in `'running'` state at startup is immediately marked `'error'` since the ffmpeg process no longer exists.
+One row per unique transcode request (keyed by video path + resolution + time range). Jobs persist across server restarts. On startup, any job found in `'running'` state is inspected: if segments exist on disk they are restored into memory and the job is marked `'complete'` (so the client can stream the recovered output); if no segments exist the job is marked `'error'` since the transcode never produced usable output.
 
 | Column | Type | Constraints | Description |
 |---|---|---|---|

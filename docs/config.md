@@ -37,7 +37,7 @@ Lives at the project root. Committed to git. Paths are machine-specific — edit
 |---|---|---|
 | `name` | string | Display name shown in the UI. Not unique — two libraries can share a name. |
 | `path` | string | **Unique.** Absolute path to the root directory. Duplicate paths are skipped with a warning. |
-| `mediaType` | `"movies"` \| `"tvShows"` | Controls how the directory is walked (flat for movies, two levels for TV). |
+| `mediaType` | `"movies"` \| `"tvShows"` | Stored in the DB and surfaced via GraphQL; the scanner currently walks all directories recursively regardless of this value. |
 | `env` | `"dev"` \| `"prod"` | Which environment this entry is active in. Filtered by `NODE_ENV` at startup. |
 
 ### Rules

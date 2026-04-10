@@ -28,7 +28,7 @@ jobs:
         run: bun run lint
 
       - name: Test
-        run: bun test src/graphql/relay.test.ts src/graphql/graphql.integration.test.ts src/db/queries/jobs.test.ts
+        run: bun run test
 
       - name: Build
         run: bun run build

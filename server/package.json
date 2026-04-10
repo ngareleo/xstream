@@ -6,7 +6,7 @@
     "dev": "NODE_ENV=development bun --watch src/index.ts",
     "build": "bun build src/index.ts --outdir dist --target bun",
     "start": "NODE_ENV=production bun dist/index.js",
-    "test": "bun test src/**/*.test.ts",
+    "test": "bun test",
     "lint": "tsc --noEmit && eslint src",
     "format": "prettier --write src",
     "format:check": "prettier --check src"

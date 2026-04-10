@@ -15,12 +15,20 @@ export const subscriptionResolvers = {
 
         return {
           [Symbol.asyncIterator]() {
-            let resolve: () => void;
+            let resolve: (() => void) | undefined;
+            let pending = false; // notification arrived before next() was awaiting
             let done = false;
 
             const controller = {
               enqueue(_: null) {
-                resolve?.();
+                if (resolve) {
+                  // next() is already waiting — unblock it immediately
+                  resolve();
+                  resolve = undefined;
+                } else {
+                  // next() hasn't been called yet — buffer the signal
+                  pending = true;
+                }
               },
             } as unknown as ReadableStreamDefaultController;
 
@@ -32,9 +40,12 @@ export const subscriptionResolvers = {
               > {
                 if (done) return { value: undefined as never, done: true };
 
-                await new Promise<void>((r) => {
-                  resolve = r;
-                });
+                if (!pending) {
+                  await new Promise<void>((r) => {
+                    resolve = r;
+                  });
+                }
+                pending = false;
 
                 const current = getJob(localId);
                 if (!current || current.status === "complete" || current.status === "error") {

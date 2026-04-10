@@ -20,6 +20,22 @@ const VIDEO_QUERY = graphql`
   }
 `;
 
+/**
+ * Normalise the route param to a Relay global ID.
+ * The param is URL-encoded by VideoCard (encodeURIComponent); decode first.
+ * If the decoded value already looks like a Relay global ID (decodes to "Video:…"),
+ * use it as-is. Otherwise treat it as a bare local ID and wrap it.
+ */
+function resolveVideoId(param: string): string {
+  const decoded = decodeURIComponent(param);
+  try {
+    if (atob(decoded).startsWith("Video:")) return decoded;
+  } catch {
+    // not valid base64 — fall through
+  }
+  return btoa(`Video:${decoded}`);
+}
+
 function PlayerContent({ videoId }: { videoId: string }) {
   const data = useLazyLoadQuery<PlayerPageQuery>(VIDEO_QUERY, { id: videoId });
 
@@ -48,9 +64,7 @@ export function PlayerPage(): JSX.Element {
           </Box>
         }
       >
-        <PlayerContent
-          videoId={atob(videoId).startsWith("Video:") ? videoId : btoa(`Video:${videoId}`)}
-        />
+        <PlayerContent videoId={resolveVideoId(videoId)} />
       </Suspense>
     </Box>
   );

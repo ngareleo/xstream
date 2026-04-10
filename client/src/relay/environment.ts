@@ -4,8 +4,9 @@ import { Environment, Network, Observable, RecordSource, Store } from "relay-run
 
 const SERVER_URL = "/graphql";
 
+const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
 const wsClient = createClient({
-  url: `ws://${window.location.host}/graphql`,
+  url: `${wsProtocol}//${window.location.host}/graphql`,
 });
 
 const fetchFn: FetchFunction = async (operation, variables) => {

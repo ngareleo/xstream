@@ -1,6 +1,6 @@
 # GraphQL Schema
 
-The server exposes a single GraphQL endpoint at `POST /graphql` (queries and mutations) and `WS /graphql` (subscriptions via WebSocket).
+The server exposes a single GraphQL endpoint at `POST /graphql` (queries and mutations). Subscriptions are served over Server-Sent Events (SSE) via graphql-yoga's built-in SSE transport. WebSocket upgrade support in Bun (`Bun.serve()`) is not yet implemented; until it is, `graphql-ws` clients will fall back to SSE automatically through graphql-yoga.
 
 ---
 

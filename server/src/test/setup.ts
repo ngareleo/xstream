@@ -12,6 +12,8 @@ import { mkdirSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
 
-const SHARED_TEST_DIR = join(tmpdir(), "tvke-test-shared");
+// Namespace by PID so concurrent `bun test` invocations on the same machine
+// (e.g. parallel CI jobs) each get their own isolated SQLite file.
+const SHARED_TEST_DIR = join(tmpdir(), `tvke-test-${process.pid}`);
 mkdirSync(SHARED_TEST_DIR, { recursive: true });
 process.env.DB_PATH = join(SHARED_TEST_DIR, "test.db");

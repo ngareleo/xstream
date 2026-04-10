@@ -86,9 +86,10 @@ async function tryRestore(job: TranscodeJobRow): Promise<ActiveJob | null> {
 
   const segmentCount = segments.filter(Boolean).length;
 
-  // Determine final status: if we have the same count as DB says, mark complete
-  const status =
-    job.total_segments !== null && segmentCount >= job.total_segments ? "complete" : "complete"; // treat any partial set as complete — server will stream what exists
+  // Mark restored jobs as complete regardless of whether the segment count matches the
+  // original plan. The server streams whatever segments exist on disk; there is no
+  // value in re-encoding when partial output is already playable.
+  const status = "complete" as const;
 
   updateJobStatus(job.id, status, {
     total_segments: segmentCount,

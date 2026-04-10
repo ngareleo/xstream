@@ -84,7 +84,7 @@ tvke is split into two workspaces: a Bun server and a Vite/React client. The ser
 1. `src/index.ts` reads `config.ts` based on `NODE_ENV`
 2. `tmp/segments/` directory created if missing
 3. `getDb()` opens SQLite connection, enables WAL + foreign keys, runs `migrate.ts`
-4. Any `transcode_jobs` rows with `status = 'running'` are marked `error` (server was restarted mid-transcode)
+4. `restoreInterruptedJobs()` inspects any `transcode_jobs` rows with `status = 'running'`: jobs with segments on disk are restored into memory and marked `complete`; jobs with no segments are marked `error`
 5. `scanLibraries()` reads `mediaFiles.json`, filters by env, validates paths, upserts libraries, ffprobes all video files
 6. `Bun.serve()` starts on configured port
 

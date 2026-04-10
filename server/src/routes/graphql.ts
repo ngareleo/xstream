@@ -21,8 +21,9 @@ const schema = makeExecutableSchema({
     subscriptionResolvers,
   ],
   resolverValidationOptions: {
-    // Warn at startup if any non-scalar field on Query, Mutation, or Subscription
-    // has no resolver — catches schema/resolver drift before the client hits it.
+    // Warn at startup if any field that declares arguments has no resolver —
+    // catches missing implementations for argument-driven fields before the
+    // client hits them at runtime.
     requireResolversForArgs: "warn",
   },
 });

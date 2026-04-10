@@ -47,19 +47,13 @@ The `path` must be an absolute path to a directory containing video files (`.mp4
 
 The client uses Relay for GraphQL queries. The compiler artifacts need to be generated before the client can build.
 
-```bash
-# Export the GraphQL schema from the server first
-cd server
-bun run src/index.ts --print-schema > ../server/schema.graphql
-cd ..
+`server/schema.graphql` is committed to the repository and must be kept in sync with `server/src/graphql/schema.ts` manually whenever the schema changes. Once it is up to date, regenerate the client artifacts:
 
-# Then run the relay compiler
+```bash
 cd client
 bun relay
 cd ..
 ```
-
-> **Note:** On first run, start the server once to let it write `schema.graphql`, then run relay-compiler.
 
 ---
 

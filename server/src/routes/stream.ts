@@ -22,7 +22,8 @@ export async function handleStream(req: Request): Promise<Response> {
   const url = new URL(req.url);
   const parts = url.pathname.split("/");
   const jobId = parts[2];
-  const fromIndex = parseInt(url.searchParams.get("from") ?? "0", 10);
+  const fromParam = parseInt(url.searchParams.get("from") ?? "0", 10);
+  const fromIndex = Number.isFinite(fromParam) && fromParam >= 0 ? fromParam : 0;
 
   if (!jobId) {
     return new Response("Missing jobId", { status: 400 });
@@ -41,19 +42,17 @@ export async function handleStream(req: Request): Promise<Response> {
 
   const stream = new ReadableStream({
     async start(controller) {
-      // Re-acquire job reference inside the stream (may have updated)
-      const activeJob = getJob(jobId);
+      console.log(`[stream] ${jobId.slice(0, 8)} — start (from=${fromIndex})`);
 
-      console.log(
-        `[stream] ${jobId.slice(0, 8)} — start (from=${fromIndex}, status=${activeJob?.status ?? "not-in-memory"}, segments=${activeJob?.segments.filter(Boolean).length ?? 0})`
-      );
-
-      // Wait for init segment (up to 10 s)
+      // Wait for init segment (up to 10 s), re-fetching the job each iteration so
+      // that jobs added to memory after the stream started are detected promptly.
       let attempts = 0;
-      while (!activeJob?.initSegmentPath && attempts < 100) {
+      while (!getJob(jobId)?.initSegmentPath && attempts < 100) {
         await Bun.sleep(100);
         attempts++;
       }
+      // Acquire the job reference after waiting — it may now be in memory.
+      const activeJob = getJob(jobId);
 
       if (!activeJob?.initSegmentPath) {
         // Last resort: check DB + filesystem
