@@ -1,8 +1,9 @@
-import { useRef, useEffect, useState, RefObject } from "react";
+import { RefObject } from "react";
 import { Box, Text, IconButton, Slider, Badge, Stack } from "@chakra-ui/react";
 import type { Resolution } from "../types.js";
 import { ALL_RESOLUTIONS, RESOLUTION_ORDER } from "../types.js";
 import { formatDuration } from "../utils/formatters.js";
+import { useVideoSync } from "../hooks/useVideoSync.js";
 
 interface Props {
   videoRef: RefObject<HTMLVideoElement | null>;
@@ -16,32 +17,7 @@ interface Props {
 }
 
 export function ControlBar({ videoRef, title, durationSeconds, resolution, maxResolution, status, onPlay, onResolutionChange }: Props) {
-  const [currentTime, setCurrentTime] = useState(0);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const rafRef = useRef<number | null>(null);
-
-  useEffect(() => {
-    const video = videoRef.current;
-    if (!video) return;
-
-    const onPlayEvt = () => setIsPlaying(true);
-    const onPauseEvt = () => setIsPlaying(false);
-
-    video.addEventListener("play", onPlayEvt);
-    video.addEventListener("pause", onPauseEvt);
-
-    const tick = () => {
-      setCurrentTime(video.currentTime);
-      rafRef.current = requestAnimationFrame(tick);
-    };
-    rafRef.current = requestAnimationFrame(tick);
-
-    return () => {
-      video.removeEventListener("play", onPlayEvt);
-      video.removeEventListener("pause", onPauseEvt);
-      if (rafRef.current) cancelAnimationFrame(rafRef.current);
-    };
-  }, [videoRef]);
+  const { currentTime, isPlaying } = useVideoSync(videoRef);
 
   const togglePlayPause = () => {
     const video = videoRef.current;

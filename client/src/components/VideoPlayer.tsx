@@ -1,14 +1,12 @@
-import { useRef, useEffect, useState, useCallback } from "react";
+import { useRef, useState, useCallback } from "react";
 import { Box, Text } from "@chakra-ui/react";
 import { useFragment, useMutation, graphql } from "react-relay";
 import type { VideoPlayer_video$key } from "../relay/__generated__/VideoPlayer_video.graphql.js";
 import type { VideoPlayerStartTranscodeMutation } from "../relay/__generated__/VideoPlayerStartTranscodeMutation.graphql.js";
 import type { Resolution } from "../types.js";
-import { DISPLAY_TO_GQL } from "../types.js";
 import { maxResolutionForHeight } from "../utils/formatters.js";
 import { ControlBar } from "./ControlBar.js";
-import { StreamingService } from "../services/StreamingService.js";
-import { BufferManager } from "../services/BufferManager.js";
+import { useVideoPlayback } from "../hooks/useVideoPlayback.js";
 
 const VIDEO_FRAGMENT = graphql`
   fragment VideoPlayer_video on Video {
@@ -38,87 +36,22 @@ export function VideoPlayer({ video }: Props) {
   const [startTranscode] = useMutation<VideoPlayerStartTranscodeMutation>(START_TRANSCODE_MUTATION);
 
   const videoRef = useRef<HTMLVideoElement>(null);
-  const streamingRef = useRef<StreamingService | null>(null);
-  const bufferRef = useRef<BufferManager | null>(null);
-
   const nativeMax = maxResolutionForHeight(data.videoStream?.height);
   const [resolution, setResolution] = useState<Resolution>(nativeMax);
-  const [error, setError] = useState<string | null>(null);
-  const [status, setStatus] = useState<"idle" | "loading" | "playing">("idle");
 
-  const teardown = useCallback(() => {
-    streamingRef.current?.cancel();
-    bufferRef.current?.teardown();
-    streamingRef.current = null;
-    bufferRef.current = null;
-  }, []);
+  const { status, error, startPlayback } = useVideoPlayback(videoRef, data.id, startTranscode);
 
-  const startPlayback = useCallback(async (res: Resolution) => {
-    const videoEl = videoRef.current;
-    if (!videoEl) return;
-
-    teardown();
-    setError(null);
-    setStatus("loading");
-
-    startTranscode({
-      variables: { videoId: data.id, resolution: DISPLAY_TO_GQL[res] as Parameters<typeof startTranscode>[0]["variables"]["resolution"] },
-      onCompleted: async (response) => {
-        const rawJobId = atob(response.startTranscode.id).replace("TranscodeJob:", "");
-
-        const buffer = new BufferManager(
-          videoEl,
-          () => streamingRef.current?.pause(),
-          () => streamingRef.current?.resume()
-        );
-        bufferRef.current = buffer;
-
-        try {
-          await buffer.init();
-        } catch (err) {
-          setError(`MSE init failed: ${(err as Error).message}`);
-          setStatus("idle");
-          return;
-        }
-
-        const streaming = new StreamingService();
-        streamingRef.current = streaming;
-
-        streaming.start(
-          rawJobId,
-          0,
-          async (segData, isInit) => {
-            try {
-              await buffer.appendSegment(segData);
-              if (isInit) {
-                videoEl.play().catch(() => {});
-                setStatus("playing");
-              }
-            } catch (err) {
-              setError(`Buffer error: ${(err as Error).message}`);
-            }
-          },
-          (err) => setError(err.message),
-          () => buffer.markStreamDone()
-        );
-      },
-      onError: (err) => {
-        setError(err.message);
-        setStatus("idle");
-      },
-    });
-  }, [data.id, startTranscode, teardown]);
-
-  const handleResolutionChange = useCallback((res: Resolution) => {
-    setResolution(res);
-    if (status === "playing") startPlayback(res);
-  }, [status, startPlayback]);
+  const handleResolutionChange = useCallback(
+    (res: Resolution) => {
+      setResolution(res);
+      if (status === "playing") startPlayback(res);
+    },
+    [status, startPlayback]
+  );
 
   const handlePlay = useCallback(() => {
     startPlayback(resolution);
   }, [resolution, startPlayback]);
-
-  useEffect(() => () => teardown(), [teardown]);
 
   return (
     <Box bg="black" position="relative">

@@ -69,6 +69,9 @@ tvke/
     │   ├── VideoCard.tsx          # Relay fragment — clickable video tile
     │   ├── VideoPlayer.tsx        # MSE orchestration, startTranscode mutation
     │   └── ControlBar.tsx         # seek bar, play/pause, resolution badges
+    ├── hooks/
+    │   ├── useVideoPlayback.ts    # MSE + streaming pipeline (teardown, startPlayback, status, error)
+    │   └── useVideoSync.ts        # syncs currentTime + isPlaying from a <video> element via RAF
     └── services/
         ├── StreamingService.ts    # fetch loop, length-prefix parser, pause/resume/cancel
         └── BufferManager.ts       # MSE SourceBuffer wrapper, sliding window eviction
@@ -141,6 +144,12 @@ Edit `mediaFiles.json` — add an entry with `name`, `path`, `mediaType` (`movie
 4. Spread the fragment in the parent query or parent fragment
 5. Run `bun relay` from `client/`
 6. Put any formatting/computation helpers in `client/src/utils/`, not in the component file
+7. If the component has stateful side-effect logic (timers, event listeners, refs, async pipelines), extract it into a hook in `client/src/hooks/`
+
+**Hooks (see `client/src/hooks/`):**
+- `useVideoPlayback(videoRef, videoId, startTranscode)` — owns the full MSE + StreamingService + BufferManager lifecycle; returns `{ status, error, startPlayback }`
+- `useVideoSync(videoRef)` — syncs `currentTime` and `isPlaying` from a `<video>` element using `requestAnimationFrame`; returns `{ currentTime, isPlaying }`
+- New hooks belong in `client/src/hooks/`. Component files should contain only the component, its Relay fragment/mutation tags, and prop types.
 
 **Relay rules (see `docs/relay.md` for full detail):**
 - `useLazyLoadQuery` only in `src/pages/` — never in components
