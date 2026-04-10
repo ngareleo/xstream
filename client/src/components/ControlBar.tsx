@@ -1,5 +1,5 @@
 import { Badge, Box, IconButton, Slider, Stack, Text } from "@chakra-ui/react";
-import type { RefObject } from "react";
+import { type FC, type RefObject } from "react";
 import { graphql, useFragment } from "react-relay";
 
 import { useVideoSync } from "../hooks/useVideoSync.js";
@@ -27,14 +27,14 @@ interface Props {
   onResolutionChange: (res: Resolution) => void;
 }
 
-export function ControlBar({
+export const ControlBar: FC<Props> = ({
   video,
   videoRef,
   resolution,
   status,
   onPlay,
   onResolutionChange,
-}: Props): JSX.Element {
+}) => {
   const data = useFragment(VIDEO_FRAGMENT, video);
   const { currentTime, isPlaying } = useVideoSync(videoRef);
 
@@ -125,4 +125,4 @@ export function ControlBar({
       </Stack>
     </Box>
   );
-}
+};

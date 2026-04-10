@@ -7,7 +7,10 @@ import { RouterProvider } from "react-router-dom";
 import { environment } from "./relay/environment.js";
 import { router } from "./router.js";
 
-ReactDOM.createRoot(document.getElementById("root")!).render(
+const rootEl = document.getElementById("root");
+if (!rootEl) throw new Error("Root element #root not found");
+
+ReactDOM.createRoot(rootEl).render(
   <React.StrictMode>
     <RelayEnvironmentProvider environment={environment}>
       <ChakraProvider value={defaultSystem}>

@@ -48,6 +48,8 @@ export const baseConfig = tseslint.config(
       ],
       // No floating promises
       "@typescript-eslint/no-floating-promises": "error",
+      // Forbid non-null assertions (!) — use optional chaining or explicit guards instead
+      "@typescript-eslint/no-non-null-assertion": "error",
       // Organised imports: sorted, grouped (external → internal → relative)
       "simple-import-sort/imports": "error",
       "simple-import-sort/exports": "error",

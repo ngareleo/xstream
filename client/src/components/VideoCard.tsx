@@ -1,4 +1,5 @@
 import { Badge, Box, Text } from "@chakra-ui/react";
+import { type FC } from "react";
 import { graphql, useFragment } from "react-relay";
 import { useNavigate } from "react-router-dom";
 
@@ -20,7 +21,7 @@ interface Props {
   video: VideoCard_video$key;
 }
 
-export function VideoCard({ video }: Props): JSX.Element {
+export const VideoCard: FC<Props> = ({ video }) => {
   const data = useFragment(VIDEO_FRAGMENT, video);
   const navigate = useNavigate();
   const label = resolutionLabel(data.videoStream?.height);
@@ -64,4 +65,4 @@ export function VideoCard({ video }: Props): JSX.Element {
       </Box>
     </Box>
   );
-}
+};

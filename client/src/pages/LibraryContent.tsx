@@ -1,5 +1,5 @@
 import { Box, Button, Heading, Text } from "@chakra-ui/react";
-import { useState } from "react";
+import { type FC, useState } from "react";
 import { graphql, useLazyLoadQuery, useMutation } from "react-relay";
 
 import { LibraryGrid } from "../components/LibraryGrid.js";
@@ -25,7 +25,7 @@ const SCAN_MUTATION = graphql`
   }
 `;
 
-export function LibraryContent(): JSX.Element {
+export const LibraryContent: FC = () => {
   // Incrementing fetchKey forces useLazyLoadQuery to refetch from the network,
   // picking up new videos that the scanLibraries mutation discovered.
   const [fetchKey, setFetchKey] = useState(0);
@@ -71,4 +71,4 @@ export function LibraryContent(): JSX.Element {
       )}
     </Box>
   );
-}
+};

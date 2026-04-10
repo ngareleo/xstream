@@ -1,6 +1,5 @@
-import type { RefObject } from "react";
-import { useCallback, useEffect, useRef, useState } from "react";
-import type { UseMutationConfig } from "react-relay";
+import { type RefObject, useCallback, useEffect, useRef, useState } from "react";
+import { graphql, useMutation } from "react-relay";
 
 import type { VideoPlayerStartTranscodeMutation } from "../relay/__generated__/VideoPlayerStartTranscodeMutation.graphql.js";
 import { BufferManager } from "../services/BufferManager.js";
@@ -8,7 +7,16 @@ import { StreamingService } from "../services/StreamingService.js";
 import type { Resolution } from "../types.js";
 import { DISPLAY_TO_GQL, RESOLUTION_MIME_TYPE } from "../types.js";
 
-type StartTranscodeFn = (config: UseMutationConfig<VideoPlayerStartTranscodeMutation>) => void;
+const START_TRANSCODE_MUTATION = graphql`
+  mutation VideoPlayerStartTranscodeMutation($videoId: ID!, $resolution: Resolution!) {
+    startTranscode(videoId: $videoId, resolution: $resolution) {
+      id
+      status
+      completedSegments
+      totalSegments
+    }
+  }
+`;
 
 export type PlaybackStatus = "idle" | "loading" | "playing";
 
@@ -21,9 +29,10 @@ interface UseVideoPlaybackResult {
 export function useVideoPlayback(
   videoRef: RefObject<HTMLVideoElement | null>,
   videoId: string,
-  startTranscode: StartTranscodeFn,
   onJobCreated?: (jobId: string | null) => void
 ): UseVideoPlaybackResult {
+  const [startTranscode] = useMutation<VideoPlayerStartTranscodeMutation>(START_TRANSCODE_MUTATION);
+
   const streamingRef = useRef<StreamingService | null>(null);
   const bufferRef = useRef<BufferManager | null>(null);
 
@@ -53,9 +62,9 @@ export function useVideoPlayback(
       startTranscode({
         variables: {
           videoId,
-          resolution: DISPLAY_TO_GQL[
-            res
-          ] as Parameters<StartTranscodeFn>[0]["variables"]["resolution"],
+          resolution: DISPLAY_TO_GQL[res] as Parameters<
+            typeof startTranscode
+          >[0]["variables"]["resolution"],
         },
         onCompleted: (response) => {
           const jobGlobalId = response.startTranscode.id;

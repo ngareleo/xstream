@@ -27,14 +27,15 @@ export class BufferManager {
 
   init(mimeType: string): Promise<void> {
     return new Promise((resolve, reject) => {
-      this.mediaSource = new MediaSource();
-      this.videoEl.src = URL.createObjectURL(this.mediaSource);
+      const ms = new MediaSource();
+      this.mediaSource = ms;
+      this.videoEl.src = URL.createObjectURL(ms);
 
-      this.mediaSource.addEventListener(
+      ms.addEventListener(
         "sourceopen",
         () => {
           try {
-            this.sourceBuffer = this.mediaSource!.addSourceBuffer(mimeType);
+            this.sourceBuffer = ms.addSourceBuffer(mimeType);
             this.sourceBuffer.mode = "sequence";
             resolve();
           } catch (err) {
@@ -56,10 +57,13 @@ export class BufferManager {
   private async drainQueue(): Promise<void> {
     this.isAppending = true;
     while (this.appendQueue.length > 0) {
-      const data = this.appendQueue.shift()!;
+      const data = this.appendQueue.shift();
+      if (data === undefined) break;
+      const sb = this.sourceBuffer;
+      if (!sb) break;
       await this.waitForUpdateEnd();
       try {
-        this.sourceBuffer!.appendBuffer(data);
+        sb.appendBuffer(data);
         await this.waitForUpdateEnd();
       } catch (err) {
         console.error("[BufferManager] appendBuffer error:", err);
@@ -75,9 +79,10 @@ export class BufferManager {
   }
 
   private waitForUpdateEnd(): Promise<void> {
-    if (!this.sourceBuffer?.updating) return Promise.resolve();
+    const sb = this.sourceBuffer;
+    if (!sb || !sb.updating) return Promise.resolve();
     return new Promise((resolve) => {
-      this.sourceBuffer!.addEventListener("updateend", () => resolve(), { once: true });
+      sb.addEventListener("updateend", () => resolve(), { once: true });
     });
   }
 

@@ -1,5 +1,5 @@
 import { Box, Spinner } from "@chakra-ui/react";
-import { Suspense } from "react";
+import { type FC, Suspense } from "react";
 import { graphql, useLazyLoadQuery } from "react-relay";
 import { useParams } from "react-router-dom";
 
@@ -30,7 +30,7 @@ function resolveVideoId(param: string): string {
   return btoa(`Video:${decoded}`);
 }
 
-function PlayerContent({ videoId }: { videoId: string }) {
+const PlayerContent: FC<{ videoId: string }> = ({ videoId }) => {
   const data = useLazyLoadQuery<PlayerPageQuery>(VIDEO_QUERY, { id: videoId });
 
   if (!data.video) {
@@ -42,9 +42,9 @@ function PlayerContent({ videoId }: { videoId: string }) {
       <VideoPlayer video={data.video} />
     </Box>
   );
-}
+};
 
-export function PlayerPage(): JSX.Element {
+export const PlayerPage: FC = () => {
   const { videoId } = useParams<{ videoId: string }>();
 
   if (!videoId) return <Box p={8}>Invalid video ID.</Box>;
@@ -62,4 +62,4 @@ export function PlayerPage(): JSX.Element {
       </Suspense>
     </Box>
   );
-}
+};

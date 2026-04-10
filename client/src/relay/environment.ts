@@ -21,7 +21,7 @@ const fetchFn: FetchFunction = async (operation, variables) => {
 const subscribeFn: SubscribeFunction = (operation, variables) => {
   return Observable.create((sink) => {
     const unsubscribe = wsClient.subscribe(
-      { query: operation.text!, variables },
+      { query: operation.text ?? "", variables },
       {
         next: (data) => sink.next(data as Parameters<typeof sink.next>[0]),
         error: sink.error.bind(sink),

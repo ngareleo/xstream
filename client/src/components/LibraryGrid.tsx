@@ -1,4 +1,5 @@
 import { SimpleGrid } from "@chakra-ui/react";
+import { type FC } from "react";
 import { graphql, useFragment } from "react-relay";
 
 import type { LibraryGrid_library$key } from "../relay/__generated__/LibraryGrid_library.graphql";
@@ -21,7 +22,7 @@ interface Props {
   library: LibraryGrid_library$key;
 }
 
-export function LibraryGrid({ library }: Props): JSX.Element {
+export const LibraryGrid: FC<Props> = ({ library }) => {
   const data = useFragment(LIBRARY_FRAGMENT, library);
 
   return (
@@ -31,4 +32,4 @@ export function LibraryGrid({ library }: Props): JSX.Element {
       ))}
     </SimpleGrid>
   );
-}
+};

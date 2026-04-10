@@ -63,22 +63,28 @@ export async function handleStream(req: Request): Promise<Response> {
               .then(() => true)
               .catch(() => false)
           : false;
-        if (!initExists) {
+        if (!initExists || !fsInitPath) {
           console.error(`[stream] ${jobId.slice(0, 8)} — init segment never became ready`);
           controller.error(new Error("Init segment not ready"));
           return;
         }
-        // Use DB path directly
-        if (activeJob) activeJob.initSegmentPath = fsInitPath!;
+        // fsInitPath is non-null because initExists is true
+        if (activeJob) activeJob.initSegmentPath = fsInitPath;
       }
 
+      const dbJobFallback = getJobById(jobId);
       const initPath =
         activeJob?.initSegmentPath ??
-        (getJobById(jobId) ? join(getJobById(jobId)!.segment_dir, "init.mp4") : null);
+        (dbJobFallback ? join(dbJobFallback.segment_dir, "init.mp4") : null);
+
+      if (!initPath) {
+        controller.error(new Error("Init segment path unavailable"));
+        return;
+      }
 
       // Send init segment first
       try {
-        const initBytes = await readFile(initPath!);
+        const initBytes = await readFile(initPath);
         console.log(`[stream] ${jobId.slice(0, 8)} — sending init (${initBytes.byteLength} bytes)`);
         writeLengthPrefixed(controller, new Uint8Array(initBytes));
       } catch (err) {
