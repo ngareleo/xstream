@@ -112,12 +112,5 @@ export function migrate(db: Database): void {
         value TEXT NOT NULL
       )
     `);
-
-    // Add video_extensions column to existing libraries tables (no-op if already exists).
-    try {
-      db.run(`ALTER TABLE libraries ADD COLUMN video_extensions TEXT NOT NULL DEFAULT '[]'`);
-    } catch {
-      // Column already exists — safe to ignore
-    }
   })();
 }

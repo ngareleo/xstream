@@ -10,7 +10,14 @@ import React, {
   useState,
   useTransition,
 } from "react";
-import { graphql, useLazyLoadQuery, useSubscription } from "react-relay";
+import {
+  graphql,
+  type PreloadedQuery,
+  useLazyLoadQuery,
+  usePreloadedQuery,
+  useQueryLoader,
+  useSubscription,
+} from "react-relay";
 import { Link, useSearchParams } from "react-router-dom";
 
 import { DevThrowTarget } from "~/components/dev-tools/DevToolsContext.js";
@@ -80,15 +87,16 @@ const DETAIL_VIDEO_QUERY = graphql`
 `;
 
 // ─── Detail loader ────────────────────────────────────────────────────────────
+// Uses usePreloadedQuery so the network request starts as soon as the user
+// clicks a card (via loadDetailQuery) rather than waiting for this component
+// to mount inside the Suspense boundary.
 
 interface DetailLoaderProps {
-  filmId: string;
+  queryRef: PreloadedQuery<LibraryPageContentDetailQuery>;
 }
 
-const DetailLoader: FC<DetailLoaderProps> = ({ filmId }) => {
-  const data = useLazyLoadQuery<LibraryPageContentDetailQuery>(DETAIL_VIDEO_QUERY, {
-    videoId: filmId,
-  });
+const DetailLoader: FC<DetailLoaderProps> = ({ queryRef }) => {
+  const data = usePreloadedQuery<LibraryPageContentDetailQuery>(DETAIL_VIDEO_QUERY, queryRef);
   if (!data.video) return null;
   return <FilmDetailPaneAsync video={data.video} />;
 };
@@ -212,6 +220,8 @@ const LibraryPage: FC = () => {
   const [search, setSearch] = useState("");
   const [isGrid, setIsGrid] = useState(true);
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
+  const [detailQueryRef, loadDetailQuery] =
+    useQueryLoader<LibraryPageContentDetailQuery>(DETAIL_VIDEO_QUERY);
 
   const filmId = searchParams.get("film");
   const isPaneOpen = Boolean(filmId);
@@ -225,10 +235,13 @@ const LibraryPage: FC = () => {
       if (filmId === id) {
         closePane();
       } else {
+        // Kick off the network request immediately, before the URL update causes
+        // DetailLoader to mount — avoids a wasted render cycle before fetching.
+        loadDetailQuery({ videoId: id });
         setSearchParams({ film: id });
       }
     },
-    [filmId, closePane, setSearchParams]
+    [filmId, closePane, loadDetailQuery, setSearchParams]
   );
 
   const interceptor = useCallback(
@@ -421,9 +434,9 @@ const LibraryPage: FC = () => {
 
             {/* Right pane */}
             <div className={styles.rightPane}>
-              {filmId && (
+              {isPaneOpen && detailQueryRef && (
                 <Suspense fallback={null}>
-                  <DetailLoader filmId={filmId} />
+                  <DetailLoader queryRef={detailQueryRef} />
                 </Suspense>
               )}
             </div>

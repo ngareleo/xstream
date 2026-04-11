@@ -43,6 +43,9 @@ export default defineConfig({
 
   source: {
     entry: { index: "./src/main.tsx" },
+  },
+
+  resolve: {
     // ~ → src/ — mirrors the tsconfig paths alias
     alias: {
       "~": path.resolve(dirname, "src"),
