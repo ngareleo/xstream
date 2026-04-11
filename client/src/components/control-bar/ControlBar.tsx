@@ -104,16 +104,7 @@ export const ControlBar: FC<Props> = ({ video, videoRef, resolution, status, isV
 
   const playIcon =
     status === "loading" ? (
-      <div
-        style={{
-          width: 18,
-          height: 18,
-          borderRadius: "50%",
-          border: "2px solid rgba(255,255,255,0.2)",
-          borderTopColor: "#fff",
-          animation: "spin 0.75s linear infinite",
-        }}
-      />
+      <div className={styles.loadingSpinner} />
     ) : isPlaying ? (
       <IconPause size={20} />
     ) : (

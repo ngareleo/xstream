@@ -164,4 +164,17 @@ export const useControlBarStyles = makeStyles({
     color: tokens.colorRed,
     backgroundColor: tokens.colorRedDim,
   },
+
+  // ── Loading spinner (replaces playIcon in loading state) ───────────────────
+  loadingSpinner: {
+    width: "18px",
+    height: "18px",
+    borderRadius: "50%",
+    border: "2px solid rgba(255,255,255,0.2)",
+    borderTopColor: tokens.colorWhite,
+    animationName: { to: { transform: "rotate(360deg)" } },
+    animationDuration: "0.75s",
+    animationTimingFunction: "linear",
+    animationIterationCount: "infinite",
+  },
 });

@@ -4,6 +4,12 @@ import { tokens } from "~/styles/tokens.js";
 
 export const useDashboardStyles = makeStyles({
   // ── Page-level layout ────────────────────────────────────────────────────
+  pageRoot: {
+    display: "flex",
+    flexDirection: "column",
+    height: "100%",
+    overflow: "hidden",
+  },
   splitBody: {
     display: "grid",
     gridTemplateColumns: "1fr 0px 0px",

@@ -186,7 +186,7 @@ export const DashboardPageContent: FC = () => {
 
   return (
     <DevThrowTarget id="Dashboard">
-      <div style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
+      <div className={styles.pageRoot}>
         <NovaEventingInterceptor interceptor={interceptor}>
           <div
             ref={containerRef}

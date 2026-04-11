@@ -22,6 +22,8 @@ import type { VideoPlayer_video$key } from "~/relay/__generated__/VideoPlayer_vi
 import type { Resolution } from "~/types.js";
 import { maxResolutionForHeight } from "~/utils/formatters.js";
 
+import { useVideoPlayerStyles } from "./VideoPlayer.styles.js";
+
 const VIDEO_FRAGMENT = graphql`
   fragment VideoPlayer_video on Video {
     id
@@ -41,6 +43,7 @@ const HIDE_DELAY_MS = 3000;
 
 export const VideoPlayer: FC<Props> = ({ video }) => {
   const data = useFragment(VIDEO_FRAGMENT, video);
+  const styles = useVideoPlayerStyles();
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -117,55 +120,20 @@ export const VideoPlayer: FC<Props> = ({ video }) => {
   return (
     <div
       ref={containerRef}
+      className={styles.root}
       onMouseMove={showControls}
       onMouseEnter={showControls}
       onMouseLeave={() => {
         if (hideTimerRef.current !== null) clearTimeout(hideTimerRef.current);
         setControlsVisible(false);
       }}
-      style={{ position: "relative", width: "100%", height: "100%", background: "#000" }}
     >
-      <video
-        ref={videoRef}
-        style={{ width: "100%", height: "100%", display: "block", objectFit: "contain" }}
-        controls={false}
-      />
+      <video ref={videoRef} className={styles.video} controls={false} />
 
       {/* Pre-play overlay — shown in idle state */}
       {status === "idle" && (
-        <div
-          onClick={handlePlay}
-          style={{
-            position: "absolute",
-            inset: 0,
-            zIndex: 5,
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 14,
-            cursor: "pointer",
-          }}
-        >
-          <button
-            onClick={handlePlay}
-            style={{
-              width: 72,
-              height: 72,
-              borderRadius: "50%",
-              background: "rgba(206,17,38,0.15)",
-              border: "1.5px solid rgba(206,17,38,0.5)",
-              color: "#fff",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              cursor: "pointer",
-              paddingLeft: 4,
-              transition: "background 0.2s ease, border-color 0.2s ease, transform 0.15s ease",
-            }}
-            aria-label="Play"
-            type="button"
-          >
+        <div className={styles.idleOverlay} onClick={handlePlay}>
+          <button className={styles.playBtn} onClick={handlePlay} aria-label="Play" type="button">
             <IconPlay size={32} />
           </button>
         </div>
@@ -173,67 +141,16 @@ export const VideoPlayer: FC<Props> = ({ video }) => {
 
       {/* Loading spinner overlay */}
       {status === "loading" && (
-        <div
-          style={{
-            position: "absolute",
-            inset: 0,
-            zIndex: 5,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            pointerEvents: "none",
-          }}
-        >
-          <div
-            style={{
-              width: 36,
-              height: 36,
-              borderRadius: "50%",
-              border: "2px solid rgba(255,255,255,0.12)",
-              borderTopColor: "rgba(206,17,38,0.85)",
-              animation: "spin 0.75s linear infinite",
-            }}
-          />
+        <div className={styles.loadingOverlay}>
+          <div className={styles.loadingSpinner} />
         </div>
       )}
 
       {/* Transcode progress label */}
-      {progressLabel && (
-        <div
-          style={{
-            position: "absolute",
-            top: 16,
-            left: 16,
-            right: 16,
-            background: "rgba(0,0,0,0.8)",
-            padding: "8px 12px",
-            borderRadius: 6,
-            fontSize: 12,
-            color: "#aaa",
-          }}
-        >
-          {progressLabel}
-        </div>
-      )}
+      {progressLabel && <div className={styles.progressLabel}>{progressLabel}</div>}
 
       {/* Error overlay */}
-      {error && (
-        <div
-          style={{
-            position: "absolute",
-            top: 16,
-            left: 16,
-            right: 16,
-            background: "rgba(206,17,38,0.85)",
-            padding: "10px 14px",
-            borderRadius: 6,
-            fontSize: 13,
-            color: "#fff",
-          }}
-        >
-          {error}
-        </div>
-      )}
+      {error && <div className={styles.errorOverlay}>{error}</div>}
 
       <NovaEventingInterceptor interceptor={interceptor}>
         <ControlBar

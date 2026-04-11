@@ -152,6 +152,12 @@ const usePlayerStyles = makeStyles({
     animationTimingFunction: "linear",
     animationIterationCount: "infinite",
   },
+
+  // ── Error / not-found states ───────────────────────────────────────────────
+  notFound: {
+    padding: "32px",
+    color: "#f0f0f5",
+  },
 });
 
 const VIDEO_QUERY = graphql`
@@ -201,7 +207,7 @@ const PlayerContent: FC<{ videoId: string }> = ({ videoId }) => {
   }, [resetTimer]);
 
   if (!data.video) {
-    return <div style={{ padding: 32, color: "#f0f0f5" }}>Video not found.</div>;
+    return <div className={styles.notFound}>Video not found.</div>;
   }
 
   return (
@@ -265,7 +271,7 @@ export const PlayerPage: FC = () => {
   const styles = usePlayerStyles();
 
   if (!videoId) {
-    return <div style={{ padding: 32, color: "#f0f0f5" }}>Invalid video ID.</div>;
+    return <div className={styles.notFound}>Invalid video ID.</div>;
   }
 
   return (
