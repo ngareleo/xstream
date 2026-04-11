@@ -79,15 +79,13 @@ export const FilmDetailPane: FC<Props> = ({ video }) => {
 
         {/* Action bar */}
         <div className={styles.actionBar}>
-          {data.matched && (
-            <Link
-              to={`/player/${data.id}`}
-              className={mergeClasses(styles.actionBtn, styles.actionBtnPrimary)}
-            >
-              <IconPlay size={10} />
-              Play
-            </Link>
-          )}
+          <Link
+            to={`/player/${data.id}`}
+            className={mergeClasses(styles.actionBtn, styles.actionBtnPrimary)}
+          >
+            <IconPlay size={10} />
+            Play
+          </Link>
           <div className={styles.actionSep} />
           <button className={styles.actionBtn}>
             <IconPencil size={10} />
