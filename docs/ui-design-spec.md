@@ -16,9 +16,10 @@ implementation. The canonical design reference is the React prototype at
 | `/watchlist` | Watchlist | AppShell |
 | `/settings` | Settings / Setup | AppShell |
 | `/player/:videoId` | Player | Full-screen (no shell) |
+| `/goodbye` | Goodbye | Full-screen (no shell) |
 
-The Player bypasses the sidebar + header shell. Every other page renders inside
-the two-column `AppShell` grid (sidebar 220px + main 1fr).
+The Player and Goodbye pages bypass the sidebar + header shell. Every other
+page renders inside the two-column `AppShell` grid (sidebar 220px + main 1fr).
 
 ---
 
@@ -44,15 +45,24 @@ Toggle: clicking an item that is already open in the pane **closes** it.
 
 ## Split-body layout
 
-Both Profiles and Library use a two-column grid called `split-body`:
+Both Profiles and Library use a three-column grid called `split-body`:
 
 ```css
-.split-body           { grid-template-columns: 1fr 0px;   }   /* pane closed */
-.split-body.pane-open { grid-template-columns: 1fr 360px; }   /* pane open   */
+/* Always 3 columns so count never changes and CSS transitions work */
+.split-body           { grid-template-columns: 1fr 0px 0px;    }  /* pane closed */
+.split-body.pane-open { grid-template-columns: 1fr 4px 360px;  }  /* pane open   */
 ```
 
+The middle column (4px) is a drag-resize handle (`.split-resize-handle`).
+When the pane is closed it collapses to 0px along with the right column.
+
+The right pane width is controlled by the `useSplitResize` hook which overrides
+`gridTemplateColumns` via an inline style when the user drags the handle. The
+CSS `transition` is suppressed while dragging (`.is-resizing` class) and
+restored on `mouseup` so the open/close animation is smooth but dragging is
+instantaneous.
+
 The transition is animated with CSS (`transition: grid-template-columns 0.25s ease`).
-No JavaScript is needed for the animation.
 
 On the Profiles page, the hero slideshow and location breadcrumb live **inside
 `split-left`**, not above `split-body`. This ensures the right pane spans the
@@ -198,57 +208,34 @@ and the `scanProgress` subscription.
 
 ---
 
-## Loading states (skeleton screens)
+## Loading states
 
-Every page shows a shimmer skeleton while the Relay query is in-flight. The
-skeleton is the Suspense `fallback` — it renders until the query resolves.
+### Global loading bar
 
-### Implementation pattern
+A 3px fixed bar at the top of the viewport (below the 52px header) indicates
+page-level data loading. It replaces per-page skeleton screens as the primary
+loading affordance.
 
-```tsx
-// Design lab: useSimulatedLoad replicates the Relay Suspense delay
-const loading = useSimulatedLoad(); // 700 ms
-if (loading) return <PageSkeleton />;
-```
+Pages call `usePageLoading(loading)` to signal load state. `LoadingBarProvider`
+counts active loaders; the bar stays visible until all have resolved. This
+handles simultaneous loaders during tab switches gracefully.
 
-In production, remove `useSimulatedLoad` and wrap the page content component in
-a `<Suspense fallback={<PageSkeleton />}>` boundary instead.
+**Animation phases:**
 
-### Shimmer utility
+| Phase | CSS | Description |
+|---|---|---|
+| `loading` | `lb-grow` keyframe (8s, deceleration) | Fake progress: eases from 0% → 88% |
+| `completing` | `lb-complete` keyframe (600ms) | Snaps to 100%, fades out |
+| `idle` | `display: none` | Bar hidden |
 
-One shared `.skeleton` class handles all shimmer elements:
+The bar uses `transform: scaleX()` with `transform-origin: left` — no layout reflow.
+A sheen sweep and a pulsing spark dot at the leading edge add visual depth.
 
-```css
-/* shared.css */
-@keyframes shimmer {
-  0%   { background-position: -200% 0; }
-  100% { background-position:  200% 0; }
-}
-.skeleton {
-  background: linear-gradient(90deg, var(--surface2) 25%, var(--surface3) 50%, var(--surface2) 75%);
-  background-size: 200% 100%;
-  animation: shimmer 1.6s ease-in-out infinite;
-  border-radius: var(--radius-sm);
-}
-```
+### Design lab vs production
 
-Apply `className="skeleton"` to any placeholder element. Do not add per-page
-keyframe definitions.
-
-### Per-page skeleton geometry
-
-Each skeleton must match the real page's layout geometry to prevent layout shift
-when content appears. Key rules:
-
-| Page | What to mirror |
-|---|---|
-| Profiles | 220px hero block + 38px breadcrumb bar + 3 profile rows (icon + name shimmer + count shimmer + action shimmers) |
-| Library | Full-width filter bar + profile-section headings + poster card grid (same column count as real grid, aspect-ratio `2/3`) |
-| Watchlist | Three stat blocks (number + label) + list items (thumbnail + two text lines + badge + play button) + add-panel (heading + search bar + 3 result rows) |
-| Settings | 200px nav column with 6 nav items (icon circle + label) + content column with 3 setting blocks (title + description + toggle/select pill) |
-
-The skeleton for AppHeader buttons (top-right) should also be shimmered since
-those buttons are data-driven (e.g. watchlist count badge).
+In the design lab, pages call `useSimulatedLoad()` (700ms) and pass the result
+to `usePageLoading()`. In production, replace `useSimulatedLoad` with the actual
+Relay loading state — the `usePageLoading` call and loading bar remain unchanged.
 
 ---
 
@@ -276,29 +263,67 @@ Two display modes:
 
 **Dev** — `import.meta.env.DEV`:
 ```
-┌──────────────────────────────────────────┐
-│ 🐛 Unhandled render error  [Copy] [Retry] │  ← red-tinted header
-├──────────────────────────────────────────┤
-│ Error message (monospace)                │
-├──────────────────────────────────────────┤
-│ JAVASCRIPT STACK                         │
-│ <pre> full stack trace </pre>            │
-├──────────────────────────────────────────┤
-│ REACT COMPONENT STACK                   │
-│ <pre> component tree </pre>              │
-└──────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────┐
+│ 🐛 Unhandled render error  [Preview customer view] [Copy] [Retry] │
+├──────────────────────────────────────────────────────────────┤
+│ Error message (monospace)                                    │
+├──────────────────────────────────────────────────────────────┤
+│ JAVASCRIPT STACK                                             │
+│ <pre> full stack trace </pre>                                │
+├──────────────────────────────────────────────────────────────┤
+│ REACT COMPONENT STACK                                        │
+│ <pre> component tree </pre>                                  │
+└──────────────────────────────────────────────────────────────┘
 ```
 
-**Prod** — no internal details:
-- Logo shield + "Something went wrong" heading
-- Reassuring subtitle (data is safe, display issue only)
+"Preview customer view" toggles to the prod screen with a yellow "DEV PREVIEW"
+banner at the top. "← Back to dev view" restores the dev screen. This lets
+developers verify what customers see without switching to a prod build.
+
+**Prod** — customer-facing help page (no stack traces, no internal details):
+- Logo shield + "SOMETHING WENT WRONG" heading
+- Reassurance: library and watchlist are safe, display issue only
+- Numbered "Things to try" card: Retry → Reload → Clear cache
 - "Try again" and "Reload page" buttons
+- Contact footer: `support@moran.app` and `help.moran.app`
 
 Implementation notes:
 - `getDerivedStateFromError` captures the error for render.
 - `componentDidCatch` is where to call `logErrorToService(error, errorInfo)`.
 - "Try again" calls `setState({ hasError: false })` which re-mounts the subtree.
 - Wrapping `<BrowserRouter>` means routing state also resets on retry — intentional.
+
+### Goodbye page (`/goodbye`)
+
+Full-screen farewell shown after sign-out confirmation. Same atmospheric
+language as the Player idle overlay and 404 page. Auto-redirects to `/` after
+4 seconds; "Back to home" button skips the wait.
+
+---
+
+## Profile menu and sign-out flow
+
+The user row at the bottom of the sidebar opens a popover menu positioned
+above it (or to the right in collapsed state).
+
+**Menu items:**
+- User info header (avatar, name, email) — non-interactive
+- Profiles list — each navigates to `/`
+- Go to home → `/`
+- Account settings → `/settings?section=account`
+- Sign out → confirmation dialog
+
+**Sign-out confirmation dialog:**
+A modal with a blurred backdrop. "Cancel" dismisses; "Sign out" navigates to
+`/goodbye`. The dialog renders outside the sidebar in a portal-like pattern
+(sibling of `<nav>` inside the React tree) so it isn't clipped by the sidebar's
+`overflow`.
+
+**Settings section deep-link:**
+`Settings` reads `?section=<id>` on mount and activates the matching section.
+Invalid or absent values fall back to `"general"`. This is the only Settings
+URL param — section changes during a session remain in component state and do
+not update the URL.
 
 ---
 

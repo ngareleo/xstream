@@ -44,9 +44,31 @@ All values live in `src/styles/shared.css` as CSS custom properties.
 - The shell is a CSS grid: `grid-template-areas: "header header" "sidebar main"`.
 - Sidebar collapses to 52px when the user clicks the Collapse button
   (`nav-collapsed` class on `.app-shell`, all labels hide, only icons remain).
-- The Player page bypasses the shell entirely — it is a full-viewport grid.
+- The Player and Goodbye pages bypass the shell entirely.
 - The header brand area (`header-brand`) has a matching width transition so
   it stays aligned with the sidebar as it collapses.
+
+### Profile menu
+
+The user row at the bottom of the sidebar is a clickable button that opens a
+popover menu positioned above it (or to the right when the sidebar is collapsed).
+
+Menu contents:
+- **User info header** — avatar, display name, email.
+- **Profiles** section — one button per profile with item count. Clicking
+  navigates to `/`.
+- **Go to home** — navigates to `/`.
+- **Account settings** — navigates to `/settings?section=account`.
+- **Sign out** — closes the menu and opens the sign-out confirmation dialog.
+
+The menu closes on outside click or Escape. The chevron on the user row rotates
+90° when the menu is open.
+
+### Sign-out confirmation dialog
+
+A modal overlay with blurred backdrop. Confirms the user wants to sign out
+before navigating to `/goodbye`. Two actions: **Cancel** and **Sign out**.
+Clicking the overlay backdrop cancels.
 
 ---
 
@@ -103,11 +125,12 @@ main
   Back button restores the previous pane state (or closes it if there was none).
 - Clicking a film row that is already showing in the pane **closes** it (toggle/deselect).
 - When the pane opens, `split-body` transitions `grid-template-columns` from
-  `1fr 0px` → `1fr 360px` (CSS transition, no JS).
+  `1fr 0px 0px` → `1fr 4px 360px`. The middle column is the resize handle.
 - The hero and location bar are inside `split-left` (not above `split-body`),
   so the right pane spans the full height of the main area.
 - Column headers switch to a condensed set when the pane is open (CSS-only via
   `.split-body.pane-open .dir-header`).
+- The right pane is **drag-resizable** via the `useSplitResize` hook (see below).
 
 ---
 
@@ -248,7 +271,13 @@ mutation and the item appears in the list via a `watchlistItemAdded` subscriptio
 ### 5 — Settings (`/settings`)
 
 A two-column layout: a nav sidebar on the left (6 sections) and a content
-panel on the right. Section switching is local state — no URL change.
+panel on the right.
+
+**URL-based section deep-linking:** the `?section=<id>` search param sets the
+active section on mount. Any valid section ID (`general`, `library`, `playback`,
+`metadata`, `account`, `danger`) is accepted; invalid or absent values fall back
+to `"general"`. This lets the profile menu's "Account settings" item link
+directly to `/settings?section=account`.
 
 Sections: General, Library, Playback, Metadata, Account, Danger Zone.
 
@@ -257,39 +286,56 @@ styling. All inputs and toggles are visual-only in the design lab.
 
 ---
 
-## Loading states (skeleton screens)
+## Loading bar
 
-Every page implements a shimmer skeleton that is shown for `~700 ms` while data
-loads. In production this replaces Relay's Suspense fallback.
+Pages signal loading state via `usePageLoading(loading)`. A single `<LoadingBar>`
+component rendered in `AppShell` (via `LoadingBarProvider`) reacts to any active
+loader and runs a three-phase animation:
 
-**Shared utility:**
-
-```ts
-// src/hooks/useSimulatedLoad.ts
-const loading = useSimulatedLoad();   // 700 ms default
-if (loading) return <PageSkeleton />;
+```
+loading  →  completing  →  idle
+(fake progress 0→88%)   (snap to 100%, fade out)
 ```
 
-**Shimmer animation** is defined once in `shared.css` as a `.skeleton` utility
-class — a `background-size: 200%` linear gradient animated with `@keyframes shimmer`.
+The bar is a 3px fixed strip at the top of the viewport (z-index 9990), below the
+52px header. Animation uses CSS `transform: scaleX()` with `transform-origin: left`
+to avoid layout reflow.
 
-| Page | Skeleton mirrors |
-|---|---|
-| Profiles | Hero (220px block) + breadcrumb bar + 3 profile-row shimmers |
-| Library | Filter bar + 2 profile sections with 6+4 poster-card grid shimmers |
-| Watchlist | Stats row + 5 list-item shimmers + add-panel shimmer (right column) |
-| Settings | 6 nav-item shimmers (left) + 3 setting-row shimmers with toggle pills (right) |
+**Phase details:**
+- `loading` — `lb-grow` keyframe eases from `scaleX(0)` to `scaleX(0.88)` over
+  8s with a deceleration curve. A subtle sheen sweep and a pulsing spark at the
+  leading edge add depth.
+- `completing` — `lb-complete` keyframe snaps to `scaleX(1)` then fades out
+  over 600ms. Triggered when `isLoading` transitions false → true.
+- `idle` — bar is hidden (`display: none`).
 
-Each skeleton matches the geometry of the real page so there is no layout shift
-when content appears.
+**Multi-loader counting** — `LoadingBarProvider` tracks a `Map<id, boolean>` so
+multiple pages can signal loading simultaneously without cancelling each other
+(e.g. during a tab switch before the previous page unmounts).
 
-In production, the skeleton is the Suspense `fallback` rendered by Relay while
-the page query is in-flight. The `useSimulatedLoad` hook is only needed in the
-design lab to replicate that delay.
+Pages call `usePageLoading(loading)` at the top level. The hook registers/
+deregisters itself via `useEffect` and `useId`, requiring no manual cleanup.
 
 ---
 
-### 6 — NotFound (`*`)
+### 6 — Goodbye (`/goodbye`)
+
+Full-screen farewell page shown after the user confirms sign-out from the
+profile menu.
+
+Atmospheric treatment matching the Player idle overlay and the 404 page (grain
+texture + radial glow + Bebas Neue ghost watermark). No app-shell (no sidebar
+or header).
+
+- Ghost "GOODBYE" watermark at 3% opacity.
+- "SEE YOU NEXT TIME, \<name\>." in Bebas Neue.
+- Subtitle: "Your library will be right here when you get back."
+- "Back to home" button + countdown label.
+- Auto-redirects to `/` after 4 seconds via a `useEffect` countdown.
+
+---
+
+### 7 — NotFound (`*`)
 
 A catch-all route rendered inside AppShell for any unknown URL.
 
@@ -311,20 +357,164 @@ Wraps the entire app in `main.tsx`. Catches any unhandled render error.
 - Full JavaScript stack trace in a monospace code block.
 - React component stack (dimmer, secondary).
 - Copy-to-clipboard, "Try again" (remounts subtree), and "Reload page" actions.
+- **"Preview customer view" toggle** — switches to the prod screen inline so
+  developers can see exactly what a customer would see. A yellow "DEV PREVIEW"
+  banner sits at the top of the viewport; "← Back to dev view" restores the
+  dev screen. The toggle is local state inside `DevErrorScreen` and has no
+  effect on the class component's state or the `handleReset` flow.
 
-**Prod mode**:
-- Friendly "Something went wrong" screen.
-- Moran logo shield, short reassuring message ("your library data is safe").
-- "Try again" and "Reload page" buttons — no internal detail exposed.
+**Prod mode** — customer-facing help page (no internal details exposed):
+- Moran logo shield + "SOMETHING WENT WRONG" heading.
+- Reassurance: "Your library and watchlist are safe — this is a display issue only."
+- Numbered "Things to try" card: **Retry**, **Reload the page**, **Clear your cache**.
+- "Try again" (remounts subtree) and "Reload page" buttons.
+- Contact footer: "Contact support" (`support@moran.app`) and `help.moran.app` link.
 
 In production, add `logErrorToService(error, errorInfo)` inside
 `componentDidCatch` to forward errors to Sentry / DataDog.
+
+**`handleReset` and the DevTools kill switch:**
+
+`handleReset` calls `(window as any).__devToolsReset?.()` before calling
+`setState`. This is a dev-only hook registered by `DevToolsProvider`. If the
+error was triggered by the DevPanel kill switch, `__devToolsReset` clears the
+throw-target ref so the re-mounted subtree doesn't immediately re-throw. In prod
+and tests the hook is absent and the `?.()` call is a no-op.
+
+---
+
+## DevTools (dev-only)
+
+`AppShell` renders two dev-only components controlled by `DevToolsProvider`:
+
+### DevPanel (floating kill switch)
+
+A "DEV" pill fixed to the bottom-right corner. Clicking it opens a floating
+panel with a **Kill switch** that force-throws a render error inside any
+registered `<DevThrowTarget>` subtree. Use it to exercise the `ErrorBoundary`
+without navigating away.
+
+Add a new target by:
+1. Wrapping the component tree in `<DevThrowTarget id="MyPage">`.
+2. Adding `{ id: "MyPage", label: "My page" }` to `THROW_TARGETS` in `DevPanel.tsx`.
+
+### How the throw works (React 18 concurrent mode)
+
+React 18 retries renders that throw. To force the `ErrorBoundary` to commit its
+fallback, the throw-target ref must stay set across retries:
+
+```
+requestThrow("Watchlist")
+  → throwTargetRef.current = "Watchlist"; setTick(t+1)
+  → DevThrowTarget re-renders, sees ref === id → throws (ref NOT cleared)
+  → React retries; ref still set → throws again → ErrorBoundary commits fallback
+  → User clicks "Try again" → ErrorBoundary.handleReset calls window.__devToolsReset()
+  → ref cleared, tick bumped → DevThrowTarget renders null → success
+```
+
+Clearing the ref before throwing is wrong: the retry sees null and succeeds,
+so the `ErrorBoundary` never commits its fallback.
+
+---
+
+## Resizable split panes
+
+Both Profiles and Library pages use `useSplitResize(defaultWidth)` from
+`src/hooks/useSplitResize.ts` to make the right-pane drag-resizable.
+
+```tsx
+const { paneWidth, containerRef, onResizeMouseDown } = useSplitResize(360);
+
+<div
+  ref={containerRef}
+  className={`split-body${paneOpen ? " pane-open" : ""}`}
+  style={paneOpen ? { gridTemplateColumns: `1fr 4px ${paneWidth}px` } : undefined}
+>
+  <div className="split-left">...</div>
+  {paneOpen && <div className="split-resize-handle" onMouseDown={onResizeMouseDown} />}
+  <div className="right-pane">...</div>
+</div>
+```
+
+The `split-body` grid always has **3 columns** (`1fr 0px 0px` when closed,
+`1fr 4px Npx` when open) so the column count never changes and the CSS
+open/close transition animates cleanly.
+
+The `.split-resize-handle` is a 4px column with a wider click-hit area (±4px
+margin/padding). It appears as a 1px line matching the border colour; on hover
+it widens to a 4px soft-red strip.
+
+During drag the hook:
+1. Adds `.is-resizing` to the container — suppresses the CSS `transition` so
+   the pane tracks the pointer without 0.25s lag.
+2. Adds `body.resizing` — locks `cursor: col-resize` globally so it doesn't
+   flicker as the pointer passes over other elements.
+3. Removes both on `mouseup`.
+
+Bounds: min 240px, max 640px.
+
+---
+
+## Tooltips
+
+A pure-CSS tooltip system using data attributes. No JavaScript required.
+
+### `[data-tip]` — tooltip above
+
+```html
+<button data-tip="Re-scan">...</button>
+```
+
+Generates a tooltip above the element via `::after`. Fades in with a 3px upward
+lift on hover.
+
+### `[data-tip-right]` — tooltip to the right
+
+```html
+<button data-tip-right="Settings">...</button>
+```
+
+Same style, positioned to the right. Used for elements at the left edge.
+
+### `.nav-side-tip` — sidebar collapsed tooltip
+
+Sidebar nav items can't use `::after` (it's reserved for notification badges on
+`.notify-amber` items), so each nav item contains an explicit child:
+
+```tsx
+<NavLink to="/library" ...>
+  <IconFilm className="nav-card-icon" />
+  <span className="nav-label">Library</span>
+  <span className="nav-side-tip" aria-hidden="true">Library</span>
+</NavLink>
+```
+
+`.nav-side-tip` is hidden (`display: none`) when the sidebar is expanded (the
+label is already visible). When collapsed, it appears to the right of the icon
+on hover. The sidebar and nav items override `overflow: hidden → visible` in
+collapsed state so the tip can extend beyond the sidebar's right edge.
+
+### Applied to
+
+| Location | Tip text |
+|---|---|
+| Sidebar nav items (collapsed) | Page name |
+| Player: backward skip | `−10s` |
+| Player: play/pause | `Play` / `Pause` |
+| Player: forward skip | `+10s` |
+| Player: volume | `Volume` |
+| Player: fullscreen | `Fullscreen` |
+| Profiles: profile row re-scan | `Re-scan` |
+| Profiles: profile row edit | `Edit` |
+| Profiles: film row edit | `Edit link` |
+| Profiles: Scan All button | `Rescan all libraries` |
+| Library: RE-LINK button | `Re-link metadata` |
 
 ---
 
 ## URL routing scheme
 
-| URL | Page | Pane state |
+| URL | Page | Pane / section |
 |---|---|---|
 | `/` | Profiles | closed |
 | `/?pane=new-profile` | Profiles | New Profile form |
@@ -333,7 +523,9 @@ In production, add `logErrorToService(error, errorInfo)` inside
 | `/library?film=dune-2` | Library | Film detail for dune-2 |
 | `/player/dune-2` | Player | — |
 | `/watchlist` | Watchlist | — |
-| `/settings` | Settings | — |
+| `/settings` | Settings | General (default) |
+| `/settings?section=account` | Settings | Account section |
+| `/goodbye` | Goodbye | — |
 
 Pane state is always in the URL. This means:
 - Opening a pane pushes a history entry → Back closes it.

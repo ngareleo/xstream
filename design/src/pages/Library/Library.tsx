@@ -29,6 +29,7 @@
 
 import React, { type FC } from "react";
 import { Link, useSearchParams } from "react-router-dom";
+import { useSplitResize } from "../../hooks/useSplitResize.js";
 import { AppHeader } from "../../components/AppHeader/AppHeader.js";
 import {
   IconSearch,
@@ -96,7 +97,7 @@ const PosterCard: FC<{
 // so both feel like the same component to users (consistent detail view).
 // The 200px poster area uses the film's gradient — replace with real poster image.
 const DetailPane: FC<{ film: Film; onClose: () => void }> = ({ film, onClose }) => (
-  <div className="right-pane" style={{ borderLeft: "1px solid var(--border)" }}>
+  <div className="right-pane">
     <div style={{ height: 200, position: "relative", overflow: "hidden", flexShrink: 0, background: film.gradient }}>
       <div style={{
         position: "absolute", inset: 0,
@@ -109,7 +110,7 @@ const DetailPane: FC<{ film: Film; onClose: () => void }> = ({ film, onClose }) 
           PLAY
         </Link>
         <div className="fd-action-sep" />
-        <button className="fd-action-btn"><IconPencil size={10} /> RE-LINK</button>
+        <button className="fd-action-btn" data-tip="Re-link metadata"><IconPencil size={10} /> RE-LINK</button>
         <div style={{ flex: 1 }} />
         <button className="fd-action-close" onClick={onClose}><IconClose size={13} /></button>
       </div>
@@ -179,6 +180,8 @@ export const Library: FC = () => {
   const loading = useSimulatedLoad();
   usePageLoading(loading);
 
+  const { paneWidth, containerRef, onResizeMouseDown } = useSplitResize(360);
+
   const [searchParams, setSearchParams] = useSearchParams();
   const selectedFilmId = searchParams.get("film");
   const selectedFilm   = selectedFilmId ? films.find((f) => f.id === selectedFilmId) : null;
@@ -212,7 +215,11 @@ export const Library: FC = () => {
       </AppHeader>
 
       <div className="main">
-        <div className={`split-body${paneOpen ? " pane-open" : ""}`}>
+        <div
+          ref={containerRef}
+          className={`split-body${paneOpen ? " pane-open" : ""}`}
+          style={paneOpen ? { gridTemplateColumns: `1fr 4px ${paneWidth}px` } : undefined}
+        >
           <div className="split-left">
 
             {/* Filter / view controls */}
@@ -292,6 +299,11 @@ export const Library: FC = () => {
               </div>
             )}
           </div>
+
+          {/* Resize handle — only present when pane is open */}
+          {paneOpen && (
+            <div className="split-resize-handle" onMouseDown={onResizeMouseDown} />
+          )}
 
           {/* Right pane: only rendered when a film is selected */}
           {paneOpen && selectedFilm && (

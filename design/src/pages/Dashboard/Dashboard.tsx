@@ -33,6 +33,7 @@
 
 import { type FC, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
+import { useSplitResize } from "../../hooks/useSplitResize.js";
 import { AppHeader } from "../../components/AppHeader/AppHeader.js";
 import { Slideshow } from "../../components/Slideshow/Slideshow.js";
 import {
@@ -133,7 +134,7 @@ const FilmRow: FC<{
           className="btn btn-surface btn-xs"
           onClick={(e) => { e.stopPropagation(); onEdit(film.id); }}
           style={{ padding: "3px 7px" }}
-          title="Edit link"
+          data-tip="Edit link"
         >
           <IconPencil size={11} />
         </button>
@@ -225,10 +226,10 @@ const ProfileRow: FC<{
             <span style={{ fontSize: 10, color: "var(--green)" }}>Scanning…</span>
           ) : (
             <>
-              <button className="btn btn-surface btn-xs" onClick={(e) => e.stopPropagation()}>
+              <button className="btn btn-surface btn-xs" data-tip="Re-scan" onClick={(e) => e.stopPropagation()}>
                 <IconRefresh size={11} />
               </button>
-              <button className="btn btn-surface btn-xs" onClick={(e) => e.stopPropagation()}>
+              <button className="btn btn-surface btn-xs" data-tip="Edit" onClick={(e) => e.stopPropagation()}>
                 <IconPencil size={11} />
               </button>
             </>
@@ -463,6 +464,8 @@ export const Dashboard: FC = () => {
   const loading = useSimulatedLoad();
   usePageLoading(loading);
 
+  const { paneWidth, containerRef, onResizeMouseDown } = useSplitResize(360);
+
   // Profile rows that are expanded (showing their child film list).
   // Local state only — not URL-encoded because expansion is transient UX.
   const [expandedIds,       setExpandedIds]       = useState<Set<string>>(new Set());
@@ -512,7 +515,7 @@ export const Dashboard: FC = () => {
         <div className="header-actions">
           {/* Scan All triggers a full re-scan of every library.
               In production: fires scanLibraries mutation, then subscribes to progress. */}
-          <button className="header-action-btn" onClick={() => {}}>
+          <button className="header-action-btn" data-tip="Rescan all libraries" onClick={() => {}}>
             <IconRefresh size={14} />
             Scan All
           </button>
@@ -534,7 +537,11 @@ export const Dashboard: FC = () => {
          * The hero, location bar, directory list, and footer all live inside
          * split-left so the right pane spans the full height of the main area.
          */}
-        <div className={`split-body${paneOpen ? " pane-open" : ""}`}>
+        <div
+          ref={containerRef}
+          className={`split-body${paneOpen ? " pane-open" : ""}`}
+          style={paneOpen ? { gridTemplateColumns: `1fr 4px ${paneWidth}px` } : undefined}
+        >
           <div className="split-left" style={{ padding: 0, display: "flex", flexDirection: "column", minHeight: 0 }}>
 
             {/* Hero: slideshow fills the container; greeting overlays the left third */}
@@ -591,6 +598,11 @@ export const Dashboard: FC = () => {
               <div className="dir-footer-stat"><span>{totalSize}</span> on disk</div>
             </div>
           </div>
+
+          {/* Resize handle — only present when pane is open */}
+          {paneOpen && (
+            <div className="split-resize-handle" onMouseDown={onResizeMouseDown} />
+          )}
 
           {/* Right pane — renders the active pane mode or nothing */}
           <div className="right-pane">

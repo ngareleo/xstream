@@ -138,7 +138,6 @@ code { font-family: 'SF Mono', 'Fira Code', monospace; }
   overflow: hidden;
   flex-shrink: 0;
   white-space: nowrap;
-  border-right: 1px solid rgba(206, 17, 38, 0.20);
   transition: width 0.22s ease;
 }
 .app-shell.nav-collapsed .header-brand { width: 52px; }
@@ -189,7 +188,14 @@ code { font-family: 'SF Mono', 'Fira Code', monospace; }
 }
 
 /* ── Collapsed sidebar ── */
-.sidebar.collapsed { width: 52px; }
+.sidebar.collapsed {
+  width: 52px;
+  /* Allow .nav-side-tip tooltips to extend beyond the sidebar's right edge */
+  overflow: visible;
+}
+.sidebar.collapsed .nav-item {
+  overflow: visible;
+}
 
 /* Center avatar, hide text */
 .sidebar.collapsed .sidebar-user { justify-content: center; padding-left: 0; padding-right: 0; }
@@ -418,18 +424,127 @@ code { font-family: 'SF Mono', 'Fira Code', monospace; }
   border-radius: var(--radius-sm);
 }
 
+/* ─── Tooltips ───────────────────────────────────────────────────────────── */
+/*
+ * Add data-tip="Label" to any button or link to get a tooltip.
+ * The element must not already use ::after for something else
+ * (sidebar nav-items use ::after for notification badges — those
+ * use .nav-side-tip instead, see Sidebar.tsx).
+ */
+[data-tip] {
+  position: relative;
+}
+[data-tip]::after {
+  content: attr(data-tip);
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%) translateY(3px);
+  white-space: nowrap;
+  font-size: 10px;
+  font-family: var(--font-body);
+  letter-spacing: 0.04em;
+  font-weight: 500;
+  background: #1a1a1a;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.5);
+  padding: 3px 8px;
+  border-radius: 3px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.12s ease, transform 0.12s ease;
+  z-index: 9999;
+}
+[data-tip]:hover::after {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+/* Tooltip that appears to the right (for left-edge elements) */
+[data-tip-right]::after {
+  content: attr(data-tip-right);
+  position: absolute;
+  top: 50%;
+  left: calc(100% + 8px);
+  bottom: auto;
+  transform: translateY(-50%) translateX(-3px);
+  white-space: nowrap;
+  font-size: 10px;
+  font-family: var(--font-body);
+  letter-spacing: 0.04em;
+  font-weight: 500;
+  background: #1a1a1a;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.5);
+  padding: 3px 8px;
+  border-radius: 3px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.12s ease, transform 0.12s ease;
+  z-index: 9999;
+}
+[data-tip-right]:hover::after {
+  opacity: 1;
+  transform: translateY(-50%) translateX(0);
+}
+
+/* Sidebar collapsed: show a right-side tooltip for each nav item.
+ * Uses a dedicated .nav-side-tip child span because ::after on .nav-item
+ * is already reserved for the notification badge on .notify-amber items. */
+.nav-side-tip {
+  position: absolute;
+  left: calc(100% + 10px);
+  top: 50%;
+  transform: translateY(-50%) translateX(-4px);
+  white-space: nowrap;
+  font-size: 10px;
+  font-family: var(--font-body);
+  letter-spacing: 0.04em;
+  font-weight: 500;
+  background: #1a1a1a;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.5);
+  padding: 3px 8px;
+  border-radius: 3px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.12s ease, transform 0.12s ease;
+  z-index: 9999;
+}
+.sidebar:not(.collapsed) .nav-side-tip { display: none; }
+.sidebar.collapsed .nav-item:hover .nav-side-tip {
+  opacity: 1;
+  transform: translateY(-50%) translateX(0);
+}
+
 /* ─── Split Layout (main content + right pane) ───────────────────────────── */
+/*
+ * Always 3 columns so the column count never changes and CSS transitions work:
+ *   1fr  — main content
+ *   0px/4px — resize handle (0 when closed, 4px when open)
+ *   0px/Npx — right pane (0 when closed, user-defined when open)
+ *
+ * The inline style from useSplitResize overrides gridTemplateColumns when
+ * the pane is open. During drag the `is-resizing` class suppresses the
+ * transition so the pane tracks the pointer without the 0.25s lag.
+ */
 .split-body {
   display: grid;
-  grid-template-columns: 1fr 0px;
+  grid-template-columns: 1fr 0px 0px;
   flex: 1;
   min-height: 0;
   transition: grid-template-columns 0.25s ease;
   overflow: hidden;
 }
 
+/* Default open state (overridden by inline style when useSplitResize is active) */
 .split-body.pane-open {
-  grid-template-columns: 1fr 360px;
+  grid-template-columns: 1fr 4px 360px;
+}
+
+/* Suppress transition while the user is dragging the resize handle */
+.split-body.is-resizing {
+  transition: none;
 }
 
 .split-left {
@@ -446,6 +561,44 @@ code { font-family: 'SF Mono', 'Fira Code', monospace; }
   overflow: hidden;
   min-width: 0;
   min-height: 0;  /* lets grid row constrain height; pane-body scrolls internally */
+}
+
+/* ─── Resize handle (between split-left and right-pane) ─────────────────── */
+.split-resize-handle {
+  cursor: col-resize;
+  background: transparent;
+  position: relative;
+  z-index: 10;
+  /* Widen the hit area beyond the 4px grid column */
+  margin: 0 -4px;
+  padding: 0 4px;
+  user-select: none;
+  flex-shrink: 0;
+}
+
+.split-resize-handle::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  left: 50%;
+  width: 1px;
+  background: var(--border);
+  transition: background 0.15s ease, width 0.15s ease, left 0.15s ease;
+}
+
+.split-resize-handle:hover::after,
+.split-resize-handle:active::after {
+  left: 4px;
+  width: 4px;
+  background: rgba(206, 17, 38, 0.5);
+}
+
+/* While dragging: keep col-resize cursor globally regardless of where the
+   pointer has wandered. The JS adds/removes this class on body. */
+body.resizing,
+body.resizing * {
+  cursor: col-resize !important;
+  user-select: none;
 }
 
 .right-pane-head { padding: 18px 18px 14px; border-bottom: 1px solid var(--border); flex-shrink: 0; }

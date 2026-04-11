@@ -7,13 +7,15 @@ import { Watchlist } from "./pages/Watchlist/Watchlist.js";
 import { Settings } from "./pages/Settings/Settings.js";
 import { Feedback } from "./pages/Feedback/Feedback.js";
 import { Player } from "./pages/Player/Player.js";
+import { Goodbye } from "./pages/Goodbye/Goodbye.js";
 import { NotFound } from "./pages/NotFound/NotFound.js";
 
 export const App: FC = () => {
   return (
     <Routes>
-      {/* Player gets its own full-screen shell */}
+      {/* Full-screen pages — no app shell */}
       <Route path="/player/:filmId" element={<Player />} />
+      <Route path="/goodbye" element={<Goodbye />} />
 
       {/* All other pages share the app-shell layout */}
       <Route

@@ -2,3 +2,288 @@
 .sidebar .nav-item {
   text-decoration: none;
 }
+
+/* ── Profile button (sidebar-user) ──────────────────────────────────────────── */
+
+.sidebar-user-wrap {
+  position: relative;
+}
+
+.sidebar-user {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  width: 100%;
+  background: none;
+  border: none;
+  border-top: 1px solid var(--border);
+  cursor: pointer;
+  text-align: left;
+  transition: background var(--transition);
+  color: inherit;
+  font-family: var(--font-body);
+}
+
+.sidebar-user:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.sidebar-user.menu-open {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.sidebar-user-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.user-chevron {
+  color: var(--muted2);
+  flex-shrink: 0;
+  transition: transform 0.15s ease, color 0.15s ease;
+}
+
+.user-chevron.open {
+  transform: rotate(90deg);
+  color: var(--muted);
+}
+
+/* ── Profile menu popover ────────────────────────────────────────────────────── */
+
+.profile-menu {
+  position: absolute;
+  bottom: calc(100% + 4px);
+  left: 8px;
+  right: 8px;
+  background: var(--surface);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius-md);
+  box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.4);
+  z-index: 200;
+  overflow: hidden;
+  animation: pm-open 0.12s ease both;
+}
+
+/* When sidebar is collapsed the menu should be wider and positioned to the right */
+.profile-menu.profile-menu-collapsed {
+  left: 52px;
+  right: auto;
+  width: 220px;
+  bottom: 8px;
+}
+
+@keyframes pm-open {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Menu user head */
+.pm-user-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface2);
+}
+
+.pm-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--red);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--white);
+  flex-shrink: 0;
+}
+
+.pm-user-info {
+  min-width: 0;
+}
+
+.pm-user-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--white);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pm-user-email {
+  font-size: 10px;
+  color: var(--muted2);
+  margin-top: 1px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Section label */
+.pm-section-label {
+  padding: 8px 14px 4px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted2);
+}
+
+/* Menu items */
+.pm-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 14px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: var(--font-body);
+  font-size: 12px;
+  color: var(--muted);
+  text-align: left;
+  transition: background var(--transition), color var(--transition);
+}
+
+.pm-item:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--white);
+}
+
+.pm-item svg {
+  flex-shrink: 0;
+  color: var(--muted2);
+}
+
+.pm-item:hover svg {
+  color: var(--muted);
+}
+
+.pm-item-name {
+  flex: 1;
+}
+
+.pm-item-count {
+  font-size: 10px;
+  color: var(--muted2);
+  flex-shrink: 0;
+}
+
+/* Profile dot */
+.pm-item-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--muted2);
+  flex-shrink: 0;
+  transition: background var(--transition);
+}
+
+.pm-item:hover .pm-item-dot {
+  background: var(--red);
+}
+
+/* Sign out — danger tint */
+.pm-item-danger {
+  color: rgba(206, 17, 38, 0.7);
+}
+
+.pm-item-danger:hover {
+  background: rgba(206, 17, 38, 0.08);
+  color: var(--red);
+}
+
+.pm-item-danger svg {
+  color: rgba(206, 17, 38, 0.5);
+}
+
+.pm-item-danger:hover svg {
+  color: var(--red);
+}
+
+/* Divider */
+.pm-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 4px 0;
+}
+
+/* ── Sign-out confirmation dialog ────────────────────────────────────────────── */
+
+.dialog-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9000;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: dialog-bg-in 0.15s ease both;
+}
+
+@keyframes dialog-bg-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.dialog {
+  background: var(--surface);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.7);
+  padding: 28px 28px 24px;
+  width: 360px;
+  max-width: calc(100vw - 32px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  text-align: center;
+  animation: dialog-in 0.18s ease both;
+}
+
+@keyframes dialog-in {
+  from { opacity: 0; transform: scale(0.95) translateY(8px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.dialog-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: rgba(206, 17, 38, 0.1);
+  border: 1px solid rgba(206, 17, 38, 0.25);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--red);
+  margin-bottom: 4px;
+}
+
+.dialog-title {
+  font-family: var(--font-head);
+  font-size: 20px;
+  letter-spacing: 0.06em;
+  color: var(--white);
+  text-transform: uppercase;
+}
+
+.dialog-body {
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.6;
+  max-width: 280px;
+}
+
+.dialog-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 8px;
+}

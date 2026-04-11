@@ -5,9 +5,11 @@
  *
  *   DEV   — full stack trace + React component stack in a scrollable code block,
  *            copy-to-clipboard, and a "reload" escape hatch.
+ *            Includes a "Preview customer view" toggle so devs can see exactly
+ *            what a customer would see without switching to prod.
  *
- *   PROD  — friendly "something went wrong" screen with just a Retry button and
- *            no internal details exposed to the user.
+ *   PROD  — customer-facing help page: friendly guidance, actionable steps,
+ *            and a support contact. No internal details exposed.
  *
  * Usage — wrap the entire app in main.tsx:
  *   <ErrorBoundary>
@@ -22,11 +24,12 @@
  */
 
 import { Component, type ErrorInfo, type FC, type ReactNode, useState } from "react";
-import { IconBug, IconRefresh, IconClose, LogoShield } from "../../lib/icons.js";
+import { IconBug, IconRefresh, IconClose, IconChat, LogoShield } from "../../lib/icons.js";
 import "./ErrorBoundary.css";
 
 // ── DevErrorScreen ────────────────────────────────────────────────────────────
 // Shows in development mode: full error message, JS stack, React component stack.
+// Includes a "Preview customer view" toggle so devs can see the prod screen.
 
 const DevErrorScreen: FC<{
   error: Error;
@@ -34,6 +37,7 @@ const DevErrorScreen: FC<{
   onReset: () => void;
 }> = ({ error, errorInfo, onReset }) => {
   const [copied, setCopied] = useState(false);
+  const [previewProd, setPreviewProd] = useState(false);
 
   const fullText = [
     `${error.name}: ${error.message}`,
@@ -52,6 +56,22 @@ const DevErrorScreen: FC<{
     });
   };
 
+  if (previewProd) {
+    return (
+      <div style={{ position: "relative" }}>
+        {/* Dev-only banner — not visible to customers */}
+        <div className="eb-preview-banner">
+          <span className="eb-preview-label">DEV PREVIEW</span>
+          <span className="eb-preview-sub">Customer view — no stack traces are shown below</span>
+          <button className="eb-action-btn eb-preview-back" onClick={() => setPreviewProd(false)}>
+            ← Back to dev view
+          </button>
+        </div>
+        <ProdErrorScreen onReset={onReset} />
+      </div>
+    );
+  }
+
   return (
     <div className="eb-root eb-dev">
       <div className="eb-grain" />
@@ -69,6 +89,13 @@ const DevErrorScreen: FC<{
             </div>
           </div>
           <div className="eb-head-actions">
+            <button
+              className="eb-action-btn eb-action-preview"
+              onClick={() => setPreviewProd(true)}
+              title="See what a customer would see"
+            >
+              Preview customer view
+            </button>
             <button className="eb-action-btn" onClick={handleCopy} title="Copy error to clipboard">
               {copied ? "Copied!" : "Copy"}
             </button>
@@ -104,7 +131,8 @@ const DevErrorScreen: FC<{
 };
 
 // ── ProdErrorScreen ───────────────────────────────────────────────────────────
-// Shows in production mode: minimal, friendly, no internal detail.
+// Customer-facing help page. No stack traces, no internal detail.
+// Guides the user through self-service steps before offering a support contact.
 
 const ProdErrorScreen: FC<{ onReset: () => void }> = ({ onReset }) => (
   <div className="eb-root eb-prod">
@@ -113,9 +141,32 @@ const ProdErrorScreen: FC<{ onReset: () => void }> = ({ onReset }) => (
       <LogoShield />
       <div className="eb-prod-title">Something went wrong</div>
       <div className="eb-prod-sub">
-        Moran ran into an unexpected problem. Your library and playback data
+        Moran ran into an unexpected problem. Your library and watchlist
         are safe — this is a display issue only.
       </div>
+
+      <div className="eb-prod-steps">
+        <div className="eb-prod-step-label">Things to try</div>
+        <div className="eb-prod-step">
+          <span className="eb-prod-step-num">1</span>
+          <div className="eb-prod-step-body">
+            <strong>Retry</strong> — tap the button below to reload just this screen without a full page refresh.
+          </div>
+        </div>
+        <div className="eb-prod-step">
+          <span className="eb-prod-step-num">2</span>
+          <div className="eb-prod-step-body">
+            <strong>Reload the page</strong> — a full browser reload clears any stale state.
+          </div>
+        </div>
+        <div className="eb-prod-step">
+          <span className="eb-prod-step-num">3</span>
+          <div className="eb-prod-step-body">
+            <strong>Clear your cache</strong> — open your browser's history settings, clear cached files, then reload.
+          </div>
+        </div>
+      </div>
+
       <div className="eb-prod-actions">
         <button className="btn btn-red btn-md" onClick={onReset}>
           <IconRefresh size={14} />
@@ -128,6 +179,20 @@ const ProdErrorScreen: FC<{ onReset: () => void }> = ({ onReset }) => (
           <IconClose size={14} />
           Reload page
         </button>
+      </div>
+
+      <div className="eb-prod-contact">
+        <IconChat size={13} />
+        <span>
+          Still having trouble?{" "}
+          <a className="eb-prod-link" href="mailto:support@moran.app">
+            Contact support
+          </a>
+          {" "}or visit{" "}
+          <a className="eb-prod-link" href="https://help.moran.app">
+            help.moran.app
+          </a>
+        </span>
       </div>
     </div>
   </div>
@@ -160,6 +225,10 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   handleReset = (): void => {
+    // Clear any pending DevTools throw target so the re-mounted subtree doesn't
+    // immediately re-throw. The hook is registered by DevToolsProvider in dev mode;
+    // it's a no-op (undefined) in prod and in tests.
+    (window as unknown as { __devToolsReset?: () => void }).__devToolsReset?.();
     this.setState({ hasError: false, error: null, errorInfo: null });
   };
 

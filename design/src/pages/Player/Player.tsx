@@ -326,17 +326,17 @@ export const Player: FC = () => {
             <div className="progress-thumb"    style={{ left:  `${progress}%` }} />
           </div>
           <div className="controls-row">
-            <button className="ctrl" onClick={() => { if (videoRef.current) videoRef.current.currentTime -= 10; }}>
+            <button className="ctrl" data-tip="−10s" onClick={() => { if (videoRef.current) videoRef.current.currentTime -= 10; }}>
               <IconBackward size={20} />
             </button>
-            <button className="ctrl play" onClick={togglePlay}>
+            <button className="ctrl play" data-tip={playing ? "Pause" : "Play"} onClick={togglePlay}>
               {playing ? <IconPause size={26} /> : <IconPlay size={26} />}
             </button>
-            <button className="ctrl" onClick={() => { if (videoRef.current) videoRef.current.currentTime += 10; }}>
+            <button className="ctrl" data-tip="+10s" onClick={() => { if (videoRef.current) videoRef.current.currentTime += 10; }}>
               <IconForward size={20} />
             </button>
             <div className="vol-wrap">
-              <button className="ctrl"><IconSpeaker size={20} /></button>
+              <button className="ctrl" data-tip="Volume"><IconSpeaker size={20} /></button>
               <div
                 className="vol-track"
                 onClick={(e) => {
@@ -362,7 +362,7 @@ export const Player: FC = () => {
                 <option>480p</option>
                 <option>240p</option>
               </select>
-              <button className="ctrl" onClick={toggleFullscreen}>
+              <button className="ctrl" data-tip="Fullscreen" onClick={toggleFullscreen}>
                 <IconArrowsOut size={20} />
               </button>
             </div>

@@ -1,4 +1,5 @@
 import { type FC, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { AppHeader } from "../../components/AppHeader/AppHeader.js";
 import { useSimulatedLoad } from "../../hooks/useSimulatedLoad.js";
 import { usePageLoading } from "../../components/LoadingBar/LoadingBarContext.js";
@@ -20,10 +21,16 @@ interface Toggle {
   on: boolean;
 }
 
+const VALID_SECTIONS: SettingsSection[] = ["general", "library", "playback", "metadata", "account", "danger"];
+
 export const Settings: FC = () => {
   const loading = useSimulatedLoad();
   usePageLoading(loading);
-  const [section, setSection] = useState<SettingsSection>("general");
+  const [searchParams] = useSearchParams();
+  const paramSection = searchParams.get("section") as SettingsSection | null;
+  const initialSection: SettingsSection =
+    paramSection && VALID_SECTIONS.includes(paramSection) ? paramSection : "general";
+  const [section, setSection] = useState<SettingsSection>(initialSection);
   const [toggles, setToggles] = useState<Record<string, boolean>>({
     hardwareAccel: true,
     autoPlay: false,
