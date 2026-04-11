@@ -33,6 +33,11 @@ export const Sidebar: FC<SidebarProps> = ({ collapsed, onToggle }) => {
         <span className={mergeClasses(styles.navLabel, collapsed && styles.navLabelHidden)}>
           Profiles
         </span>
+        {collapsed && (
+          <span className="nav-side-tip" aria-hidden="true">
+            Profiles
+          </span>
+        )}
       </NavLink>
 
       <NavLink to="/library" className={navItemClass}>
@@ -43,6 +48,11 @@ export const Sidebar: FC<SidebarProps> = ({ collapsed, onToggle }) => {
         <span className={mergeClasses(styles.navLabel, collapsed && styles.navLabelHidden)}>
           Library
         </span>
+        {collapsed && (
+          <span className="nav-side-tip" aria-hidden="true">
+            Library
+          </span>
+        )}
       </NavLink>
 
       <NavLink to="/watchlist" className={navItemClass}>
@@ -53,6 +63,11 @@ export const Sidebar: FC<SidebarProps> = ({ collapsed, onToggle }) => {
         <span className={mergeClasses(styles.navLabel, collapsed && styles.navLabelHidden)}>
           Watchlist
         </span>
+        {collapsed && (
+          <span className="nav-side-tip" aria-hidden="true">
+            Watchlist
+          </span>
+        )}
       </NavLink>
 
       <NavLink to="/settings" className={navItemClass}>
@@ -63,6 +78,11 @@ export const Sidebar: FC<SidebarProps> = ({ collapsed, onToggle }) => {
         <span className={mergeClasses(styles.navLabel, collapsed && styles.navLabelHidden)}>
           Settings
         </span>
+        {collapsed && (
+          <span className="nav-side-tip" aria-hidden="true">
+            Settings
+          </span>
+        )}
       </NavLink>
 
       <NavLink to="/feedback" className={navItemClass}>
@@ -73,6 +93,11 @@ export const Sidebar: FC<SidebarProps> = ({ collapsed, onToggle }) => {
         <span className={mergeClasses(styles.navLabel, collapsed && styles.navLabelHidden)}>
           Feedback
         </span>
+        {collapsed && (
+          <span className="nav-side-tip" aria-hidden="true">
+            Feedback
+          </span>
+        )}
       </NavLink>
 
       <div className={styles.navSpacer} />

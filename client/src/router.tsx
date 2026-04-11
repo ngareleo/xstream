@@ -23,6 +23,9 @@ const FeedbackPage = lazy(() =>
 const PlayerPage = lazy(() =>
   import("./pages/PlayerPage.js").then((m) => ({ default: m.PlayerPage }))
 );
+const NotFoundPage = lazy(() =>
+  import("./pages/NotFoundPage.js").then((m) => ({ default: m.NotFoundPage }))
+);
 
 function PageLoader(): JSX.Element {
   return (
@@ -86,6 +89,14 @@ export const router: ReturnType<typeof createBrowserRouter> = createBrowserRoute
         element: (
           <Suspense fallback={<PageLoader />}>
             <FeedbackPage />
+          </Suspense>
+        ),
+      },
+      {
+        path: "*",
+        element: (
+          <Suspense fallback={<PageLoader />}>
+            <NotFoundPage />
           </Suspense>
         ),
       },

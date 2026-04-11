@@ -4,6 +4,14 @@ import React, { type FC, type MouseEvent, type RefObject, useState } from "react
 import { graphql, useFragment } from "react-relay";
 
 import { useVideoSync } from "~/hooks/useVideoSync.js";
+import {
+  IconArrowsOut,
+  IconBackward,
+  IconForward,
+  IconPause,
+  IconPlay,
+  IconSpeaker,
+} from "~/lib/icons.js";
 import type { ControlBar_video$key } from "~/relay/__generated__/ControlBar_video.graphql.js";
 import type { Resolution } from "~/types.js";
 import { ALL_RESOLUTIONS, RESOLUTION_ORDER } from "~/types.js";
@@ -94,7 +102,23 @@ export const ControlBar: FC<Props> = ({ video, videoRef, resolution, status, isV
 
   const progressPct = data.durationSeconds > 0 ? (currentTime / data.durationSeconds) * 100 : 0;
 
-  const playIcon = status === "loading" ? "⏳" : isPlaying ? "⏸" : "▶";
+  const playIcon =
+    status === "loading" ? (
+      <div
+        style={{
+          width: 18,
+          height: 18,
+          borderRadius: "50%",
+          border: "2px solid rgba(255,255,255,0.2)",
+          borderTopColor: "#fff",
+          animation: "spin 0.75s linear infinite",
+        }}
+      />
+    ) : isPlaying ? (
+      <IconPause size={20} />
+    ) : (
+      <IconPlay size={20} />
+    );
 
   return (
     <div className={mergeClasses(styles.root, !isVisible && styles.rootHidden)}>
@@ -124,10 +148,10 @@ export const ControlBar: FC<Props> = ({ video, videoRef, resolution, status, isV
             {playIcon}
           </button>
           <button className={styles.btn} aria-label="Rewind 10 seconds" onClick={handleSkip(-10)}>
-            ⏮ 10
+            <IconBackward size={18} />
           </button>
           <button className={styles.btn} aria-label="Forward 10 seconds" onClick={handleSkip(10)}>
-            10 ⏭
+            <IconForward size={18} />
           </button>
 
           {/* Volume */}
@@ -137,7 +161,7 @@ export const ControlBar: FC<Props> = ({ video, videoRef, resolution, status, isV
             onMouseLeave={() => setShowVolumeSlider(false)}
           >
             <button className={styles.btn} aria-label="Volume">
-              🔊
+              <IconSpeaker size={18} />
             </button>
             <input
               type="range"
@@ -192,7 +216,7 @@ export const ControlBar: FC<Props> = ({ video, videoRef, resolution, status, isV
           </div>
 
           <button className={styles.btn} aria-label="Fullscreen" onClick={handleFullscreen}>
-            ⛶
+            <IconArrowsOut size={18} />
           </button>
         </div>
       </div>

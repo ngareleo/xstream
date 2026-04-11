@@ -1,3 +1,4 @@
+import { mergeClasses } from "@griffel/react";
 import React, { type FC } from "react";
 import { graphql, useFragment } from "react-relay";
 import { Link, useNavigate } from "react-router-dom";
@@ -43,18 +44,19 @@ const VIDEO_FRAGMENT = graphql`
 
 interface Props {
   video: PlayerSidebar_video$key;
+  hidden?: boolean;
 }
 
-export const PlayerSidebar: FC<Props> = ({ video }) => {
+export const PlayerSidebar: FC<Props> = ({ video, hidden }) => {
   const data = useFragment(VIDEO_FRAGMENT, video);
   const styles = usePlayerSidebarStyles();
   const navigate = useNavigate();
 
   const meta = data.metadata;
   const displayTitle = meta?.title ?? data.title;
-  const metaLine = [meta?.year, meta?.genre].filter(Boolean).join(" · ");
-
-  const posterStyle = meta?.posterUrl ? { backgroundImage: `url(${meta.posterUrl})` } : undefined;
+  const metaLine = [meta?.year, meta?.genre, formatDuration(data.durationSeconds)]
+    .filter(Boolean)
+    .join(" · ");
 
   // Up Next: other videos from the same library, excluding current
   const upNext = (data.library?.videos.edges ?? [])
@@ -63,43 +65,41 @@ export const PlayerSidebar: FC<Props> = ({ video }) => {
     .slice(0, 4);
 
   return (
-    <div className={styles.root}>
+    <div className={mergeClasses(styles.root, hidden === true && styles.rootHidden)}>
       {/* Now Playing */}
       <div className={styles.section}>
         <div className={styles.sectionLabel}>Now Playing</div>
-        <div className={styles.poster} style={posterStyle} />
         <div className={styles.title}>{displayTitle}</div>
-        {metaLine && (
-          <div className={styles.meta}>
-            {metaLine} · {formatDuration(data.durationSeconds)}
-          </div>
-        )}
+        {metaLine && <div className={styles.meta}>{metaLine}</div>}
         {meta?.plot && <div className={styles.plot}>{meta.plot}</div>}
       </div>
 
-      {/* Up Next */}
-      {upNext.length > 0 && (
-        <div className={styles.section}>
-          <div className={styles.sectionLabel}>Up Next</div>
-          {upNext.map((v) => {
-            const thumbStyle = v.metadata?.posterUrl
-              ? { backgroundImage: `url(${v.metadata.posterUrl})` }
-              : undefined;
-            return (
-              <div key={v.id} className={styles.upNextItem}>
-                <div className={styles.upNextThumb} style={thumbStyle} />
-                <div className={styles.upNextInfo}>
-                  <div className={styles.upNextTitle}>{v.title}</div>
-                  {v.metadata?.year && <div className={styles.upNextYear}>{v.metadata.year}</div>}
-                </div>
-                <Link to={`/player/${v.id}`} className={styles.upNextPlay} title="Play">
-                  <IconPlay size={9} />
+      {/* Scrollable body */}
+      <div className={styles.body}>
+        {/* Up Next */}
+        {upNext.length > 0 && (
+          <div className={styles.upNextSection}>
+            <div className={styles.sectionLabel}>Up Next</div>
+            {upNext.map((v) => {
+              const thumbStyle = v.metadata?.posterUrl
+                ? { backgroundImage: `url(${v.metadata.posterUrl})` }
+                : undefined;
+              return (
+                <Link key={v.id} to={`/player/${v.id}`} className={styles.upNextItem}>
+                  <div className={styles.upNextThumb} style={thumbStyle} />
+                  <div className={styles.upNextInfo}>
+                    <div className={styles.upNextTitle}>{v.title}</div>
+                    {v.metadata?.year && <div className={styles.upNextYear}>{v.metadata.year}</div>}
+                  </div>
+                  <span className={styles.upNextPlay}>
+                    <IconPlay size={9} />
+                  </span>
                 </Link>
-              </div>
-            );
-          })}
-        </div>
-      )}
+              );
+            })}
+          </div>
+        )}
+      </div>
 
       {/* Footer */}
       <div className={styles.footer}>

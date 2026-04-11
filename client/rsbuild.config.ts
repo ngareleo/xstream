@@ -13,7 +13,7 @@ export default defineConfig({
     pluginReact(),
     // Apply babel-plugin-relay so graphql template literals are compiled at build time.
     pluginBabel({
-      include: /\.(?:jsx|tsx)$/,
+      include: /\.(?:ts|jsx|tsx)$/,
       babelLoaderOptions(opts) {
         opts.plugins ??= [];
         opts.plugins.unshift("relay");

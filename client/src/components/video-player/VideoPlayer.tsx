@@ -17,6 +17,7 @@ import { ControlBar } from "~/components/control-bar/ControlBar.js";
 import type { JobProgress } from "~/hooks/useJobSubscription.js";
 import { useJobSubscription } from "~/hooks/useJobSubscription.js";
 import { useVideoPlayback } from "~/hooks/useVideoPlayback.js";
+import { IconPlay } from "~/lib/icons.js";
 import type { VideoPlayer_video$key } from "~/relay/__generated__/VideoPlayer_video.graphql.js";
 import type { Resolution } from "~/types.js";
 import { maxResolutionForHeight } from "~/utils/formatters.js";
@@ -130,35 +131,69 @@ export const VideoPlayer: FC<Props> = ({ video }) => {
         controls={false}
       />
 
-      {/* Big play overlay — shown in idle state; clicking starts playback */}
+      {/* Pre-play overlay — shown in idle state */}
       {status === "idle" && (
         <div
           onClick={handlePlay}
           style={{
             position: "absolute",
             inset: 0,
+            zIndex: 5,
             display: "flex",
+            flexDirection: "column",
             alignItems: "center",
             justifyContent: "center",
+            gap: 14,
             cursor: "pointer",
           }}
         >
-          <div
+          <button
+            onClick={handlePlay}
             style={{
               width: 72,
               height: 72,
               borderRadius: "50%",
-              background: "#CE1126",
+              background: "rgba(206,17,38,0.15)",
+              border: "1.5px solid rgba(206,17,38,0.5)",
+              color: "#fff",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              fontSize: 26,
-              color: "#ffffff",
+              cursor: "pointer",
               paddingLeft: 4,
+              transition: "background 0.2s ease, border-color 0.2s ease, transform 0.15s ease",
             }}
+            aria-label="Play"
+            type="button"
           >
-            ▶
-          </div>
+            <IconPlay size={32} />
+          </button>
+        </div>
+      )}
+
+      {/* Loading spinner overlay */}
+      {status === "loading" && (
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            zIndex: 5,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            pointerEvents: "none",
+          }}
+        >
+          <div
+            style={{
+              width: 36,
+              height: 36,
+              borderRadius: "50%",
+              border: "2px solid rgba(255,255,255,0.12)",
+              borderTopColor: "rgba(206,17,38,0.85)",
+              animation: "spin 0.75s linear infinite",
+            }}
+          />
         </div>
       )}
 

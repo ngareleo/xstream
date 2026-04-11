@@ -22,6 +22,7 @@ export const useSidebarStyles = makeStyles({
   },
   rootCollapsed: {
     width: tokens.sidebarCollapsedWidth,
+    overflow: "visible",
   },
 
   // ── Nav items ─────────────────────────────────────────────────────────────

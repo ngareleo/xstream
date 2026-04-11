@@ -7,6 +7,7 @@ import ReactDOM from "react-dom/client";
 import { RelayEnvironmentProvider } from "react-relay";
 import { RouterProvider } from "react-router-dom";
 
+import { ErrorBoundary } from "./components/error-boundary/ErrorBoundary.js";
 import { environment } from "./relay/environment.js";
 import { router } from "./router.js";
 
@@ -34,10 +35,12 @@ if (!rootEl) throw new Error("Root element #root not found");
 
 ReactDOM.createRoot(rootEl).render(
   <React.StrictMode>
-    <RelayEnvironmentProvider environment={environment}>
-      <AppEventing>
-        <RouterProvider router={router} />
-      </AppEventing>
-    </RelayEnvironmentProvider>
+    <ErrorBoundary>
+      <RelayEnvironmentProvider environment={environment}>
+        <AppEventing>
+          <RouterProvider router={router} />
+        </AppEventing>
+      </RelayEnvironmentProvider>
+    </ErrorBoundary>
   </React.StrictMode>
 );

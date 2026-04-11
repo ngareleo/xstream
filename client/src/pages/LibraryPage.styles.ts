@@ -12,7 +12,7 @@ export const useLibraryStyles = makeStyles({
   },
   splitBody: {
     display: "grid",
-    gridTemplateColumns: "1fr 0px",
+    gridTemplateColumns: "1fr 0px 0px",
     flex: "1",
     minHeight: "0",
     transitionProperty: "grid-template-columns",
@@ -20,8 +20,15 @@ export const useLibraryStyles = makeStyles({
     transitionTimingFunction: "ease",
     overflow: "hidden",
   },
-  splitBodyPaneOpen: {
-    gridTemplateColumns: `1fr ${tokens.rightPaneWidth}`,
+  resizeHandle: {
+    width: "4px",
+    cursor: "col-resize",
+    backgroundColor: tokens.colorBorder,
+    transitionProperty: "background-color",
+    transitionDuration: tokens.transition,
+    ":hover": {
+      backgroundColor: tokens.colorRed,
+    },
   },
   splitLeft: {
     overflow: "hidden",
