@@ -1,0 +1,4 @@
+/* Sidebar-specific overrides beyond shared.css */
+.sidebar .nav-item {
+  text-decoration: none;
+}

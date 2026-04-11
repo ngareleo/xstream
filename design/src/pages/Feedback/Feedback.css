@@ -1,0 +1,23 @@
+.feedback-layout { display: grid; grid-template-columns: 1fr 320px; gap: 28px; }
+
+.type-chips { display: flex; flex-wrap: wrap; gap: 7px; }
+.type-chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  background: var(--surface2); border: 1px solid var(--border);
+  color: var(--muted); font-size: 12px; font-weight: 500;
+  padding: 6px 12px; border-radius: 100px; cursor: pointer;
+  font-family: var(--font-body);
+  transition: all var(--transition);
+}
+.type-chip:hover { color: var(--white); border-color: var(--border2); }
+.type-chip.active { background: rgba(255,255,255,0.04); }
+
+textarea.form-input {
+  line-height: 1.6;
+  min-height: 100px;
+}
+
+.btn[disabled] {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
