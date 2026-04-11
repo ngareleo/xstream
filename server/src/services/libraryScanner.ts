@@ -2,6 +2,7 @@ import ffmpegInstaller from "@ffmpeg-installer/ffmpeg";
 import ffprobeInstaller from "@ffprobe-installer/ffprobe";
 import { createHash } from "crypto";
 import ffmpeg from "fluent-ffmpeg";
+import { createReadStream } from "fs";
 import { access, readdir, stat } from "fs/promises";
 import { basename, extname, join } from "path";
 
@@ -16,6 +17,21 @@ ffmpeg.setFfprobePath(ffprobeInstaller.path);
 
 function sha1(input: string): string {
   return createHash("sha1").update(input).digest("hex");
+}
+
+/**
+ * Reads the first 64 KB of a file and returns a fingerprint string of the form
+ * `<sizeBytes>:<sha1hex>`. Stable across renames and moves; changes only when
+ * file content changes.
+ */
+async function computeContentFingerprint(filePath: string, sizeBytes: number): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const hash = createHash("sha1");
+    const stream = createReadStream(filePath, { start: 0, end: 65535 });
+    stream.on("data", (chunk: Buffer | string) => hash.update(chunk));
+    stream.on("end", () => resolve(`${sizeBytes}:${hash.digest("hex")}`));
+    stream.on("error", reject);
+  });
 }
 
 function deriveTitle(filename: string): string {
@@ -79,6 +95,7 @@ async function scanLibraryEntry(entry: MediaLibraryEntry): Promise<LibraryRow> {
 
       const videoId = sha1(filePath);
       const title = (format.tags?.title as string | undefined) ?? deriveTitle(filePath);
+      const content_fingerprint = await computeContentFingerprint(filePath, fileStat.size);
 
       const videoRow: VideoRow = {
         id: videoId,
@@ -90,6 +107,7 @@ async function scanLibraryEntry(entry: MediaLibraryEntry): Promise<LibraryRow> {
         file_size_bytes: fileStat.size,
         bitrate: Number(format.bit_rate ?? 0),
         scanned_at: new Date().toISOString(),
+        content_fingerprint,
       };
       upsertVideo(videoRow);
 

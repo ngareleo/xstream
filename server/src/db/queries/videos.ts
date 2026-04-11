@@ -5,16 +5,17 @@ export function upsertVideo(row: VideoRow): void {
   const db = getDb();
   db.prepare(
     `
-    INSERT INTO videos (id, library_id, path, filename, title, duration_seconds, file_size_bytes, bitrate, scanned_at)
-    VALUES ($id, $library_id, $path, $filename, $title, $duration_seconds, $file_size_bytes, $bitrate, $scanned_at)
+    INSERT INTO videos (id, library_id, path, filename, title, duration_seconds, file_size_bytes, bitrate, scanned_at, content_fingerprint)
+    VALUES ($id, $library_id, $path, $filename, $title, $duration_seconds, $file_size_bytes, $bitrate, $scanned_at, $content_fingerprint)
     ON CONFLICT(path) DO UPDATE SET
-      library_id       = excluded.library_id,
-      filename         = excluded.filename,
-      title            = excluded.title,
-      duration_seconds = excluded.duration_seconds,
-      file_size_bytes  = excluded.file_size_bytes,
-      bitrate          = excluded.bitrate,
-      scanned_at       = excluded.scanned_at
+      library_id          = excluded.library_id,
+      filename            = excluded.filename,
+      title               = excluded.title,
+      duration_seconds    = excluded.duration_seconds,
+      file_size_bytes     = excluded.file_size_bytes,
+      bitrate             = excluded.bitrate,
+      scanned_at          = excluded.scanned_at,
+      content_fingerprint = excluded.content_fingerprint
   `
   ).run({
     $id: row.id,
@@ -26,6 +27,7 @@ export function upsertVideo(row: VideoRow): void {
     $file_size_bytes: row.file_size_bytes,
     $bitrate: row.bitrate,
     $scanned_at: row.scanned_at,
+    $content_fingerprint: row.content_fingerprint,
   });
 }
 

@@ -28,6 +28,13 @@ export function migrate(db: Database): void {
 
     db.run(`CREATE INDEX IF NOT EXISTS videos_library_id ON videos(library_id)`);
 
+    // Idempotent column addition — SQLite has no ALTER TABLE ADD COLUMN IF NOT EXISTS
+    try {
+      db.run(`ALTER TABLE videos ADD COLUMN content_fingerprint TEXT`);
+    } catch {
+      // column already exists on subsequent startups
+    }
+
     db.run(`
       CREATE TABLE IF NOT EXISTS video_streams (
         id           INTEGER PRIMARY KEY AUTOINCREMENT,

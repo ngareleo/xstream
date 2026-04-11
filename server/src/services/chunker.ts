@@ -31,9 +31,9 @@ export function killAllActiveJobs(): void {
   activeCommands.clear();
 }
 
-function jobId(videoPath: string, resolution: Resolution, start?: number, end?: number): string {
+function jobId(contentKey: string, resolution: Resolution, start?: number, end?: number): string {
   return createHash("sha1")
-    .update(`${videoPath}|${resolution}|${start ?? ""}|${end ?? ""}`)
+    .update(`${contentKey}|${resolution}|${start ?? ""}|${end ?? ""}`)
     .digest("hex");
 }
 
@@ -46,7 +46,8 @@ export async function startTranscodeJob(
   const video = getVideoById(videoId);
   if (!video) throw new Error(`Video not found: ${videoId}`);
 
-  const id = jobId(video.path, resolution, startTimeSeconds, endTimeSeconds);
+  const contentKey = video.content_fingerprint ?? video.path;
+  const id = jobId(contentKey, resolution, startTimeSeconds, endTimeSeconds);
 
   // Return existing in-memory job if already running or complete
   const existing = getJob(id);
