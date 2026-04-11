@@ -557,14 +557,6 @@ export const Dashboard: FC = () => {
               </div>
             </div>
 
-            {/* Location breadcrumb — purely visual in the design lab */}
-            <div className="location-bar">
-              <div className="loc-crumb">
-                <span style={{ color: "var(--muted2)", fontSize: 12 }}>Library</span>
-                <span className="loc-sep">/</span>
-                <span className="loc-current">Profiles</span>
-              </div>
-            </div>
 
             {/* Directory column headers — hidden when pane is open (CSS) */}
             <div className="dir-header">

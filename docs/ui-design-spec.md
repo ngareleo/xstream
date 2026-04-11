@@ -13,7 +13,6 @@ implementation. The canonical design reference is the React prototype at
 |---|---|---|
 | `/` | Profiles (Dashboard) | AppShell |
 | `/library` | Library | AppShell |
-| `/watchlist` | Watchlist | AppShell |
 | `/settings` | Settings / Setup | AppShell |
 | `/player/:videoId` | Player | Full-screen (no shell) |
 | `/goodbye` | Goodbye | Full-screen (no shell) |

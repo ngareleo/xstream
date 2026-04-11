@@ -136,36 +136,48 @@ main
 
 ### 2 — Library (`/library`)
 
-Poster grid view of every film across all profiles.
+Poster grid or compact list view of every film across all profiles. Films are
+presented in a single flat list — **not partitioned by profile**.
 
 **Layout:**
 ```
 main
 └── split-body (grid: 1fr | 0px → 360px)
     ├── split-left
-    │   ├── filter-bar   (search input + type filter + view toggle)
-    │   └── profile-section × N
-    │       ├── profile-section-head
-    │       └── films-grid (poster cards)
+    │   ├── filter-bar      (search + type filter + view toggle)
+    │   ├── profile-chips   (All profiles | per-profile pill filters)
+    │   └── films-grid / films-list
     └── right-pane (DetailPane, same structure as Profiles page)
 ```
 
 **Filter bar:**
 - Search input filters by title, filename, and genre (client-side, case-insensitive).
-- Type filter select (All / Movies / TV Shows) — visual only in the design lab.
-- Grid / List view toggle — list view UI exists but content not yet implemented.
+- Type filter select (All / Movies / TV Shows).
+- Grid / List view toggle.
 
-**Poster card:**
+**Profile chips:**
+- Pill buttons below the filter bar: "All profiles" + one chip per library.
+- Clicking a chip filters to that library; clicking the active chip returns to All.
+- Each chip shows a film count. Chips are mutually exclusive.
+
+**Grid view — Poster card:**
 - Fixed-aspect-ratio card with gradient placeholder background.
 - 4K badge (top-right, red) when `resolution === "4K"`.
 - IMDb rating (bottom-right, yellow) when available.
 - Question-mark icon centered when the file is unmatched.
 - Selected state adds a red border and slightly raised appearance.
 
+**List view — Film row:**
+- 48×68px gradient thumbnail.
+- Title + year · genre + profile pill (which library it belongs to).
+- Format badges: resolution (red for 4K, gray otherwise) + HDR format.
+- Rating (yellow), Duration, Size — right-aligned columns with column headers.
+- Selected row highlighted with a red tint.
+
 **Right pane:**
 - Identical structure to the Profiles detail pane.
 - URL pattern: `/library?film=xxx`.
-- Toggle behaviour: clicking the same card again closes the pane.
+- Toggle behaviour: clicking the same card/row again closes the pane.
 
 ---
 
@@ -249,26 +261,7 @@ never self-hides.
 
 ---
 
-### 4 — Watchlist (`/watchlist`)
-
-A two-column layout: a sortable list of queued/in-progress films on the left,
-and an "Add to Watchlist" search panel on the right.
-
-**Stats row:** three counters at the top — Queued, In Progress, Watched.
-
-**List sections:**
-- _Continue Watching_ — items with `progress != null`, shown with a red
-  progress bar.
-- _Up Next_ — items with no progress yet.
-- Removing an item hides it locally; in production this fires a mutation.
-
-**Add panel:** live-search of the film library. Results show "On disk" in green
-when the file exists locally. In production, adding a film fires a watchlist
-mutation and the item appears in the list via a `watchlistItemAdded` subscription.
-
----
-
-### 5 — Settings (`/settings`)
+### 4 — Settings (`/settings`)
 
 A two-column layout: a nav sidebar on the left (6 sections) and a content
 panel on the right.
@@ -318,7 +311,7 @@ deregisters itself via `useEffect` and `useId`, requiring no manual cleanup.
 
 ---
 
-### 6 — Goodbye (`/goodbye`)
+### 5 — Goodbye (`/goodbye`)
 
 Full-screen farewell page shown after the user confirms sign-out from the
 profile menu.
@@ -335,7 +328,7 @@ or header).
 
 ---
 
-### 7 — NotFound (`*`)
+### 6 — NotFound (`*`)
 
 A catch-all route rendered inside AppShell for any unknown URL.
 
@@ -522,7 +515,6 @@ collapsed state so the tip can extend beyond the sidebar's right edge.
 | `/library` | Library | closed |
 | `/library?film=dune-2` | Library | Film detail for dune-2 |
 | `/player/dune-2` | Player | — |
-| `/watchlist` | Watchlist | — |
 | `/settings` | Settings | General (default) |
 | `/settings?section=account` | Settings | Account section |
 | `/goodbye` | Goodbye | — |
@@ -541,7 +533,6 @@ Pane state is always in the URL. This means:
 | `data/mock.ts` · `profiles` | `ProfilesPageContent` · `useLazyLoadQuery` |
 | `data/mock.ts` · `films` | Fragment spreads on `LibraryContent` |
 | `data/mock.ts` · `user` | `viewer` field on root query |
-| `data/mock.ts` · `watchlist` | `watchlist` query + `watchlistItemAdded` subscription |
 | `FilmDetailPane` / `DetailPane` | `VideoDetailsPanel` + `VideoDetailsPanelAsync` |
 | `NewProfilePane` | `SetupPageContent` library form |
 | `<video src="test.mp4">` | `VideoPlayer` (MSE via `useVideoPlayback`) |
