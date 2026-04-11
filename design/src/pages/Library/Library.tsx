@@ -9,22 +9,18 @@
  *   ?film=xxx  →  DetailPane open for that film
  *   (no param) →  pane closed
  *
- * Toggling:
- *   Clicking a poster that is already selected closes the pane (second click =
- *   deselect). This keeps the interaction model consistent with the Profiles page.
+ * Filter bar:
+ *   - Search (title / genre / filename)
+ *   - Profile chips  — "All profiles" + one chip per profile
+ *   - Type select    — All / Movies / TV Shows
+ *   - View toggle    — grid | list
  *
- * View modes:
- *   "grid" (default) — poster cards in a responsive multi-column grid.
- *   "list"           — compact rows (not yet implemented; toggle UI is present).
- *
- * Navigation:
- *   The PLAY button in DetailPane uses <Link> so the Player can navigate(-1)
- *   back to /library?film=xxx with the pane restored.
+ * Films are displayed in a single flat list (no per-profile sections).
+ * Toggling: clicking the already-selected poster/row closes the pane.
  *
  * Data (mock → real):
  *   - `profiles` / `films` → useLazyLoadQuery on the LibraryPage query
- *   - Each profile section → LibraryContent fragment per library
- *   - Search filtering    → client-side on loaded data (fine for local libraries)
+ *   - Search + profile + type filtering → client-side on loaded data
  */
 
 import React, { type FC } from "react";
@@ -33,8 +29,6 @@ import { useSplitResize } from "../../hooks/useSplitResize.js";
 import { AppHeader } from "../../components/AppHeader/AppHeader.js";
 import {
   IconSearch,
-  IconFilm,
-  IconTv,
   IconClose,
   IconPlay,
   IconPencil,
@@ -47,13 +41,8 @@ import "./Library.css";
 
 type ViewMode = "grid" | "list";
 
-// ── PosterCard ────────────────────────────────────────────────────────────
-// A single film tile in the grid. Clicking selects/deselects (opens pane).
-// The gradient background is a placeholder for a real poster image.
-// Visual indicators:
-//   - 4K badge (top-right, red) when resolution === "4K"
-//   - IMDb rating (bottom-right) when available
-//   - Question-mark icon when the file is unmatched (no metadata linked yet)
+// ── PosterCard (grid view) ────────────────────────────────────────────────────
+
 const PosterCard: FC<{
   film:     Film;
   onSelect: (id: string) => void;
@@ -73,8 +62,6 @@ const PosterCard: FC<{
         <span className="poster-rating">{film.rating}</span>
       )}
       {!film.matched && (
-        // Unmatched: the file exists but has no linked metadata.
-        // In production, tapping this should open the link/search flow.
         <div style={{
           color: "rgba(245,197,24,0.4)", display: "flex",
           alignItems: "center", justifyContent: "center", height: "100%",
@@ -92,10 +79,62 @@ const PosterCard: FC<{
   </div>
 );
 
-// ── DetailPane ────────────────────────────────────────────────────────────
-// Slide-in detail panel. Matches the FilmDetailPane on the Dashboard page
-// so both feel like the same component to users (consistent detail view).
-// The 200px poster area uses the film's gradient — replace with real poster image.
+// ── FilmListRow (list view) ───────────────────────────────────────────────────
+
+const FilmListRow: FC<{
+  film:     Film;
+  onSelect: (id: string) => void;
+  selected: boolean;
+}> = ({ film, onSelect, selected }) => {
+  const profile = profiles.find((p) => p.id === film.profile);
+
+  return (
+    <div
+      className={`film-list-row${selected ? " selected" : ""}`}
+      onClick={() => onSelect(film.id)}
+    >
+      {/* Thumbnail */}
+      <div className="flr-thumb" style={{ background: film.gradient }}>
+        {!film.matched && (
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} style={{ width: 16, height: 16, opacity: 0.4, color: "rgba(245,197,24,0.6)" }}>
+            <path d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 5.25h.008v.008H12v-.008Z" />
+          </svg>
+        )}
+      </div>
+
+      {/* Title + meta */}
+      <div className="flr-info">
+        <div className="flr-title">{film.title ?? film.filename}</div>
+        <div className="flr-meta">
+          {film.year ? `${film.year} · ${film.genre}` : "Unmatched"}
+          {profile && <span className="flr-profile">{profile.name}</span>}
+        </div>
+      </div>
+
+      {/* Badges */}
+      <div className="flr-badges">
+        {film.matched && <span className={`badge ${film.resolution === "4K" ? "badge-red" : "badge-gray"}`}>{film.resolution}</span>}
+        {film.hdr && <span className="badge badge-gray">{film.hdr}</span>}
+      </div>
+
+      {/* Rating */}
+      {film.rating ? (
+        <div className="flr-rating">{film.rating}</div>
+      ) : (
+        <div className="flr-rating" />
+      )}
+
+      {/* Duration */}
+      <div className="flr-duration">{film.duration}</div>
+
+      {/* Size */}
+      <div className="flr-size">{film.size}</div>
+    </div>
+  );
+};
+
+// ── DetailPane ────────────────────────────────────────────────────────────────
+
 const DetailPane: FC<{ film: Film; onClose: () => void }> = ({ film, onClose }) => (
   <div className="right-pane">
     <div style={{ height: 200, position: "relative", overflow: "hidden", flexShrink: 0, background: film.gradient }}>
@@ -104,7 +143,6 @@ const DetailPane: FC<{ film: Film; onClose: () => void }> = ({ film, onClose }) 
         background: "linear-gradient(to bottom,rgba(0,0,0,0.58) 0%,transparent 40%,rgba(0,0,0,0.84) 100%)",
       }} />
       <div className="fd-actions">
-        {/* <Link> pushes a history entry; Back in the Player returns to /library?film=xxx */}
         <Link to={`/player/${film.id}`} className="fd-action-btn primary">
           <IconPlay size={10} />
           PLAY
@@ -169,14 +207,14 @@ const DetailPane: FC<{ film: Film; onClose: () => void }> = ({ film, onClose }) 
   </div>
 );
 
-// ── Library (page root) ───────────────────────────────────────────────────
-export const Library: FC = () => {
-  // Search and view-mode are local transient state — not URL-encoded because
-  // they don't affect navigation (the user expects them to reset on navigation).
-  const [search,   setSearch]   = React.useState("");
-  const [viewMode, setViewMode] = React.useState<ViewMode>("grid");
+// ── Library (page root) ───────────────────────────────────────────────────────
 
-  // Selected film drives the right pane; encoded in the URL for Back support.
+export const Library: FC = () => {
+  const [search,        setSearch]        = React.useState("");
+  const [viewMode,      setViewMode]      = React.useState<ViewMode>("grid");
+  const [profileFilter, setProfileFilter] = React.useState<string | null>(null);
+  const [typeFilter,    setTypeFilter]    = React.useState("all");
+
   const loading = useSimulatedLoad();
   usePageLoading(loading);
 
@@ -187,25 +225,36 @@ export const Library: FC = () => {
   const selectedFilm   = selectedFilmId ? films.find((f) => f.id === selectedFilmId) : null;
   const paneOpen       = selectedFilm != null;
 
-  // Toggle: clicking the already-selected poster closes the pane.
   const selectFilm = (id: string) => {
-    if (selectedFilmId === id) {
-      setSearchParams({});
-    } else {
-      setSearchParams({ film: id });
-    }
+    if (selectedFilmId === id) setSearchParams({});
+    else setSearchParams({ film: id });
   };
 
-  const filterFilms = (profileFilms: Film[]) => {
-    if (!search.trim()) return profileFilms;
-    const q = search.toLowerCase();
-    return profileFilms.filter(
-      (f) =>
-        (f.title    ?? "").toLowerCase().includes(q) ||
-        f.filename.toLowerCase().includes(q) ||
-        (f.genre ?? "").toLowerCase().includes(q),
-    );
-  };
+  const filteredFilms = React.useMemo(() => {
+    let result = films;
+
+    if (profileFilter) {
+      result = result.filter((f) => f.profile === profileFilter);
+    }
+
+    if (typeFilter === "movies") {
+      result = result.filter((f) => f.mediaType === "movies" || f.mediaType === undefined);
+    } else if (typeFilter === "tv") {
+      result = result.filter((f) => f.mediaType === "tv");
+    }
+
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      result = result.filter(
+        (f) =>
+          (f.title    ?? "").toLowerCase().includes(q) ||
+          f.filename.toLowerCase().includes(q)         ||
+          (f.genre    ?? "").toLowerCase().includes(q),
+      );
+    }
+
+    return result;
+  }, [profileFilter, typeFilter, search]);
 
   return (
     <DevThrowTarget id="Library">
@@ -222,12 +271,11 @@ export const Library: FC = () => {
         >
           <div className="split-left">
 
-            {/* Filter / view controls */}
+            {/* ── Filter bar ── */}
             <div className="filter-bar">
+              {/* Search */}
               <div className="search-wrap" style={{ flex: 1, minWidth: 180 }}>
-                <span className="search-icon">
-                  <IconSearch size={13} />
-                </span>
+                <span className="search-icon"><IconSearch size={13} /></span>
                 <input
                   type="text"
                   placeholder="Search titles, genres, filenames…"
@@ -235,16 +283,25 @@ export const Library: FC = () => {
                   onChange={(e) => setSearch(e.target.value)}
                 />
               </div>
-              <select className="filter-select">
-                <option>All Types</option>
-                <option>Movies</option>
-                <option>TV Shows</option>
+
+              {/* Type filter */}
+              <select
+                className="filter-select"
+                value={typeFilter}
+                onChange={(e) => setTypeFilter(e.target.value)}
+              >
+                <option value="all">All Types</option>
+                <option value="movies">Movies</option>
+                <option value="tv">TV Shows</option>
               </select>
+
+              {/* View toggle */}
               <div style={{ display: "flex", gap: 4 }}>
                 <button
                   className={`icon-btn${viewMode === "grid" ? " active" : ""}`}
                   onClick={() => setViewMode("grid")}
                   title="Grid view"
+                  data-tip="Grid"
                 >
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} style={{ width: 15, height: 15 }}>
                     <path d="M3.75 6A2.25 2.25 0 0 1 6 3.75h2.25A2.25 2.25 0 0 1 10.5 6v2.25a2.25 2.25 0 0 1-2.25 2.25H6a2.25 2.25 0 0 1-2.25-2.25V6ZM3.75 15.75A2.25 2.25 0 0 1 6 13.5h2.25a2.25 2.25 0 0 1 2.25 2.25V18a2.25 2.25 0 0 1-2.25 2.25H6A2.25 2.25 0 0 1 3.75 18v-2.25ZM13.5 6a2.25 2.25 0 0 1 2.25-2.25H18A2.25 2.25 0 0 1 20.25 6v2.25A2.25 2.25 0 0 1 18 10.5h-2.25a2.25 2.25 0 0 1-2.25-2.25V6ZM13.5 15.75a2.25 2.25 0 0 1 2.25-2.25H18a2.25 2.25 0 0 1 2.25 2.25V18A2.25 2.25 0 0 1 18 20.25h-2.25A2.25 2.25 0 0 1 13.5 18v-2.25Z" />
@@ -254,6 +311,7 @@ export const Library: FC = () => {
                   className={`icon-btn${viewMode === "list" ? " active" : ""}`}
                   onClick={() => setViewMode("list")}
                   title="List view"
+                  data-tip="List"
                 >
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} style={{ width: 15, height: 15 }}>
                     <path d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25H12" />
@@ -262,50 +320,77 @@ export const Library: FC = () => {
               </div>
             </div>
 
-            {/* One section per profile, each containing its filtered poster grid */}
-            {profiles.map((profile) => {
-              const profileFilms = filterFilms(films.filter((f) => f.profile === profile.id));
-              if (profileFilms.length === 0) return null;
-              const Icon = profile.type === "tv" ? IconTv : IconFilm;
-              return (
-                <div key={profile.id} className="profile-section">
-                  <div className="profile-section-head">
-                    <Icon size={18} style={{ color: "var(--muted)", flexShrink: 0 }} />
-                    <span className="section-name">{profile.name}</span>
-                    <span className="section-count">{profileFilms.length} titles</span>
-                    <a className="section-link" href="#">View all</a>
-                  </div>
-                  <div className="films-grid">
-                    {profileFilms.map((film) => (
-                      <PosterCard
-                        key={film.id}
-                        film={film}
-                        onSelect={selectFilm}
-                        selected={selectedFilmId === film.id}
-                      />
-                    ))}
-                  </div>
-                </div>
-              );
-            })}
+            {/* ── Profile chips ── */}
+            <div className="profile-chips">
+              <button
+                className={`profile-chip${profileFilter === null ? " active" : ""}`}
+                onClick={() => setProfileFilter(null)}
+              >
+                All profiles
+                <span className="chip-count">{films.length}</span>
+              </button>
+              {profiles.map((p) => {
+                const count = films.filter((f) => f.profile === p.id).length;
+                return (
+                  <button
+                    key={p.id}
+                    className={`profile-chip${profileFilter === p.id ? " active" : ""}`}
+                    onClick={() => setProfileFilter(profileFilter === p.id ? null : p.id)}
+                  >
+                    {p.name}
+                    <span className="chip-count">{count}</span>
+                  </button>
+                );
+              })}
+            </div>
 
-            {filterFilms(films).length === 0 && (
+            {/* ── Results ── */}
+            {filteredFilms.length === 0 ? (
               <div className="empty-state">
                 <div className="empty-icon" style={{ color: "var(--muted2)" }}>
                   <IconSearch size={36} />
                 </div>
                 <div className="empty-title">No results</div>
-                <div className="empty-sub">Try a different search term</div>
+                <div className="empty-sub">Try a different search term or filter</div>
+              </div>
+            ) : viewMode === "grid" ? (
+              <div className="films-grid">
+                {filteredFilms.map((film) => (
+                  <PosterCard
+                    key={film.id}
+                    film={film}
+                    onSelect={selectFilm}
+                    selected={selectedFilmId === film.id}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div className="films-list">
+                <div className="flr-header">
+                  <div className="flr-header-title">Title</div>
+                  <div className="flr-header-badges">Format</div>
+                  <div className="flr-header-rating">Rating</div>
+                  <div className="flr-header-duration">Duration</div>
+                  <div className="flr-header-size">Size</div>
+                </div>
+                {filteredFilms.map((film) => (
+                  <FilmListRow
+                    key={film.id}
+                    film={film}
+                    onSelect={selectFilm}
+                    selected={selectedFilmId === film.id}
+                  />
+                ))}
               </div>
             )}
           </div>
 
-          {/* Resize handle — only present when pane is open */}
+          {/* Resize handle */}
           {paneOpen && (
             <div className="split-resize-handle" onMouseDown={onResizeMouseDown} />
           )}
 
-          {/* Right pane: only rendered when a film is selected */}
+          {/* Detail pane */}
           {paneOpen && selectedFilm && (
             <DetailPane film={selectedFilm} onClose={() => setSearchParams({})} />
           )}

@@ -3,7 +3,6 @@ import { NavLink, useNavigate } from "react-router-dom";
 import {
   IconSquares,
   IconFilm,
-  IconBookmark,
   IconAdjustments,
   IconChat,
   IconChevronLeft,
@@ -158,16 +157,6 @@ export const Sidebar: FC<SidebarProps> = ({ collapsed, onToggle }) => {
           <IconFilm size={40} className="nav-card-icon" />
           <span className="nav-label">Library</span>
           <span className="nav-side-tip" aria-hidden="true">Library</span>
-        </NavLink>
-
-        <NavLink
-          to="/watchlist"
-          className={({ isActive }) => `nav-item notify-amber${isActive ? " active" : ""}`}
-          data-count="6"
-        >
-          <IconBookmark size={40} className="nav-card-icon" />
-          <span className="nav-label">Watchlist</span>
-          <span className="nav-side-tip" aria-hidden="true">Watchlist</span>
         </NavLink>
 
         <NavLink to="/settings" className={({ isActive }) => `nav-item${isActive ? " active" : ""}`}>
