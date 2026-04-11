@@ -95,13 +95,16 @@ jobs:
                 '',
                 '[View interactive bundle report](https://ngareleo.github.io/tvke/stats.html)',
                 '',
-                '> Deployed from this run — open immediately in the browser, no download needed.',
+                '> The report is deployed to GitHub Pages on every merge to `main`.',
+                '> The link above reflects the most recently merged state.',
               ].join('\n'),
             });
 
   deploy-bundle-report:
     name: Deploy bundle report
     needs: client
+    # GitHub Pages only allows deployments from the default branch.
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
       pages: write
