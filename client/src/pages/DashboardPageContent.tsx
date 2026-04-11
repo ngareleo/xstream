@@ -1,10 +1,12 @@
 import { mergeClasses } from "@griffel/react";
 import { NovaEventingInterceptor } from "@nova/react";
 import type { EventWrapper } from "@nova/types";
-import React, { type FC, Suspense, useCallback, useState } from "react";
-import { graphql, useLazyLoadQuery } from "react-relay";
+import React, { type FC, Suspense, useCallback, useEffect, useState } from "react";
+import { graphql, useLazyLoadQuery, useMutation } from "react-relay";
 import { useSearchParams } from "react-router-dom";
 
+import { useHeaderActionStyles } from "~/components/app-header/AppHeader.styles.js";
+import { useHeaderActions } from "~/components/app-shell/AppShell.js";
 import { isFilmDetailPaneClosedEvent } from "~/components/film-detail-pane/FilmDetailPane.events.js";
 import { FilmDetailPaneAsync } from "~/components/film-detail-pane/FilmDetailPaneAsync.js";
 import {
@@ -23,9 +25,10 @@ import {
 } from "~/components/profile-row/ProfileRow.events.js";
 import { ProfileRow } from "~/components/profile-row/ProfileRow.js";
 import { Slideshow } from "~/components/slideshow/Slideshow.js";
-import { IconPlus } from "~/lib/icons.js";
+import { IconPlus, IconRefresh } from "~/lib/icons.js";
 import type { DashboardPageContentDetailQuery } from "~/relay/__generated__/DashboardPageContentDetailQuery.graphql.js";
 import type { DashboardPageContentQuery } from "~/relay/__generated__/DashboardPageContentQuery.graphql.js";
+import type { DashboardPageContentScanMutation } from "~/relay/__generated__/DashboardPageContentScanMutation.graphql.js";
 import { formatFileSize } from "~/utils/formatters.js";
 
 import { useDashboardStyles } from "./DashboardPage.styles.js";
@@ -51,6 +54,14 @@ const DETAIL_VIDEO_QUERY = graphql`
   }
 `;
 
+const SCAN_MUTATION = graphql`
+  mutation DashboardPageContentScanMutation {
+    scanLibraries {
+      id
+    }
+  }
+`;
+
 // ─── Detail pane loader ───────────────────────────────────────────────────────
 
 interface DetailLoaderProps {
@@ -69,6 +80,8 @@ const DetailLoader: FC<DetailLoaderProps> = ({ filmId }) => {
 
 export const DashboardPageContent: FC = () => {
   const styles = useDashboardStyles();
+  const actionStyles = useHeaderActionStyles();
+  const setHeaderActions = useHeaderActions();
   const data = useLazyLoadQuery<DashboardPageContentQuery>(DASHBOARD_QUERY, {});
 
   const [searchParams, setSearchParams] = useSearchParams();
@@ -99,6 +112,41 @@ export const DashboardPageContent: FC = () => {
     },
     [isPaneFilmDetail, filmIdParam, closePane, setSearchParams]
   );
+
+  const [scan, isScanPending] = useMutation<DashboardPageContentScanMutation>(SCAN_MUTATION);
+
+  const handleScanAll = (): void => {
+    if (isScanPending) return;
+    scan({ variables: {} });
+  };
+
+  // Inject page-specific action buttons into the app header
+  useEffect(() => {
+    setHeaderActions(
+      <>
+        <button
+          className={actionStyles.btn}
+          onClick={handleScanAll}
+          disabled={isScanPending}
+          type="button"
+        >
+          <IconRefresh size={14} />
+          {isScanPending ? "Scanning…" : "Scan All"}
+        </button>
+        <div className={actionStyles.sep} />
+        <button
+          className={mergeClasses(actionStyles.btn, actionStyles.btnPrimary)}
+          onClick={openNewProfile}
+          type="button"
+        >
+          <IconPlus size={14} />
+          New Profile
+        </button>
+      </>
+    );
+    return () => setHeaderActions(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isScanPending]);
 
   const interceptor = useCallback(
     async (wrapper: EventWrapper): Promise<EventWrapper | undefined> => {
@@ -161,16 +209,6 @@ export const DashboardPageContent: FC = () => {
               </span>
               <span className={styles.locSep}>/</span>
               <span className={styles.locCurrent}>All Libraries</span>
-              <div className={styles.headerActions}>
-                <button
-                  className={mergeClasses(styles.headerActionBtn, styles.headerActionBtnPrimary)}
-                  onClick={openNewProfile}
-                  type="button"
-                >
-                  <IconPlus size={11} />
-                  New Library
-                </button>
-              </div>
             </div>
 
             {/* Column headers */}

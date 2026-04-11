@@ -5,10 +5,10 @@ import { LogoShield } from "~/lib/icons.js";
 import { useAppHeaderStyles } from "./AppHeader.styles.js";
 
 interface AppHeaderProps {
-  children?: ReactNode;
+  actions?: ReactNode;
 }
 
-export const AppHeader: FC<AppHeaderProps> = ({ children }) => {
+export const AppHeader: FC<AppHeaderProps> = ({ actions }) => {
   const styles = useAppHeaderStyles();
 
   return (
@@ -20,7 +20,9 @@ export const AppHeader: FC<AppHeaderProps> = ({ children }) => {
         </div>
       </div>
 
-      <div className={styles.content}>{children}</div>
+      <div className={styles.content} />
+
+      {actions && <div className={styles.actionsSlot}>{actions}</div>}
     </header>
   );
 };

@@ -161,48 +161,6 @@ export const useDashboardStyles = makeStyles({
     flexShrink: "0",
   },
 
-  // ── Header actions ────────────────────────────────────────────────────────
-  headerActions: {
-    display: "flex",
-    alignItems: "center",
-    gap: "4px",
-    marginLeft: "auto",
-  },
-  headerActionBtn: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: "6px",
-    padding: "6px 13px",
-    background: "transparent",
-    border: "none",
-    color: "rgba(255,255,255,0.5)",
-    fontSize: "12px",
-    fontWeight: "600",
-    letterSpacing: "0.04em",
-    cursor: "pointer",
-    borderRadius: tokens.radiusSm,
-    transitionProperty: "color, background",
-    transitionDuration: tokens.transition,
-    ":hover": {
-      color: tokens.colorWhite,
-      backgroundColor: "rgba(255,255,255,0.06)",
-    },
-  },
-  headerActionBtnPrimary: {
-    color: "rgba(255,200,200,0.82)",
-    ":hover": {
-      color: "rgba(255,180,180,1)",
-      backgroundColor: "rgba(206,17,38,0.15)",
-    },
-  },
-  headerActionSep: {
-    width: "1px",
-    height: "16px",
-    backgroundColor: "rgba(206,17,38,0.25)",
-    flexShrink: "0",
-    margin: "0 4px",
-  },
-
   // ── Page title ────────────────────────────────────────────────────────────
   topbarTitle: {
     fontSize: "15px",

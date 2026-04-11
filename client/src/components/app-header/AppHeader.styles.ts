@@ -38,13 +38,71 @@ export const useAppHeaderStyles = makeStyles({
     color: tokens.colorWhite,
     lineHeight: "1",
   },
+
+  // Spacer — pushes actionsSlot to the right
   content: {
     flex: "1",
+  },
+
+  // The angled action-buttons cluster on the right edge of the header
+  actionsSlot: {
     display: "flex",
+    alignItems: "stretch",
+    alignSelf: "stretch",
+    backgroundColor: "rgba(206, 17, 38, 0.07)",
+    clipPath:
+      "polygon(22px 0%, calc(100% - 5px) 0%, 100% 5px, 100% calc(100% - 5px), calc(100% - 5px) 100%, 0% 100%)",
+    overflow: "hidden",
+  },
+});
+
+// Exported separately so page components can apply them to their injected buttons
+export const useHeaderActionStyles = makeStyles({
+  btn: {
+    display: "inline-flex",
     alignItems: "center",
+    gap: "7px",
     paddingLeft: "20px",
     paddingRight: "20px",
-    gap: "12px",
-    minWidth: "0",
+    alignSelf: "stretch",
+    backgroundColor: "transparent",
+    border: "none",
+    color: "rgba(255, 255, 255, 0.48)",
+    fontFamily: tokens.fontBody,
+    fontSize: "12px",
+    fontWeight: "600",
+    letterSpacing: "0.03em",
+    cursor: "pointer",
+    whiteSpace: "nowrap",
+    transitionProperty: "color, text-shadow",
+    transitionDuration: tokens.transition,
+    ":hover": {
+      color: "rgba(255, 255, 255, 0.92)",
+      textShadow: "0 0 6px rgba(255,255,255,0.75), 0 0 14px rgba(255,255,255,0.35)",
+    },
+  },
+  btnPrimary: {
+    color: "rgba(255, 200, 200, 0.82)",
+    ":hover": {
+      color: "#fff",
+      textShadow:
+        "0 0 5px #fff, 0 0 10px rgba(255,80,80,0.95), 0 0 22px rgba(206,17,38,0.8), 0 0 42px rgba(206,17,38,0.4)",
+    },
+  },
+  sep: {
+    width: "14px",
+    flexShrink: "0",
+    alignSelf: "stretch",
+    position: "relative",
+    "::after": {
+      content: '""',
+      position: "absolute",
+      left: "50%",
+      top: "18%",
+      bottom: "18%",
+      width: "1px",
+      backgroundColor: "rgba(206, 17, 38, 0.30)",
+      transform: "skewX(-15deg)",
+    },
   },
 });

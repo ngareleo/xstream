@@ -1,10 +1,30 @@
 import { mergeClasses } from "@griffel/react";
-import { type FC, type ReactNode, useState } from "react";
+import { createContext, type FC, type ReactNode, useContext, useState } from "react";
 
 import { AppHeader } from "~/components/app-header/AppHeader.js";
 import { Sidebar } from "~/components/sidebar/Sidebar.js";
 
 import { useAppShellStyles } from "./AppShell.styles.js";
+
+// ─── Header actions slot ──────────────────────────────────────────────────────
+// Pages inject action buttons into the header by calling useHeaderActions().
+// AppShell holds the state; AppHeader renders whatever is set.
+
+interface HeaderActionsCtx {
+  actions: ReactNode;
+  setActions: (node: ReactNode) => void;
+}
+
+const HeaderActionsContext = createContext<HeaderActionsCtx>({
+  actions: null,
+  setActions: () => {},
+});
+
+export function useHeaderActions(): (node: ReactNode) => void {
+  return useContext(HeaderActionsContext).setActions;
+}
+
+// ─── AppShell ─────────────────────────────────────────────────────────────────
 
 interface AppShellProps {
   children: ReactNode;
@@ -17,13 +37,16 @@ interface AppShellProps {
  */
 export const AppShell: FC<AppShellProps> = ({ children }) => {
   const [collapsed, setCollapsed] = useState(false);
+  const [actions, setActions] = useState<ReactNode>(null);
   const styles = useAppShellStyles();
 
   return (
-    <div className={mergeClasses(styles.root, collapsed && styles.rootCollapsed)}>
-      <AppHeader />
-      <Sidebar collapsed={collapsed} onToggle={() => setCollapsed((c) => !c)} />
-      <div className={styles.main}>{children}</div>
-    </div>
+    <HeaderActionsContext.Provider value={{ actions, setActions }}>
+      <div className={mergeClasses(styles.root, collapsed && styles.rootCollapsed)}>
+        <AppHeader actions={actions} />
+        <Sidebar collapsed={collapsed} onToggle={() => setCollapsed((c) => !c)} />
+        <div className={styles.main}>{children}</div>
+      </div>
+    </HeaderActionsContext.Provider>
   );
 };
