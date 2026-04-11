@@ -1,25 +1,11 @@
 import React, { type FC, Suspense } from "react";
 
+import { LibrarySkeleton } from "~/components/page-skeleton/PageSkeleton.js";
+
 import { LibraryPageContent } from "./LibraryPageContent.js";
 
-export const LibraryPage: FC = () => {
-  return (
-    <Suspense
-      fallback={
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "center",
-            height: "100%",
-            color: "#666",
-          }}
-        >
-          Loading…
-        </div>
-      }
-    >
-      <LibraryPageContent />
-    </Suspense>
-  );
-};
+export const LibraryPage: FC = () => (
+  <Suspense fallback={<LibrarySkeleton />}>
+    <LibraryPageContent />
+  </Suspense>
+);

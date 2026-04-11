@@ -2,6 +2,12 @@ import React, { type FC, lazy, Suspense } from "react";
 import { createBrowserRouter, Outlet } from "react-router-dom";
 
 import { AppShell } from "~/components/app-shell/AppShell.js";
+import {
+  DashboardSkeleton,
+  LibrarySkeleton,
+  SettingsSkeleton,
+  WatchlistSkeleton,
+} from "~/components/page-skeleton/PageSkeleton.js";
 
 const DashboardPage = lazy(() => import("./pages/DashboardPage.js"));
 const LibraryPage = lazy(() =>
@@ -46,7 +52,7 @@ export const router: ReturnType<typeof createBrowserRouter> = createBrowserRoute
       {
         path: "/",
         element: (
-          <Suspense fallback={<PageLoader />}>
+          <Suspense fallback={<DashboardSkeleton />}>
             <DashboardPage />
           </Suspense>
         ),
@@ -54,7 +60,7 @@ export const router: ReturnType<typeof createBrowserRouter> = createBrowserRoute
       {
         path: "/library",
         element: (
-          <Suspense fallback={<PageLoader />}>
+          <Suspense fallback={<LibrarySkeleton />}>
             <LibraryPage />
           </Suspense>
         ),
@@ -62,7 +68,7 @@ export const router: ReturnType<typeof createBrowserRouter> = createBrowserRoute
       {
         path: "/watchlist",
         element: (
-          <Suspense fallback={<PageLoader />}>
+          <Suspense fallback={<WatchlistSkeleton />}>
             <WatchlistPage />
           </Suspense>
         ),
@@ -70,7 +76,7 @@ export const router: ReturnType<typeof createBrowserRouter> = createBrowserRoute
       {
         path: "/settings",
         element: (
-          <Suspense fallback={<PageLoader />}>
+          <Suspense fallback={<SettingsSkeleton />}>
             <SettingsPage />
           </Suspense>
         ),
