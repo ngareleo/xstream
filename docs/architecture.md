@@ -48,11 +48,12 @@ tvke is split into two workspaces: a Bun server and a Vite/React client. The ser
 |---|---|---|
 | Entry point | `src/index.ts` | Startup sequence, `Bun.serve()`, route dispatch |
 | Config | `src/config.ts` | Dev/prod AppConfig, resolution profiles, mediaFiles.json loader |
-| DB connection | `src/db/index.ts` | SQLite singleton with WAL mode and foreign keys enabled |
+| DB connection | `src/db/index.ts` | SQLite singleton with WAL mode and foreign keys enabled; `closeDb()` for graceful shutdown |
 | Migrations | `src/db/migrate.ts` | Idempotent schema creation on every startup |
 | Query layer | `src/db/queries/` | All SQL — one file per table |
-| Library scanner | `src/services/libraryScanner.ts` | Walks media directories, ffprobes each file, upserts DB |
-| Chunker | `src/services/chunker.ts` | Manages ffmpeg jobs, watches output dir, updates jobStore + DB |
+| Library scanner | `src/services/libraryScanner.ts` | Walks media directories, runs ffprobe + content fingerprint concurrently per file, upserts DB |
+| Scan store | `src/services/scanStore.ts` | In-memory scan state pub/sub; exposes `isScanRunning`, `markScanStarted/Ended`, async `subscribeToScan()` |
+| Chunker | `src/services/chunker.ts` | Manages ffmpeg jobs, watches output dir, updates jobStore + DB; `killAllActiveJobs()` for graceful shutdown |
 | Job store | `src/services/jobStore.ts` | In-memory map of active jobs (source of truth for streaming) |
 | GraphQL handler | `src/routes/graphql.ts` | graphql-yoga instance with schema and CORS config |
 | Stream handler | `src/routes/stream.ts` | Reads segments from jobStore, writes length-prefixed binary frames |
@@ -68,7 +69,7 @@ tvke is split into two workspaces: a Bun server and a Vite/React client. The ser
 | Entry | `src/main.tsx` | Mounts providers: Relay, Chakra, `NovaEventingProvider` (`AppEventing`), Router |
 | Router | `src/router.tsx` | `/` → LibraryPage, `/play/:videoId` → PlayerPage |
 | Relay env | `src/relay/environment.ts` | HTTP fetch + WebSocket subscribe network layer |
-| Library page | `src/pages/LibraryPage.tsx` | Queries all libraries, renders grids, triggers rescan |
+| Library page | `src/pages/LibraryPage.tsx` | Queries all libraries, renders grids, subscribes to scan state for live spinner |
 | Player page | `src/pages/PlayerPage.tsx` | Loads video metadata, renders VideoPlayer |
 | Library grid | `src/components/LibraryGrid.tsx` | Relay fragment over a Library's videos connection |
 | Video card | `src/components/VideoCard.tsx` | Relay fragment, clickable tile with title + duration |
@@ -86,30 +87,44 @@ tvke is split into two workspaces: a Bun server and a Vite/React client. The ser
 2. `tmp/segments/` directory created if missing
 3. `getDb()` opens SQLite connection, enables WAL + foreign keys, runs `migrate.ts`
 4. `restoreInterruptedJobs()` inspects any `transcode_jobs` rows with `status = 'running'`: jobs with segments on disk are restored into memory and marked `complete`; jobs with no segments are marked `error`
-5. `scanLibraries()` reads `mediaFiles.json`, filters by env, validates paths, upserts libraries, ffprobes all video files
+5. Continuous scan loop starts (background async loop): `while(true) { scanLibraries(); sleep(scanIntervalMs) }` — runs immediately then repeats every `config.scanIntervalMs` (default 30s)
 6. `Bun.serve()` starts on configured port
+
+### Graceful Shutdown
+
+SIGTERM and SIGINT handlers call `shutdown()`:
+1. `killAllActiveJobs()` — sends SIGTERM to every running ffmpeg process
+2. `closeDb()` — closes the SQLite connection (flushes WAL)
+3. `process.exit(0)`
+
+In-progress transcode jobs are left in `status='running'` in the DB so `restoreInterruptedJobs()` handles them correctly on the next startup.
 
 ---
 
 ## Data Flow: Library Scan
 
 ```
-mediaFiles.json
+Continuous loop (every scanIntervalMs, default 30s)
       │
       ▼
 loadMediaConfig() → filter by env → validate path exists
       │
       ▼
-walkDirectory() → list all video files recursively
+walkDirectory() → yield video file paths (async generator, depth-first)
       │
-      ▼
-ffprobe(filePath) → format + streams metadata
+      ▼  ← for each file, launched concurrently via Promise.all
+stat(filePath)
       │
-      ▼
+      ├── ffprobe(filePath)  ─────────────────────────┐  (concurrent)
+      └── computeContentFingerprint(filePath, size)  ─┘
+                │
+                ▼
 upsertLibrary() → libraries table
-upsertVideo()   → videos table
+upsertVideo()   → videos table   (keyed on path, includes content_fingerprint)
 replaceVideoStreams() → video_streams table
 ```
+
+The content fingerprint is `"<sizeBytes>:<sha1hex>"` over the first 64 KB of the file. It is stable across renames/moves and changes only when file content changes. Transcode job IDs are derived from the fingerprint rather than the file path, so the segment cache survives file renames.
 
 ## Data Flow: Playback
 

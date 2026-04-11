@@ -37,8 +37,11 @@ One row per video file. Populated by the library scanner via ffprobe. Upserted o
 | `file_size_bytes` | INTEGER | NOT NULL | Bytes on disk from `fs.stat` |
 | `bitrate` | INTEGER | NOT NULL | Overall bitrate in bps from ffprobe `format.bit_rate` |
 | `scanned_at` | TEXT | NOT NULL | ISO 8601 timestamp of last ffprobe scan |
+| `content_fingerprint` | TEXT | NOT NULL | `"<sizeBytes>:<sha1hex>"` — SHA-1 of the first 64 KB of the file, prefixed with file size. Stable across renames; changes only when content changes. Used as the basis for transcode job cache keys. |
 
 **Index:** `videos_library_id` on `library_id` — used by the `videos(first, after)` connection resolver.
+
+> **Breaking migration note:** `content_fingerprint TEXT NOT NULL` is part of the original `CREATE TABLE` definition. If you have an existing `tmp/tvke.db` from before this column was added, delete it — the server will recreate the schema and re-scan all libraries on next startup.
 
 ---
 
@@ -83,7 +86,7 @@ One row per unique transcode request (keyed by video path + resolution + time ra
 | `updated_at` | TEXT | NOT NULL | ISO 8601 — updated on every status change |
 | `error` | TEXT | nullable | Error message when `status = 'error'`; null otherwise |
 
-**Job deduplication:** The composite key (videoPath + resolution + start + end) means re-requesting the same transcode returns the existing job immediately, serving cached segments.
+**Job deduplication:** The ID is derived from `content_fingerprint + resolution + start + end`. Re-requesting the same transcode (even if the file was renamed/moved) returns the existing job immediately, serving cached segments.
 
 ---
 

@@ -1,7 +1,7 @@
 import ffmpegInstaller from "@ffmpeg-installer/ffmpeg";
 import ffprobeInstaller from "@ffprobe-installer/ffprobe";
 import { createHash } from "crypto";
-import ffmpeg from "fluent-ffmpeg";
+import ffmpeg, { type FfmpegCommand } from "fluent-ffmpeg";
 import { mkdir, stat, watch } from "fs/promises";
 import { join, resolve } from "path";
 
@@ -16,9 +16,53 @@ import { getJob, setJob } from "./jobStore.js";
 ffmpeg.setFfmpegPath(ffmpegInstaller.path);
 ffmpeg.setFfprobePath(ffprobeInstaller.path);
 
-function jobId(videoPath: string, resolution: Resolution, start?: number, end?: number): string {
+// Tracks all ffmpeg processes currently encoding so they can be killed on shutdown.
+const activeCommands = new Map<string, FfmpegCommand>();
+
+/**
+ * Gracefully shuts down all active ffmpeg jobs:
+ * 1. Sends SIGTERM to every running process.
+ * 2. Waits up to `timeoutMs` for each to exit.
+ * 3. SIGKILLs any process that did not exit within the timeout.
+ */
+export async function killAllActiveJobs(timeoutMs = 5000): Promise<void> {
+  if (activeCommands.size === 0) return;
+
+  const exitPromises = [...activeCommands.entries()].map(([id, command]) => {
+    return new Promise<void>((resolve) => {
+      const cleanup = (): void => {
+        activeCommands.delete(id);
+        resolve();
+      };
+      command.once("end", cleanup);
+      command.once("error", cleanup);
+      console.log(`[chunker] Killing job ${id.slice(0, 8)}`);
+      try {
+        command.kill("SIGTERM");
+      } catch {
+        cleanup();
+      }
+    });
+  });
+
+  const timeout = new Promise<void>((resolve) => setTimeout(resolve, timeoutMs));
+  await Promise.race([Promise.all(exitPromises), timeout]);
+
+  // SIGKILL any processes that didn't exit within the timeout
+  for (const [id, command] of activeCommands) {
+    console.warn(`[chunker] Force-killing job ${id.slice(0, 8)} (SIGTERM timeout)`);
+    try {
+      command.kill("SIGKILL");
+    } catch {
+      // already gone
+    }
+  }
+  activeCommands.clear();
+}
+
+function jobId(contentKey: string, resolution: Resolution, start?: number, end?: number): string {
   return createHash("sha1")
-    .update(`${videoPath}|${resolution}|${start ?? ""}|${end ?? ""}`)
+    .update(`${contentKey}|${resolution}|${start ?? ""}|${end ?? ""}`)
     .digest("hex");
 }
 
@@ -31,7 +75,7 @@ export async function startTranscodeJob(
   const video = getVideoById(videoId);
   if (!video) throw new Error(`Video not found: ${videoId}`);
 
-  const id = jobId(video.path, resolution, startTimeSeconds, endTimeSeconds);
+  const id = jobId(video.content_fingerprint, resolution, startTimeSeconds, endTimeSeconds);
 
   // Return existing in-memory job if already running or complete
   const existing = getJob(id);
@@ -131,6 +175,8 @@ async function runFfmpeg(
   // Calling watchSegments after .on("start") risks missing early segment events.
   void watchSegments(job, segmentDir, initPath);
 
+  activeCommands.set(job.id, command);
+
   file
     .applyOutputOptions(command, profile, segmentPattern, segmentDir)
     .output(join(segmentDir, "playlist.m3u8"))
@@ -139,6 +185,7 @@ async function runFfmpeg(
       console.log(`[chunker] cmd: ${cmd.slice(0, 120)}…`);
     })
     .on("error", (err) => {
+      activeCommands.delete(job.id);
       console.error(`[chunker] Job ${job.id.slice(0, 8)} error:`, err.message);
       job.status = "error";
       job.error = err.message;
@@ -146,6 +193,7 @@ async function runFfmpeg(
       notifySubscribers(job);
     })
     .on("end", () => {
+      activeCommands.delete(job.id);
       console.log(
         `[chunker] Job ${job.id.slice(0, 8)} complete. ${job.segments.filter(Boolean).length} segments`
       );

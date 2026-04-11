@@ -14,15 +14,16 @@ export function migrate(db: Database): void {
 
     db.run(`
       CREATE TABLE IF NOT EXISTS videos (
-        id                TEXT PRIMARY KEY,
-        library_id        TEXT NOT NULL REFERENCES libraries(id),
-        path              TEXT NOT NULL UNIQUE,
-        filename          TEXT NOT NULL,
-        title             TEXT,
-        duration_seconds  REAL NOT NULL,
-        file_size_bytes   INTEGER NOT NULL,
-        bitrate           INTEGER NOT NULL,
-        scanned_at        TEXT NOT NULL
+        id                   TEXT PRIMARY KEY,
+        library_id           TEXT NOT NULL REFERENCES libraries(id),
+        path                 TEXT NOT NULL UNIQUE,
+        filename             TEXT NOT NULL,
+        title                TEXT,
+        duration_seconds     REAL NOT NULL,
+        file_size_bytes      INTEGER NOT NULL,
+        bitrate              INTEGER NOT NULL,
+        scanned_at           TEXT NOT NULL,
+        content_fingerprint  TEXT NOT NULL
       )
     `);
 

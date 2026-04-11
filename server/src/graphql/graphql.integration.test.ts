@@ -52,6 +52,7 @@ beforeAll(() => {
     file_size_bytes: 1024,
     bitrate: 5000000,
     scanned_at: new Date().toISOString(),
+    content_fingerprint: "1024:aabbccddeeff00112233445566778899aabbccdd",
   });
 });
 

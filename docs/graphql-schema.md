@@ -142,8 +142,18 @@ type Mutation {
   ): TranscodeJob!
 }
 
+type LibraryScanUpdate {
+  scanning: Boolean!
+}
+
 type Subscription {
   transcodeJobUpdated(jobId: ID!): TranscodeJob!
+  """
+  Emits immediately with the current scan state, then on every state change.
+  scanning=true  → a scan is in progress
+  scanning=false → scan completed; re-query libraries for updated data
+  """
+  libraryScanUpdated: LibraryScanUpdate!
 }
 ```
 
@@ -181,6 +191,8 @@ const wsClient = createClient({ url: `ws://${window.location.host}/graphql` });
 ```
 
 The `transcodeJobUpdated` subscription fires every time a new segment is written or the job status changes. The client uses this to display progress during transcoding.
+
+The `libraryScanUpdated` subscription emits the current scan state immediately on connect (so clients joining mid-scan are informed), then on every subsequent state change. When `scanning` transitions to `false`, clients should re-query the `libraries` field to pick up newly indexed videos. The server scans continuously on a timer (`scanIntervalMs`, default 30 s) — clients do not need to trigger scans manually.
 
 ---
 

@@ -48,6 +48,8 @@ export interface VideoRow {
   file_size_bytes: number;
   bitrate: number;
   scanned_at: string;
+  /** SHA-1 of the first 64 KB of the file, prefixed with file size. Stable across renames/moves. */
+  content_fingerprint: string;
 }
 
 export interface VideoStreamRow {

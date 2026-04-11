@@ -34,6 +34,7 @@ const VIDEO: Parameters<typeof upsertVideo>[0] = {
   file_size_bytes: 4_000_000_000,
   bitrate: 4_000_000,
   scanned_at: "2026-01-01T00:00:00.000Z",
+  content_fingerprint: "4000000000:aabbccddeeff00112233445566778899aabbccdd",
 };
 
 describe("upsertVideo", () => {
@@ -41,27 +42,32 @@ describe("upsertVideo", () => {
     upsertVideo(VIDEO);
     const row = getVideoById("vid1");
     expect(row).not.toBeNull();
-    expect(row!.title).toBe("Great Movie");
-    expect(row!.filename).toBe("movie.mkv");
-    expect(row!.duration_seconds).toBe(7200);
-    expect(row!.file_size_bytes).toBe(4_000_000_000);
+    if (!row) return;
+    expect(row.title).toBe("Great Movie");
+    expect(row.filename).toBe("movie.mkv");
+    expect(row.duration_seconds).toBe(7200);
+    expect(row.file_size_bytes).toBe(4_000_000_000);
   });
 
   test("ON CONFLICT(path) updates metadata fields", () => {
     upsertVideo({ ...VIDEO, title: "Updated Title", duration_seconds: 3600, bitrate: 8_000_000 });
     const row = getVideoById("vid1");
-    expect(row!.title).toBe("Updated Title");
-    expect(row!.duration_seconds).toBe(3600);
-    expect(row!.bitrate).toBe(8_000_000);
+    expect(row).not.toBeNull();
+    if (!row) return;
+    expect(row.title).toBe("Updated Title");
+    expect(row.duration_seconds).toBe(3600);
+    expect(row.bitrate).toBe(8_000_000);
     // id and path must not change
-    expect(row!.id).toBe("vid1");
-    expect(row!.path).toBe("/test/movie.mkv");
+    expect(row.id).toBe("vid1");
+    expect(row.path).toBe("/test/movie.mkv");
   });
 
   test("null title is stored as null", () => {
     upsertVideo({ ...VIDEO, id: "vid-null-title", path: "/test/notitle.mkv", title: null });
     const row = getVideoById("vid-null-title");
-    expect(row!.title).toBeNull();
+    expect(row).not.toBeNull();
+    if (!row) return;
+    expect(row.title).toBeNull();
   });
 });
 
@@ -191,9 +197,12 @@ describe("getVideoById", () => {
       file_size_bytes: 8_589_934_592,
       bitrate: 15_000_000,
       scanned_at: "2026-03-15T12:00:00.000Z",
+      content_fingerprint: "8589934592:abc123def456",
     };
     upsertVideo(full);
-    const row = getVideoById("vid-full")!;
+    const row = getVideoById("vid-full");
+    expect(row).not.toBeNull();
+    if (!row) return;
     expect(row.duration_seconds).toBe(5400.5);
     expect(row.file_size_bytes).toBe(8_589_934_592);
     expect(row.bitrate).toBe(15_000_000);

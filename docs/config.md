@@ -45,7 +45,7 @@ Lives at the project root. Committed to git. Paths are machine-specific — edit
 - `path` is the unique key. Two entries with the same path — the first wins, the second is logged and skipped.
 - Entries with `env` not matching the current environment are silently ignored.
 - If a path does not exist on disk, the library is skipped with a `[scanner] Path not accessible` warning. The server continues starting up.
-- The server picks up config changes on restart or when the `scanLibraries` GraphQL mutation is called.
+- The server picks up config changes on restart or on the next automatic scan cycle (every `scanIntervalMs`, default 30 s). The `scanLibraries` GraphQL mutation can also be called to trigger an immediate rescan.
 
 ---
 
@@ -61,6 +61,7 @@ Active when `NODE_ENV` is absent or `development`.
 | `segmentDir` | `./tmp/segments` (relative to project root) |
 | `dbPath` | `./tmp/tvke.db` |
 | `mediaConfigPath` | `./mediaFiles.json` |
+| `scanIntervalMs` | `30000` |
 
 ### Prod
 
@@ -72,6 +73,7 @@ Active when `NODE_ENV=production`. Fields marked with an env var are required in
 | `segmentDir` | `SEGMENT_DIR` | `./tmp/segments` |
 | `dbPath` | `DB_PATH` | `./tmp/tvke.db` |
 | `mediaConfigPath` | — | `./mediaFiles.json` |
+| `scanIntervalMs` | `SCAN_INTERVAL_MS` | `30000` |
 
 In production, `segmentDir` and `dbPath` should be set to persistent storage locations (not `/tmp`). The same `mediaFiles.json` is used in both environments — `env: "prod"` entries activate when `NODE_ENV=production`.
 
@@ -85,7 +87,7 @@ tmp/
 ├── tvke.db-shm                # WAL shared memory file
 ├── tvke.db-wal                # WAL write-ahead log
 └── segments/
-    └── <jobId>/               # SHA-1 of (videoPath + resolution + start + end)
+    └── <jobId>/               # SHA-1 of (content_fingerprint + resolution + start + end)
         ├── init.mp4           # fMP4 init segment (moov box)
         ├── segment_0000.m4s
         ├── segment_0001.m4s

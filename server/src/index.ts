@@ -1,9 +1,10 @@
 import { mkdir } from "fs/promises";
 
 import { config } from "./config.js";
-import { getDb } from "./db/index.js";
+import { closeDb, getDb } from "./db/index.js";
 import { yoga } from "./routes/graphql.js";
 import { handleStream } from "./routes/stream.js";
+import { killAllActiveJobs } from "./services/chunker.js";
 import { restoreInterruptedJobs } from "./services/jobRestore.js";
 import { scanLibraries } from "./services/libraryScanner.js";
 
@@ -20,10 +21,22 @@ async function bootstrap(): Promise<void> {
   // complete; jobs with no output are marked as error.
   await restoreInterruptedJobs();
 
-  // Scan media libraries
-  console.log("[server] Scanning media libraries...");
-  await scanLibraries();
-  console.log("[server] Library scan complete");
+  // Start continuous library scan loop. Runs immediately then repeats every
+  // config.scanIntervalMs so the library stays up to date without any client
+  // action. scanLibraries() is a no-op if a scan is already in progress.
+  // Errors are caught per-iteration so a transient failure doesn't stop the loop.
+  void (async () => {
+    while (true) {
+      try {
+        console.log("[server] Scanning media libraries...");
+        await scanLibraries();
+        console.log("[server] Library scan complete");
+      } catch (err) {
+        console.error("[server] Scan error (will retry):", err);
+      }
+      await Bun.sleep(config.scanIntervalMs);
+    }
+  })();
 
   // Start HTTP server
   Bun.serve({
@@ -56,6 +69,21 @@ async function bootstrap(): Promise<void> {
   console.log(`[server] Listening on http://localhost:${config.port}`);
   console.log(`[server] GraphQL at http://localhost:${config.port}/graphql`);
 }
+
+async function shutdown(signal: string): Promise<void> {
+  console.log(`[server] ${signal} received — shutting down`);
+  await killAllActiveJobs(5000);
+  closeDb();
+  console.log("[server] Shutdown complete");
+  process.exit(0);
+}
+
+process.on("SIGTERM", () => {
+  void shutdown("SIGTERM");
+});
+process.on("SIGINT", () => {
+  void shutdown("SIGINT");
+});
 
 bootstrap().catch((err) => {
   console.error("[server] Fatal startup error:", err);

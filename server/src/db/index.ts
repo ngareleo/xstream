@@ -14,3 +14,8 @@ export function getDb(): Database {
   }
   return _db;
 }
+
+export function closeDb(): void {
+  _db?.close();
+  _db = null;
+}
