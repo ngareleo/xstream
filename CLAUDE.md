@@ -59,24 +59,52 @@ tvke/
 │
 └── client/src/
     ├── main.tsx                   # RelayEnvironmentProvider + ChakraProvider + RouterProvider + NovaEventingProvider (root)
-    ├── router.tsx                 # / → LibraryPage, /play/:videoId → PlayerPage
+    ├── router.tsx                 # routes: / → LibraryPage, /play/:videoId → PlayerPage, /profiles → ProfilesPage, /setup → SetupPage
     ├── relay/environment.ts       # RelayEnvironment (HTTP fetch + WebSocket subscribe)
-    ├── relay/__generated__/       # relay-compiler output (run: bun relay in client/)
+    ├── relay/__generated__/       # relay-compiler output — gitignored, generated at startup
     ├── pages/
-    │   ├── LibraryPage.tsx        # lists libraries + triggers rescan
-    │   └── PlayerPage.tsx         # loads video metadata, renders VideoPlayer
+    │   ├── LibraryPage.tsx        # Suspense shell → LibraryPageContent (lazy Relay query)
+    │   ├── LibraryPageContent.tsx # useLazyLoadQuery — lists libraries, triggers rescan
+    │   ├── LibraryContent.tsx     # Relay fragment — single library's grid of videos
+    │   ├── PlayerPage.tsx         # loads video metadata, renders VideoPlayer + PlayerSidebarAsync
+    │   ├── ProfilesPage.tsx       # Suspense shell → ProfilesPageContent
+    │   ├── ProfilesPageContent.tsx# useLazyLoadQuery — sidebar + grid/list view of library videos
+    │   ├── SetupPage.tsx          # thin shell → SetupPageContent
+    │   └── SetupPageContent.tsx   # library management UI
     ├── components/
-    │   ├── ControlBar.events.ts   # Nova event constants, payload types, isControlBarEvent() guard
+    │   ├── AppHeader.tsx          # top nav with Library / Profiles / Setup tabs
+    │   ├── ControlBar.events.ts   # Nova event constants, payload types, guards
     │   ├── ControlBar.tsx         # seek bar, play/pause, resolution badges; bubbles Nova events
     │   ├── LibraryGrid.tsx        # Relay fragment — video grid within a library
+    │   ├── LibraryRail.events.ts  # Nova events for LibraryRail
+    │   ├── LibraryRail.tsx        # horizontal scrollable library row
+    │   ├── MediaGridItem.tsx      # Relay fragment — grid card (image + title)
+    │   ├── MediaList.events.ts    # Nova events for MediaList
+    │   ├── MediaList.tsx          # Relay fragment — vertical video list
+    │   ├── MediaListItem.tsx      # Relay fragment — single list row
+    │   ├── PlayerSidebar.tsx      # video info panel shown alongside the player
+    │   ├── PlayerSidebarAsync.tsx # lazy-loaded PlayerSidebar (code-split chunk)
+    │   ├── ProfilesSidebar.events.ts # Nova events for ProfilesSidebar
+    │   ├── ProfilesSidebar.tsx    # library selector sidebar on Profiles page
     │   ├── VideoCard.tsx          # Relay fragment — clickable video tile
-    │   └── VideoPlayer.tsx        # MSE orchestration; NovaEventingInterceptor for ControlBar events
+    │   ├── VideoDetailsPanel.events.ts # Nova events for VideoDetailsPanel
+    │   ├── VideoDetailsPanel.tsx  # Relay fragment — full video detail overlay
+    │   ├── VideoDetailsPanelAsync.tsx  # lazy-loaded VideoDetailsPanel
+    │   ├── VideoPlayer.tsx        # MSE orchestration; NovaEventingInterceptor for ControlBar events
+    │   └── VideoPlayerAsync.tsx   # lazy-loaded VideoPlayer (code-split chunk)
     ├── hooks/
     │   ├── useVideoPlayback.ts    # MSE + streaming pipeline (teardown, startPlayback, status, error)
     │   └── useVideoSync.ts        # syncs currentTime + isPlaying from a <video> element via RAF
-    └── services/
-        ├── StreamingService.ts    # fetch loop, length-prefix parser, pause/resume/cancel
-        └── BufferManager.ts       # MSE SourceBuffer wrapper, sliding window eviction
+    ├── services/
+    │   ├── StreamingService.ts    # fetch loop, length-prefix parser, pause/resume/cancel
+    │   └── BufferManager.ts       # MSE SourceBuffer wrapper, sliding window eviction
+    ├── storybook/
+    │   ├── withNovaEventing.tsx   # decorator: no-op NovaEventingProvider for stories
+    │   ├── withLayout.tsx         # decorator: wraps story in a sized <div>
+    │   └── withRelay.tsx          # decorator: mock Relay environment for fragment stories
+    └── utils/
+        ├── formatters.ts          # pure helpers: formatDuration, resolutionLabel, etc.
+        └── lazy.ts                # lazyNamedExport() factory for code-split named exports
 ```
 
 ---
@@ -85,7 +113,7 @@ tvke/
 
 1. **All SQL goes through `db/queries/`** — no `getDb().prepare(...)` calls outside that directory.
 
-2. **GraphQL schema changes require re-running relay-compiler** — from `client/`: `bun relay`. The `__generated__/` artifacts must be up to date or Relay queries will fail at runtime.
+2. **GraphQL schema changes require re-running relay-compiler** — from `client/`: `bun relay`. The `__generated__/` artifacts are gitignored and generated at dev startup and in CI; they must be up to date or Relay queries will fail at runtime.
 
 3. **`SourceBuffer.appendBuffer()` must never be called while `updating === true`** — always `await waitForUpdateEnd()` before each call. Violating this throws `InvalidStateError` and breaks the MSE pipeline.
 
@@ -147,6 +175,36 @@ Edit `mediaFiles.json` — add an entry with `name`, `path`, `mediaType` (`movie
 5. Run `bun relay` from `client/`
 6. Put any formatting/computation helpers in `client/src/utils/`, not in the component file
 7. If the component has stateful side-effect logic (timers, event listeners, refs, async pipelines), extract it into a hook in `client/src/hooks/`
+
+### Add a new page
+Pages follow a two-file shell/content split:
+- `XxxPage.tsx` — the Suspense shell. Wraps `XxxPageContent` in `<Suspense fallback={<Spinner />}>`. Contains no data-fetching logic.
+- `XxxPageContent.tsx` — the actual page. Calls `useLazyLoadQuery` at the top. All Relay, state, and layout logic lives here.
+
+Add the route in `client/src/router.tsx`.
+
+### Code-split a heavy component
+Heavy components (video player, large detail panels) are split into their own JS chunk so they don't block the initial page load.
+
+1. Write the component normally in `ComponentName.tsx`
+2. Create `ComponentNameAsync.tsx` alongside it:
+
+```tsx
+// ComponentNameAsync.tsx
+import type { LazyExoticComponent } from "react";
+import { lazyNamedExport } from "../utils/lazy.js";
+import type { ComponentName as ComponentNameType } from "./ComponentName.js";
+
+export const ComponentNameAsync: LazyExoticComponent<typeof ComponentNameType> = lazyNamedExport(
+  () => import("./ComponentName.js"),
+  (m) => m.ComponentName
+);
+```
+
+3. Import `ComponentNameAsync` (not `ComponentName`) at the call site
+4. Wrap the usage in `<Suspense fallback={...}>` at the appropriate ancestor
+
+The `lazyNamedExport` helper in `client/src/utils/lazy.ts` wraps `React.lazy()` to handle named exports while preserving the full component type. The bundler names the chunk after the imported module file automatically.
 
 **Hooks (see `client/src/hooks/`):**
 - `useVideoPlayback(videoRef, videoId, onJobCreated?)` — owns the full MSE + StreamingService + BufferManager pipeline including `START_TRANSCODE_MUTATION`; returns `{ status, error, startPlayback }`
@@ -228,13 +286,7 @@ const interceptor = useCallback(async (wrapper, _forwardEvent) => {
 </NovaEventingInterceptor>
 ```
 
-Stories for components that use `useNovaEventing()` require a `NovaEventingProvider` ancestor — the hook throws without one. The app-root provider in `main.tsx` covers the real app; stories need their own:
-```tsx
-const noopEventing = { bubble: (_e: EventWrapper): Promise<void> => Promise.resolve() };
-<NovaEventingProvider eventing={noopEventing} reactEventMapper={mapEventMetadata}>
-  <MyComponent ... />
-</NovaEventingProvider>
-```
+Stories for components that use `useNovaEventing()` require a `NovaEventingProvider` ancestor — the hook throws without one. Add `withNovaEventing` from `client/src/storybook/withNovaEventing.tsx` to `meta.decorators`; do not inline a manual provider in the story file.
 
 Event files are colocated with their component (`ControlBar.events.ts` next to `ControlBar.tsx`). Do not define event constants inline in component files or in a shared top-level `events.ts`.
 
@@ -257,14 +309,19 @@ Import `FC` as a type: `import { type FC } from "react"`. Pages and inner compon
 
 **Storybook rule — every component must have a story:**
 - Stories live in `<ComponentName>.stories.tsx` alongside the component
-- Relay fragment components use **`@imchhh/storybook-addon-relay`** — add `parameters.relay` with a `@relay_test_operation` query, `getReferenceEntry`, and `mockResolvers`. The addon handles the mock environment automatically.
-- Do NOT use `createMockEnvironment` / `RelayEnvironmentProvider` directly — use the addon instead
+- Relay fragment components use the **`withRelay` decorator** from `client/src/storybook/withRelay.tsx` — add `parameters.relay` with a `@relay_test_operation` query and `mockResolvers`. Do NOT use `createMockEnvironment` / `RelayEnvironmentProvider` directly in story files.
 - Story queries must have `@relay_test_operation` directive; run `bun relay` from `client/` after adding/changing a story query
 - Each visual variant is a named export with its own `parameters.relay.mockResolvers` override
 - Stories test visual states, not behaviour; keep them free of application logic
 - Add `play` functions (from `@storybook/test`) to verify interactive states
 
 **Storybook shared decorators (`client/src/storybook/`):**
+- `withRelay` — mock Relay environment for fragment components. Add to `meta.decorators` and set `parameters.relay`:
+  - `query` — a `graphql` tagged template with `@relay_test_operation`
+  - `variables` — query variables
+  - `mockResolvers` — object keyed by GraphQL type name, values are resolver functions
+  - `getReferenceEntry(result)` — maps one root field to a component prop (single-fragment case)
+  - `getReferenceEntries(result)` — maps multiple root fields (multi-fragment case, e.g. a component that takes two fragment keys)
 - `withNovaEventing` — wraps a story in a no-op `NovaEventingProvider`. Required for any component that calls `useNovaEventing()`. Import and add to `meta.decorators`; do not inline `noopEventing` + `NovaEventingProvider` in individual story files.
 - `withLayout(style)` — wraps a story in a plain `<div>` with the given CSS styles. Use for width/height constraints (e.g. `withLayout({ width: 380 })`). Never write inline JSX decorators in story files — the classic Babel transform used by Storybook requires `React` to be in scope for any JSX in story files, but the shared decorator files already import it.
 

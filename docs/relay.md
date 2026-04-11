@@ -122,7 +122,7 @@ After any change to a `.graphql` tag in the client source, or any change to `ser
 cd client && bun relay
 ```
 
-The artifacts in `src/relay/__generated__/` are committed. Never edit them manually.
+The artifacts in `src/relay/__generated__/` are **gitignored** — they are generated at dev startup (`bun dev`) and at the start of every CI run. Never edit them manually and never commit them. The `bun relay` script creates the directory if it doesn't exist before invoking relay-compiler.
 
 ---
 
