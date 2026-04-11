@@ -1,4 +1,34 @@
-import { type FC, useState } from "react";
+/**
+ * Library page — poster grid / list view of all films across every profile.
+ *
+ * Layout:
+ *   AppShell grid → header + sidebar + main.
+ *   Inside `.main`: `split-body` (1fr / 0 → 360px right pane).
+ *
+ * Right pane (URL-encoded):
+ *   ?film=xxx  →  DetailPane open for that film
+ *   (no param) →  pane closed
+ *
+ * Toggling:
+ *   Clicking a poster that is already selected closes the pane (second click =
+ *   deselect). This keeps the interaction model consistent with the Profiles page.
+ *
+ * View modes:
+ *   "grid" (default) — poster cards in a responsive multi-column grid.
+ *   "list"           — compact rows (not yet implemented; toggle UI is present).
+ *
+ * Navigation:
+ *   The PLAY button in DetailPane uses <Link> so the Player can navigate(-1)
+ *   back to /library?film=xxx with the pane restored.
+ *
+ * Data (mock → real):
+ *   - `profiles` / `films` → useLazyLoadQuery on the LibraryPage query
+ *   - Each profile section → LibraryContent fragment per library
+ *   - Search filtering    → client-side on loaded data (fine for local libraries)
+ */
+
+import React, { type FC } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import { AppHeader } from "../../components/AppHeader/AppHeader.js";
 import {
   IconSearch,
@@ -13,11 +43,18 @@ import "./Library.css";
 
 type ViewMode = "grid" | "list";
 
-const PosterCard: FC<{ film: Film; onSelect: (id: string) => void; selected: boolean }> = ({
-  film,
-  onSelect,
-  selected,
-}) => (
+// ── PosterCard ────────────────────────────────────────────────────────────
+// A single film tile in the grid. Clicking selects/deselects (opens pane).
+// The gradient background is a placeholder for a real poster image.
+// Visual indicators:
+//   - 4K badge (top-right, red) when resolution === "4K"
+//   - IMDb rating (bottom-right) when available
+//   - Question-mark icon when the file is unmatched (no metadata linked yet)
+const PosterCard: FC<{
+  film:     Film;
+  onSelect: (id: string) => void;
+  selected: boolean;
+}> = ({ film, onSelect, selected }) => (
   <div
     className={`poster-card${selected ? " selected" : ""}`}
     onClick={() => onSelect(film.id)}
@@ -32,7 +69,12 @@ const PosterCard: FC<{ film: Film; onSelect: (id: string) => void; selected: boo
         <span className="poster-rating">{film.rating}</span>
       )}
       {!film.matched && (
-        <div style={{ color: "rgba(245,197,24,0.4)", display: "flex", alignItems: "center", justifyContent: "center", height: "100%" }}>
+        // Unmatched: the file exists but has no linked metadata.
+        // In production, tapping this should open the link/search flow.
+        <div style={{
+          color: "rgba(245,197,24,0.4)", display: "flex",
+          alignItems: "center", justifyContent: "center", height: "100%",
+        }}>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} style={{ width: 32, height: 32, opacity: 0.4 }}>
             <path d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 5.25h.008v.008H12v-.008Z" />
           </svg>
@@ -46,22 +88,33 @@ const PosterCard: FC<{ film: Film; onSelect: (id: string) => void; selected: boo
   </div>
 );
 
+// ── DetailPane ────────────────────────────────────────────────────────────
+// Slide-in detail panel. Matches the FilmDetailPane on the Dashboard page
+// so both feel like the same component to users (consistent detail view).
+// The 200px poster area uses the film's gradient — replace with real poster image.
 const DetailPane: FC<{ film: Film; onClose: () => void }> = ({ film, onClose }) => (
   <div className="right-pane" style={{ borderLeft: "1px solid var(--border)" }}>
     <div style={{ height: 200, position: "relative", overflow: "hidden", flexShrink: 0, background: film.gradient }}>
-      <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to bottom,rgba(0,0,0,0.58) 0%,transparent 40%,rgba(0,0,0,0.84) 100%)" }} />
+      <div style={{
+        position: "absolute", inset: 0,
+        background: "linear-gradient(to bottom,rgba(0,0,0,0.58) 0%,transparent 40%,rgba(0,0,0,0.84) 100%)",
+      }} />
       <div className="fd-actions">
-        <a href={`/player/${film.id}`} className="fd-action-btn primary">
+        {/* <Link> pushes a history entry; Back in the Player returns to /library?film=xxx */}
+        <Link to={`/player/${film.id}`} className="fd-action-btn primary">
           <IconPlay size={10} />
           PLAY
-        </a>
+        </Link>
         <div className="fd-action-sep" />
         <button className="fd-action-btn"><IconPencil size={10} /> RE-LINK</button>
         <div style={{ flex: 1 }} />
         <button className="fd-action-close" onClick={onClose}><IconClose size={13} /></button>
       </div>
       <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, padding: "12px 16px", zIndex: 2 }}>
-        <div style={{ fontFamily: "var(--font-head)", fontSize: 22, letterSpacing: ".06em", color: "var(--white)", lineHeight: 1 }}>
+        <div style={{
+          fontFamily: "var(--font-head)", fontSize: 22,
+          letterSpacing: ".06em", color: "var(--white)", lineHeight: 1,
+        }}>
           {film.title ?? film.filename}
         </div>
         {film.year && (
@@ -74,13 +127,19 @@ const DetailPane: FC<{ film: Film; onClose: () => void }> = ({ film, onClose }) 
     <div style={{ overflowY: "auto", flex: 1 }}>
       {film.rating && (
         <>
-          <div style={{ display: "flex", gap: 5, flexWrap: "wrap", padding: "12px 16px", borderBottom: "1px solid var(--border)" }}>
+          <div style={{
+            display: "flex", gap: 5, flexWrap: "wrap",
+            padding: "12px 16px", borderBottom: "1px solid var(--border)",
+          }}>
             <span className="badge badge-red">{film.resolution}</span>
-            {film.hdr && <span className="badge badge-gray">{film.hdr}</span>}
+            {film.hdr  && <span className="badge badge-gray">{film.hdr}</span>}
             <span className="badge badge-gray">{film.codec}</span>
             <span className="badge badge-gray">{film.audio}</span>
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 16px", borderBottom: "1px solid var(--border)" }}>
+          <div style={{
+            display: "flex", alignItems: "center", gap: 10,
+            padding: "10px 16px", borderBottom: "1px solid var(--border)",
+          }}>
             <span style={{ fontSize: 15, fontWeight: 700, color: "var(--yellow)" }}>{film.rating}</span>
             <span style={{ fontSize: 11, color: "var(--muted)" }}>IMDb · {film.duration}</span>
           </div>
@@ -89,7 +148,9 @@ const DetailPane: FC<{ film: Film; onClose: () => void }> = ({ film, onClose }) 
       {film.plot && (
         <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--border)" }}>
           <div className="section-label">Synopsis</div>
-          <div style={{ fontSize: 12, color: "rgba(255,255,255,0.55)", lineHeight: 1.7 }}>{film.plot}</div>
+          <div style={{ fontSize: 12, color: "rgba(255,255,255,0.55)", lineHeight: 1.7 }}>
+            {film.plot}
+          </div>
         </div>
       )}
       {film.cast.length > 0 && (
@@ -104,20 +165,36 @@ const DetailPane: FC<{ film: Film; onClose: () => void }> = ({ film, onClose }) 
   </div>
 );
 
+// ── Library (page root) ───────────────────────────────────────────────────
 export const Library: FC = () => {
-  const [search, setSearch] = useState("");
-  const [viewMode, setViewMode] = useState<ViewMode>("grid");
-  const [selectedFilmId, setSelectedFilmId] = useState<string | null>(null);
+  // Search and view-mode are local transient state — not URL-encoded because
+  // they don't affect navigation (the user expects them to reset on navigation).
+  const [search,   setSearch]   = React.useState("");
+  const [viewMode, setViewMode] = React.useState<ViewMode>("grid");
 
-  const selectedFilm = selectedFilmId ? films.find((f) => f.id === selectedFilmId) : null;
-  const paneOpen = selectedFilm != null;
+  // Selected film drives the right pane; encoded in the URL for Back support.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const selectedFilmId = searchParams.get("film");
+  const selectedFilm   = selectedFilmId ? films.find((f) => f.id === selectedFilmId) : null;
+  const paneOpen       = selectedFilm != null;
 
+  // Toggle: clicking the already-selected poster closes the pane.
+  const selectFilm = (id: string) => {
+    if (selectedFilmId === id) {
+      setSearchParams({});
+    } else {
+      setSearchParams({ film: id });
+    }
+  };
+
+  // Client-side search: filters by title, filename, or genre.
+  // In production this would filter the already-loaded relay store data.
   const filterFilms = (profileFilms: Film[]) => {
     if (!search.trim()) return profileFilms;
     const q = search.toLowerCase();
     return profileFilms.filter(
       (f) =>
-        (f.title ?? "").toLowerCase().includes(q) ||
+        (f.title    ?? "").toLowerCase().includes(q) ||
         f.filename.toLowerCase().includes(q) ||
         (f.genre ?? "").toLowerCase().includes(q),
     );
@@ -132,7 +209,8 @@ export const Library: FC = () => {
       <div className="main">
         <div className={`split-body${paneOpen ? " pane-open" : ""}`}>
           <div className="split-left">
-            {/* Filter bar */}
+
+            {/* Filter / view controls */}
             <div className="filter-bar">
               <div className="search-wrap" style={{ flex: 1, minWidth: 180 }}>
                 <span className="search-icon">
@@ -172,6 +250,7 @@ export const Library: FC = () => {
               </div>
             </div>
 
+            {/* One section per profile, each containing its filtered poster grid */}
             {profiles.map((profile) => {
               const profileFilms = filterFilms(films.filter((f) => f.profile === profile.id));
               if (profileFilms.length === 0) return null;
@@ -189,7 +268,7 @@ export const Library: FC = () => {
                       <PosterCard
                         key={film.id}
                         film={film}
-                        onSelect={setSelectedFilmId}
+                        onSelect={selectFilm}
                         selected={selectedFilmId === film.id}
                       />
                     ))}
@@ -209,8 +288,9 @@ export const Library: FC = () => {
             )}
           </div>
 
+          {/* Right pane: only rendered when a film is selected */}
           {paneOpen && selectedFilm && (
-            <DetailPane film={selectedFilm} onClose={() => setSelectedFilmId(null)} />
+            <DetailPane film={selectedFilm} onClose={() => setSearchParams({})} />
           )}
         </div>
       </div>

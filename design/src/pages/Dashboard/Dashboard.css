@@ -1,38 +1,52 @@
-/* ── Dashboard hero: greeting + slideshow ── */
+/* ── Dashboard hero: slideshow as background, greeting overlaid ── */
 .dashboard-hero {
-  display: grid;
-  grid-template-columns: 260px 1fr;
-  gap: 0;
+  position: relative;
+  height: 220px;
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
+  overflow: hidden;
 }
 
 .dashboard-greeting {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  top: 0;
+  z-index: 2;
+  width: 380px;
   display: flex;
   flex-direction: column;
-  justify-content: center;
-  padding: 20px 24px;
-  border-right: 1px solid var(--border);
-  background: var(--surface);
+  justify-content: flex-end;
+  padding: 20px 28px;
+  /* fade out to the right */
+  background: linear-gradient(
+    to right,
+    rgba(8, 8, 8, 0.80) 0%,
+    rgba(8, 8, 8, 0.60) 60%,
+    transparent 100%
+  );
 }
 
 .greeting-text {
   font-family: var(--font-head);
-  font-size: 26px;
-  letter-spacing: 0.05em;
+  font-size: 32px;
+  letter-spacing: 0.06em;
   color: var(--white);
-  line-height: 1.1;
-  margin-bottom: 8px;
+  line-height: 1;
+  margin-bottom: 6px;
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.6);
 }
 
 .greeting-name {
   color: var(--red);
+  text-shadow: 0 0 20px rgba(206, 17, 38, 0.5);
 }
 
 .greeting-sub {
   font-size: 11px;
-  color: var(--muted);
-  letter-spacing: 0.02em;
+  color: rgba(255, 255, 255, 0.58);
+  letter-spacing: 0.04em;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
 }
 
 /* ── Dashboard-specific dir layout ── */
