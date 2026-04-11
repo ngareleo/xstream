@@ -1,4 +1,5 @@
 import { mergeClasses } from "@griffel/react";
+import { useNovaEventing } from "@nova/react";
 import React, { type FC, type MouseEvent, useState } from "react";
 import { graphql, useFragment } from "react-relay";
 import { Link } from "react-router-dom";
@@ -7,6 +8,7 @@ import { IconDocument, IconPencil, IconPlay, IconTv, IconWarning } from "~/lib/i
 import type { FilmRow_video$key } from "~/relay/__generated__/FilmRow_video.graphql.js";
 import { formatDuration } from "~/utils/formatters.js";
 
+import { createFilmSelectedEvent } from "./FilmRow.events.js";
 import { useFilmRowStyles } from "./FilmRow.styles.js";
 
 const FILM_FRAGMENT = graphql`
@@ -29,13 +31,13 @@ const FILM_FRAGMENT = graphql`
 interface Props {
   video: FilmRow_video$key;
   isSelected: boolean;
-  onSelect: (id: string) => void;
 }
 
-export const FilmRow: FC<Props> = ({ video, isSelected, onSelect }) => {
+export const FilmRow: FC<Props> = ({ video, isSelected }) => {
   const data = useFragment(FILM_FRAGMENT, video);
   const styles = useFilmRowStyles();
   const [hovered, setHovered] = useState(false);
+  const { bubble } = useNovaEventing();
 
   const isUnmatched = !data.matched;
   const isTv = data.mediaType === "TV_SHOWS";
@@ -45,13 +47,13 @@ export const FilmRow: FC<Props> = ({ video, isSelected, onSelect }) => {
   const isHd = (data.videoStream?.height ?? 0) >= 2160;
 
   const handleClick = (e: MouseEvent): void => {
-    onSelect(data.id);
+    void bubble({ reactEvent: e, event: createFilmSelectedEvent(data.id) });
     e.stopPropagation();
   };
 
   const handleEditClick = (e: MouseEvent): void => {
+    void bubble({ reactEvent: e, event: createFilmSelectedEvent(data.id) });
     e.stopPropagation();
-    onSelect(data.id);
   };
 
   return (

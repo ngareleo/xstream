@@ -1,11 +1,13 @@
 import { mergeClasses } from "@griffel/react";
-import React, { type FC, useState } from "react";
+import { useNovaEventing } from "@nova/react";
+import React, { type FC } from "react";
 import { graphql, useFragment } from "react-relay";
 import { Link } from "react-router-dom";
 
 import { IconPlay, IconQuestion } from "~/lib/icons.js";
 import type { PosterCard_video$key } from "~/relay/__generated__/PosterCard_video.graphql.js";
 
+import { createPosterCardFilmSelectedEvent } from "./PosterCard.events.js";
 import { usePosterCardStyles } from "./PosterCard.styles.js";
 
 const POSTER_FRAGMENT = graphql`
@@ -45,36 +47,44 @@ function gradientForId(id: string): string {
 
 interface Props {
   video: PosterCard_video$key;
-  onSelect: (id: string) => void;
+  isSelected?: boolean;
 }
 
-export const PosterCard: FC<Props> = ({ video, onSelect }) => {
+export const PosterCard: FC<Props> = ({ video, isSelected = false }) => {
   const data = useFragment(POSTER_FRAGMENT, video);
   const styles = usePosterCardStyles();
-  const [hovered, setHovered] = useState(false);
+  const { bubble } = useNovaEventing();
 
   const isHd = (data.videoStream?.height ?? 0) >= 2160;
   const bgStyle = data.metadata?.posterUrl
     ? { backgroundImage: `url(${data.metadata.posterUrl})` }
     : { background: gradientForId(data.id) };
 
+  const handleClick = (e: React.MouseEvent): void => {
+    void bubble({ reactEvent: e, event: createPosterCardFilmSelectedEvent(data.id) });
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent): void => {
+    if (e.key === "Enter" || e.key === " ") {
+      void bubble({ reactEvent: e, event: createPosterCardFilmSelectedEvent(data.id) });
+    }
+  };
+
   return (
     <div
-      className={styles.root}
-      onClick={() => onSelect(data.id)}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
+      className={mergeClasses(styles.root, isSelected && styles.rootSelected)}
+      onClick={handleClick}
       role="button"
       tabIndex={0}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") onSelect(data.id);
-      }}
+      onKeyDown={handleKeyDown}
     >
       <div className={styles.inner}>
         {/* Background */}
         <div className={styles.bg} style={bgStyle} />
         <div className={styles.bottomGradient} />
-        <div className={mergeClasses(styles.hoverOverlay, hovered && styles.hoverOverlayVisible)} />
+        <div
+          className={mergeClasses(styles.hoverOverlay, isSelected && styles.hoverOverlayVisible)}
+        />
 
         {/* Top-right badge */}
         <div className={styles.badgeTopRight}>
@@ -92,11 +102,11 @@ export const PosterCard: FC<Props> = ({ video, onSelect }) => {
           </div>
         )}
 
-        {/* Play chip (hover) */}
+        {/* Play chip (hover) — always shown when selected */}
         {data.matched && (
           <Link
             to={`/player/${data.id}`}
-            className={mergeClasses(styles.playChip, hovered && styles.playChipVisible)}
+            className={mergeClasses(styles.playChip, isSelected && styles.playChipVisible)}
             onClick={(e) => e.stopPropagation()}
           >
             <IconPlay size={9} />

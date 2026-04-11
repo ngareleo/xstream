@@ -1,10 +1,15 @@
 import { mergeClasses } from "@griffel/react";
+import { useNovaEventing } from "@nova/react";
 import React, { type FC, useState } from "react";
 import { graphql, useMutation } from "react-relay";
 
 import { IconClose } from "~/lib/icons.js";
 import type { NewProfilePaneCreateLibraryMutation } from "~/relay/__generated__/NewProfilePaneCreateLibraryMutation.graphql.js";
 
+import {
+  createNewProfilePaneClosedEvent,
+  createNewProfilePaneLibraryCreatedEvent,
+} from "./NewProfilePane.events.js";
 import { useNewProfilePaneStyles } from "./NewProfilePane.styles.js";
 
 const CREATE_LIBRARY_MUTATION = graphql`
@@ -28,17 +33,14 @@ const EXTENSION_PRESETS: Record<string, string[]> = {
 
 const ALL_EXTENSIONS = [".mkv", ".mp4", ".avi", ".mov", ".m4v", ".wmv", ".flv", ".ts"];
 
-interface Props {
-  onClose: () => void;
-  onCreated: () => void;
-}
-
-export const NewProfilePane: FC<Props> = ({ onClose, onCreated }) => {
+export const NewProfilePane: FC = () => {
   const styles = useNewProfilePaneStyles();
   const [name, setName] = useState("");
   const [path, setPath] = useState("");
   const [mediaType, setMediaType] = useState<"MOVIES" | "TV_SHOWS">("MOVIES");
   const [extensions, setExtensions] = useState<string[]>(EXTENSION_PRESETS.MOVIES);
+  const { bubble } = useNovaEventing();
+  const submitEventRef = React.useRef<React.MouseEvent | null>(null);
 
   const [commit, isPending] =
     useMutation<NewProfilePaneCreateLibraryMutation>(CREATE_LIBRARY_MUTATION);
@@ -53,7 +55,12 @@ export const NewProfilePane: FC<Props> = ({ onClose, onCreated }) => {
     setExtensions((prev) => (prev.includes(ext) ? prev.filter((e) => e !== ext) : [...prev, ext]));
   };
 
-  const handleSubmit = (): void => {
+  const handleClose = (e: React.MouseEvent): void => {
+    void bubble({ reactEvent: e, event: createNewProfilePaneClosedEvent() });
+  };
+
+  const handleSubmit = (e: React.MouseEvent): void => {
+    submitEventRef.current = e;
     if (!name.trim() || !path.trim()) {
       setError("Name and path are required.");
       return;
@@ -65,8 +72,15 @@ export const NewProfilePane: FC<Props> = ({ onClose, onCreated }) => {
     setError(null);
     commit({
       variables: { name: name.trim(), path: path.trim(), mediaType, extensions },
-      onCompleted: () => {
-        onCreated();
+      onCompleted: (data) => {
+        const libraryId = data.createLibrary?.id ?? "";
+        const ev = submitEventRef.current;
+        if (ev) {
+          void bubble({
+            reactEvent: ev,
+            event: createNewProfilePaneLibraryCreatedEvent(libraryId),
+          });
+        }
       },
       onError: (err) => {
         setError(err.message);
@@ -78,7 +92,7 @@ export const NewProfilePane: FC<Props> = ({ onClose, onCreated }) => {
     <div className={styles.root}>
       <div className={styles.header}>
         <div className={styles.headerTitle}>New Library</div>
-        <button className={styles.closeBtn} onClick={onClose} title="Close">
+        <button className={styles.closeBtn} onClick={handleClose} title="Close">
           <IconClose size={13} />
         </button>
       </div>
@@ -139,12 +153,12 @@ export const NewProfilePane: FC<Props> = ({ onClose, onCreated }) => {
       </div>
 
       <div className={styles.footer}>
-        <button className={styles.btnCancel} onClick={onClose}>
+        <button className={styles.btnCancel} onClick={handleClose}>
           Cancel
         </button>
         <button
           className={styles.btnCreate}
-          onClick={handleSubmit}
+          onClick={(e) => handleSubmit(e)}
           disabled={isPending}
           type="button"
         >

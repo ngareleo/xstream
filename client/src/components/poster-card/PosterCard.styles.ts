@@ -19,6 +19,10 @@ export const usePosterCardStyles = makeStyles({
       boxShadow: "0 8px 24px rgba(0,0,0,0.5)",
     },
   },
+  rootSelected: {
+    transform: "translateY(-2px)",
+    boxShadow: `0 0 0 2px rgba(206,17,38,0.7), 0 8px 24px rgba(0,0,0,0.5)`,
+  },
 
   // Aspect-ratio wrapper (2:3)
   inner: {

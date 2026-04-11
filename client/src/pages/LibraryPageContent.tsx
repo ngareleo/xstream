@@ -1,4 +1,6 @@
 import { mergeClasses } from "@griffel/react";
+import { NovaEventingInterceptor } from "@nova/react";
+import type { EventWrapper } from "@nova/types";
 import React, {
   type FC,
   Suspense,
@@ -11,7 +13,12 @@ import React, {
 import { graphql, useLazyLoadQuery, useSubscription } from "react-relay";
 import { useSearchParams } from "react-router-dom";
 
-import { FilmDetailPane } from "~/components/film-detail-pane/FilmDetailPane.js";
+import { isFilmDetailPaneClosedEvent } from "~/components/film-detail-pane/FilmDetailPane.events.js";
+import { FilmDetailPaneAsync } from "~/components/film-detail-pane/FilmDetailPaneAsync.js";
+import {
+  isPosterCardFilmSelectedEvent,
+  type PosterCardFilmSelectedData,
+} from "~/components/poster-card/PosterCard.events.js";
 import { PosterCard } from "~/components/poster-card/PosterCard.js";
 import { IconBars, IconSquares } from "~/lib/icons.js";
 import type { LibraryPageContentDetailQuery } from "~/relay/__generated__/LibraryPageContentDetailQuery.graphql.js";
@@ -64,15 +71,14 @@ const DETAIL_VIDEO_QUERY = graphql`
 
 interface DetailLoaderProps {
   filmId: string;
-  onClose: () => void;
 }
 
-const DetailLoader: FC<DetailLoaderProps> = ({ filmId, onClose }) => {
+const DetailLoader: FC<DetailLoaderProps> = ({ filmId }) => {
   const data = useLazyLoadQuery<LibraryPageContentDetailQuery>(DETAIL_VIDEO_QUERY, {
     videoId: filmId,
   });
   if (!data.video) return null;
-  return <FilmDetailPane video={data.video} onClose={onClose} />;
+  return <FilmDetailPaneAsync video={data.video} />;
 };
 
 // ─── Main component ───────────────────────────────────────────────────────────
@@ -132,6 +138,22 @@ export const LibraryPageContent: FC = () => {
     [filmId, closePane, setSearchParams]
   );
 
+  const interceptor = useCallback(
+    async (wrapper: EventWrapper): Promise<EventWrapper | undefined> => {
+      if (isPosterCardFilmSelectedEvent(wrapper)) {
+        const payload = wrapper.event.data?.() as PosterCardFilmSelectedData | undefined;
+        if (payload) handleSelect(payload.videoId);
+        return undefined;
+      }
+      if (isFilmDetailPaneClosedEvent(wrapper)) {
+        closePane();
+        return undefined;
+      }
+      return wrapper;
+    },
+    [handleSelect, closePane]
+  );
+
   const activeLibrary =
     data.libraries.find((l) => l.id === activeLibraryId) ?? data.libraries[0] ?? null;
 
@@ -162,85 +184,87 @@ export const LibraryPageContent: FC = () => {
   }
 
   return (
-    <div className={styles.root}>
-      {/* Filter bar */}
-      <div className={styles.filterBar}>
-        <input
-          className={styles.searchInput}
-          placeholder="Search titles, genres…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
-        <div className={styles.filterSep} />
-        <button
-          className={mergeClasses(styles.toggleBtn, isGrid && styles.toggleBtnActive)}
-          onClick={() => setIsGrid(true)}
-          title="Grid view"
-          type="button"
-        >
-          <IconSquares size={13} />
-        </button>
-        <button
-          className={mergeClasses(styles.toggleBtn, !isGrid && styles.toggleBtnActive)}
-          onClick={() => setIsGrid(false)}
-          title="List view"
-          type="button"
-        >
-          <IconBars size={13} />
-        </button>
-        <span className={styles.filterCount}>
-          {filteredVideos.length} title{filteredVideos.length !== 1 ? "s" : ""}
-        </span>
-      </div>
-
-      {/* Library tabs (only when >1 library) */}
-      {data.libraries.length > 1 && (
-        <div className={styles.tabs}>
-          {data.libraries.map((lib) => (
-            <button
-              key={lib.id}
-              className={mergeClasses(
-                styles.tab,
-                lib.id === (activeLibrary?.id ?? null) && styles.tabActive
-              )}
-              onClick={() => setActiveLibraryId(lib.id)}
-              type="button"
-            >
-              {lib.name}
-              <span className={styles.tabCount}>{lib.videos.totalCount}</span>
-            </button>
-          ))}
+    <NovaEventingInterceptor interceptor={interceptor}>
+      <div className={styles.root}>
+        {/* Filter bar */}
+        <div className={styles.filterBar}>
+          <input
+            className={styles.searchInput}
+            placeholder="Search titles, genres…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+          <div className={styles.filterSep} />
+          <button
+            className={mergeClasses(styles.toggleBtn, isGrid && styles.toggleBtnActive)}
+            onClick={() => setIsGrid(true)}
+            title="Grid view"
+            type="button"
+          >
+            <IconSquares size={13} />
+          </button>
+          <button
+            className={mergeClasses(styles.toggleBtn, !isGrid && styles.toggleBtnActive)}
+            onClick={() => setIsGrid(false)}
+            title="List view"
+            type="button"
+          >
+            <IconBars size={13} />
+          </button>
+          <span className={styles.filterCount}>
+            {filteredVideos.length} title{filteredVideos.length !== 1 ? "s" : ""}
+          </span>
         </div>
-      )}
 
-      {/* Split body */}
-      <div className={mergeClasses(styles.splitBody, isPaneOpen && styles.splitBodyPaneOpen)}>
-        <div className={styles.splitLeft}>
-          {filteredVideos.length === 0 ? (
-            <div className={styles.empty}>
-              <div className={styles.emptyTitle}>No results</div>
-              <div className={styles.emptyBody}>Try a different search term.</div>
-            </div>
-          ) : (
-            <div className={styles.gridArea}>
-              <div className={styles.grid}>
-                {filteredVideos.map((video) => (
-                  <PosterCard key={video.id} video={video} onSelect={handleSelect} />
-                ))}
+        {/* Library tabs (only when >1 library) */}
+        {data.libraries.length > 1 && (
+          <div className={styles.tabs}>
+            {data.libraries.map((lib) => (
+              <button
+                key={lib.id}
+                className={mergeClasses(
+                  styles.tab,
+                  lib.id === (activeLibrary?.id ?? null) && styles.tabActive
+                )}
+                onClick={() => setActiveLibraryId(lib.id)}
+                type="button"
+              >
+                {lib.name}
+                <span className={styles.tabCount}>{lib.videos.totalCount}</span>
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Split body */}
+        <div className={mergeClasses(styles.splitBody, isPaneOpen && styles.splitBodyPaneOpen)}>
+          <div className={styles.splitLeft}>
+            {filteredVideos.length === 0 ? (
+              <div className={styles.empty}>
+                <div className={styles.emptyTitle}>No results</div>
+                <div className={styles.emptyBody}>Try a different search term.</div>
               </div>
-            </div>
-          )}
-        </div>
+            ) : (
+              <div className={styles.gridArea}>
+                <div className={styles.grid}>
+                  {filteredVideos.map((video) => (
+                    <PosterCard key={video.id} video={video} isSelected={video.id === filmId} />
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
 
-        {/* Right pane */}
-        <div className={styles.rightPane}>
-          {filmId && (
-            <Suspense fallback={null}>
-              <DetailLoader filmId={filmId} onClose={closePane} />
-            </Suspense>
-          )}
+          {/* Right pane */}
+          <div className={styles.rightPane}>
+            {filmId && (
+              <Suspense fallback={null}>
+                <DetailLoader filmId={filmId} />
+              </Suspense>
+            )}
+          </div>
         </div>
       </div>
-    </div>
+    </NovaEventingInterceptor>
   );
 };

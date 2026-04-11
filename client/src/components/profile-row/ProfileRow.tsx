@@ -1,4 +1,5 @@
 import { mergeClasses } from "@griffel/react";
+import { useNovaEventing } from "@nova/react";
 import React, { type FC, type MouseEvent, useState } from "react";
 import { graphql, useFragment } from "react-relay";
 
@@ -7,6 +8,7 @@ import { IconChevronDown, IconPencil, IconRefresh } from "~/lib/icons.js";
 import type { ProfileRow_library$key } from "~/relay/__generated__/ProfileRow_library.graphql.js";
 import { formatFileSize } from "~/utils/formatters.js";
 
+import { createProfileRowToggledEvent } from "./ProfileRow.events.js";
 import { useProfileRowStyles } from "./ProfileRow.styles.js";
 
 const LIBRARY_FRAGMENT = graphql`
@@ -36,8 +38,7 @@ interface Props {
   library: ProfileRow_library$key;
   expanded: boolean;
   selected: boolean;
-  onToggle: () => void;
-  onFilmSelect: (id: string) => void;
+  selectedFilmId?: string | null;
   scanning?: boolean;
   scanProgress?: { done: number; total: number } | null;
 }
@@ -46,14 +47,14 @@ export const ProfileRow: FC<Props> = ({
   library,
   expanded,
   selected,
-  onToggle,
-  onFilmSelect,
+  selectedFilmId = null,
   scanning = false,
   scanProgress = null,
 }) => {
   const data = useFragment(LIBRARY_FRAGMENT, library);
   const styles = useProfileRowStyles();
   const [hovered, setHovered] = useState(false);
+  const { bubble } = useNovaEventing();
 
   const totalItems = data.stats.totalCount;
   const matchPct = totalItems > 0 ? Math.round((data.stats.matchedCount / totalItems) * 100) : 0;
@@ -67,7 +68,7 @@ export const ProfileRow: FC<Props> = ({
 
   const handleRowClick = (e: MouseEvent): void => {
     e.stopPropagation();
-    onToggle();
+    void bubble({ reactEvent: e, event: createProfileRowToggledEvent(data.id) });
   };
 
   return (
@@ -144,7 +145,7 @@ export const ProfileRow: FC<Props> = ({
 
       <div className={mergeClasses(styles.children, expanded && styles.childrenOpen)}>
         {data.videos.edges.map(({ node }) => (
-          <FilmRow key={node.id} video={node} isSelected={false} onSelect={onFilmSelect} />
+          <FilmRow key={node.id} video={node} isSelected={node.id === selectedFilmId} />
         ))}
       </div>
     </>

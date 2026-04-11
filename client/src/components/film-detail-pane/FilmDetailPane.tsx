@@ -1,4 +1,5 @@
 import { mergeClasses } from "@griffel/react";
+import { useNovaEventing } from "@nova/react";
 import React, { type FC } from "react";
 import { graphql, useFragment } from "react-relay";
 import { Link } from "react-router-dom";
@@ -7,6 +8,7 @@ import { IconClose, IconPencil, IconPlay } from "~/lib/icons.js";
 import type { FilmDetailPane_video$key } from "~/relay/__generated__/FilmDetailPane_video.graphql.js";
 import { formatDuration, formatFileSize } from "~/utils/formatters.js";
 
+import { createFilmDetailPaneClosedEvent } from "./FilmDetailPane.events.js";
 import { useFilmDetailPaneStyles } from "./FilmDetailPane.styles.js";
 
 const DETAIL_FRAGMENT = graphql`
@@ -46,12 +48,12 @@ const DETAIL_FRAGMENT = graphql`
 
 interface Props {
   video: FilmDetailPane_video$key;
-  onClose: () => void;
 }
 
-export const FilmDetailPane: FC<Props> = ({ video, onClose }) => {
+export const FilmDetailPane: FC<Props> = ({ video }) => {
   const data = useFragment(DETAIL_FRAGMENT, video);
   const styles = useFilmDetailPaneStyles();
+  const { bubble } = useNovaEventing();
 
   const meta = data.metadata;
   const vs = data.videoStream;
@@ -92,7 +94,13 @@ export const FilmDetailPane: FC<Props> = ({ video, onClose }) => {
             {data.matched ? "Re-link" : "Link"}
           </button>
           <div className={styles.actionSpacer} />
-          <button className={styles.closeBtn} onClick={onClose} title="Close">
+          <button
+            className={styles.closeBtn}
+            onClick={(e) =>
+              void bubble({ reactEvent: e, event: createFilmDetailPaneClosedEvent() })
+            }
+            title="Close"
+          >
             <IconClose size={14} />
           </button>
         </div>
