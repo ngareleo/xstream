@@ -33,6 +33,7 @@
     "@imchhh/storybook-addon-relay": "^0.0.15",
     "@rsbuild/core": "^1.7.5",
     "@rsbuild/plugin-babel": "^1.1.2",
+    "@rsbuild/plugin-bundle-analyzer": "^1.1.0",
     "@rsbuild/plugin-react": "^1.4.6",
     "@storybook/addon-a11y": "^10.3.5",
     "@storybook/addon-docs": "^10.3.5",

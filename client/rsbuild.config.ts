@@ -3,6 +3,7 @@ import { fileURLToPath } from "node:url";
 
 import { defineConfig } from "@rsbuild/core";
 import { pluginBabel } from "@rsbuild/plugin-babel";
+import { pluginBundleAnalyzer } from "@rsbuild/plugin-bundle-analyzer";
 import { pluginReact } from "@rsbuild/plugin-react";
 
 const dirname =
@@ -19,6 +20,11 @@ export default defineConfig({
         opts.plugins.unshift("relay");
       },
     }),
+    // Generate an interactive HTML bundle report in CI. Output lands at
+    // dist/stats.html, which the CI workflow uploads as an artifact.
+    ...(process.env.CI
+      ? [pluginBundleAnalyzer({ analyzerMode: "static", openAnalyzer: false, reportFilename: "stats.html" })]
+      : []),
   ],
 
   source: {

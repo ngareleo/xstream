@@ -75,8 +75,28 @@ jobs:
         run: bun run build
 
       - name: Upload bundle stats
+        id: upload-stats
         uses: actions/upload-artifact@v4
         with:
           name: bundle-stats
           path: client/dist/stats.html
           retention-days: 30
+
+      - name: Comment bundle diagram link on PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const artifactUrl = '${{ steps.upload-stats.outputs.artifact-url }}';
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: [
+                '## 📦 Bundle Diagram',
+                '',
+                `[Download interactive bundle report](${artifactUrl})`,
+                '',
+                '> The report is an HTML file — download, unzip, and open `stats.html` in a browser.',
+              ].join('\n'),
+            });
