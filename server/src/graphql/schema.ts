@@ -114,7 +114,19 @@ export const typeDefs = /* GraphQL */ `
     ): TranscodeJob!
   }
 
+  # ── Scan status ──────────────────────────────────────────────────────────────
+
+  type LibraryScanUpdate {
+    scanning: Boolean!
+  }
+
   type Subscription {
     transcodeJobUpdated(jobId: ID!): TranscodeJob!
+    """
+    Emits immediately with the current scan state, then on every state change.
+    scanning=true  → a scan is in progress
+    scanning=false → scan completed; re-query libraries for updated data
+    """
+    libraryScanUpdated: LibraryScanUpdate!
   }
 `;

@@ -46,8 +46,7 @@ export async function startTranscodeJob(
   const video = getVideoById(videoId);
   if (!video) throw new Error(`Video not found: ${videoId}`);
 
-  const contentKey = video.content_fingerprint ?? video.path;
-  const id = jobId(contentKey, resolution, startTimeSeconds, endTimeSeconds);
+  const id = jobId(video.content_fingerprint, resolution, startTimeSeconds, endTimeSeconds);
 
   // Return existing in-memory job if already running or complete
   const existing = getJob(id);

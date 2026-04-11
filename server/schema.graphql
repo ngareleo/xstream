@@ -104,6 +104,11 @@ type Mutation {
   ): TranscodeJob!
 }
 
+type LibraryScanUpdate {
+  scanning: Boolean!
+}
+
 type Subscription {
   transcodeJobUpdated(jobId: ID!): TranscodeJob!
+  libraryScanUpdated: LibraryScanUpdate!
 }

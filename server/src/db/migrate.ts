@@ -14,26 +14,20 @@ export function migrate(db: Database): void {
 
     db.run(`
       CREATE TABLE IF NOT EXISTS videos (
-        id                TEXT PRIMARY KEY,
-        library_id        TEXT NOT NULL REFERENCES libraries(id),
-        path              TEXT NOT NULL UNIQUE,
-        filename          TEXT NOT NULL,
-        title             TEXT,
-        duration_seconds  REAL NOT NULL,
-        file_size_bytes   INTEGER NOT NULL,
-        bitrate           INTEGER NOT NULL,
-        scanned_at        TEXT NOT NULL
+        id                   TEXT PRIMARY KEY,
+        library_id           TEXT NOT NULL REFERENCES libraries(id),
+        path                 TEXT NOT NULL UNIQUE,
+        filename             TEXT NOT NULL,
+        title                TEXT,
+        duration_seconds     REAL NOT NULL,
+        file_size_bytes      INTEGER NOT NULL,
+        bitrate              INTEGER NOT NULL,
+        scanned_at           TEXT NOT NULL,
+        content_fingerprint  TEXT NOT NULL
       )
     `);
 
     db.run(`CREATE INDEX IF NOT EXISTS videos_library_id ON videos(library_id)`);
-
-    // Idempotent column addition — SQLite has no ALTER TABLE ADD COLUMN IF NOT EXISTS
-    try {
-      db.run(`ALTER TABLE videos ADD COLUMN content_fingerprint TEXT`);
-    } catch {
-      // column already exists on subsequent startups
-    }
 
     db.run(`
       CREATE TABLE IF NOT EXISTS video_streams (

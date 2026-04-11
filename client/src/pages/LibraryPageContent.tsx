@@ -1,8 +1,8 @@
-import { Box, Text } from "@chakra-ui/react";
+import { Box, Spinner, Text } from "@chakra-ui/react";
 import { NovaEventingInterceptor } from "@nova/react";
 import type { EventWrapper } from "@nova/types";
-import React, { type FC, useCallback, useState } from "react";
-import { graphql, useLazyLoadQuery } from "react-relay";
+import React, { type FC, useCallback, useMemo, useState, useTransition } from "react";
+import { graphql, useLazyLoadQuery, useSubscription } from "react-relay";
 
 import { AppHeader } from "../components/AppHeader.js";
 import { LibraryGrid } from "../components/LibraryGrid.js";
@@ -12,6 +12,7 @@ import {
 } from "../components/LibraryRail.events.js";
 import { LibraryRail } from "../components/LibraryRail.js";
 import type { LibraryPageContentQuery } from "../relay/__generated__/LibraryPageContentQuery.graphql.js";
+import type { LibraryPageContentScanSubscription } from "../relay/__generated__/LibraryPageContentScanSubscription.graphql.js";
 
 const LIBRARY_QUERY = graphql`
   query LibraryPageContentQuery {
@@ -24,8 +25,47 @@ const LIBRARY_QUERY = graphql`
   }
 `;
 
+const SCAN_SUBSCRIPTION = graphql`
+  subscription LibraryPageContentScanSubscription {
+    libraryScanUpdated {
+      scanning
+    }
+  }
+`;
+
 export const LibraryPageContent: FC = () => {
-  const data = useLazyLoadQuery<LibraryPageContentQuery>(LIBRARY_QUERY, {});
+  const [scanning, setScanning] = useState(false);
+  const [fetchKey, setFetchKey] = useState(0);
+  const [, startTransition] = useTransition();
+
+  const scanConfig = useMemo(
+    () => ({
+      subscription: SCAN_SUBSCRIPTION,
+      variables: {},
+      onNext: (response: LibraryPageContentScanSubscription["response"] | null | undefined) => {
+        const isScanning = response?.libraryScanUpdated?.scanning ?? false;
+        setScanning(isScanning);
+        if (!isScanning) {
+          // Defer the refetch so the UI keeps showing current data while
+          // Relay loads the updated library list in the background
+          startTransition(() => {
+            setFetchKey((k) => k + 1);
+          });
+        }
+      },
+      onError: () => {},
+    }),
+    []
+  );
+
+  useSubscription<LibraryPageContentScanSubscription>(scanConfig);
+
+  const data = useLazyLoadQuery<LibraryPageContentQuery>(
+    LIBRARY_QUERY,
+    {},
+    { fetchKey, fetchPolicy: fetchKey > 0 ? "network-only" : "store-or-network" }
+  );
+
   const [selectedLibraryId, setSelectedLibraryId] = useState<string | null>(
     data.libraries[0]?.id ?? null
   );
@@ -55,9 +95,12 @@ export const LibraryPageContent: FC = () => {
           {/* Main content */}
           {selectedLibrary ? (
             <Box flex={1} overflowY="auto" p={8}>
-              <Text fontSize="xl" fontWeight="bold" color="white" mb={6}>
-                {selectedLibrary.name}
-              </Text>
+              <Box display="flex" alignItems="center" gap={3} mb={6}>
+                <Text fontSize="xl" fontWeight="bold" color="white">
+                  {selectedLibrary.name}
+                </Text>
+                {scanning && <Spinner size="sm" color="orange.400" />}
+              </Box>
               <LibraryGrid library={selectedLibrary} />
             </Box>
           ) : (

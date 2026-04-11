@@ -34,7 +34,7 @@ const VIDEO: Parameters<typeof upsertVideo>[0] = {
   file_size_bytes: 4_000_000_000,
   bitrate: 4_000_000,
   scanned_at: "2026-01-01T00:00:00.000Z",
-  content_fingerprint: null,
+  content_fingerprint: "4000000000:aabbccddeeff00112233445566778899aabbccdd",
 };
 
 describe("upsertVideo", () => {

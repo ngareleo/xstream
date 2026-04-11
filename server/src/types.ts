@@ -49,7 +49,7 @@ export interface VideoRow {
   bitrate: number;
   scanned_at: string;
   /** SHA-1 of the first 64 KB of the file, prefixed with file size. Stable across renames/moves. */
-  content_fingerprint: string | null;
+  content_fingerprint: string;
 }
 
 export interface VideoStreamRow {
