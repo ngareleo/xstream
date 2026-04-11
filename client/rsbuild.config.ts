@@ -3,7 +3,6 @@ import { fileURLToPath } from "node:url";
 
 import { defineConfig } from "@rsbuild/core";
 import { pluginBabel } from "@rsbuild/plugin-babel";
-import { pluginBundleAnalyzer } from "@rsbuild/plugin-bundle-analyzer";
 import { pluginReact } from "@rsbuild/plugin-react";
 
 const dirname =
@@ -20,12 +19,24 @@ export default defineConfig({
         opts.plugins.unshift("relay");
       },
     }),
-    // Generate an interactive HTML bundle report in CI. Output lands at
-    // dist/stats.html, which the CI workflow uploads as an artifact.
-    ...(process.env.CI
-      ? [pluginBundleAnalyzer({ analyzerMode: "static", openAnalyzer: false, reportFilename: "stats.html" })]
-      : []),
   ],
+
+  tools: {
+    rspack: (config) => {
+      // Generate an interactive HTML bundle report in CI. Output lands at
+      // dist/stats.html, which the CI workflow uploads as an artifact.
+      if (process.env.CI) {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-explicit-any
+        const { BundleAnalyzerPlugin } = require("webpack-bundle-analyzer") as any;
+        config.plugins ??= [];
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-call
+        config.plugins.push(
+          new BundleAnalyzerPlugin({ analyzerMode: "static", openAnalyzer: false, reportFilename: "stats.html" })
+        );
+      }
+      return config;
+    },
+  },
 
   source: {
     entry: { index: "./src/main.tsx" },
