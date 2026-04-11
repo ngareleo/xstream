@@ -39,8 +39,6 @@ jobs:
   client:
     name: Client — lint, test, relay, build
     runs-on: ubuntu-latest
-    permissions:
-      pull-requests: write
     defaults:
       run:
         working-directory: client
@@ -81,34 +79,14 @@ jobs:
         with:
           path: client/dist
 
-      - name: Comment bundle diagram link on PR
-        if: github.event_name == 'pull_request'
-        uses: actions/github-script@v7
-        with:
-          script: |
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-              body: [
-                '## Bundle Report',
-                '',
-                '[View interactive bundle report](https://ngareleo.github.io/tvke/stats.html)',
-                '',
-                '> The report is deployed to GitHub Pages on every merge to `main`.',
-                '> The link above reflects the most recently merged state.',
-              ].join('\n'),
-            });
-
   deploy-bundle-report:
     name: Deploy bundle report
     needs: client
-    # GitHub Pages only allows deployments from the default branch.
-    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
       pages: write
       id-token: write
+      pull-requests: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
@@ -116,3 +94,20 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+
+      - name: Comment bundle report link on PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pageUrl = '${{ steps.deployment.outputs.page_url }}';
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: [
+                '## Bundle Report',
+                '',
+                `[View interactive bundle report](${pageUrl}stats.html)`,
+              ].join('\n'),
+            });
