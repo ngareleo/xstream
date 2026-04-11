@@ -13,6 +13,8 @@ export interface AppConfig {
   segmentDir: string;
   dbPath: string;
   mediaConfigPath: string;
+  /** Milliseconds between automatic library rescans. */
+  scanIntervalMs: number;
 }
 
 const root = resolve(import.meta.dir, "../..");
@@ -23,6 +25,7 @@ const dev: AppConfig = {
   // Allow DB_PATH override so integration tests can use a temp database
   dbPath: process.env.DB_PATH ?? resolve(root, "tmp/tvke.db"),
   mediaConfigPath: resolve(root, "mediaFiles.json"),
+  scanIntervalMs: 30_000,
 };
 
 const prod: AppConfig = {
@@ -30,6 +33,7 @@ const prod: AppConfig = {
   segmentDir: process.env.SEGMENT_DIR ?? resolve(root, "tmp/segments"),
   dbPath: process.env.DB_PATH ?? resolve(root, "tmp/tvke.db"),
   mediaConfigPath: resolve(root, "mediaFiles.json"),
+  scanIntervalMs: Number(process.env.SCAN_INTERVAL_MS ?? 30_000),
 };
 
 export const config: AppConfig = process.env.NODE_ENV === "production" ? prod : dev;

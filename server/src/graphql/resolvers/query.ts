@@ -1,7 +1,6 @@
 import { getJobById } from "../../db/queries/jobs.js";
 import { getAllLibraries, getLibraryById } from "../../db/queries/libraries.js";
 import { getVideoById } from "../../db/queries/videos.js";
-import { scanLibraries } from "../../services/libraryScanner.js";
 import {
   type GQLLibrary,
   type GQLTranscodeJob,
@@ -35,9 +34,6 @@ export const queryResolvers = {
     },
 
     libraries(): GQLLibrary[] {
-      // Auto-trigger a background scan on every library request.
-      // scanLibraries() is a no-op if one is already in progress.
-      void scanLibraries();
       return getAllLibraries().map(presentLibrary);
     },
 

@@ -21,10 +21,17 @@ async function bootstrap(): Promise<void> {
   // complete; jobs with no output are marked as error.
   await restoreInterruptedJobs();
 
-  // Scan media libraries
-  console.log("[server] Scanning media libraries...");
-  await scanLibraries();
-  console.log("[server] Library scan complete");
+  // Start continuous library scan loop. Runs immediately then repeats every
+  // config.scanIntervalMs so the library stays up to date without any client
+  // action. scanLibraries() is a no-op if a scan is already in progress.
+  void (async () => {
+    while (true) {
+      console.log("[server] Scanning media libraries...");
+      await scanLibraries();
+      console.log("[server] Library scan complete");
+      await Bun.sleep(config.scanIntervalMs);
+    }
+  })();
 
   // Start HTTP server
   Bun.serve({
