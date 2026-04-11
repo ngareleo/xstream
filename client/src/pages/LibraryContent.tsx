@@ -2,9 +2,9 @@ import { Box, Button, Heading, Text } from "@chakra-ui/react";
 import React, { type FC, useState } from "react";
 import { graphql, useLazyLoadQuery, useMutation } from "react-relay";
 
-import { LibraryGrid } from "../components/LibraryGrid.js";
-import type { LibraryContentQuery } from "../relay/__generated__/LibraryContentQuery.graphql.js";
-import type { LibraryContentScanMutation } from "../relay/__generated__/LibraryContentScanMutation.graphql.js";
+import { LibraryGrid } from "~/components/library_grid/LibraryGrid.js";
+import type { LibraryContentQuery } from "~/relay/__generated__/LibraryContentQuery.graphql.js";
+import type { LibraryContentScanMutation } from "~/relay/__generated__/LibraryContentScanMutation.graphql.js";
 
 const LIBRARIES_QUERY = graphql`
   query LibraryContentQuery {

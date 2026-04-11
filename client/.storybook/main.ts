@@ -1,7 +1,7 @@
 import type { StorybookConfig } from "storybook-react-rsbuild";
 import { pluginBabel } from "@rsbuild/plugin-babel";
 
-import { dirname } from "path";
+import { dirname, resolve } from "path";
 import { fileURLToPath } from "url";
 
 /**
@@ -38,6 +38,13 @@ const config: StorybookConfig = {
         },
       })
     );
+
+    // Mirror the ~ → src/ alias from rsbuild.config.ts so story imports resolve.
+    const __filename = fileURLToPath(import.meta.url);
+    const __dirname = dirname(__filename);
+    config.source ??= {};
+    (config.source.alias as Record<string, string>)["~"] = resolve(__dirname, "../src");
+
     return config;
   },
 };

@@ -1,11 +1,11 @@
 import { type RefObject, useCallback, useEffect, useRef, useState } from "react";
 import { graphql, useMutation } from "react-relay";
 
-import type { useVideoPlaybackStartTranscodeMutation } from "../relay/__generated__/useVideoPlaybackStartTranscodeMutation.graphql.js";
-import { BufferManager } from "../services/BufferManager.js";
-import { StreamingService } from "../services/StreamingService.js";
-import type { Resolution } from "../types.js";
-import { DISPLAY_TO_GQL, RESOLUTION_MIME_TYPE } from "../types.js";
+import type { useVideoPlaybackStartTranscodeMutation } from "~/relay/__generated__/useVideoPlaybackStartTranscodeMutation.graphql.js";
+import { BufferManager } from "~/services/BufferManager.js";
+import { StreamingService } from "~/services/StreamingService.js";
+import type { Resolution } from "~/types.js";
+import { DISPLAY_TO_GQL, RESOLUTION_MIME_TYPE } from "~/types.js";
 
 const START_TRANSCODE_MUTATION = graphql`
   mutation useVideoPlaybackStartTranscodeMutation($videoId: ID!, $resolution: Resolution!) {

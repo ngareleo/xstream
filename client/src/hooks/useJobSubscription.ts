@@ -1,7 +1,7 @@
 import { useMemo, useRef } from "react";
 import { graphql, useSubscription } from "react-relay";
 
-import type { useJobSubscriptionQuery } from "../relay/__generated__/useJobSubscriptionQuery.graphql.js";
+import type { useJobSubscriptionQuery } from "~/relay/__generated__/useJobSubscriptionQuery.graphql.js";
 
 const JOB_SUBSCRIPTION = graphql`
   subscription useJobSubscriptionQuery($jobId: ID!) {

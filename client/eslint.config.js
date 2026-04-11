@@ -20,6 +20,19 @@ export default tseslint.config(
       "react-hooks/exhaustive-deps": "warn",
       // no-floating-promises requires type info (parserOptions.project)
       "@typescript-eslint/no-floating-promises": "error",
+      // Cross-module imports must use the ~ alias, not relative parent paths.
+      // Same-directory imports (./X) are still allowed for colocated files.
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: ["../*"],
+              message: "Use the ~ alias for cross-module imports (e.g. ~/components/videoCard/VideoCard.js).",
+            },
+          ],
+        },
+      ],
     },
   },
   {

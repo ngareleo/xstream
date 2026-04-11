@@ -1,4 +1,4 @@
-import type { Resolution } from "../types.js";
+import type { Resolution } from "~/types.js";
 
 export function formatFileSize(bytes: number): string {
   if (bytes >= 1e9) return `${(bytes / 1e9).toFixed(1)} GB`;

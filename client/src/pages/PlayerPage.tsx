@@ -2,9 +2,9 @@ import React, { type FC, Suspense } from "react";
 import { graphql, useLazyLoadQuery } from "react-relay";
 import { useNavigate, useParams } from "react-router-dom";
 
-import { PlayerSidebarAsync } from "../components/PlayerSidebarAsync.js";
-import { VideoPlayerAsync } from "../components/VideoPlayerAsync.js";
-import type { PlayerPageQuery } from "../relay/__generated__/PlayerPageQuery.graphql.js";
+import { PlayerSidebarAsync } from "~/components/player_sidebar/PlayerSidebarAsync.js";
+import { VideoPlayerAsync } from "~/components/video_player/VideoPlayerAsync.js";
+import type { PlayerPageQuery } from "~/relay/__generated__/PlayerPageQuery.graphql.js";
 
 const VIDEO_QUERY = graphql`
   query PlayerPageQuery($id: ID!) {

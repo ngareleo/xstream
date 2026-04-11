@@ -5,7 +5,16 @@
     "lib": ["ES2020", "DOM", "DOM.Iterable"],
     "jsx": "react-jsx",
     "outDir": "./dist",
-    "noEmit": true
+    "noEmit": true,
+    "paths": {
+      "~/*": ["./src/*"]
+    }
   },
-  "include": ["src/**/*", ".storybook/**/*", "vite.config.ts", "vitest.storybook.config.ts"]
+  "include": [
+    "src/**/*",
+    ".storybook/**/*",
+    "rsbuild.config.ts",
+    "vitest.config.ts",
+    "vitest.storybook.config.ts"
+  ]
 }

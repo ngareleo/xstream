@@ -4,15 +4,15 @@ import type { EventWrapper } from "@nova/types";
 import React, { type FC, useCallback, useMemo, useRef, useState, useTransition } from "react";
 import { graphql, useLazyLoadQuery, useSubscription } from "react-relay";
 
-import { AppHeader } from "../components/AppHeader.js";
-import { LibraryGrid } from "../components/LibraryGrid.js";
+import { AppHeader } from "~/components/app_header/AppHeader.js";
+import { LibraryGrid } from "~/components/library_grid/LibraryGrid.js";
 import {
   isLibraryRailSelectedEvent,
   type LibraryRailSelectedData,
-} from "../components/LibraryRail.events.js";
-import { LibraryRail } from "../components/LibraryRail.js";
-import type { LibraryPageContentQuery } from "../relay/__generated__/LibraryPageContentQuery.graphql.js";
-import type { LibraryPageContentScanSubscription } from "../relay/__generated__/LibraryPageContentScanSubscription.graphql.js";
+} from "~/components/library_rail/LibraryRail.events.js";
+import { LibraryRail } from "~/components/library_rail/LibraryRail.js";
+import type { LibraryPageContentQuery } from "~/relay/__generated__/LibraryPageContentQuery.graphql.js";
+import type { LibraryPageContentScanSubscription } from "~/relay/__generated__/LibraryPageContentScanSubscription.graphql.js";
 
 const LIBRARY_QUERY = graphql`
   query LibraryPageContentQuery {
