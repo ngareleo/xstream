@@ -2,13 +2,13 @@
 
 ## Overview
 
-tvke is split into two workspaces: a Bun server and a Vite/React client. The server handles media indexing, video transcoding, and streaming. The client renders a browsable library and a streaming video player.
+tvke is split into two workspaces: a Bun server and an Rsbuild/React client. The server handles media indexing, video transcoding, and streaming. The client renders a browsable library and a streaming video player.
 
 > **Note on the server implementation:** The Bun/JS server is a prototype for rapid architecture validation. A Rust rewrite is planned for production performance at 4K bitrates. The GraphQL schema and the `/stream/:jobId` binary protocol are the stable contracts — the client will require no changes across the rewrite provided these interfaces stay compatible. See `CLAUDE.md` for the exact compatibility requirements.
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│  Client (React + Relay + Vite :5173)                            │
+│  Client (React + Relay + Rsbuild :5173)                         │
 │                                                                 │
 │  LibraryPage ──── GraphQL query ──────────────────────────────┐ │
 │  PlayerPage  ──── GraphQL mutation (startTranscode) ─────────┐│ │
@@ -71,11 +71,11 @@ tvke is split into two workspaces: a Bun server and a Vite/React client. The ser
 | Relay env | `src/relay/environment.ts` | HTTP fetch + WebSocket subscribe network layer |
 | Library page | `src/pages/LibraryPage.tsx` | Queries all libraries, renders grids, subscribes to scan state for live spinner |
 | Player page | `src/pages/PlayerPage.tsx` | Loads video metadata, renders VideoPlayer |
-| Library grid | `src/components/LibraryGrid.tsx` | Relay fragment over a Library's videos connection |
-| Video card | `src/components/VideoCard.tsx` | Relay fragment, clickable tile with title + duration |
-| Video player | `src/components/VideoPlayer.tsx` | `NovaEventingInterceptor` for ControlBar events; delegates MSE + transcoding to `useVideoPlayback` |
-| Control bar | `src/components/ControlBar.tsx` | Seek slider, play/pause, resolution selector; raises events via `useNovaEventing().bubble()` |
-| Control bar events | `src/components/ControlBar.events.ts` | Event type constants, factory functions, and type guards for ControlBar events |
+| Library grid | `src/components/library-grid/LibraryGrid.tsx` | Relay fragment over a Library's videos connection |
+| Video card | `src/components/video-card/VideoCard.tsx` | Relay fragment, clickable tile with title + duration |
+| Video player | `src/components/video-player/VideoPlayer.tsx` | `NovaEventingInterceptor` for ControlBar events; delegates MSE + transcoding to `useVideoPlayback` |
+| Control bar | `src/components/control-bar/ControlBar.tsx` | Seek slider, play/pause, resolution selector; raises events via `useNovaEventing().bubble()` |
+| Control bar events | `src/components/control-bar/ControlBar.events.ts` | Event type constants, factory functions, and type guards for ControlBar events |
 | Streaming service | `src/services/StreamingService.ts` | Fetch loop, length-prefix frame parser, pause/resume/cancel |
 | Buffer manager | `src/services/BufferManager.ts` | MSE SourceBuffer wrapper, sliding window eviction, back-pressure |
 

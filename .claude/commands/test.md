@@ -16,13 +16,13 @@ Run, analyse, and fix tests across the tvke monorepo.
 cd server && bun test
 
 # Client tests (vitest)
-cd client && bun test
+cd client && bun run test
 
 # Run a single file
 cd server && bun test src/db/queries/jobs.test.ts
 
 # Watch mode
-cd client && bun test:watch
+cd client && bun run test:watch
 ```
 
 ## DB integration test pattern

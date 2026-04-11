@@ -60,13 +60,7 @@ If the component raises events (user interactions that propagate up to an ancest
    - Type guards: `isXxxEvent(wrapper: EventWrapper): boolean`
 2. In the component, call `useNovaEventing().bubble()` with the factory function — never build event objects inline
 3. In the parent that handles events, use `NovaEventingInterceptor` with a `useCallback` interceptor that always `return wrapper` (forward) unless forwarding causes a specific unwanted side effect
-4. Stories for components using `useNovaEventing()` must wrap with a no-op `NovaEventingProvider`:
-   ```tsx
-   const noopEventing = { bubble: (_e: EventWrapper): Promise<void> => Promise.resolve() };
-   <NovaEventingProvider eventing={noopEventing} reactEventMapper={mapEventMetadata}>
-     <MyComponent ... />
-   </NovaEventingProvider>
-   ```
+4. Stories for components using `useNovaEventing()` must add `withNovaEventing` from `~/storybook/withNovaEventing.js` to `meta.decorators` — do not inline a manual provider in the story file.
 
 Do not use callback props (`onPlay`, `onChange`) for events that should propagate — use `bubble()`.
 
@@ -93,8 +87,9 @@ Use `@imchhh/storybook-addon-relay` for all Relay fragment components:
 ```tsx
 import { graphql } from "react-relay";
 import type { Meta, StoryObj } from "storybook-react-rsbuild";
+
+import type { MyComponentStoryQuery } from "~/relay/__generated__/MyComponentStoryQuery.graphql.js";
 import { MyComponent } from "./MyComponent.js";
-import type { MyComponentStoryQuery } from "../relay/__generated__/MyComponentStoryQuery.graphql.js";
 
 const STORY_QUERY = graphql`
   query MyComponentStoryQuery($id: ID!) @relay_test_operation {

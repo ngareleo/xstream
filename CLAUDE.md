@@ -17,7 +17,7 @@ tvke is a high-resolution web streaming application. The server transcodes video
 | Database | SQLite via `bun:sqlite` — **raw SQL only, no ORM** |
 | GraphQL server | `graphql-yoga` + `@graphql-tools/schema` |
 | Video processing | `fluent-ffmpeg` + `@ffmpeg-installer/ffmpeg` |
-| Client bundler | Vite |
+| Client bundler | Rsbuild |
 | UI framework | React 18 + React Router v6 |
 | UI components | Chakra UI v3 |
 | Data fetching | Relay (`react-relay`) + `relay-compiler` |
@@ -73,26 +73,40 @@ tvke/
     │   ├── SetupPage.tsx          # thin shell → SetupPageContent
     │   └── SetupPageContent.tsx   # library management UI
     ├── components/
-    │   ├── AppHeader.tsx          # top nav with Library / Profiles / Setup tabs
-    │   ├── ControlBar.events.ts   # Nova event constants, payload types, guards
-    │   ├── ControlBar.tsx         # seek bar, play/pause, resolution badges; bubbles Nova events
-    │   ├── LibraryGrid.tsx        # Relay fragment — video grid within a library
-    │   ├── LibraryRail.events.ts  # Nova events for LibraryRail
-    │   ├── LibraryRail.tsx        # horizontal scrollable library row
-    │   ├── MediaGridItem.tsx      # Relay fragment — grid card (image + title)
-    │   ├── MediaList.events.ts    # Nova events for MediaList
-    │   ├── MediaList.tsx          # Relay fragment — vertical video list
-    │   ├── MediaListItem.tsx      # Relay fragment — single list row
-    │   ├── PlayerSidebar.tsx      # video info panel shown alongside the player
-    │   ├── PlayerSidebarAsync.tsx # lazy-loaded PlayerSidebar (code-split chunk)
-    │   ├── ProfilesSidebar.events.ts # Nova events for ProfilesSidebar
-    │   ├── ProfilesSidebar.tsx    # library selector sidebar on Profiles page
-    │   ├── VideoCard.tsx          # Relay fragment — clickable video tile
-    │   ├── VideoDetailsPanel.events.ts # Nova events for VideoDetailsPanel
-    │   ├── VideoDetailsPanel.tsx  # Relay fragment — full video detail overlay
-    │   ├── VideoDetailsPanelAsync.tsx  # lazy-loaded VideoDetailsPanel
-    │   ├── VideoPlayer.tsx        # MSE orchestration; NovaEventingInterceptor for ControlBar events
-    │   └── VideoPlayerAsync.tsx   # lazy-loaded VideoPlayer (code-split chunk)
+    │   │   Each component lives in its own kebab-case directory.
+    │   │   Stories and colocated .events.ts files share the same directory.
+    │   ├── app-header/
+    │   │   └── AppHeader.tsx          # top nav with Library / Profiles / Setup tabs
+    │   ├── control-bar/
+    │   │   ├── ControlBar.tsx         # seek bar, play/pause, resolution badges; bubbles Nova events
+    │   │   └── ControlBar.events.ts   # Nova event constants, payload types, guards
+    │   ├── library-grid/
+    │   │   └── LibraryGrid.tsx        # Relay fragment — video grid within a library
+    │   ├── library-rail/
+    │   │   ├── LibraryRail.tsx        # horizontal scrollable library row
+    │   │   └── LibraryRail.events.ts  # Nova events for LibraryRail
+    │   ├── media-grid-item/
+    │   │   └── MediaGridItem.tsx      # Relay fragment — grid card (image + title)
+    │   ├── media-list/
+    │   │   ├── MediaList.tsx          # Relay fragment — vertical video list
+    │   │   └── MediaList.events.ts    # Nova events for MediaList
+    │   ├── media-list-item/
+    │   │   └── MediaListItem.tsx      # Relay fragment — single list row
+    │   ├── player-sidebar/
+    │   │   ├── PlayerSidebar.tsx      # video info panel shown alongside the player
+    │   │   └── PlayerSidebarAsync.tsx # lazy-loaded PlayerSidebar (code-split chunk)
+    │   ├── profiles-sidebar/
+    │   │   ├── ProfilesSidebar.tsx    # library selector sidebar on Profiles page
+    │   │   └── ProfilesSidebar.events.ts # Nova events for ProfilesSidebar
+    │   ├── video-card/
+    │   │   └── VideoCard.tsx          # Relay fragment — clickable video tile
+    │   ├── video-details-panel/
+    │   │   ├── VideoDetailsPanel.tsx  # Relay fragment — full video detail overlay
+    │   │   ├── VideoDetailsPanelAsync.tsx  # lazy-loaded VideoDetailsPanel
+    │   │   └── VideoDetailsPanel.events.ts # Nova events for VideoDetailsPanel
+    │   └── video-player/
+    │       ├── VideoPlayer.tsx        # MSE orchestration; NovaEventingInterceptor for ControlBar events
+    │       └── VideoPlayerAsync.tsx   # lazy-loaded VideoPlayer (code-split chunk)
     ├── hooks/
     │   ├── useVideoPlayback.ts    # MSE + streaming pipeline (teardown, startPlayback, status, error)
     │   └── useVideoSync.ts        # syncs currentTime + isPlaying from a <video> element via RAF
@@ -173,13 +187,14 @@ Edit `RESOLUTION_PROFILES` in `server/src/config.ts` and the `Resolution` enum i
 Edit `mediaFiles.json` — add an entry with `name`, `path`, `mediaType` (`movies` | `tvShows`), `env` (`dev` | `prod`), and optionally `videoExtensions` (array of lowercase extensions, e.g. `[".mp4", ".mkv"]`). The server picks it up on the next automatic scan cycle (every `scanIntervalMs`, default 30 s), on restart, or immediately via the `scanLibraries` GraphQL mutation.
 
 ### Add a new client component with data
-1. Define a `graphql` fragment in the component file (`fragment ComponentName_prop on TypeName { ... }`)
-2. Import the generated `$key` type from `relay/__generated__/`
-3. Accept the `$key` as a prop; call `useFragment` inside the component
-4. Spread the fragment in the parent query or parent fragment
-5. Run `bun relay` from `client/`
-6. Put any formatting/computation helpers in `client/src/utils/`, not in the component file
-7. If the component has stateful side-effect logic (timers, event listeners, refs, async pipelines), extract it into a hook in `client/src/hooks/`
+1. Create `client/src/components/<kebab-case-name>/ComponentName.tsx` — the directory name is the kebab-case of the component name (e.g. `VideoCard` → `video-card/`)
+2. Define a `graphql` fragment in the component file (`fragment ComponentName_prop on TypeName { ... }`)
+3. Import the generated `$key` type from `~/relay/__generated__/`
+4. Accept the `$key` as a prop; call `useFragment` inside the component
+5. Spread the fragment in the parent query or parent fragment
+6. Run `bun relay` from `client/`
+7. Put any formatting/computation helpers in `client/src/utils/`, not in the component file — import them with the `~/` alias (e.g. `~/utils/formatters.js`)
+8. If the component has stateful side-effect logic (timers, event listeners, refs, async pipelines), extract it into a hook in `client/src/hooks/`
 
 ### Add a new page
 Pages follow a two-file shell/content split:
@@ -191,13 +206,14 @@ Add the route in `client/src/router.tsx`.
 ### Code-split a heavy component
 Heavy components (video player, large detail panels) are split into their own JS chunk so they don't block the initial page load.
 
-1. Write the component normally in `ComponentName.tsx`
-2. Create `ComponentNameAsync.tsx` alongside it:
+1. Write the component normally in `ComponentName.tsx` inside its `<kebab-case>/` directory
+2. Create `ComponentNameAsync.tsx` alongside it (same directory):
 
 ```tsx
 // ComponentNameAsync.tsx
 import type { LazyExoticComponent } from "react";
-import { lazyNamedExport } from "../utils/lazy.js";
+
+import { lazyNamedExport } from "~/utils/lazy.js";
 import type { ComponentName as ComponentNameType } from "./ComponentName.js";
 
 export const ComponentNameAsync: LazyExoticComponent<typeof ComponentNameType> = lazyNamedExport(
@@ -373,7 +389,7 @@ Do not couple the client to anything server-implementation-specific. All client�
 **ESLint config hierarchy:**
 - `eslint.config.js` (root) — shared base: `typescript-eslint/recommended`, `explicit-module-boundary-types`, `no-floating-promises`, `consistent-type-imports`, Prettier compat
 - `server/eslint.config.js` — extends root, sets `parserOptions.project`
-- `client/eslint.config.js` — extends root, adds `react-hooks` rules, relaxes `explicit-module-boundary-types` for `*.stories.*` files
+- `client/eslint.config.js` — extends root, adds `react-hooks` rules, relaxes `explicit-module-boundary-types` for `*.stories.*` files, bans `../` cross-module imports
 
 **Key enforced rules:**
 - All exported functions must have explicit return types (`@typescript-eslint/explicit-module-boundary-types`)
@@ -381,6 +397,7 @@ Do not couple the client to anything server-implementation-specific. All client�
 - Type-only imports must use `import type` (`@typescript-eslint/consistent-type-imports`)
 - Non-null assertions (`!`) are forbidden (`@typescript-eslint/no-non-null-assertion`) — use optional chaining or explicit guards; exception: test files where `!` post-`expect` is acceptable
 - React hook rules enforced: `react-hooks/rules-of-hooks: error`, `react-hooks/exhaustive-deps: warn`
+- Cross-module imports must use the `~/` alias (`no-restricted-imports` bans `../`) — same-directory `./` imports are still allowed for colocated files within a component directory
 
 ---
 

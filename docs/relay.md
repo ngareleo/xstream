@@ -102,7 +102,7 @@ Never redefine types (like `Resolution`) locally in components. Import them from
 
 ```tsx
 // ✅ correct — centralised in src/types.ts, derived from relay output
-import type { Resolution } from "../types.js";
+import type { Resolution } from "~/types.js";
 
 // ❌ wrong — duplicated locally
 type Resolution = "240p" | "360p" | "480p" | "720p" | "1080p" | "4k";
