@@ -1,6 +1,7 @@
 import { mergeClasses } from "@griffel/react";
 import { type FC, useEffect, useRef, useState } from "react";
 
+import { strings } from "./Slideshow.strings.js";
 import { useSlideshowStyles } from "./Slideshow.styles.js";
 
 // Gradient placeholders — replaced with real poster backdrops once OMDb is live
@@ -11,7 +12,7 @@ const GRADIENTS = [
   "linear-gradient(135deg, #1a1a0a 0%, #3d2d0b 40%, #0a0a0a 100%)",
 ];
 
-const CAPTIONS = ["Your library", "Curated for you", "4K · HDR · Dolby", "Ready to watch"];
+const CAPTIONS = [strings.caption0, strings.caption1, strings.caption2, strings.caption3];
 
 const INTERVAL_MS = 6000;
 
@@ -66,7 +67,7 @@ export const Slideshow: FC = () => {
             key={i}
             className={mergeClasses(styles.dot, i === current && styles.dotActive)}
             onClick={() => goTo(i)}
-            aria-label={`Slide ${i + 1}`}
+            aria-label={`${strings.slideAriaLabel} ${i + 1}`}
           />
         ))}
       </div>

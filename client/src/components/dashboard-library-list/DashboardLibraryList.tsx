@@ -5,6 +5,7 @@ import { ProfileRow } from "~/components/profile-row/ProfileRow.js";
 import type { DashboardLibraryList_library$key } from "~/relay/__generated__/DashboardLibraryList_library.graphql.js";
 import { formatFileSize } from "~/utils/formatters.js";
 
+import { strings } from "./DashboardLibraryList.strings.js";
 import { useDashboardLibraryListStyles } from "./DashboardLibraryList.styles.js";
 
 const FRAGMENT = graphql`
@@ -42,20 +43,20 @@ export const DashboardLibraryList: FC<Props> = ({
       {/* Location bar */}
       <div className={styles.locationBar}>
         <span style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", letterSpacing: "0.08em" }}>
-          Profiles
+          {strings.breadcrumbRoot}
         </span>
-        <span className={styles.locSep}>/</span>
-        <span className={styles.locCurrent}>All Libraries</span>
+        <span className={styles.locSep}>{strings.breadcrumbSep}</span>
+        <span className={styles.locCurrent}>{strings.breadcrumbCurrent}</span>
       </div>
 
       {/* Column headers */}
       <div className={styles.dirHeader}>
         <div />
-        <div className={styles.dirCol}>Name</div>
-        <div className={styles.dirCol}>Count</div>
-        <div className={styles.dirCol}>Match</div>
-        <div className={styles.dirCol}>Size</div>
-        <div className={styles.dirCol}>Actions</div>
+        <div className={styles.dirCol}>{strings.colName}</div>
+        <div className={styles.dirCol}>{strings.colCount}</div>
+        <div className={styles.dirCol}>{strings.colMatch}</div>
+        <div className={styles.dirCol}>{strings.colSize}</div>
+        <div className={styles.dirCol}>{strings.colActions}</div>
       </div>
 
       {/* Library rows */}
@@ -74,13 +75,14 @@ export const DashboardLibraryList: FC<Props> = ({
       {/* Footer */}
       <div className={styles.dirFooter}>
         <span className={styles.dirFooterStat}>
-          Libraries <span className={styles.dirFooterStatNum}>{data.length}</span>
+          {strings.footerLibraries} <span className={styles.dirFooterStatNum}>{data.length}</span>
         </span>
         <span className={styles.dirFooterStat}>
-          Files <span className={styles.dirFooterStatNum}>{totalFiles}</span>
+          {strings.footerFiles} <span className={styles.dirFooterStatNum}>{totalFiles}</span>
         </span>
         <span className={styles.dirFooterStat}>
-          Total <span className={styles.dirFooterStatNum}>{formatFileSize(totalBytes)}</span>
+          {strings.footerTotal}{" "}
+          <span className={styles.dirFooterStatNum}>{formatFileSize(totalBytes)}</span>
         </span>
       </div>
     </>

@@ -9,6 +9,7 @@ import type { ProfileRow_library$key } from "~/relay/__generated__/ProfileRow_li
 import { formatFileSize } from "~/utils/formatters.js";
 
 import { createProfileRowToggledEvent } from "./ProfileRow.events.js";
+import { strings } from "./ProfileRow.strings.js";
 import { useProfileRowStyles } from "./ProfileRow.styles.js";
 
 const LIBRARY_FRAGMENT = graphql`
@@ -61,10 +62,10 @@ export const ProfileRow: FC<Props> = ({
   const hasWarn = data.stats.unmatchedCount > 0;
   const typeLabel =
     data.mediaType === "MOVIES"
-      ? `${totalItems} films`
+      ? `${totalItems} ${strings.typeFilms}`
       : data.mediaType === "TV_SHOWS"
-        ? `${totalItems} episodes`
-        : `${totalItems} items`;
+        ? `${totalItems} ${strings.typeEpisodes}`
+        : `${totalItems} ${strings.typeItems}`;
 
   const handleRowClick = (e: MouseEvent): void => {
     e.stopPropagation();
@@ -125,17 +126,21 @@ export const ProfileRow: FC<Props> = ({
           className={mergeClasses(styles.actions, (hovered || selected) && styles.actionsVisible)}
         >
           {scanning ? (
-            <span style={{ fontSize: 10, color: "#27AE60" }}>Scanning…</span>
+            <span style={{ fontSize: 10, color: "#27AE60" }}>{strings.scanning}</span>
           ) : (
             <>
               <button
                 className={styles.iconBtn}
                 onClick={(e) => e.stopPropagation()}
-                title="Refresh"
+                title={strings.refreshTitle}
               >
                 <IconRefresh size={11} />
               </button>
-              <button className={styles.iconBtn} onClick={(e) => e.stopPropagation()} title="Edit">
+              <button
+                className={styles.iconBtn}
+                onClick={(e) => e.stopPropagation()}
+                title={strings.editTitle}
+              >
                 <IconPencil size={11} />
               </button>
             </>

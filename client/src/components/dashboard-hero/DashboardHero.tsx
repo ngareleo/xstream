@@ -5,6 +5,7 @@ import { Slideshow } from "~/components/slideshow/Slideshow.js";
 import type { DashboardHero_library$key } from "~/relay/__generated__/DashboardHero_library.graphql.js";
 import { formatFileSize } from "~/utils/formatters.js";
 
+import { strings } from "./DashboardHero.strings.js";
 import { useDashboardHeroStyles } from "./DashboardHero.styles.js";
 
 const FRAGMENT = graphql`
@@ -32,7 +33,8 @@ export const DashboardHero: FC<Props> = ({ libraries }) => {
       <Slideshow />
       <div className={styles.greeting}>
         <div className={styles.greetingText}>
-          Your <span className={styles.greetingName}>Library</span>
+          {strings.greetingPrefix}{" "}
+          <span className={styles.greetingName}>{strings.greetingHighlight}</span>
         </div>
         <div className={styles.greetingSub}>
           {totalFiles} files · {formatFileSize(totalBytes)}

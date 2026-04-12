@@ -11,6 +11,7 @@ import { useNavigate } from "react-router-dom";
 
 import { LogoShield } from "~/lib/icons.js";
 
+import { strings } from "./GoodbyePage.strings.js";
 import { useGoodbyeStyles } from "./GoodbyePage.styles.js";
 
 const GoodbyePage: FC = () => {
@@ -27,13 +28,13 @@ const GoodbyePage: FC = () => {
       <div className={styles.grain} />
       <div className={styles.glow} />
       <div className={styles.ghost} aria-hidden="true">
-        GOODBYE
+        {strings.ghost}
       </div>
 
       <div className={styles.body}>
         <LogoShield />
-        <div className={styles.title}>See you next time.</div>
-        <div className={styles.sub}>Your library will be right here when you get back.</div>
+        <div className={styles.title}>{strings.title}</div>
+        <div className={styles.sub}>{strings.subtitle}</div>
 
         <div className={styles.actions}>
           <button
@@ -41,9 +42,9 @@ const GoodbyePage: FC = () => {
             onClick={() => void navigate("/", { replace: true })}
             type="button"
           >
-            Back to home
+            {strings.backToHome}
           </button>
-          <span className={styles.countdown}>Redirecting shortly…</span>
+          <span className={styles.countdown}>{strings.redirecting}</span>
         </div>
       </div>
     </div>

@@ -1,6 +1,6 @@
 import { NovaEventingInterceptor } from "@nova/react";
 import type { EventWrapper } from "@nova/types";
-import React, {
+import {
   type FC,
   Suspense,
   useCallback,
@@ -10,19 +10,15 @@ import React, {
   useState,
   useTransition,
 } from "react";
-import {
-  graphql,
-  type PreloadedQuery,
-  useLazyLoadQuery,
-  usePreloadedQuery,
-  useQueryLoader,
-  useSubscription,
-} from "react-relay";
+import { graphql, useLazyLoadQuery, useQueryLoader, useSubscription } from "react-relay";
 import { useSearchParams } from "react-router-dom";
 
 import { DevThrowTarget } from "~/components/dev-tools/DevToolsContext.js";
+import {
+  FILM_DETAIL_QUERY,
+  FilmDetailLoader,
+} from "~/components/film-detail-pane/FilmDetailLoader.js";
 import { isFilmDetailPaneClosedEvent } from "~/components/film-detail-pane/FilmDetailPane.events.js";
-import { FilmDetailPaneAsync } from "~/components/film-detail-pane/FilmDetailPaneAsync.js";
 import { LibraryChips } from "~/components/library-chips/LibraryChips.js";
 import { LibraryFilmListRow } from "~/components/library-film-list-row/LibraryFilmListRow.js";
 import {
@@ -35,10 +31,11 @@ import {
 } from "~/components/poster-card/PosterCard.events.js";
 import { PosterCard } from "~/components/poster-card/PosterCard.js";
 import { useSplitResize } from "~/hooks/useSplitResize.js";
-import type { LibraryPageContentDetailQuery } from "~/relay/__generated__/LibraryPageContentDetailQuery.graphql.js";
+import type { FilmDetailLoaderQuery } from "~/relay/__generated__/FilmDetailLoaderQuery.graphql.js";
 import type { LibraryPageContentQuery } from "~/relay/__generated__/LibraryPageContentQuery.graphql.js";
 import type { LibraryPageContentScanSubscription } from "~/relay/__generated__/LibraryPageContentScanSubscription.graphql.js";
 
+import { strings } from "./LibraryPage.strings.js";
 import { useLibraryStyles } from "./LibraryPage.styles.js";
 
 const LIBRARY_QUERY = graphql`
@@ -66,29 +63,6 @@ const SCAN_SUBSCRIPTION = graphql`
     }
   }
 `;
-
-const DETAIL_VIDEO_QUERY = graphql`
-  query LibraryPageContentDetailQuery($videoId: ID!) {
-    video(id: $videoId) {
-      ...FilmDetailPane_video
-    }
-  }
-`;
-
-// ─── Detail loader ────────────────────────────────────────────────────────────
-// Uses usePreloadedQuery so the network request starts as soon as the user
-// clicks a card (via loadDetailQuery) rather than waiting for this component
-// to mount inside the Suspense boundary.
-
-interface DetailLoaderProps {
-  queryRef: PreloadedQuery<LibraryPageContentDetailQuery>;
-}
-
-const DetailLoader: FC<DetailLoaderProps> = ({ queryRef }) => {
-  const data = usePreloadedQuery<LibraryPageContentDetailQuery>(DETAIL_VIDEO_QUERY, queryRef);
-  if (!data.video) return null;
-  return <FilmDetailPaneAsync video={data.video} />;
-};
 
 // ─── LibraryPage ──────────────────────────────────────────────────────────────
 
@@ -123,7 +97,7 @@ const LibraryPage: FC = () => {
   const [isGrid, setIsGrid] = useState(true);
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
   const [detailQueryRef, loadDetailQuery] =
-    useQueryLoader<LibraryPageContentDetailQuery>(DETAIL_VIDEO_QUERY);
+    useQueryLoader<FilmDetailLoaderQuery>(FILM_DETAIL_QUERY);
 
   // Defer the search string so the UI stays responsive while the user types;
   // the server query only re-fires once the deferred value settles.
@@ -188,10 +162,8 @@ const LibraryPage: FC = () => {
     return (
       <div className={styles.root}>
         <div className={styles.empty}>
-          <div className={styles.emptyTitle}>No libraries found</div>
-          <div className={styles.emptyBody}>
-            Create a library from the Dashboard to start browsing your collection.
-          </div>
+          <div className={styles.emptyTitle}>{strings.noLibrariesTitle}</div>
+          <div className={styles.emptyBody}>{strings.noLibrariesBody}</div>
         </div>
       </div>
     );
@@ -229,8 +201,8 @@ const LibraryPage: FC = () => {
             <div className={styles.splitLeft}>
               {filteredVideos.length === 0 ? (
                 <div className={styles.empty}>
-                  <div className={styles.emptyTitle}>No results</div>
-                  <div className={styles.emptyBody}>Try a different search term.</div>
+                  <div className={styles.emptyTitle}>{strings.noResultsTitle}</div>
+                  <div className={styles.emptyBody}>{strings.noResultsBody}</div>
                 </div>
               ) : isGrid ? (
                 <div className={styles.gridArea}>
@@ -244,18 +216,18 @@ const LibraryPage: FC = () => {
                 <div className={styles.listArea}>
                   <div className={styles.listHeader}>
                     <div />
-                    <div className={styles.listHeaderCell}>Title</div>
+                    <div className={styles.listHeaderCell}>{strings.colTitle}</div>
                     <div className={styles.listHeaderCell} style={{ textAlign: "right" }}>
-                      Format
+                      {strings.colFormat}
                     </div>
                     <div className={styles.listHeaderCell} style={{ textAlign: "right" }}>
-                      Rating
+                      {strings.colRating}
                     </div>
                     <div className={styles.listHeaderCell} style={{ textAlign: "right" }}>
-                      Duration
+                      {strings.colDuration}
                     </div>
                     <div className={styles.listHeaderCell} style={{ textAlign: "right" }}>
-                      Size
+                      {strings.colSize}
                     </div>
                   </div>
                   {filteredVideos.map((video) => (
@@ -277,7 +249,7 @@ const LibraryPage: FC = () => {
             <div className={styles.rightPane}>
               {isPaneOpen && detailQueryRef && (
                 <Suspense fallback={null}>
-                  <DetailLoader queryRef={detailQueryRef} />
+                  <FilmDetailLoader queryRef={detailQueryRef} />
                 </Suspense>
               )}
             </div>

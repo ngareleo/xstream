@@ -8,6 +8,7 @@ import { IconPlay, IconQuestion } from "~/lib/icons.js";
 import type { PosterCard_video$key } from "~/relay/__generated__/PosterCard_video.graphql.js";
 
 import { createPosterCardFilmSelectedEvent } from "./PosterCard.events.js";
+import { strings } from "./PosterCard.strings.js";
 import { usePosterCardStyles } from "./PosterCard.styles.js";
 
 const POSTER_FRAGMENT = graphql`
@@ -89,7 +90,7 @@ export const PosterCard: FC<Props> = ({ video, isSelected = false }) => {
         {/* Top-right badge */}
         <div className={styles.badgeTopRight}>
           <span className={mergeClasses(styles.badge, isHd ? styles.badgeRed : styles.badgeGray)}>
-            {isHd ? "4K" : "HD"}
+            {isHd ? strings.badge4K : strings.badgeHD}
           </span>
         </div>
 
@@ -110,7 +111,7 @@ export const PosterCard: FC<Props> = ({ video, isSelected = false }) => {
             onClick={(e) => e.stopPropagation()}
           >
             <IconPlay size={9} />
-            Play
+            {strings.play}
           </Link>
         )}
 

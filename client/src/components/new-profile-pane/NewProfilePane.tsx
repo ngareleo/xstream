@@ -10,6 +10,7 @@ import {
   createNewProfilePaneClosedEvent,
   createNewProfilePaneLibraryCreatedEvent,
 } from "./NewProfilePane.events.js";
+import { strings } from "./NewProfilePane.strings.js";
 import { useNewProfilePaneStyles } from "./NewProfilePane.styles.js";
 
 const CREATE_LIBRARY_MUTATION = graphql`
@@ -62,11 +63,11 @@ export const NewProfilePane: FC = () => {
   const handleSubmit = (e: React.MouseEvent): void => {
     submitEventRef.current = e;
     if (!name.trim() || !path.trim()) {
-      setError("Name and path are required.");
+      setError(strings.errorNamePath);
       return;
     }
     if (extensions.length === 0) {
-      setError("Select at least one file extension.");
+      setError(strings.errorExtensions);
       return;
     }
     setError(null);
@@ -91,47 +92,47 @@ export const NewProfilePane: FC = () => {
   return (
     <div className={styles.root}>
       <div className={styles.header}>
-        <div className={styles.headerTitle}>New Library</div>
-        <button className={styles.closeBtn} onClick={handleClose} title="Close">
+        <div className={styles.headerTitle}>{strings.headerTitle}</div>
+        <button className={styles.closeBtn} onClick={handleClose} title={strings.closeTitle}>
           <IconClose size={13} />
         </button>
       </div>
 
       <div className={styles.body}>
         <div className={styles.fieldGroup}>
-          <label className={styles.label}>Library Name</label>
+          <label className={styles.label}>{strings.labelName}</label>
           <input
             className={styles.input}
-            placeholder="e.g. Movies 4K"
+            placeholder={strings.placeholderName}
             value={name}
             onChange={(e) => setName(e.target.value)}
           />
         </div>
 
         <div className={styles.fieldGroup}>
-          <label className={styles.label}>Folder Path</label>
+          <label className={styles.label}>{strings.labelPath}</label>
           <input
             className={styles.input}
-            placeholder="/media/movies"
+            placeholder={strings.placeholderPath}
             value={path}
             onChange={(e) => setPath(e.target.value)}
           />
         </div>
 
         <div className={styles.fieldGroup}>
-          <label className={styles.label}>Media Type</label>
+          <label className={styles.label}>{strings.labelMediaType}</label>
           <select
             className={styles.select}
             value={mediaType}
             onChange={(e) => handleMediaTypeChange(e.target.value as "MOVIES" | "TV_SHOWS")}
           >
-            <option value="MOVIES">Movies</option>
-            <option value="TV_SHOWS">TV Shows</option>
+            <option value="MOVIES">{strings.optionMovies}</option>
+            <option value="TV_SHOWS">{strings.optionTvShows}</option>
           </select>
         </div>
 
         <div className={styles.fieldGroup}>
-          <label className={styles.label}>File Extensions</label>
+          <label className={styles.label}>{strings.labelExtensions}</label>
           <div className={styles.extChips}>
             {ALL_EXTENSIONS.map((ext) => (
               <button
@@ -154,7 +155,7 @@ export const NewProfilePane: FC = () => {
 
       <div className={styles.footer}>
         <button className={styles.btnCancel} onClick={handleClose}>
-          Cancel
+          {strings.cancel}
         </button>
         <button
           className={styles.btnCreate}
@@ -162,7 +163,7 @@ export const NewProfilePane: FC = () => {
           disabled={isPending}
           type="button"
         >
-          {isPending ? "Creating…" : "Create Library"}
+          {isPending ? strings.creating : strings.create}
         </button>
       </div>
     </div>

@@ -3,6 +3,7 @@ import { type FC } from "react";
 
 import { IconBars, IconSquares } from "~/lib/icons.js";
 
+import { strings } from "./LibraryFilterBar.strings.js";
 import { useLibraryFilterBarStyles } from "./LibraryFilterBar.styles.js";
 
 export type TypeFilter = "all" | "MOVIES" | "TV_SHOWS";
@@ -32,7 +33,7 @@ export const LibraryFilterBar: FC<Props> = ({
     <div className={styles.filterBar}>
       <input
         className={styles.searchInput}
-        placeholder="Search titles, genres…"
+        placeholder={strings.searchPlaceholder}
         value={search}
         onChange={(e) => onSearchChange(e.target.value)}
       />
@@ -42,15 +43,15 @@ export const LibraryFilterBar: FC<Props> = ({
         value={typeFilter}
         onChange={(e) => onTypeFilterChange(e.target.value as TypeFilter)}
       >
-        <option value="all">All Types</option>
-        <option value="MOVIES">Movies</option>
-        <option value="TV_SHOWS">TV Shows</option>
+        <option value="all">{strings.filterAll}</option>
+        <option value="MOVIES">{strings.filterMovies}</option>
+        <option value="TV_SHOWS">{strings.filterTvShows}</option>
       </select>
       <div className={styles.filterSep} />
       <button
         className={mergeClasses(styles.toggleBtn, isGrid && styles.toggleBtnActive)}
         onClick={() => onIsGridChange(true)}
-        title="Grid view"
+        title={strings.gridViewTitle}
         type="button"
       >
         <IconSquares size={13} />
@@ -58,13 +59,13 @@ export const LibraryFilterBar: FC<Props> = ({
       <button
         className={mergeClasses(styles.toggleBtn, !isGrid && styles.toggleBtnActive)}
         onClick={() => onIsGridChange(false)}
-        title="List view"
+        title={strings.listViewTitle}
         type="button"
       >
         <IconBars size={13} />
       </button>
       <span className={styles.filterCount}>
-        {count} title{count !== 1 ? "s" : ""}
+        {count} {count !== 1 ? strings.titlePlural : strings.titleSingular}
       </span>
     </div>
   );

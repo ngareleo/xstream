@@ -9,6 +9,7 @@ import type { FilmRow_video$key } from "~/relay/__generated__/FilmRow_video.grap
 import { formatDuration } from "~/utils/formatters.js";
 
 import { createFilmSelectedEvent } from "./FilmRow.events.js";
+import { strings } from "./FilmRow.strings.js";
 import { useFilmRowStyles } from "./FilmRow.styles.js";
 
 const FILM_FRAGMENT = graphql`
@@ -84,7 +85,7 @@ export const FilmRow: FC<Props> = ({ video, isSelected }) => {
 
       <div className={styles.cell}>
         <span className={mergeClasses(styles.badge, isHd ? styles.badgeRed : styles.badgeGray)}>
-          {isHd ? "4K" : "HD"}
+          {isHd ? strings.badge4K : strings.badgeHD}
         </span>
       </div>
 
@@ -93,7 +94,11 @@ export const FilmRow: FC<Props> = ({ video, isSelected }) => {
       <div
         className={mergeClasses(styles.actions, (hovered || isSelected) && styles.actionsVisible)}
       >
-        <button className={styles.btnSurface} onClick={handleEditClick} title="Edit link">
+        <button
+          className={styles.btnSurface}
+          onClick={handleEditClick}
+          title={strings.editLinkTitle}
+        >
           <IconPencil size={11} />
         </button>
         {isUnmatched ? (
@@ -101,7 +106,7 @@ export const FilmRow: FC<Props> = ({ video, isSelected }) => {
             className={mergeClasses(styles.btnSurface, styles.btnYellow)}
             onClick={handleEditClick}
           >
-            Link
+            {strings.link}
           </button>
         ) : (
           <Link

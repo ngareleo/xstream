@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 
 import { IconArrowLeft, IconSearch } from "~/lib/icons.js";
 
+import { strings } from "./NotFound.strings.js";
 import { useNotFoundStyles } from "./NotFound.styles.js";
 
 export const NotFound: FC = () => {
@@ -15,20 +16,18 @@ export const NotFound: FC = () => {
       <div className={styles.grain} />
 
       <div className={styles.body}>
-        <div className={styles.code}>404</div>
-        <div className={styles.title}>Page not found</div>
-        <div className={styles.sub}>
-          The page you&apos;re looking for doesn&apos;t exist or has been moved.
-        </div>
+        <div className={styles.code}>{strings.code}</div>
+        <div className={styles.title}>{strings.title}</div>
+        <div className={styles.sub}>{strings.subtitle}</div>
 
         <div className={styles.actions}>
           <button className={styles.btnGhost} onClick={() => void navigate(-1)} type="button">
             <IconArrowLeft size={14} />
-            Go back
+            {strings.goBack}
           </button>
           <Link to="/" className={styles.btnRed}>
             <IconSearch size={14} />
-            Browse library
+            {strings.browseLibrary}
           </Link>
         </div>
       </div>

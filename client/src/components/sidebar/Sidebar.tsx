@@ -15,6 +15,7 @@ import {
   IconUser,
 } from "~/lib/icons.js";
 
+import { strings } from "./Sidebar.strings.js";
 import { useSidebarStyles } from "./Sidebar.styles.js";
 import { SignOutDialogAsync } from "./SignOutDialogAsync.js";
 
@@ -73,27 +74,27 @@ const ProfileMenu: FC<ProfileMenuProps> = ({ collapsed, onClose, onSignOut }) =>
       <div className={styles.pmUserHead}>
         <div className={styles.pmAvatar}>D</div>
         <div className={styles.pmUserInfo}>
-          <div className={styles.pmUserName}>User</div>
-          <div className={styles.pmUserEmail}>user@moran.local</div>
+          <div className={styles.pmUserName}>{strings.pmUserName}</div>
+          <div className={styles.pmUserEmail}>{strings.pmUserEmail}</div>
         </div>
       </div>
 
-      <div className={styles.pmSectionLabel}>Profiles</div>
+      <div className={styles.pmSectionLabel}>{strings.pmSectionProfiles}</div>
       <button className={styles.pmItem} onClick={() => go("/")} type="button">
         <div className={styles.pmItemDot} />
-        <span className={styles.pmItemName}>All Libraries</span>
+        <span className={styles.pmItemName}>{strings.pmAllLibraries}</span>
       </button>
 
       <div className={styles.pmDivider} />
 
       <button className={styles.pmItem} onClick={() => go("/")} type="button">
         <IconHome size={13} />
-        <span className={styles.pmItemName}>Home</span>
+        <span className={styles.pmItemName}>{strings.pmHome}</span>
       </button>
 
       <button className={styles.pmItem} onClick={() => go("/settings")} type="button">
         <IconUser size={13} />
-        <span className={styles.pmItemName}>Account settings</span>
+        <span className={styles.pmItemName}>{strings.pmAccountSettings}</span>
       </button>
 
       <div className={styles.pmDivider} />
@@ -107,7 +108,7 @@ const ProfileMenu: FC<ProfileMenuProps> = ({ collapsed, onClose, onSignOut }) =>
         type="button"
       >
         <IconSignOut size={13} />
-        <span className={styles.pmItemName}>Sign out</span>
+        <span className={styles.pmItemName}>{strings.pmSignOut}</span>
       </button>
     </div>
   );
@@ -142,11 +143,11 @@ export const Sidebar: FC<SidebarProps> = ({ collapsed, onToggle }) => {
             className={mergeClasses(styles.navCardIcon, collapsed && styles.navCardIconCollapsed)}
           />
           <span className={mergeClasses(styles.navLabel, collapsed && styles.navLabelHidden)}>
-            Profiles
+            {strings.navProfiles}
           </span>
           {collapsed && (
             <span className={styles.navSideTip} aria-hidden="true">
-              Profiles
+              {strings.navProfiles}
             </span>
           )}
         </NavLink>
@@ -157,11 +158,11 @@ export const Sidebar: FC<SidebarProps> = ({ collapsed, onToggle }) => {
             className={mergeClasses(styles.navCardIcon, collapsed && styles.navCardIconCollapsed)}
           />
           <span className={mergeClasses(styles.navLabel, collapsed && styles.navLabelHidden)}>
-            Library
+            {strings.navLibrary}
           </span>
           {collapsed && (
             <span className={styles.navSideTip} aria-hidden="true">
-              Library
+              {strings.navLibrary}
             </span>
           )}
         </NavLink>
@@ -172,11 +173,11 @@ export const Sidebar: FC<SidebarProps> = ({ collapsed, onToggle }) => {
             className={mergeClasses(styles.navCardIcon, collapsed && styles.navCardIconCollapsed)}
           />
           <span className={mergeClasses(styles.navLabel, collapsed && styles.navLabelHidden)}>
-            Watchlist
+            {strings.navWatchlist}
           </span>
           {collapsed && (
             <span className={styles.navSideTip} aria-hidden="true">
-              Watchlist
+              {strings.navWatchlist}
             </span>
           )}
         </NavLink>
@@ -187,11 +188,11 @@ export const Sidebar: FC<SidebarProps> = ({ collapsed, onToggle }) => {
             className={mergeClasses(styles.navCardIcon, collapsed && styles.navCardIconCollapsed)}
           />
           <span className={mergeClasses(styles.navLabel, collapsed && styles.navLabelHidden)}>
-            Settings
+            {strings.navSettings}
           </span>
           {collapsed && (
             <span className={styles.navSideTip} aria-hidden="true">
-              Settings
+              {strings.navSettings}
             </span>
           )}
         </NavLink>
@@ -202,11 +203,11 @@ export const Sidebar: FC<SidebarProps> = ({ collapsed, onToggle }) => {
             className={mergeClasses(styles.navCardIcon, collapsed && styles.navCardIconCollapsed)}
           />
           <span className={mergeClasses(styles.navLabel, collapsed && styles.navLabelHidden)}>
-            Feedback
+            {strings.navFeedback}
           </span>
           {collapsed && (
             <span className={styles.navSideTip} aria-hidden="true">
-              Feedback
+              {strings.navFeedback}
             </span>
           )}
         </NavLink>
@@ -216,7 +217,7 @@ export const Sidebar: FC<SidebarProps> = ({ collapsed, onToggle }) => {
         <button
           className={mergeClasses(styles.collapseBtn, collapsed && styles.collapseBtnCollapsed)}
           onClick={onToggle}
-          aria-label="Toggle navigation"
+          aria-label={strings.toggleNavAriaLabel}
           type="button"
         >
           <IconChevronLeft
@@ -226,7 +227,7 @@ export const Sidebar: FC<SidebarProps> = ({ collapsed, onToggle }) => {
               collapsed && styles.collapseBtnIconRotated
             )}
           />
-          {!collapsed && <span className={styles.navLabel}>Collapse</span>}
+          {!collapsed && <span className={styles.navLabel}>{strings.collapseLabel}</span>}
         </button>
 
         {/* Profile button */}
@@ -245,7 +246,7 @@ export const Sidebar: FC<SidebarProps> = ({ collapsed, onToggle }) => {
               collapsed && styles.userBtnCollapsed
             )}
             onClick={() => setMenuOpen((o) => !o)}
-            aria-label="Open profile menu"
+            aria-label={strings.openProfileMenuAriaLabel}
             aria-expanded={menuOpen}
             type="button"
           >
@@ -253,8 +254,8 @@ export const Sidebar: FC<SidebarProps> = ({ collapsed, onToggle }) => {
             {!collapsed && (
               <>
                 <div className={styles.userText}>
-                  <div className={styles.userName}>User</div>
-                  <div className={styles.userSub}>0 profiles · 0 files</div>
+                  <div className={styles.userName}>{strings.userName}</div>
+                  <div className={styles.userSub}>{strings.userSub}</div>
                 </div>
                 <IconChevronRight
                   size={12}

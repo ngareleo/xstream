@@ -7,6 +7,7 @@ import { IconArrowLeft, IconPlay } from "~/lib/icons.js";
 import type { PlayerSidebar_video$key } from "~/relay/__generated__/PlayerSidebar_video.graphql.js";
 import { formatDuration } from "~/utils/formatters.js";
 
+import { strings } from "./PlayerSidebar.strings.js";
 import { usePlayerSidebarStyles } from "./PlayerSidebar.styles.js";
 
 const VIDEO_FRAGMENT = graphql`
@@ -68,7 +69,7 @@ export const PlayerSidebar: FC<Props> = ({ video, hidden }) => {
     <div className={mergeClasses(styles.root, hidden === true && styles.rootHidden)}>
       {/* Now Playing */}
       <div className={styles.section}>
-        <div className={styles.sectionLabel}>Now Playing</div>
+        <div className={styles.sectionLabel}>{strings.nowPlaying}</div>
         <div className={styles.title}>{displayTitle}</div>
         {metaLine && <div className={styles.meta}>{metaLine}</div>}
         {meta?.plot && <div className={styles.plot}>{meta.plot}</div>}
@@ -79,7 +80,7 @@ export const PlayerSidebar: FC<Props> = ({ video, hidden }) => {
         {/* Up Next */}
         {upNext.length > 0 && (
           <div className={styles.upNextSection}>
-            <div className={styles.sectionLabel}>Up Next</div>
+            <div className={styles.sectionLabel}>{strings.upNext}</div>
             {upNext.map((v) => {
               const thumbStyle = v.metadata?.posterUrl
                 ? { backgroundImage: `url(${v.metadata.posterUrl})` }
@@ -105,7 +106,7 @@ export const PlayerSidebar: FC<Props> = ({ video, hidden }) => {
       <div className={styles.footer}>
         <button className={styles.backBtn} onClick={() => navigate(-1)} type="button">
           <IconArrowLeft size={12} />
-          Back
+          {strings.back}
         </button>
       </div>
     </div>

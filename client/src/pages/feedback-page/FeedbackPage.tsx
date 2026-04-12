@@ -1,5 +1,6 @@
 import React, { type FC, useState } from "react";
 
+import { strings } from "./FeedbackPage.strings.js";
 import { useFeedbackStyles } from "./FeedbackPage.styles.js";
 
 type Category = "bug" | "feature" | "other";
@@ -21,14 +22,12 @@ export const FeedbackPage: FC = () => {
   return (
     <div className={styles.root}>
       <div className={styles.card}>
-        <div className={styles.heading}>Feedback</div>
-        <div className={styles.sub}>
-          Found a bug or have an idea? Let us know. We read everything.
-        </div>
+        <div className={styles.heading}>{strings.heading}</div>
+        <div className={styles.sub}>{strings.subtitle}</div>
 
         <div className={styles.fieldGroup}>
           <label className={styles.label} htmlFor="category">
-            Category
+            {strings.labelCategory}
           </label>
           <select
             id="category"
@@ -36,20 +35,20 @@ export const FeedbackPage: FC = () => {
             value={category}
             onChange={(e) => setCategory(e.target.value as Category)}
           >
-            <option value="bug">Bug Report</option>
-            <option value="feature">Feature Request</option>
-            <option value="other">Other</option>
+            <option value="bug">{strings.optionBug}</option>
+            <option value="feature">{strings.optionFeature}</option>
+            <option value="other">{strings.optionOther}</option>
           </select>
         </div>
 
         <div className={styles.fieldGroup}>
           <label className={styles.label} htmlFor="message">
-            Message
+            {strings.labelMessage}
           </label>
           <textarea
             id="message"
             className={styles.textarea}
-            placeholder="Describe the issue or idea…"
+            placeholder={strings.messagePlaceholder}
             value={message}
             onChange={(e) => setMessage(e.target.value)}
           />
@@ -61,10 +60,10 @@ export const FeedbackPage: FC = () => {
           disabled={!message.trim()}
           type="button"
         >
-          Submit Feedback
+          {strings.submitBtn}
         </button>
 
-        {submitted && <div className={styles.successMsg}>Thanks — your feedback was received!</div>}
+        {submitted && <div className={styles.successMsg}>{strings.successMsg}</div>}
       </div>
     </div>
   );

@@ -1,15 +1,8 @@
 import { mergeClasses } from "@griffel/react";
 import { NovaEventingInterceptor } from "@nova/react";
 import type { EventWrapper } from "@nova/types";
-import React, { type FC, Suspense, useCallback, useEffect, useState } from "react";
-import {
-  graphql,
-  type PreloadedQuery,
-  useLazyLoadQuery,
-  useMutation,
-  usePreloadedQuery,
-  useQueryLoader,
-} from "react-relay";
+import { type FC, Suspense, useCallback, useEffect, useState } from "react";
+import { graphql, useLazyLoadQuery, useMutation, useQueryLoader } from "react-relay";
 import { useSearchParams } from "react-router-dom";
 
 import { useHeaderActionStyles } from "~/components/app-header/AppHeader.styles.js";
@@ -17,8 +10,11 @@ import { useHeaderActions } from "~/components/app-shell/AppShell.js";
 import { DashboardHero } from "~/components/dashboard-hero/DashboardHero.js";
 import { DashboardLibraryList } from "~/components/dashboard-library-list/DashboardLibraryList.js";
 import { DevThrowTarget } from "~/components/dev-tools/DevToolsContext.js";
+import {
+  FILM_DETAIL_QUERY,
+  FilmDetailLoader,
+} from "~/components/film-detail-pane/FilmDetailLoader.js";
 import { isFilmDetailPaneClosedEvent } from "~/components/film-detail-pane/FilmDetailPane.events.js";
-import { FilmDetailPaneAsync } from "~/components/film-detail-pane/FilmDetailPaneAsync.js";
 import {
   FilmRowEventTypes,
   type FilmSelectedData,
@@ -35,10 +31,11 @@ import {
 } from "~/components/profile-row/ProfileRow.events.js";
 import { useSplitResize } from "~/hooks/useSplitResize.js";
 import { IconPlus, IconRefresh } from "~/lib/icons.js";
-import type { DashboardPageContentDetailQuery } from "~/relay/__generated__/DashboardPageContentDetailQuery.graphql.js";
 import type { DashboardPageContentQuery } from "~/relay/__generated__/DashboardPageContentQuery.graphql.js";
 import type { DashboardPageContentScanMutation } from "~/relay/__generated__/DashboardPageContentScanMutation.graphql.js";
+import type { FilmDetailLoaderQuery } from "~/relay/__generated__/FilmDetailLoaderQuery.graphql.js";
 
+import { strings } from "./DashboardPage.strings.js";
 import { useDashboardStyles } from "./DashboardPage.styles.js";
 
 const DASHBOARD_QUERY = graphql`
@@ -51,14 +48,6 @@ const DASHBOARD_QUERY = graphql`
   }
 `;
 
-const DETAIL_VIDEO_QUERY = graphql`
-  query DashboardPageContentDetailQuery($videoId: ID!) {
-    video(id: $videoId) {
-      ...FilmDetailPane_video
-    }
-  }
-`;
-
 const SCAN_MUTATION = graphql`
   mutation DashboardPageContentScanMutation {
     scanLibraries {
@@ -66,21 +55,6 @@ const SCAN_MUTATION = graphql`
     }
   }
 `;
-
-// ─── Detail pane loader ───────────────────────────────────────────────────────
-// Uses usePreloadedQuery so the network request starts as soon as the user
-// clicks (via loadDetailQuery in the event handler) rather than waiting for
-// this component to mount.
-
-interface DetailLoaderProps {
-  queryRef: PreloadedQuery<DashboardPageContentDetailQuery>;
-}
-
-const DetailLoader: FC<DetailLoaderProps> = ({ queryRef }) => {
-  const data = usePreloadedQuery<DashboardPageContentDetailQuery>(DETAIL_VIDEO_QUERY, queryRef);
-  if (!data.video) return null;
-  return <FilmDetailPaneAsync video={data.video} />;
-};
 
 // ─── DashboardPage ────────────────────────────────────────────────────────────
 
@@ -91,7 +65,7 @@ const DashboardPage: FC = () => {
   const { paneWidth, containerRef, onResizeMouseDown } = useSplitResize(360);
   const data = useLazyLoadQuery<DashboardPageContentQuery>(DASHBOARD_QUERY, {});
   const [detailQueryRef, loadDetailQuery] =
-    useQueryLoader<DashboardPageContentDetailQuery>(DETAIL_VIDEO_QUERY);
+    useQueryLoader<FilmDetailLoaderQuery>(FILM_DETAIL_QUERY);
 
   const [searchParams, setSearchParams] = useSearchParams();
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -143,7 +117,7 @@ const DashboardPage: FC = () => {
           type="button"
         >
           <IconRefresh size={14} />
-          {isScanPending ? "Scanning…" : "Scan All"}
+          {isScanPending ? strings.scanning : strings.scanAll}
         </button>
         <div className={actionStyles.sep}>
           <div className={actionStyles.sepLine} />
@@ -154,7 +128,7 @@ const DashboardPage: FC = () => {
           type="button"
         >
           <IconPlus size={14} />
-          New Profile
+          {strings.newProfile}
         </button>
       </>
     );
@@ -224,7 +198,7 @@ const DashboardPage: FC = () => {
               )}
               {isPaneFilmDetail && detailQueryRef && (
                 <Suspense fallback={null}>
-                  <DetailLoader queryRef={detailQueryRef} />
+                  <FilmDetailLoader queryRef={detailQueryRef} />
                 </Suspense>
               )}
             </div>

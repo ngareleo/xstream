@@ -2,6 +2,7 @@ import { type FC, type ReactNode } from "react";
 
 import { LogoShield } from "~/lib/icons.js";
 
+import { strings } from "./AppHeader.strings.js";
 import { useAppHeaderStyles } from "./AppHeader.styles.js";
 
 interface AppHeaderProps {
@@ -16,7 +17,7 @@ export const AppHeader: FC<AppHeaderProps> = ({ actions }) => {
       <div className={styles.brand}>
         <LogoShield />
         <div className={styles.brandText}>
-          <div className={styles.logoMark}>MORAN</div>
+          <div className={styles.logoMark}>{strings.brandName}</div>
         </div>
       </div>
 

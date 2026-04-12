@@ -7,6 +7,7 @@ import { IconPlay } from "~/lib/icons.js";
 import type { LibraryFilmListRow_video$key } from "~/relay/__generated__/LibraryFilmListRow_video.graphql.js";
 import { formatDuration, formatFileSize } from "~/utils/formatters.js";
 
+import { strings } from "./LibraryFilmListRow.strings.js";
 import { useLibraryFilmListRowStyles } from "./LibraryFilmListRow.styles.js";
 
 const FRAGMENT = graphql`
@@ -63,8 +64,10 @@ export const LibraryFilmListRow: FC<Props> = ({ video, isSelected, onSelect }) =
           <div className={styles.listMeta}>{[year, genre].filter(Boolean).join(" · ")}</div>
         )}
       </div>
-      <div className={styles.listCell}>{is4k ? "4K" : "HD"}</div>
-      <div className={styles.listCell}>{rating != null ? `★ ${rating.toFixed(1)}` : "—"}</div>
+      <div className={styles.listCell}>{is4k ? strings.badge4K : strings.badgeHD}</div>
+      <div className={styles.listCell}>
+        {rating != null ? `★ ${rating.toFixed(1)}` : strings.noRating}
+      </div>
       <div className={styles.listCell}>{formatDuration(data.durationSeconds)}</div>
       <div className={styles.listCell}>
         {data.matched ? (

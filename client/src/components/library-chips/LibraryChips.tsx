@@ -4,6 +4,7 @@ import { graphql, useFragment } from "react-relay";
 
 import type { LibraryChips_library$key } from "~/relay/__generated__/LibraryChips_library.graphql.js";
 
+import { strings } from "./LibraryChips.strings.js";
 import { useLibraryChipsStyles } from "./LibraryChips.styles.js";
 
 const FRAGMENT = graphql`
@@ -41,7 +42,7 @@ export const LibraryChips: FC<Props> = ({
         onClick={() => onActiveLibraryIdChange(null)}
         type="button"
       >
-        All
+        {strings.allChipLabel}
         <span className={styles.chipCount}>{totalCount}</span>
       </button>
       {data.map((lib) => (

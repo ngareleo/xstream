@@ -9,6 +9,7 @@ import type { FilmDetailPane_video$key } from "~/relay/__generated__/FilmDetailP
 import { formatDuration, formatFileSize } from "~/utils/formatters.js";
 
 import { createFilmDetailPaneClosedEvent } from "./FilmDetailPane.events.js";
+import { strings } from "./FilmDetailPane.strings.js";
 import { useFilmDetailPaneStyles } from "./FilmDetailPane.styles.js";
 
 const DETAIL_FRAGMENT = graphql`
@@ -84,14 +85,14 @@ export const FilmDetailPane: FC<Props> = ({ video }) => {
             className={mergeClasses(styles.actionBtn, styles.actionBtnPrimary)}
           >
             <IconPlay size={10} />
-            Play
+            {strings.play}
           </Link>
           <div className={styles.actionSep}>
             <div className={styles.actionSepLine} />
           </div>
           <button className={styles.actionBtn}>
             <IconPencil size={10} />
-            {data.matched ? "Re-link" : "Link"}
+            {data.matched ? strings.reLink : strings.link}
           </button>
           <div className={styles.actionSpacer} />
           <button
@@ -99,7 +100,7 @@ export const FilmDetailPane: FC<Props> = ({ video }) => {
             onClick={(e) =>
               void bubble({ reactEvent: e, event: createFilmDetailPaneClosedEvent() })
             }
-            title="Close"
+            title={strings.close}
           >
             <IconClose size={14} />
           </button>
@@ -118,17 +119,27 @@ export const FilmDetailPane: FC<Props> = ({ video }) => {
           <>
             {/* Badges row */}
             <div className={styles.section}>
-              <div className={styles.sectionLabel}>Details</div>
+              <div className={styles.sectionLabel}>{strings.sectionDetails}</div>
               <div className={styles.badgesRow}>
-                {isHd && <span className={mergeClasses(styles.badge, styles.badgeRed)}>4K</span>}
+                {isHd && (
+                  <span className={mergeClasses(styles.badge, styles.badgeRed)}>
+                    {strings.badge4K}
+                  </span>
+                )}
                 {vs && !isHd && (
-                  <span className={mergeClasses(styles.badge, styles.badgeGray)}>HD</span>
+                  <span className={mergeClasses(styles.badge, styles.badgeGray)}>
+                    {strings.badgeHD}
+                  </span>
                 )}
                 {data.mediaType === "MOVIES" && (
-                  <span className={mergeClasses(styles.badge, styles.badgeGray)}>Movie</span>
+                  <span className={mergeClasses(styles.badge, styles.badgeGray)}>
+                    {strings.badgeMovie}
+                  </span>
                 )}
                 {data.mediaType === "TV_SHOWS" && (
-                  <span className={mergeClasses(styles.badge, styles.badgeGray)}>TV</span>
+                  <span className={mergeClasses(styles.badge, styles.badgeGray)}>
+                    {strings.badgeTV}
+                  </span>
                 )}
                 {vs?.codec && (
                   <span className={mergeClasses(styles.badge, styles.badgeGray)}>
@@ -141,10 +152,10 @@ export const FilmDetailPane: FC<Props> = ({ video }) => {
             {/* IMDb rating */}
             {meta.rating != null && (
               <div className={styles.section}>
-                <div className={styles.sectionLabel}>Rating</div>
+                <div className={styles.sectionLabel}>{strings.sectionRating}</div>
                 <div className={styles.ratingRow}>
                   <span className={styles.ratingNum}>★ {meta.rating.toFixed(1)}</span>
-                  <span className={styles.ratingLabel}>IMDb</span>
+                  <span className={styles.ratingLabel}>{strings.ratingProvider}</span>
                 </div>
               </div>
             )}
@@ -152,7 +163,7 @@ export const FilmDetailPane: FC<Props> = ({ video }) => {
             {/* Plot */}
             {meta.plot && (
               <div className={styles.section}>
-                <div className={styles.sectionLabel}>Synopsis</div>
+                <div className={styles.sectionLabel}>{strings.sectionSynopsis}</div>
                 <div className={styles.plot}>{meta.plot}</div>
               </div>
             )}
@@ -160,7 +171,7 @@ export const FilmDetailPane: FC<Props> = ({ video }) => {
             {/* Cast */}
             {meta.cast.length > 0 && (
               <div className={styles.section}>
-                <div className={styles.sectionLabel}>Cast</div>
+                <div className={styles.sectionLabel}>{strings.sectionCast}</div>
                 <div className={styles.castChips}>
                   {meta.cast.map((name) => (
                     <span key={name} className={styles.castChip}>
@@ -173,26 +184,26 @@ export const FilmDetailPane: FC<Props> = ({ video }) => {
 
             {/* File info */}
             <div className={styles.section}>
-              <div className={styles.sectionLabel}>File</div>
+              <div className={styles.sectionLabel}>{strings.sectionFile}</div>
               {vs && (
                 <div className={styles.infoRow}>
-                  <span className={styles.infoKey}>Resolution</span>
+                  <span className={styles.infoKey}>{strings.infoResolution}</span>
                   <span className={styles.infoVal}>
                     {vs.width}×{vs.height}
                   </span>
                 </div>
               )}
               <div className={styles.infoRow}>
-                <span className={styles.infoKey}>Duration</span>
+                <span className={styles.infoKey}>{strings.infoDuration}</span>
                 <span className={styles.infoVal}>{formatDuration(data.durationSeconds)}</span>
               </div>
               <div className={styles.infoRow}>
-                <span className={styles.infoKey}>Size</span>
+                <span className={styles.infoKey}>{strings.infoSize}</span>
                 <span className={styles.infoVal}>{formatFileSize(data.fileSizeBytes)}</span>
               </div>
               {as && (
                 <div className={styles.infoRow}>
-                  <span className={styles.infoKey}>Audio</span>
+                  <span className={styles.infoKey}>{strings.infoAudio}</span>
                   <span className={styles.infoVal}>
                     {as.codec.toUpperCase()} {as.channels}ch
                   </span>
@@ -200,13 +211,13 @@ export const FilmDetailPane: FC<Props> = ({ video }) => {
               )}
               {meta.director && (
                 <div className={styles.infoRow}>
-                  <span className={styles.infoKey}>Director</span>
+                  <span className={styles.infoKey}>{strings.infoDirector}</span>
                   <span className={styles.infoVal}>{meta.director}</span>
                 </div>
               )}
               {meta.imdbId && (
                 <div className={styles.infoRow}>
-                  <span className={styles.infoKey}>IMDb</span>
+                  <span className={styles.infoKey}>{strings.infoImdb}</span>
                   <span className={styles.infoVal}>{meta.imdbId}</span>
                 </div>
               )}
@@ -214,10 +225,8 @@ export const FilmDetailPane: FC<Props> = ({ video }) => {
           </>
         ) : (
           <div className={styles.emptyMeta}>
-            <div>No metadata matched</div>
-            <div style={{ marginTop: 6 }}>
-              Use the <strong>Link</strong> button above to match this file.
-            </div>
+            <div>{strings.noMetadata}</div>
+            <div style={{ marginTop: 6 }}>{strings.noMetadataHelp}</div>
           </div>
         )}
       </div>
