@@ -80,12 +80,14 @@ jobs:
       # from concurrent PRs never overwrite each other.
       - name: Deploy bundle report (PR)
         if: github.event_name == 'pull_request'
+        continue-on-error: true
         env:
           SURGE_TOKEN: ${{ secrets.SURGE_TOKEN }}
         run: bunx surge dist/ tvke-pr-${{ github.event.pull_request.number }}.surge.sh --token $SURGE_TOKEN
 
       - name: Comment bundle report link on PR
         if: github.event_name == 'pull_request'
+        continue-on-error: true
         uses: actions/github-script@v7
         with:
           script: |
@@ -104,6 +106,7 @@ jobs:
       # Keep a stable post-merge report at a fixed URL.
       - name: Deploy bundle report (main)
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        continue-on-error: true
         env:
           SURGE_TOKEN: ${{ secrets.SURGE_TOKEN }}
         run: bunx surge dist/ tvke-bundle.surge.sh --token $SURGE_TOKEN
