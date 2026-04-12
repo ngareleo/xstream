@@ -1,12 +1,17 @@
 import { mergeClasses } from "@griffel/react";
-import { useNovaEventing } from "@nova/react";
+import { NovaEventingInterceptor, useNovaEventing } from "@nova/react";
+import type { EventWrapper } from "@nova/types";
 import React, { type FC, useCallback, useState } from "react";
-import { fetchQuery, graphql, useFragment, useMutation, useRelayEnvironment } from "react-relay";
+import { graphql, useFragment, useMutation } from "react-relay";
 
+import {
+  type FolderSelectedData,
+  isFolderSelectedEvent,
+} from "~/components/directory-browser/DirectoryBrowser.events.js";
+import { DirectoryBrowser } from "~/components/directory-browser/DirectoryBrowser.js";
 import { IconClose, IconFolder } from "~/lib/icons.js";
 import type { EditProfilePane_library$key } from "~/relay/__generated__/EditProfilePane_library.graphql.js";
 import type { EditProfilePaneDeleteLibraryMutation } from "~/relay/__generated__/EditProfilePaneDeleteLibraryMutation.graphql.js";
-import type { EditProfilePaneListDirectoryQuery } from "~/relay/__generated__/EditProfilePaneListDirectoryQuery.graphql.js";
 import type { EditProfilePaneUpdateLibraryMutation } from "~/relay/__generated__/EditProfilePaneUpdateLibraryMutation.graphql.js";
 
 import {
@@ -57,21 +62,7 @@ const DELETE_LIBRARY_MUTATION = graphql`
   }
 `;
 
-const LIST_DIRECTORY_QUERY = graphql`
-  query EditProfilePaneListDirectoryQuery($path: String!) {
-    listDirectory(path: $path) {
-      name
-      path
-    }
-  }
-`;
-
 const ALL_EXTENSIONS = [".mkv", ".mp4", ".avi", ".mov", ".m4v", ".wmv", ".flv", ".ts"];
-
-interface DirEntry {
-  name: string;
-  path: string;
-}
 
 interface Props {
   library: EditProfilePane_library$key;
@@ -81,7 +72,6 @@ export const EditProfilePane: FC<Props> = ({ library }) => {
   const data = useFragment(LIBRARY_FRAGMENT, library);
   const styles = useEditProfilePaneStyles();
   const { bubble } = useNovaEventing();
-  const environment = useRelayEnvironment();
   const submitEventRef = React.useRef<React.MouseEvent | null>(null);
   const deleteEventRef = React.useRef<React.MouseEvent | null>(null);
 
@@ -93,50 +83,20 @@ export const EditProfilePane: FC<Props> = ({ library }) => {
   const [extensions, setExtensions] = useState<string[]>([...data.videoExtensions]);
   const [error, setError] = useState<string | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-
-  // ── Path browser state ────────────────────────────────────────────────────
   const [browseOpen, setBrowseOpen] = useState(false);
-  const [browsePath, setBrowsePath] = useState<string>(data.path || "/");
-  const [entries, setEntries] = useState<DirEntry[]>([]);
-  const [browseLoading, setBrowseLoading] = useState(false);
 
-  const loadDirectory = useCallback(
-    (dirPath: string): void => {
-      setBrowseLoading(true);
-      fetchQuery<EditProfilePaneListDirectoryQuery>(environment, LIST_DIRECTORY_QUERY, {
-        path: dirPath,
-      }).subscribe({
-        next: (result) => {
-          setEntries([...(result.listDirectory ?? [])]);
-          setBrowsePath(dirPath);
-          setBrowseLoading(false);
-        },
-        error: () => {
-          setEntries([]);
-          setBrowseLoading(false);
-        },
-      });
+  const browserInterceptor = useCallback(
+    async (wrapper: EventWrapper): Promise<EventWrapper | undefined> => {
+      if (isFolderSelectedEvent(wrapper) && wrapper.event.data) {
+        const { path: selected } = wrapper.event.data() as FolderSelectedData;
+        setPath(selected);
+        setBrowseOpen(false);
+        return undefined;
+      }
+      return wrapper;
     },
-    [environment]
+    []
   );
-
-  const openBrowser = (): void => {
-    const startPath = path.trim() || "/";
-    setBrowseOpen((prev) => {
-      if (!prev) loadDirectory(startPath);
-      return !prev;
-    });
-  };
-
-  const navigateUp = (): void => {
-    const parent = browsePath.replace(/\/?[^/]+$/, "") || "/";
-    loadDirectory(parent);
-  };
-
-  const selectFolder = (): void => {
-    setPath(browsePath);
-    setBrowseOpen(false);
-  };
 
   // ── Mutations ─────────────────────────────────────────────────────────────
   const [commit, isPending] =
@@ -234,7 +194,7 @@ export const EditProfilePane: FC<Props> = ({ library }) => {
             />
             <button
               className={mergeClasses(styles.browseBtn, browseOpen && styles.browseBtnActive)}
-              onClick={openBrowser}
+              onClick={() => setBrowseOpen((prev) => !prev)}
               type="button"
               title={strings.browseTitle}
             >
@@ -243,45 +203,9 @@ export const EditProfilePane: FC<Props> = ({ library }) => {
           </div>
 
           {browseOpen && (
-            <div className={styles.browserPanel}>
-              <div className={styles.browserBreadcrumb}>{browsePath}</div>
-              <div className={styles.browserList}>
-                {browseLoading ? (
-                  <div className={styles.browserEmpty}>{strings.browseLoading}</div>
-                ) : (
-                  <>
-                    {browsePath !== "/" && (
-                      <button
-                        className={mergeClasses(styles.browserEntry, styles.browserEntryUp)}
-                        onClick={navigateUp}
-                        type="button"
-                      >
-                        ↑ ..
-                      </button>
-                    )}
-                    {entries.length === 0 && !browseLoading ? (
-                      <div className={styles.browserEmpty}>{strings.browseEmpty}</div>
-                    ) : (
-                      entries.map((entry) => (
-                        <button
-                          key={entry.path}
-                          className={styles.browserEntry}
-                          onClick={() => loadDirectory(entry.path)}
-                          type="button"
-                        >
-                          📁 {entry.name}
-                        </button>
-                      ))
-                    )}
-                  </>
-                )}
-              </div>
-              <div className={styles.browserActions}>
-                <button className={styles.browserSelectBtn} onClick={selectFolder} type="button">
-                  {strings.browseSelect}
-                </button>
-              </div>
-            </div>
+            <NovaEventingInterceptor interceptor={browserInterceptor}>
+              <DirectoryBrowser initialPath={path.trim() || "/"} />
+            </NovaEventingInterceptor>
           )}
         </div>
 
