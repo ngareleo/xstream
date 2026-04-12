@@ -23,6 +23,7 @@ interface Props {
   libraries: DashboardLibraryList_library$key;
   expandedId: string | null;
   isPaneFilmDetail: boolean;
+  isPaneOpen: boolean;
   selectedFilmId: string | null;
 }
 
@@ -30,6 +31,7 @@ export const DashboardLibraryList: FC<Props> = ({
   libraries,
   expandedId,
   isPaneFilmDetail,
+  isPaneOpen,
   selectedFilmId,
 }) => {
   const data = useFragment(FRAGMENT, libraries);
@@ -68,6 +70,7 @@ export const DashboardLibraryList: FC<Props> = ({
             expanded={expandedId === lib.id}
             selected={isPaneFilmDetail}
             selectedFilmId={selectedFilmId}
+            isPaneOpen={isPaneOpen}
           />
         ))}
       </div>

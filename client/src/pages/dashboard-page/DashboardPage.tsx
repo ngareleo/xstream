@@ -182,6 +182,7 @@ const DashboardPage: FC = () => {
                 libraries={data.libraries}
                 expandedId={expandedId}
                 isPaneFilmDetail={isPaneFilmDetail}
+                isPaneOpen={isPaneOpen}
                 selectedFilmId={filmIdParam}
               />
             </div>

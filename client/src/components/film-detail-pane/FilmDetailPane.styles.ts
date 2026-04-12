@@ -66,6 +66,10 @@ export const useFilmDetailPaneStyles = makeStyles({
       backgroundColor: tokens.colorRedDark,
     },
   },
+  actionBtnActive: {
+    backgroundColor: "rgba(255,255,255,0.16)",
+    color: tokens.colorWhite,
+  },
   actionSep: {
     width: "12px",
     flexShrink: "0",

@@ -4,7 +4,7 @@ import React, { type FC, type MouseEvent, useState } from "react";
 import { graphql, useFragment } from "react-relay";
 
 import { FilmRow } from "~/components/film-row/FilmRow.js";
-import { IconChevronDown, IconPencil, IconRefresh } from "~/lib/icons.js";
+import { IconChevronDown, IconEdit, IconRefresh } from "~/lib/icons.js";
 import type { ProfileRow_library$key } from "~/relay/__generated__/ProfileRow_library.graphql.js";
 import { formatFileSize } from "~/utils/formatters.js";
 
@@ -42,6 +42,7 @@ interface Props {
   selectedFilmId?: string | null;
   scanning?: boolean;
   scanProgress?: { done: number; total: number } | null;
+  isPaneOpen?: boolean;
 }
 
 export const ProfileRow: FC<Props> = ({
@@ -51,6 +52,7 @@ export const ProfileRow: FC<Props> = ({
   selectedFilmId = null,
   scanning = false,
   scanProgress = null,
+  isPaneOpen = false,
 }) => {
   const data = useFragment(LIBRARY_FRAGMENT, library);
   const styles = useProfileRowStyles();
@@ -97,9 +99,11 @@ export const ProfileRow: FC<Props> = ({
           <div className={styles.path}>{data.path}</div>
         </div>
 
-        <div className={styles.cell}>{typeLabel}</div>
+        <div className={styles.cell} style={isPaneOpen ? { display: "none" } : undefined}>
+          {typeLabel}
+        </div>
 
-        <div className={styles.cell}>
+        <div className={styles.cell} style={isPaneOpen ? { display: "none" } : undefined}>
           {scanning ? (
             <div className={styles.scanInline}>
               <div className={styles.scanSpinner} />
@@ -118,7 +122,10 @@ export const ProfileRow: FC<Props> = ({
           )}
         </div>
 
-        <div className={mergeClasses(styles.cell, "mono")}>
+        <div
+          className={mergeClasses(styles.cell, "mono")}
+          style={isPaneOpen ? { display: "none" } : undefined}
+        >
           {formatFileSize(data.stats.totalSizeBytes)}
         </div>
 
@@ -141,7 +148,7 @@ export const ProfileRow: FC<Props> = ({
                 onClick={(e) => e.stopPropagation()}
                 title={strings.editTitle}
               >
-                <IconPencil size={11} />
+                <IconEdit size={11} />
               </button>
             </>
           )}
@@ -150,7 +157,12 @@ export const ProfileRow: FC<Props> = ({
 
       <div className={mergeClasses(styles.children, expanded && styles.childrenOpen)}>
         {data.videos.edges.map(({ node }) => (
-          <FilmRow key={node.id} video={node} isSelected={node.id === selectedFilmId} />
+          <FilmRow
+            key={node.id}
+            video={node}
+            isSelected={node.id === selectedFilmId}
+            paneOpen={isPaneOpen}
+          />
         ))}
       </div>
     </>

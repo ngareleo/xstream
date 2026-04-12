@@ -4,7 +4,7 @@ import React, { type FC, type MouseEvent, useState } from "react";
 import { graphql, useFragment } from "react-relay";
 import { Link } from "react-router-dom";
 
-import { IconDocument, IconPencil, IconPlay, IconTv, IconWarning } from "~/lib/icons.js";
+import { IconDocument, IconEdit, IconPlay, IconTv, IconWarning } from "~/lib/icons.js";
 import type { FilmRow_video$key } from "~/relay/__generated__/FilmRow_video.graphql.js";
 import { formatDuration } from "~/utils/formatters.js";
 
@@ -32,9 +32,10 @@ const FILM_FRAGMENT = graphql`
 interface Props {
   video: FilmRow_video$key;
   isSelected: boolean;
+  paneOpen?: boolean;
 }
 
-export const FilmRow: FC<Props> = ({ video, isSelected }) => {
+export const FilmRow: FC<Props> = ({ video, isSelected, paneOpen = false }) => {
   const data = useFragment(FILM_FRAGMENT, video);
   const styles = useFilmRowStyles();
   const [hovered, setHovered] = useState(false);
@@ -81,7 +82,9 @@ export const FilmRow: FC<Props> = ({ video, isSelected }) => {
         </div>
       </div>
 
-      <div className={styles.cell}>{label}</div>
+      <div className={styles.cell} style={paneOpen ? { display: "none" } : undefined}>
+        {label}
+      </div>
 
       <div className={styles.cell}>
         <span className={mergeClasses(styles.badge, isHd ? styles.badgeRed : styles.badgeGray)}>
@@ -89,7 +92,7 @@ export const FilmRow: FC<Props> = ({ video, isSelected }) => {
         </span>
       </div>
 
-      <div className={styles.cell} />
+      <div className={styles.cell} style={paneOpen ? { display: "none" } : undefined} />
 
       <div
         className={mergeClasses(styles.actions, (hovered || isSelected) && styles.actionsVisible)}
@@ -99,7 +102,7 @@ export const FilmRow: FC<Props> = ({ video, isSelected }) => {
           onClick={handleEditClick}
           title={strings.editLinkTitle}
         >
-          <IconPencil size={11} />
+          <IconEdit size={11} />
         </button>
         {isUnmatched ? (
           <button

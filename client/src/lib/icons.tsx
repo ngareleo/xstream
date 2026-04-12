@@ -72,6 +72,12 @@ export const IconPencil = (p: IconProps): JSX.Element =>
     p
   );
 
+export const IconEdit = (p: IconProps): JSX.Element =>
+  base(
+    <path d="M13.232 3.23233L16.768 6.76833M14.732 1.73233C15.2009 1.26343 15.8369 1 16.5 1C17.1631 1 17.7991 1.26343 18.268 1.73233C18.7369 2.20123 19.0003 2.8372 19.0003 3.50033C19.0003 4.16346 18.7369 4.79943 18.268 5.26833L4.5 19.0363H1V15.4643L14.732 1.73233Z" />,
+    { ...p, viewBox: "0 0 20 20", strokeWidth: 2 }
+  );
+
 export const IconRefresh = (p: IconProps): JSX.Element =>
   base(
     <path d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" />,
@@ -201,6 +207,21 @@ export const IconBug = (p: IconProps): JSX.Element =>
     <path d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />,
     p
   );
+
+export const IconSpinner = ({ size = 16, ...rest }: IconProps): JSX.Element => (
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth={2}
+    strokeLinecap="round"
+    {...rest}
+    style={{ width: size, height: size, flexShrink: 0, animation: "spin 0.8s linear infinite" }}
+  >
+    <path d="M12 2a10 10 0 0 1 10 10" opacity="1" />
+    <path d="M12 2a10 10 0 0 0-10 10" opacity="0.25" />
+  </svg>
+);
 
 export const LogoShield = (): JSX.Element => (
   <svg width="24" height="28" viewBox="0 0 24 28" fill="none">
