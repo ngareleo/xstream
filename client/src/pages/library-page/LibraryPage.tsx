@@ -1,4 +1,3 @@
-import { mergeClasses } from "@griffel/react";
 import { NovaEventingInterceptor } from "@nova/react";
 import type { EventWrapper } from "@nova/types";
 import React, {
@@ -24,6 +23,7 @@ import { useSearchParams } from "react-router-dom";
 import { DevThrowTarget } from "~/components/dev-tools/DevToolsContext.js";
 import { isFilmDetailPaneClosedEvent } from "~/components/film-detail-pane/FilmDetailPane.events.js";
 import { FilmDetailPaneAsync } from "~/components/film-detail-pane/FilmDetailPaneAsync.js";
+import { LibraryChips } from "~/components/library-chips/LibraryChips.js";
 import { LibraryFilmListRow } from "~/components/library-film-list-row/LibraryFilmListRow.js";
 import {
   LibraryFilterBar,
@@ -45,7 +45,7 @@ const LIBRARY_QUERY = graphql`
   query LibraryPageContentQuery($search: String, $mediaType: MediaType) {
     libraries {
       id
-      name
+      ...LibraryChips_library @arguments(search: $search, mediaType: $mediaType)
       videos(first: 200, search: $search, mediaType: $mediaType) {
         edges {
           node {
@@ -54,7 +54,6 @@ const LIBRARY_QUERY = graphql`
             ...LibraryFilmListRow_video
           }
         }
-        totalCount
       }
     }
   }
@@ -212,34 +211,13 @@ const LibraryPage: FC = () => {
             count={filteredVideos.length}
           />
 
-          {/* Profile chips */}
+          {/* Library selector chips — only shown when there are multiple libraries */}
           {data.libraries.length > 1 && (
-            <div className={styles.profileChips}>
-              <button
-                className={mergeClasses(styles.chip, activeLibraryId === null && styles.chipActive)}
-                onClick={() => setActiveLibraryId(null)}
-                type="button"
-              >
-                All
-                <span className={styles.chipCount}>
-                  {data.libraries.reduce((s, l) => s + l.videos.totalCount, 0)}
-                </span>
-              </button>
-              {data.libraries.map((lib) => (
-                <button
-                  key={lib.id}
-                  className={mergeClasses(
-                    styles.chip,
-                    lib.id === activeLibraryId && styles.chipActive
-                  )}
-                  onClick={() => setActiveLibraryId(lib.id === activeLibraryId ? null : lib.id)}
-                  type="button"
-                >
-                  {lib.name}
-                  <span className={styles.chipCount}>{lib.videos.totalCount}</span>
-                </button>
-              ))}
-            </div>
+            <LibraryChips
+              libraries={data.libraries}
+              activeLibraryId={activeLibraryId}
+              onActiveLibraryIdChange={setActiveLibraryId}
+            />
           )}
 
           {/* Split body */}
