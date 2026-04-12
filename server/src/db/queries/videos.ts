@@ -119,6 +119,43 @@ export function countVideosByLibrary(libraryId: string, filter: VideoFilter = {}
   return row.count;
 }
 
+export interface VideosFilter {
+  libraryId?: string;
+  search?: string;
+  mediaType?: MediaType;
+}
+
+/**
+ * Fetches videos across all libraries, with optional filtering by library,
+ * search string, and media type. Used by the top-level `videos` Query field
+ * so the client can delegate library selection to the server.
+ */
+export function getVideos(limit: number, filter: VideosFilter = {}): VideoRow[] {
+  const { libraryId, search, mediaType } = filter;
+  const conditions: string[] = [];
+  const params: Record<string, string | number | null> = { $limit: limit };
+
+  if (libraryId) {
+    conditions.push("v.library_id = $library_id");
+    params.$library_id = libraryId;
+  }
+  if (search) {
+    conditions.push("v.title LIKE $search");
+    params.$search = `%${search}%`;
+  }
+  if (mediaType) {
+    conditions.push(
+      "EXISTS (SELECT 1 FROM libraries l WHERE l.id = v.library_id AND l.media_type = $media_type)"
+    );
+    params.$media_type = mediaType;
+  }
+
+  const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+  return getDb()
+    .prepare(`SELECT v.* FROM videos v ${where} ORDER BY v.title, v.filename LIMIT $limit`)
+    .all(params) as VideoRow[];
+}
+
 export function sumFileSizeByLibrary(libraryId: string): number {
   const row = getDb()
     .prepare(

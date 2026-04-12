@@ -58,17 +58,17 @@ import { strings } from "./LibraryPage.strings.js";
 import { useLibraryStyles } from "./LibraryPage.styles.js";
 
 const LIBRARY_QUERY = graphql`
-  query LibraryPageContentQuery($search: String, $mediaType: MediaType) {
+  query LibraryPageContentQuery($search: String, $mediaType: MediaType, $libraryId: ID) {
     libraries {
       id
-      ...LibraryChips_library @arguments(search: $search, mediaType: $mediaType)
-      videos(first: 200, search: $search, mediaType: $mediaType) {
-        edges {
-          node {
-            id
-            ...PosterCard_video
-            ...LibraryFilmListRow_video
-          }
+      ...LibraryChips_library
+    }
+    videos(first: 200, search: $search, mediaType: $mediaType, libraryId: $libraryId) {
+      edges {
+        node {
+          id
+          ...PosterCard_video
+          ...LibraryFilmListRow_video
         }
       }
     }
@@ -127,6 +127,7 @@ const LibraryPage: FC = () => {
     {
       search: deferredSearch || null,
       mediaType: typeFilter !== "all" ? typeFilter : null,
+      libraryId: activeLibraryId ?? null,
     },
     { fetchKey, fetchPolicy: fetchKey > 0 ? "network-only" : "store-or-network" }
   );
@@ -212,14 +213,7 @@ const LibraryPage: FC = () => {
     [handleSelect, closePane, filmId, setSearchParams]
   );
 
-  // Server handles search + mediaType filtering; client only picks the active library chip.
-  const filteredVideos = useMemo(() => {
-    if (activeLibraryId) {
-      const lib = data.libraries.find((l) => l.id === activeLibraryId);
-      return lib ? lib.videos.edges.map((e) => e.node) : [];
-    }
-    return data.libraries.flatMap((l) => l.videos.edges.map((e) => e.node));
-  }, [data.libraries, activeLibraryId]);
+  const videos = data.videos.edges.map((e) => e.node);
 
   if (data.libraries.length === 0) {
     return (
@@ -240,7 +234,7 @@ const LibraryPage: FC = () => {
             search={search}
             typeFilter={typeFilter}
             isGrid={isGrid}
-            count={filteredVideos.length}
+            count={videos.length}
           />
 
           {/* Library selector chips — only shown when there are multiple libraries */}
@@ -255,7 +249,7 @@ const LibraryPage: FC = () => {
             style={isPaneOpen ? { gridTemplateColumns: `1fr 4px ${paneWidth}px` } : undefined}
           >
             <div className={styles.splitLeft}>
-              {filteredVideos.length === 0 ? (
+              {videos.length === 0 ? (
                 <div className={styles.empty}>
                   <div className={styles.emptyTitle}>{strings.noResultsTitle}</div>
                   <div className={styles.emptyBody}>{strings.noResultsBody}</div>
@@ -263,7 +257,7 @@ const LibraryPage: FC = () => {
               ) : isGrid ? (
                 <div className={styles.gridArea}>
                   <div className={styles.grid}>
-                    {filteredVideos.map((video) => (
+                    {videos.map((video) => (
                       <PosterCard key={video.id} video={video} isSelected={video.id === filmId} />
                     ))}
                   </div>
@@ -286,7 +280,7 @@ const LibraryPage: FC = () => {
                       {strings.colSize}
                     </div>
                   </div>
-                  {filteredVideos.map((video) => (
+                  {videos.map((video) => (
                     <LibraryFilmListRow
                       key={video.id}
                       video={video}

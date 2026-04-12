@@ -3,9 +3,10 @@ import { join } from "path";
 
 import { getJobById } from "../../db/queries/jobs.js";
 import { getAllLibraries, getLibraryById } from "../../db/queries/libraries.js";
-import { getVideoById } from "../../db/queries/videos.js";
+import { getVideoById, getVideos } from "../../db/queries/videos.js";
 import { getWatchlist, getWatchlistItemById } from "../../db/queries/watchlist.js";
 import { isOmdbConfigured, searchOmdbList } from "../../services/omdbService.js";
+import { gqlMediaTypeToInternal } from "../mappers.js";
 import {
   type GQLLibrary,
   type GQLTranscodeJob,
@@ -48,6 +49,25 @@ export const queryResolvers = {
 
     libraries(): GQLLibrary[] {
       return getAllLibraries().map(presentLibrary);
+    },
+
+    videos(
+      _: unknown,
+      {
+        first = 200,
+        libraryId,
+        search,
+        mediaType,
+      }: { first?: number; libraryId?: string; search?: string; mediaType?: string }
+    ): { edges: { node: GQLVideo }[] } {
+      const localLibraryId = libraryId ? fromGlobalId(libraryId).id : undefined;
+      const internalMediaType = mediaType ? gqlMediaTypeToInternal(mediaType) : undefined;
+      const rows = getVideos(first, {
+        libraryId: localLibraryId,
+        search,
+        mediaType: internalMediaType,
+      });
+      return { edges: rows.map((row) => ({ node: presentVideo(row) })) };
     },
 
     video(_: unknown, { id }: { id: string }): GQLVideo | null {

@@ -149,6 +149,7 @@ export const typeDefs = /* GraphQL */ `
   type Query {
     node(id: ID!): Node
     libraries: [Library!]!
+    videos(first: Int, libraryId: ID, search: String, mediaType: MediaType): VideoConnection!
     video(id: ID!): Video
     transcodeJob(id: ID!): TranscodeJob
     watchlist: [WatchlistItem!]!
