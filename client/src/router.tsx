@@ -2,6 +2,7 @@ import React, { type FC, lazy, Suspense } from "react";
 import { createBrowserRouter, Outlet } from "react-router-dom";
 
 import { AppShell } from "~/components/app-shell/AppShell.js";
+import { ErrorBoundary } from "~/components/error-boundary/ErrorBoundary.js";
 import {
   DashboardSkeleton,
   LibrarySkeleton,
@@ -59,7 +60,9 @@ function PageLoader(): JSX.Element {
 
 const ShellLayout: FC = () => (
   <AppShell>
-    <Outlet />
+    <ErrorBoundary>
+      <Outlet />
+    </ErrorBoundary>
   </AppShell>
 );
 
@@ -121,26 +124,32 @@ export const router: ReturnType<typeof createBrowserRouter> = createBrowserRoute
   {
     path: "/play/:videoId",
     element: (
-      <Suspense fallback={<PageLoader />}>
-        <PlayerPage />
-      </Suspense>
+      <ErrorBoundary>
+        <Suspense fallback={<PageLoader />}>
+          <PlayerPage />
+        </Suspense>
+      </ErrorBoundary>
     ),
   },
   {
     path: "/player/:videoId",
     element: (
-      <Suspense fallback={<PageLoader />}>
-        <PlayerPage />
-      </Suspense>
+      <ErrorBoundary>
+        <Suspense fallback={<PageLoader />}>
+          <PlayerPage />
+        </Suspense>
+      </ErrorBoundary>
     ),
   },
   // Goodbye is full-screen — no AppShell
   {
     path: "/goodbye",
     element: (
-      <Suspense fallback={<PageLoader />}>
-        <GoodbyePage />
-      </Suspense>
+      <ErrorBoundary>
+        <Suspense fallback={<PageLoader />}>
+          <GoodbyePage />
+        </Suspense>
+      </ErrorBoundary>
     ),
   },
 ]);
