@@ -5,7 +5,7 @@ import { Slideshow } from "~/components/slideshow/Slideshow.js";
 import type { DashboardHero_library$key } from "~/relay/__generated__/DashboardHero_library.graphql.js";
 import { formatFileSize } from "~/utils/formatters.js";
 
-import { useDashboardStyles } from "./DashboardPage.styles.js";
+import { useDashboardHeroStyles } from "./DashboardHero.styles.js";
 
 const FRAGMENT = graphql`
   fragment DashboardHero_library on Library @relay(plural: true) {
@@ -22,7 +22,7 @@ interface Props {
 
 export const DashboardHero: FC<Props> = ({ libraries }) => {
   const data = useFragment(FRAGMENT, libraries);
-  const styles = useDashboardStyles();
+  const styles = useDashboardHeroStyles();
 
   const totalFiles = data.reduce((s, l) => s + l.stats.totalCount, 0);
   const totalBytes = data.reduce((s, l) => s + l.stats.totalSizeBytes, 0);

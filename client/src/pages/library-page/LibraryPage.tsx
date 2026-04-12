@@ -24,6 +24,11 @@ import { useSearchParams } from "react-router-dom";
 import { DevThrowTarget } from "~/components/dev-tools/DevToolsContext.js";
 import { isFilmDetailPaneClosedEvent } from "~/components/film-detail-pane/FilmDetailPane.events.js";
 import { FilmDetailPaneAsync } from "~/components/film-detail-pane/FilmDetailPaneAsync.js";
+import { LibraryFilmListRow } from "~/components/library-film-list-row/LibraryFilmListRow.js";
+import {
+  LibraryFilterBar,
+  type TypeFilter,
+} from "~/components/library-filter-bar/LibraryFilterBar.js";
 import {
   isPosterCardFilmSelectedEvent,
   type PosterCardFilmSelectedData,
@@ -34,8 +39,6 @@ import type { LibraryPageContentDetailQuery } from "~/relay/__generated__/Librar
 import type { LibraryPageContentQuery } from "~/relay/__generated__/LibraryPageContentQuery.graphql.js";
 import type { LibraryPageContentScanSubscription } from "~/relay/__generated__/LibraryPageContentScanSubscription.graphql.js";
 
-import { LibraryFilmListRow } from "./LibraryFilmListRow.js";
-import { LibraryFilterBar, type TypeFilter } from "./LibraryFilterBar.js";
 import { useLibraryStyles } from "./LibraryPage.styles.js";
 
 const LIBRARY_QUERY = graphql`

@@ -5,7 +5,7 @@ import { ProfileRow } from "~/components/profile-row/ProfileRow.js";
 import type { DashboardLibraryList_library$key } from "~/relay/__generated__/DashboardLibraryList_library.graphql.js";
 import { formatFileSize } from "~/utils/formatters.js";
 
-import { useDashboardStyles } from "./DashboardPage.styles.js";
+import { useDashboardLibraryListStyles } from "./DashboardLibraryList.styles.js";
 
 const FRAGMENT = graphql`
   fragment DashboardLibraryList_library on Library @relay(plural: true) {
@@ -32,7 +32,7 @@ export const DashboardLibraryList: FC<Props> = ({
   selectedFilmId,
 }) => {
   const data = useFragment(FRAGMENT, libraries);
-  const styles = useDashboardStyles();
+  const styles = useDashboardLibraryListStyles();
 
   const totalFiles = data.reduce((s, l) => s + l.stats.totalCount, 0);
   const totalBytes = data.reduce((s, l) => s + l.stats.totalSizeBytes, 0);

@@ -3,7 +3,7 @@ import { type FC } from "react";
 
 import { IconBars, IconSquares } from "~/lib/icons.js";
 
-import { useLibraryStyles } from "./LibraryPage.styles.js";
+import { useLibraryFilterBarStyles } from "./LibraryFilterBar.styles.js";
 
 export type TypeFilter = "all" | "MOVIES" | "TV_SHOWS";
 
@@ -26,7 +26,7 @@ export const LibraryFilterBar: FC<Props> = ({
   onIsGridChange,
   count,
 }) => {
-  const styles = useLibraryStyles();
+  const styles = useLibraryFilterBarStyles();
 
   return (
     <div className={styles.filterBar}>

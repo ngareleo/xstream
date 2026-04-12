@@ -47,123 +47,7 @@ export const useLibraryStyles = makeStyles({
     minHeight: "0",
   },
 
-  // ── Filter bar ─────────────────────────────────────────────────────────────
-  filterBar: {
-    display: "flex",
-    alignItems: "center",
-    gap: "10px",
-    padding: "0 20px",
-    height: "48px",
-    borderBottom: `1px solid ${tokens.colorBorder}`,
-    flexShrink: "0",
-    backgroundColor: tokens.colorSurface,
-  },
-  searchInput: {
-    flex: "1",
-    maxWidth: "300px",
-    padding: "6px 12px",
-    backgroundColor: tokens.colorSurface2,
-    border: `1px solid ${tokens.colorBorder}`,
-    borderRadius: tokens.radiusSm,
-    color: tokens.colorWhite,
-    fontSize: "12px",
-    fontFamily: tokens.fontBody,
-    outlineStyle: "none",
-    ":focus": {
-      border: `1px solid ${tokens.colorRed}`,
-    },
-    "::placeholder": {
-      color: tokens.colorMuted2,
-    },
-  },
-  filterSep: {
-    width: "1px",
-    height: "16px",
-    backgroundColor: tokens.colorBorder,
-    flexShrink: "0",
-  },
-  toggleBtn: {
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    width: "30px",
-    height: "28px",
-    background: "transparent",
-    border: `1px solid transparent`,
-    borderRadius: tokens.radiusSm,
-    color: tokens.colorMuted,
-    cursor: "pointer",
-    transitionProperty: "color, border-color, background",
-    transitionDuration: tokens.transition,
-    ":hover": {
-      color: tokens.colorWhite,
-      backgroundColor: tokens.colorSurface2,
-    },
-  },
-  toggleBtnActive: {
-    color: tokens.colorWhite,
-    backgroundColor: tokens.colorSurface2,
-    border: `1px solid ${tokens.colorBorder}`,
-  },
-  filterCount: {
-    marginLeft: "auto",
-    fontSize: "11px",
-    color: tokens.colorMuted2,
-  },
-
-  // ── Library tabs ───────────────────────────────────────────────────────────
-  tabs: {
-    display: "flex",
-    alignItems: "center",
-    gap: "0",
-    borderBottom: `1px solid ${tokens.colorBorder}`,
-    flexShrink: "0",
-    overflowX: "auto",
-    backgroundColor: tokens.colorSurface,
-  },
-  tab: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: "6px",
-    padding: "0 16px",
-    height: "36px",
-    fontSize: "12px",
-    fontWeight: "600",
-    color: tokens.colorMuted,
-    cursor: "pointer",
-    background: "transparent",
-    border: "none",
-    borderBottom: "2px solid transparent",
-    transitionProperty: "color, border-color",
-    transitionDuration: tokens.transition,
-    whiteSpace: "nowrap",
-    ":hover": {
-      color: tokens.colorWhite,
-    },
-  },
-  tabActive: {
-    color: tokens.colorWhite,
-    borderBottom: `2px solid ${tokens.colorRed}`,
-  },
-  tabCount: {
-    fontSize: "10px",
-    color: tokens.colorMuted2,
-    fontWeight: "400",
-  },
-
-  // ── Grid ───────────────────────────────────────────────────────────────────
-  gridArea: {
-    flex: "1",
-    overflowY: "auto",
-    padding: "20px",
-  },
-  grid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))",
-    gap: "12px",
-  },
-
-  // ── Profile chips ──────────────────────────────────────────────────────────
+  // ── Library chips ──────────────────────────────────────────────────────────
   profileChips: {
     display: "flex",
     alignItems: "center",
@@ -205,23 +89,19 @@ export const useLibraryStyles = makeStyles({
     fontWeight: "400",
   },
 
-  // ── Type filter select ─────────────────────────────────────────────────────
-  filterSelect: {
-    backgroundColor: tokens.colorSurface2,
-    border: `1px solid ${tokens.colorBorder}`,
-    color: tokens.colorWhite,
-    fontSize: "12px",
-    fontFamily: tokens.fontBody,
-    padding: "6px 10px",
-    borderRadius: tokens.radiusSm,
-    outlineStyle: "none",
-    cursor: "pointer",
-    ":focus": {
-      border: `1px solid ${tokens.colorRed}`,
-    },
+  // ── Grid ───────────────────────────────────────────────────────────────────
+  gridArea: {
+    flex: "1",
+    overflowY: "auto",
+    padding: "20px",
+  },
+  grid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))",
+    gap: "12px",
   },
 
-  // ── List view ──────────────────────────────────────────────────────────────
+  // ── List view container ────────────────────────────────────────────────────
   listArea: {
     flex: "1",
     overflowY: "auto",
@@ -242,60 +122,6 @@ export const useLibraryStyles = makeStyles({
     letterSpacing: "0.1em",
     textTransform: "uppercase",
     color: tokens.colorMuted2,
-  },
-  listRow: {
-    display: "grid",
-    gridTemplateColumns: "48px 1fr 110px 60px 72px 64px",
-    gap: "0 12px",
-    alignItems: "center",
-    padding: "6px 10px",
-    borderRadius: tokens.radiusSm,
-    cursor: "pointer",
-    transitionProperty: "background",
-    transitionDuration: tokens.transition,
-    borderBottom: "1px solid transparent",
-    ":hover": {
-      backgroundColor: "rgba(255,255,255,0.04)",
-    },
-  },
-  listRowSelected: {
-    backgroundColor: "rgba(206,17,38,0.07)",
-    borderBottomColor: "rgba(206,17,38,0.15)",
-  },
-  listThumb: {
-    width: "48px",
-    height: "68px",
-    borderRadius: "3px",
-    flexShrink: "0",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    overflow: "hidden",
-    backgroundSize: "cover",
-    backgroundPosition: "center",
-    backgroundColor: tokens.colorSurface2,
-  },
-  listInfo: {
-    minWidth: "0",
-  },
-  listTitle: {
-    fontSize: "13px",
-    fontWeight: "500",
-    color: "rgba(245,245,245,0.85)",
-    whiteSpace: "nowrap",
-    overflow: "hidden",
-    textOverflow: "ellipsis",
-  },
-  listMeta: {
-    fontSize: "11px",
-    color: tokens.colorMuted,
-    marginTop: "2px",
-  },
-  listCell: {
-    fontSize: "11px",
-    color: tokens.colorMuted2,
-    whiteSpace: "nowrap",
-    textAlign: "right",
   },
 
   // ── Empty states ───────────────────────────────────────────────────────────

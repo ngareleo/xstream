@@ -7,7 +7,7 @@ import { IconPlay } from "~/lib/icons.js";
 import type { LibraryFilmListRow_video$key } from "~/relay/__generated__/LibraryFilmListRow_video.graphql.js";
 import { formatDuration, formatFileSize } from "~/utils/formatters.js";
 
-import { useLibraryStyles } from "./LibraryPage.styles.js";
+import { useLibraryFilmListRowStyles } from "./LibraryFilmListRow.styles.js";
 
 const FRAGMENT = graphql`
   fragment LibraryFilmListRow_video on Video {
@@ -36,7 +36,7 @@ interface Props {
 
 export const LibraryFilmListRow: FC<Props> = ({ video, isSelected, onSelect }) => {
   const data = useFragment(FRAGMENT, video);
-  const styles = useLibraryStyles();
+  const styles = useLibraryFilmListRowStyles();
 
   const is4k = (data.videoStream?.height ?? 0) >= 2160;
   const thumbStyle = data.metadata?.posterUrl

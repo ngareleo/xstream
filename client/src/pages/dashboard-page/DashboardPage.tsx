@@ -14,6 +14,8 @@ import { useSearchParams } from "react-router-dom";
 
 import { useHeaderActionStyles } from "~/components/app-header/AppHeader.styles.js";
 import { useHeaderActions } from "~/components/app-shell/AppShell.js";
+import { DashboardHero } from "~/components/dashboard-hero/DashboardHero.js";
+import { DashboardLibraryList } from "~/components/dashboard-library-list/DashboardLibraryList.js";
 import { DevThrowTarget } from "~/components/dev-tools/DevToolsContext.js";
 import { isFilmDetailPaneClosedEvent } from "~/components/film-detail-pane/FilmDetailPane.events.js";
 import { FilmDetailPaneAsync } from "~/components/film-detail-pane/FilmDetailPaneAsync.js";
@@ -37,8 +39,6 @@ import type { DashboardPageContentDetailQuery } from "~/relay/__generated__/Dash
 import type { DashboardPageContentQuery } from "~/relay/__generated__/DashboardPageContentQuery.graphql.js";
 import type { DashboardPageContentScanMutation } from "~/relay/__generated__/DashboardPageContentScanMutation.graphql.js";
 
-import { DashboardHero } from "./DashboardHero.js";
-import { DashboardLibraryList } from "./DashboardLibraryList.js";
 import { useDashboardStyles } from "./DashboardPage.styles.js";
 
 const DASHBOARD_QUERY = graphql`
