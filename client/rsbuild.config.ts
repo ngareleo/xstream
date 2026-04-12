@@ -1,8 +1,5 @@
-import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-
-const require = createRequire(import.meta.url);
 
 import { defineConfig } from "@rsbuild/core";
 import { pluginBabel } from "@rsbuild/plugin-babel";
@@ -15,8 +12,6 @@ export default defineConfig({
   plugins: [
     pluginReact(),
     // Apply babel-plugin-relay so graphql template literals are compiled at build time.
-    // Also apply @griffel/babel-preset here (in the main pipeline, after TypeScript
-    // is already stripped) so the webpack loader can extract styles.
     pluginBabel({
       include: /\.(?:ts|jsx|tsx)$/,
       babelLoaderOptions(opts) {
@@ -25,24 +20,6 @@ export default defineConfig({
       },
     }),
   ],
-
-  tools: {
-    rspack: (config) => {
-      // Generate an interactive HTML bundle report in CI. Output lands at
-      // dist/stats.html, which the CI workflow uploads as an artifact.
-      if (process.env.CI) {
-        // require() rather than import() because rsbuild.config.ts runs in a
-        // CommonJS context at build time; the package ships no type declarations.
-        // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-explicit-any
-        const { BundleAnalyzerPlugin } = require("webpack-bundle-analyzer") as any;
-        config.plugins ??= [];
-        config.plugins.push(
-          new BundleAnalyzerPlugin({ analyzerMode: "static", openAnalyzer: false, reportFilename: "stats.html" })
-        );
-      }
-      return config;
-    },
-  },
 
   source: {
     entry: { index: "./src/main.tsx" },
@@ -74,6 +51,12 @@ export default defineConfig({
       detail: true,
       compressed: true,
     },
+
+    // Generate an interactive HTML bundle report in CI. Output lands at
+    // dist/stats.html, which the CI workflow uploads as an artifact.
+    ...(process.env.CI
+      ? { bundleAnalyze: { analyzerMode: "static", openAnalyzer: false, reportFilename: "stats.html" } }
+      : {}),
 
     /**
      * Split vendor dependencies into stable, independently-cacheable chunks.
