@@ -132,9 +132,7 @@ export const ProfileRow: FC<Props> = ({
           </div>
         )}
 
-        {!isPaneOpen && (
-          <div className={styles.cell}>{formatFileSize(data.stats.totalSizeBytes)}</div>
-        )}
+        <div className={styles.cell}>{formatFileSize(data.stats.totalSizeBytes)}</div>
 
         <div
           className={mergeClasses(styles.actions, (hovered || selected) && styles.actionsVisible)}

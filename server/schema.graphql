@@ -127,6 +127,11 @@ type TranscodeJob implements Node {
   error: String
 }
 
+type DirEntry {
+  name: String!
+  path: String!
+}
+
 type Query {
   node(id: ID!): Node
   libraries: [Library!]!
@@ -135,6 +140,7 @@ type Query {
   watchlist: [WatchlistItem!]!
   searchOmdb(query: String!, year: Int): [OmdbSearchResult!]!
   omdbConfigured: Boolean!
+  listDirectory(path: String!): [DirEntry!]!
 }
 
 type Mutation {

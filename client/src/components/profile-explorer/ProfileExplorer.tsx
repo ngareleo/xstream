@@ -80,7 +80,7 @@ export const ProfileExplorer: FC<Props> = ({
         <div className={styles.dirCol}>{strings.colName}</div>
         {!isPaneOpen && <div className={styles.dirCol}>{strings.colCount}</div>}
         {!isPaneOpen && <div className={styles.dirCol}>{strings.colMatch}</div>}
-        {!isPaneOpen && <div className={styles.dirCol}>{strings.colSize}</div>}
+        <div className={styles.dirCol}>{strings.colSize}</div>
         <div />
       </div>
 

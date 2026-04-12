@@ -17,6 +17,7 @@ import { DashboardHero } from "~/components/dashboard-hero/DashboardHero.js";
 import { DevThrowTarget } from "~/components/dev-tools/DevToolsContext.js";
 import {
   isEditProfilePaneClosedEvent,
+  isEditProfilePaneDeletedEvent,
   isEditProfilePaneSavedEvent,
 } from "~/components/edit-profile-pane/EditProfilePane.events.js";
 import { EditProfilePaneAsync } from "~/components/edit-profile-pane/EditProfilePaneAsync.js";
@@ -277,7 +278,11 @@ const DashboardPage: FC = () => {
         closePane();
         return undefined;
       }
-      if (isEditProfilePaneClosedEvent(wrapper) || isEditProfilePaneSavedEvent(wrapper)) {
+      if (
+        isEditProfilePaneClosedEvent(wrapper) ||
+        isEditProfilePaneSavedEvent(wrapper) ||
+        isEditProfilePaneDeletedEvent(wrapper)
+      ) {
         closePane();
         return undefined;
       }

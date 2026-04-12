@@ -141,6 +141,11 @@ export const typeDefs = /* GraphQL */ `
 
   # ── Root ─────────────────────────────────────────────────────────────────────
 
+  type DirEntry {
+    name: String!
+    path: String!
+  }
+
   type Query {
     node(id: ID!): Node
     libraries: [Library!]!
@@ -149,6 +154,7 @@ export const typeDefs = /* GraphQL */ `
     watchlist: [WatchlistItem!]!
     searchOmdb(query: String!, year: Int): [OmdbSearchResult!]!
     omdbConfigured: Boolean!
+    listDirectory(path: String!): [DirEntry!]!
   }
 
   type Mutation {

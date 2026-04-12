@@ -1,3 +1,6 @@
+import { readdir } from "fs/promises";
+import { join } from "path";
+
 import { getJobById } from "../../db/queries/jobs.js";
 import { getAllLibraries, getLibraryById } from "../../db/queries/libraries.js";
 import { getVideoById } from "../../db/queries/videos.js";
@@ -87,6 +90,21 @@ export const queryResolvers = {
 
     omdbConfigured(): boolean {
       return isOmdbConfigured();
+    },
+
+    async listDirectory(
+      _: unknown,
+      { path: dirPath }: { path: string }
+    ): Promise<{ name: string; path: string }[]> {
+      try {
+        const entries = await readdir(dirPath, { withFileTypes: true });
+        return entries
+          .filter((e) => e.isDirectory() && !e.name.startsWith("."))
+          .map((e) => ({ name: e.name, path: join(dirPath, e.name) }))
+          .sort((a, b) => a.name.localeCompare(b.name));
+      } catch {
+        return [];
+      }
     },
   },
 

@@ -101,11 +101,9 @@ export const FilmRow: FC<Props> = ({ video, isSelected, paneOpen = false }) => {
         </div>
       )}
 
-      {!paneOpen && (
-        <div className={mergeClasses(styles.cell, styles.cellMono)}>
-          {formatFileSize(data.fileSizeBytes)}
-        </div>
-      )}
+      <div className={mergeClasses(styles.cell, styles.cellMono)}>
+        {formatFileSize(data.fileSizeBytes)}
+      </div>
 
       <div
         className={mergeClasses(styles.actions, (hovered || isSelected) && styles.actionsVisible)}

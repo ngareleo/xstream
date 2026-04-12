@@ -11,3 +11,17 @@ client/src/relay/__generated__/
 
 *storybook.log
 storybook-static
+
+# playwright-mcp session logs/snapshots
+.playwright-mcp/
+client/.playwright-mcp/
+
+# vite dep cache
+client/.vite/
+
+# dev session screenshots
+*.png
+*.jpg
+
+# docs tooling state
+docs/.obsidian/

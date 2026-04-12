@@ -4,7 +4,7 @@ import { tokens } from "~/styles/tokens";
 
 // Shared grid template constants so FilmRow, ProfileRow, and the header always align.
 export const GRID_FULL = "28px 1fr 80px 1fr 70px 110px";
-export const GRID_COMPACT = "28px 1fr 110px";
+export const GRID_COMPACT = "28px 1fr 70px 110px";
 
 export const useFilmRowStyles = makeStyles({
   row: {

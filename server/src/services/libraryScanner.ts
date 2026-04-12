@@ -6,7 +6,6 @@ import { createReadStream } from "fs";
 import { access, readdir, stat } from "fs/promises";
 import { basename, extname, join } from "path";
 
-import { loadMediaConfig } from "../config.js";
 import { getAllLibraries, upsertLibrary } from "../db/queries/libraries.js";
 import { getUnmatchedVideoIds, upsertVideoMetadata } from "../db/queries/videoMetadata.js";
 import { replaceVideoStreams, upsertVideo } from "../db/queries/videos.js";
@@ -279,24 +278,20 @@ export async function scanLibraries(): Promise<LibraryRow[]> {
   markScanStarted();
 
   try {
-    // If no libraries in DB yet, seed from mediaFiles.json for backward compatibility.
     const existingLibraries = getAllLibraries();
-    const entries: MediaLibraryEntry[] =
-      existingLibraries.length > 0
-        ? existingLibraries.map((lib) => ({
-            name: lib.name,
-            path: lib.path,
-            mediaType: lib.media_type,
-            env: lib.env as "dev" | "prod" | "user",
-            videoExtensions: (() => {
-              try {
-                return JSON.parse(lib.video_extensions) as string[];
-              } catch {
-                return DEFAULT_VIDEO_EXTENSIONS;
-              }
-            })(),
-          }))
-        : loadMediaConfig();
+    const entries: MediaLibraryEntry[] = existingLibraries.map((lib) => ({
+      name: lib.name,
+      path: lib.path,
+      mediaType: lib.media_type,
+      env: lib.env as "dev" | "prod" | "user",
+      videoExtensions: (() => {
+        try {
+          return JSON.parse(lib.video_extensions) as string[];
+        } catch {
+          return DEFAULT_VIDEO_EXTENSIONS;
+        }
+      })(),
+    }));
 
     const results: LibraryRow[] = [];
 

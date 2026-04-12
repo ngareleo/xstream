@@ -1,18 +1,11 @@
-import { readFileSync } from "fs";
 import { resolve } from "path";
 
-import type {
-  MediaFilesConfig,
-  MediaLibraryEntry,
-  Resolution,
-  ResolutionProfile,
-} from "./types.js";
+import type { Resolution, ResolutionProfile } from "./types.js";
 
 export interface AppConfig {
   port: number;
   segmentDir: string;
   dbPath: string;
-  mediaConfigPath: string;
   /** Milliseconds between automatic library rescans. */
   scanIntervalMs: number;
 }
@@ -24,7 +17,6 @@ const dev: AppConfig = {
   segmentDir: resolve(root, "tmp/segments"),
   // Allow DB_PATH override so integration tests can use a temp database
   dbPath: process.env.DB_PATH ?? resolve(root, "tmp/tvke.db"),
-  mediaConfigPath: resolve(root, "mediaFiles.json"),
   scanIntervalMs: 30_000,
 };
 
@@ -32,7 +24,6 @@ const prod: AppConfig = {
   port: Number(process.env.PORT ?? 8080),
   segmentDir: process.env.SEGMENT_DIR ?? resolve(root, "tmp/segments"),
   dbPath: process.env.DB_PATH ?? resolve(root, "tmp/tvke.db"),
-  mediaConfigPath: resolve(root, "mediaFiles.json"),
   scanIntervalMs: (() => {
     const raw = Number(process.env.SCAN_INTERVAL_MS ?? 30_000);
     return Number.isFinite(raw) && raw > 0 ? raw : 30_000;
@@ -97,30 +88,3 @@ export const RESOLUTION_PROFILES: Record<Resolution, ResolutionProfile> = {
     segmentDuration: 2,
   },
 };
-
-export function loadMediaConfig(): MediaLibraryEntry[] {
-  const env = process.env.NODE_ENV === "production" ? "prod" : "dev";
-  let raw: MediaFilesConfig;
-
-  try {
-    raw = JSON.parse(readFileSync(config.mediaConfigPath, "utf8")) as MediaFilesConfig;
-  } catch {
-    console.error(`[config] Failed to read mediaFiles.json at ${config.mediaConfigPath}`);
-    return [];
-  }
-
-  const seen = new Set<string>();
-  const active: MediaLibraryEntry[] = [];
-
-  for (const entry of raw.libraries) {
-    if (entry.env !== env) continue;
-    if (seen.has(entry.path)) {
-      console.warn(`[config] Duplicate path skipped: ${entry.path}`);
-      continue;
-    }
-    seen.add(entry.path);
-    active.push(entry);
-  }
-
-  return active;
-}

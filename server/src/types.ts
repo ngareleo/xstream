@@ -25,10 +25,6 @@ export interface MediaLibraryEntry {
 
 export const DEFAULT_VIDEO_EXTENSIONS = [".mp4", ".mkv", ".mov", ".avi", ".m4v", ".webm", ".ts"];
 
-export interface MediaFilesConfig {
-  libraries: MediaLibraryEntry[];
-}
-
 // DB row shapes (snake_case mirrors column names)
 export interface LibraryRow {
   id: string;
