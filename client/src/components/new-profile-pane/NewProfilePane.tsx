@@ -1,9 +1,15 @@
 import { mergeClasses } from "@griffel/react";
-import { useNovaEventing } from "@nova/react";
-import React, { type FC, useState } from "react";
+import { NovaEventingInterceptor, useNovaEventing } from "@nova/react";
+import type { EventWrapper } from "@nova/types";
+import React, { type FC, useCallback, useState } from "react";
 import { graphql, useMutation } from "react-relay";
 
-import { IconClose } from "~/lib/icons.js";
+import {
+  type FolderSelectedData,
+  isFolderSelectedEvent,
+} from "~/components/directory-browser/DirectoryBrowser.events.js";
+import { DirectoryBrowser } from "~/components/directory-browser/DirectoryBrowser.js";
+import { IconClose, IconFolder } from "~/lib/icons.js";
 import type { NewProfilePaneCreateLibraryMutation } from "~/relay/__generated__/NewProfilePaneCreateLibraryMutation.graphql.js";
 
 import {
@@ -43,9 +49,23 @@ export const NewProfilePane: FC = () => {
   const { bubble } = useNovaEventing();
   const submitEventRef = React.useRef<React.MouseEvent | null>(null);
 
+  const [browseOpen, setBrowseOpen] = useState(false);
   const [commit, isPending] =
     useMutation<NewProfilePaneCreateLibraryMutation>(CREATE_LIBRARY_MUTATION);
   const [error, setError] = useState<string | null>(null);
+
+  const browserInterceptor = useCallback(
+    async (wrapper: EventWrapper): Promise<EventWrapper | undefined> => {
+      if (isFolderSelectedEvent(wrapper) && wrapper.event.data) {
+        const { path: selected } = wrapper.event.data() as FolderSelectedData;
+        setPath(selected);
+        setBrowseOpen(false);
+        return undefined;
+      }
+      return wrapper;
+    },
+    []
+  );
 
   const handleMediaTypeChange = (next: "MOVIES" | "TV_SHOWS"): void => {
     setMediaType(next);
@@ -111,12 +131,30 @@ export const NewProfilePane: FC = () => {
 
         <div className={styles.fieldGroup}>
           <label className={styles.label}>{strings.labelPath}</label>
-          <input
-            className={styles.input}
-            placeholder={strings.placeholderPath}
-            value={path}
-            onChange={(e) => setPath(e.target.value)}
-          />
+          <div className={styles.pathRow}>
+            <input
+              className={styles.pathInput}
+              placeholder={strings.placeholderPath}
+              value={path}
+              onChange={(e) => {
+                setPath(e.target.value);
+                if (browseOpen) setBrowseOpen(false);
+              }}
+            />
+            <button
+              className={mergeClasses(styles.browseBtn, browseOpen && styles.browseBtnActive)}
+              onClick={() => setBrowseOpen((prev) => !prev)}
+              type="button"
+              title={strings.browseTitle}
+            >
+              <IconFolder size={13} />
+            </button>
+          </div>
+          {browseOpen && (
+            <NovaEventingInterceptor interceptor={browserInterceptor}>
+              <DirectoryBrowser initialPath={path.trim() || "/"} />
+            </NovaEventingInterceptor>
+          )}
         </div>
 
         <div className={styles.fieldGroup}>

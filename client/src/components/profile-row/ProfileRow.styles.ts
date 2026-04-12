@@ -87,6 +87,14 @@ export const useProfileRowStyles = makeStyles({
     opacity: "1",
   },
 
+  scanLabel: {
+    display: "flex",
+    alignItems: "center",
+    gap: "5px",
+    fontSize: "10px",
+    color: tokens.colorGreen,
+    marginTop: "1px",
+  },
   scanInline: {
     display: "flex",
     alignItems: "center",

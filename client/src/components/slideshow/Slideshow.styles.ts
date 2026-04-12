@@ -9,12 +9,16 @@ export const useSlideshowStyles = makeStyles({
   slide: {
     position: "absolute",
     inset: "0",
-    backgroundSize: "cover",
-    backgroundPosition: "center",
+    backgroundSize: "300% 300%",
+    backgroundPosition: "0% 0%",
     opacity: "0",
     transitionProperty: "opacity",
     transitionDuration: "0.8s",
     transitionTimingFunction: "ease",
+    animationName: "gradient-drift",
+    animationDuration: "12s",
+    animationTimingFunction: "ease",
+    animationIterationCount: "infinite",
   },
   slideActive: {
     opacity: "1",

@@ -2,10 +2,10 @@ import LocalizedStrings from "react-localization";
 
 export const strings = new LocalizedStrings({
   en: {
-    caption0: "Your library",
-    caption1: "Curated for you",
-    caption2: "4K \u00b7 HDR \u00b7 Dolby",
-    caption3: "Ready to watch",
+    caption0: "Here\u2019s looking at you, kid.",
+    caption1: "May the Force be with you.",
+    caption2: "You talking to me?",
+    caption3: "I\u2019ll be back.",
     slideAriaLabel: "Slide",
   },
 });

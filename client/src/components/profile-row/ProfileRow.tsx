@@ -104,19 +104,27 @@ export const ProfileRow: FC<Props> = ({
 
         <div className={styles.nameCell}>
           <div className={styles.name}>{data.name}</div>
-          <div className={styles.path}>{data.path}</div>
+          {scanning ? (
+            <div className={styles.scanLabel}>
+              <div className={styles.scanSpinner} />
+              <span>
+                {scanProgress
+                  ? strings.scanningProgress
+                      .replace("{done}", String(scanProgress.done))
+                      .replace("{total}", String(scanProgress.total))
+                  : strings.scanningEllipsis}
+              </span>
+            </div>
+          ) : (
+            <div className={styles.path}>{data.path}</div>
+          )}
         </div>
 
-        {!isPaneOpen && <div className={styles.cell}>{typeLabel}</div>}
+        {!isPaneOpen && <div className={styles.cell}>{scanning ? null : typeLabel}</div>}
 
         {!isPaneOpen && (
           <div className={styles.cell}>
-            {scanning ? (
-              <div className={styles.scanInline}>
-                <div className={styles.scanSpinner} />
-                {scanProgress ? `${scanProgress.done}/${scanProgress.total}` : "…"}
-              </div>
-            ) : (
+            {!scanning && (
               <div className={styles.matchBar}>
                 <div className={styles.matchTrack}>
                   <div
@@ -132,14 +140,14 @@ export const ProfileRow: FC<Props> = ({
           </div>
         )}
 
-        <div className={styles.cell}>{formatFileSize(data.stats.totalSizeBytes)}</div>
+        <div className={styles.cell}>
+          {scanning ? null : formatFileSize(data.stats.totalSizeBytes)}
+        </div>
 
         <div
           className={mergeClasses(styles.actions, (hovered || selected) && styles.actionsVisible)}
         >
-          {scanning ? (
-            <span style={{ fontSize: 10, color: "#27AE60" }}>{strings.scanning}</span>
-          ) : (
+          {scanning ? null : (
             <>
               <button
                 className={styles.iconBtn}

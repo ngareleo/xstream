@@ -10,7 +10,7 @@ import { subscriptionResolvers } from "../graphql/resolvers/subscription.js";
 import { videoResolvers } from "../graphql/resolvers/video.js";
 import { typeDefs } from "../graphql/schema.js";
 
-const schema = makeExecutableSchema({
+export const schema = makeExecutableSchema({
   typeDefs,
   resolvers: [
     queryResolvers,

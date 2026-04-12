@@ -105,6 +105,54 @@ export const useNewProfilePaneStyles = makeStyles({
     boxSizing: "border-box",
   },
 
+  // ── Path row ──────────────────────────────────────────────────────────────
+  pathRow: {
+    display: "flex",
+    gap: "6px",
+    alignItems: "stretch",
+  },
+  pathInput: {
+    flex: "1",
+    padding: "8px 12px",
+    backgroundColor: tokens.colorSurface2,
+    border: `1px solid ${tokens.colorBorder}`,
+    borderRadius: tokens.radiusSm,
+    color: tokens.colorWhite,
+    fontSize: "12px",
+    fontFamily: tokens.fontMono,
+    outlineStyle: "none",
+    transitionProperty: "border-color",
+    transitionDuration: tokens.transition,
+    ":focus": {
+      border: `1px solid ${tokens.colorRed}`,
+    },
+    "::placeholder": {
+      color: tokens.colorMuted2,
+    },
+    boxSizing: "border-box",
+  },
+  browseBtn: {
+    padding: "0 10px",
+    backgroundColor: tokens.colorSurface2,
+    border: `1px solid ${tokens.colorBorder}`,
+    borderRadius: tokens.radiusSm,
+    color: tokens.colorMuted,
+    fontSize: "11px",
+    fontWeight: "600",
+    cursor: "pointer",
+    whiteSpace: "nowrap",
+    transitionProperty: "color, border-color",
+    transitionDuration: tokens.transition,
+    ":hover": {
+      color: tokens.colorWhite,
+      border: `1px solid ${tokens.colorBorder2}`,
+    },
+  },
+  browseBtnActive: {
+    color: tokens.colorWhite,
+    border: `1px solid ${tokens.colorBorder2}`,
+  },
+
   // ── Extension chips ───────────────────────────────────────────────────────
   extChips: {
     display: "flex",

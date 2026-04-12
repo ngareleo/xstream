@@ -39,7 +39,7 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      "/graphql": { target: "http://localhost:3001" },
+      "/graphql": { target: "http://localhost:3001", ws: true },
       "/stream": { target: "http://localhost:3001" },
     },
   },

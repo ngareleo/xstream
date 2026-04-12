@@ -8,5 +8,7 @@ export const strings = new LocalizedStrings({
     refreshTitle: "Refresh",
     editTitle: "Edit",
     scanning: "Scanning\u2026",
+    scanningEllipsis: "Scanning\u2026",
+    scanningProgress: "Scanning {done} / {total}",
   },
 });

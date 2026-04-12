@@ -1,7 +1,16 @@
 import { mergeClasses } from "@griffel/react";
 import { NovaEventingInterceptor } from "@nova/react";
 import type { EventWrapper } from "@nova/types";
-import { type FC, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  type FC,
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useTransition,
+} from "react";
 import {
   graphql,
   useLazyLoadQuery,
@@ -105,14 +114,20 @@ const DashboardPage: FC = () => {
   const actionStyles = useHeaderActionStyles();
   const setHeaderActions = useHeaderActions();
   const { paneWidth, containerRef, onResizeMouseDown } = useSplitResize(360);
-  const data = useLazyLoadQuery<DashboardPageContentQuery>(DASHBOARD_QUERY, {});
+  const [fetchKey, setFetchKey] = useState(0);
+  const [, startTransition] = useTransition();
+  const wasScanning = useRef(false);
+  const data = useLazyLoadQuery<DashboardPageContentQuery>(
+    DASHBOARD_QUERY,
+    {},
+    { fetchKey, fetchPolicy: fetchKey > 0 ? "network-only" : "store-or-network" }
+  );
   const [detailQueryRef, loadDetailQuery] =
     useQueryLoader<FilmDetailLoaderQuery>(FILM_DETAIL_QUERY);
 
   const [searchParams, setSearchParams] = useSearchParams();
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
-  // Per-library scan progress: libraryId → { done, total }
   const [scanningLibraryId, setScanningLibraryId] = useState<string | null>(null);
   const [scanProgress, setScanProgress] = useState<{ done: number; total: number } | null>(null);
 
@@ -123,15 +138,20 @@ const DashboardPage: FC = () => {
       onNext: (response: DashboardPageScanProgressSubscription["response"] | null | undefined) => {
         const progress = response?.libraryScanProgress;
         if (!progress) return;
-        if (progress.scanning && progress.libraryId) {
-          setScanningLibraryId(progress.libraryId);
+        const nowScanning = Boolean(progress.scanning);
+        if (nowScanning) {
+          setScanningLibraryId(progress.libraryId ?? null);
           if (progress.done != null && progress.total != null) {
             setScanProgress({ done: progress.done, total: progress.total });
           }
         } else {
           setScanningLibraryId(null);
           setScanProgress(null);
+          if (wasScanning.current) {
+            startTransition(() => setFetchKey((k) => k + 1));
+          }
         }
+        wasScanning.current = nowScanning;
       },
       onError: () => {},
     }),
@@ -289,14 +309,21 @@ const DashboardPage: FC = () => {
         return undefined;
       }
       if (isNewProfilePaneLibraryCreatedEvent(wrapper)) {
+        // Refetch immediately so the new library row appears, then explicitly
+        // kick off a scan so the subscription picks it up and triggers a
+        // second refetch when videos are discovered.
+        startTransition(() => setFetchKey((k) => k + 1));
+        scan({ variables: {} });
         closePane();
         return undefined;
       }
-      if (
-        isEditProfilePaneClosedEvent(wrapper) ||
-        isEditProfilePaneSavedEvent(wrapper) ||
-        isEditProfilePaneDeletedEvent(wrapper)
-      ) {
+      if (isEditProfilePaneClosedEvent(wrapper) || isEditProfilePaneSavedEvent(wrapper)) {
+        closePane();
+        return undefined;
+      }
+      if (isEditProfilePaneDeletedEvent(wrapper)) {
+        // Refetch so the deleted library disappears without corrupting the store
+        startTransition(() => setFetchKey((k) => k + 1));
         closePane();
         return undefined;
       }
@@ -304,6 +331,49 @@ const DashboardPage: FC = () => {
     },
     [openFilmDetail, closePane, isScanPending, scan, setSearchParams, filmIdParam]
   );
+
+  if (data.libraries.length === 0) {
+    return (
+      <DevThrowTarget id="Dashboard">
+        <div className={styles.pageRoot}>
+          <NovaEventingInterceptor interceptor={interceptor}>
+            <div
+              ref={containerRef}
+              className={styles.splitBody}
+              style={
+                isPaneNewProfile ? { gridTemplateColumns: `1fr 4px ${paneWidth}px` } : undefined
+              }
+            >
+              <div className={styles.emptyRoot}>
+                <div className={styles.emptyWatermark}>LIBRARY</div>
+                <div className={styles.emptyContent}>
+                  <div className={styles.emptyHeadline}>
+                    <span className={styles.emptyHeadlineWhite}>YOUR COLLECTION</span>
+                    <span className={styles.emptyHeadlineRed}>STARTS HERE.</span>
+                  </div>
+                  <div className={styles.emptyRule} />
+                  <p className={styles.emptyBody}>{strings.emptyBody}</p>
+                  <button className={styles.emptyBtn} onClick={openNewProfile} type="button">
+                    {strings.emptyBtn}
+                  </button>
+                </div>
+              </div>
+              {isPaneNewProfile && (
+                <div className={styles.resizeHandle} onMouseDown={onResizeMouseDown} />
+              )}
+              <div className={styles.rightPane}>
+                {isPaneNewProfile && (
+                  <Suspense fallback={null}>
+                    <NewProfilePaneAsync />
+                  </Suspense>
+                )}
+              </div>
+            </div>
+          </NovaEventingInterceptor>
+        </div>
+      </DevThrowTarget>
+    );
+  }
 
   return (
     <DevThrowTarget id="Dashboard">
@@ -345,7 +415,11 @@ const DashboardPage: FC = () => {
               )}
               {isPaneFilmDetail && detailQueryRef && (
                 <Suspense fallback={null}>
-                  <FilmDetailLoader queryRef={detailQueryRef} linking={linkingParam} />
+                  <FilmDetailLoader
+                    key={filmIdParam}
+                    queryRef={detailQueryRef}
+                    linking={linkingParam}
+                  />
                 </Suspense>
               )}
               {isPaneEditProfile &&

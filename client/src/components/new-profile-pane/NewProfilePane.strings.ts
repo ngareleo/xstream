@@ -8,6 +8,7 @@ export const strings = new LocalizedStrings({
     placeholderName: "e.g. Movies 4K",
     labelPath: "Folder Path",
     placeholderPath: "/media/movies",
+    browseTitle: "Browse filesystem",
     labelMediaType: "Media Type",
     optionMovies: "Movies",
     optionTvShows: "TV Shows",

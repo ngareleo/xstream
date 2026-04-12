@@ -162,15 +162,25 @@ async function scanLibraryEntry(entry: MediaLibraryEntry): Promise<LibraryRow> {
   );
 
   // Collect all file paths first, then process with bounded concurrency.
-  // probeVideo + computeContentFingerprint run concurrently within each task;
-  // at most SCAN_CONCURRENCY tasks run simultaneously to avoid exhausting
-  // file descriptors and CPU on large libraries.
-  const taskFns: (() => Promise<void>)[] = [];
+  const filePaths: string[] = [];
   for await (const filePath of walkDirectory(entry.path, extensions)) {
-    taskFns.push(() => processFile(filePath, libraryId));
+    filePaths.push(filePath);
   }
 
-  console.log(`[scanner] Found ${taskFns.length} video(s) in "${entry.name}"`);
+  const total = filePaths.length;
+  let done = 0;
+
+  // Emit immediately so the client sees this library enter scanning state.
+  markScanProgress(libraryId, 0, total);
+  console.log(`[scanner] Found ${total} video(s) in "${entry.name}"`);
+
+  // Wrap each file task to emit a progress event after it completes.
+  const taskFns = filePaths.map((filePath) => async () => {
+    await processFile(filePath, libraryId);
+    done += 1;
+    markScanProgress(libraryId, done, total);
+  });
+
   await runConcurrently(taskFns, SCAN_CONCURRENCY);
 
   return libraryRow;
@@ -190,8 +200,10 @@ export function parseTitleFromFilename(filename: string): {
   // Strip extension
   const base = basename(filename, extname(filename));
 
-  // Try to find a year (4-digit number between 1900 and 2099)
-  const yearMatch = base.match(/[.\s_-]((19|20)\d{2})[.\s_-]/);
+  // Try to find a year (4-digit number between 1900 and 2099).
+  // Handles: "Title (2024) 4K", "Title.2024.1080p", "Title 2024" (year at end).
+  // Allows ( and ) as separators in addition to . _ - and whitespace.
+  const yearMatch = base.match(/(?:[.\s_(-])((19|20)\d{2})(?:[.\s_)-]|$)/);
   let title: string;
   let year: number | undefined;
 

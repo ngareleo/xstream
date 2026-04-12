@@ -15,13 +15,10 @@ export function formatDuration(seconds: number): string {
   return `${m}:${String(s).padStart(2, "0")}`;
 }
 
-/** "2h 46m" / "46m" — used in list/detail views */
+/** "148 min" — used in list/detail views */
 export function formatDurationHuman(seconds: number): string {
-  const h = Math.floor(seconds / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-  if (h > 0 && m > 0) return `${h}h ${m}m`;
-  if (h > 0) return `${h}h`;
-  return `${m}m`;
+  const m = Math.round(seconds / 60);
+  return `${m} min`;
 }
 
 export function resolutionLabel(

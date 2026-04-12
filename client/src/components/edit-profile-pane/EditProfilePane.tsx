@@ -148,9 +148,6 @@ export const EditProfilePane: FC<Props> = ({ library }) => {
     deleteEventRef.current = e;
     commitDelete({
       variables: { id: data.id },
-      updater: (store) => {
-        store.delete(data.id);
-      },
       onCompleted: () => {
         const ev = deleteEventRef.current;
         if (ev) {
