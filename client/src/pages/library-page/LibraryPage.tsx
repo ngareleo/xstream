@@ -1,3 +1,4 @@
+import { mergeClasses } from "@griffel/react";
 import { NovaEventingInterceptor } from "@nova/react";
 import type { EventWrapper } from "@nova/types";
 import {
@@ -11,9 +12,17 @@ import {
   useState,
   useTransition,
 } from "react";
-import { graphql, useLazyLoadQuery, useQueryLoader, useSubscription } from "react-relay";
+import {
+  graphql,
+  useLazyLoadQuery,
+  useMutation,
+  useQueryLoader,
+  useSubscription,
+} from "react-relay";
 import { useSearchParams } from "react-router-dom";
 
+import { useHeaderActionStyles } from "~/components/app-header/AppHeader.styles.js";
+import { useHeaderActions } from "~/components/app-shell/AppShell.js";
 import { DevThrowTarget } from "~/components/dev-throw-target/DevThrowTarget.js";
 import {
   type FilmDetailPaneLinkingChangedData,
@@ -47,12 +56,14 @@ import {
 } from "~/components/poster-card/PosterCard.events.js";
 import { PosterCard } from "~/components/poster-card/PosterCard.js";
 import { useSplitResize } from "~/hooks/useSplitResize.js";
+import { IconRefresh } from "~/lib/icons.js";
 import {
   FILM_DETAIL_QUERY,
   FilmDetailLoader,
 } from "~/pages/film-detail-loader/FilmDetailLoader.js";
 import type { FilmDetailLoaderQuery } from "~/relay/__generated__/FilmDetailLoaderQuery.graphql.js";
 import type { LibraryPageContentQuery } from "~/relay/__generated__/LibraryPageContentQuery.graphql.js";
+import type { LibraryPageContentScanMutation } from "~/relay/__generated__/LibraryPageContentScanMutation.graphql.js";
 import type { LibraryPageContentScanSubscription } from "~/relay/__generated__/LibraryPageContentScanSubscription.graphql.js";
 
 import { strings } from "./LibraryPage.strings.js";
@@ -76,6 +87,14 @@ const LIBRARY_QUERY = graphql`
   }
 `;
 
+const SCAN_MUTATION = graphql`
+  mutation LibraryPageContentScanMutation {
+    scanLibraries {
+      id
+    }
+  }
+`;
+
 const SCAN_SUBSCRIPTION = graphql`
   subscription LibraryPageContentScanSubscription {
     libraryScanUpdated {
@@ -88,10 +107,13 @@ const SCAN_SUBSCRIPTION = graphql`
 
 const LibraryPage: FC = () => {
   const styles = useLibraryStyles();
+  const actionStyles = useHeaderActionStyles();
+  const setHeaderActions = useHeaderActions();
   const { paneWidth, containerRef, onResizeMouseDown } = useSplitResize(360);
   const [fetchKey, setFetchKey] = useState(0);
   const [, startTransition] = useTransition();
   const wasScanning = useRef(false);
+  const [scan, isScanPending] = useMutation<LibraryPageContentScanMutation>(SCAN_MUTATION);
 
   const scanConfig = useMemo(
     () => ({
@@ -110,6 +132,26 @@ const LibraryPage: FC = () => {
   );
 
   useSubscription<LibraryPageContentScanSubscription>(scanConfig);
+
+  // Inject Scan button into the app header; clear on unmount
+  useEffect(() => {
+    const handleScan = (): void => {
+      if (!isScanPending) scan({ variables: {} });
+    };
+    setHeaderActions(
+      <button
+        className={mergeClasses(actionStyles.btn, actionStyles.btnPrimary)}
+        onClick={handleScan}
+        disabled={isScanPending}
+        type="button"
+      >
+        <IconRefresh size={14} />
+        {isScanPending ? strings.scanning : strings.scanAll}
+      </button>
+    );
+    return () => setHeaderActions(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isScanPending]);
 
   const [searchParams, setSearchParams] = useSearchParams();
   const [activeLibraryId, setActiveLibraryId] = useState<string | null>(null);
