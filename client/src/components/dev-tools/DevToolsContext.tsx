@@ -1,36 +1,42 @@
 import {
   createContext,
   type FC,
-  type MutableRefObject,
   type ReactNode,
   useCallback,
   useContext,
-  useReducer,
-  useRef,
+  useEffect,
+  useState,
 } from "react";
 
 interface DevToolsCtx {
-  /** Ref holding the active throw target id (or null). Mutation is safe during render. */
-  throwTargetRef: MutableRefObject<string | null>;
+  throwTarget: string | null;
   setThrowTarget: (id: string | null) => void;
 }
 
 const Ctx = createContext<DevToolsCtx>({
-  throwTargetRef: { current: null },
+  throwTarget: null,
   setThrowTarget: () => {},
 });
 
 export const DevToolsProvider: FC<{ children: ReactNode }> = ({ children }) => {
-  const throwTargetRef = useRef<string | null>(null);
-  // A plain counter state used only to trigger re-renders when the ref changes.
-  const [, rerender] = useReducer((x: number) => x + 1, 0);
+  const [throwTarget, setThrowTarget] = useState<string | null>(null);
 
-  const setThrowTarget = useCallback((id: string | null) => {
-    throwTargetRef.current = id;
-    rerender();
+  // ErrorBoundary.handleReset calls window.__devToolsReset() before resetting
+  // its own state, giving us a chance to clear throwTarget first so the
+  // re-mounted DevThrowTarget doesn't throw again on "Try Again".
+  useEffect(() => {
+    (window as unknown as { __devToolsReset?: () => void }).__devToolsReset = () =>
+      setThrowTarget(null);
+    return () => {
+      delete (window as unknown as { __devToolsReset?: () => void }).__devToolsReset;
+    };
   }, []);
 
-  return <Ctx.Provider value={{ throwTargetRef, setThrowTarget }}>{children}</Ctx.Provider>;
+  const handleSet = useCallback((id: string | null) => {
+    setThrowTarget(id);
+  }, []);
+
+  return <Ctx.Provider value={{ throwTarget, setThrowTarget: handleSet }}>{children}</Ctx.Provider>;
 };
 
 export function useDevTools(): DevToolsCtx {
