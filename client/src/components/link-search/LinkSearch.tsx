@@ -2,13 +2,14 @@ import { useNovaEventing } from "@nova/react";
 import { type FC, useEffect, useRef, useState } from "react";
 import { fetchQuery, graphql, useRelayEnvironment } from "react-relay";
 
+import { SearchSuggestionCard } from "~/components/search-suggestion-card/SearchSuggestionCard.js";
 import { IconClose, IconSearch, IconSpinner } from "~/lib/icons.js";
-import type { LinkSearchQuery } from "~/relay/__generated__/LinkSearchQuery.graphql.js";
+import type {
+  LinkSearchQuery,
+  LinkSearchQuery$data,
+} from "~/relay/__generated__/LinkSearchQuery.graphql.js";
 
-import {
-  createLinkSearchCancelledEvent,
-  createSuggestionSelectedEvent,
-} from "./LinkSearch.events.js";
+import { createLinkSearchCancelledEvent } from "./LinkSearch.events.js";
 import { strings } from "./LinkSearch.strings.js";
 import { useLinkSearchStyles } from "./LinkSearch.styles.js";
 
@@ -23,12 +24,7 @@ const SEARCH_QUERY = graphql`
   }
 `;
 
-export interface OmdbSuggestion {
-  imdbId: string;
-  title: string;
-  year: number | null;
-  posterUrl: string | null;
-}
+type Suggestion = LinkSearchQuery$data["searchOmdb"][number];
 
 interface Props {
   filename: string;
@@ -39,7 +35,7 @@ type SearchStatus = "idle" | "searching" | "results";
 export const LinkSearch: FC<Props> = ({ filename }) => {
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<SearchStatus>("idle");
-  const [suggestions, setSuggestions] = useState<OmdbSuggestion[]>([]);
+  const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
   const styles = useLinkSearchStyles();
   const { bubble } = useNovaEventing();
@@ -64,7 +60,7 @@ export const LinkSearch: FC<Props> = ({ filename }) => {
         query: query.trim(),
       }).subscribe({
         next: (data) => {
-          setSuggestions((data.searchOmdb ?? []) as OmdbSuggestion[]);
+          setSuggestions([...(data.searchOmdb ?? [])]);
           setStatus("results");
         },
         error: () => {
@@ -118,24 +114,7 @@ export const LinkSearch: FC<Props> = ({ filename }) => {
           {suggestions.length === 0 ? (
             <div className={styles.noResults}>{strings.noResults}</div>
           ) : (
-            suggestions.map((s) => (
-              <button
-                key={s.imdbId}
-                className={styles.item}
-                onClick={(e) => {
-                  void bubble({ reactEvent: e, event: createSuggestionSelectedEvent(s) });
-                }}
-              >
-                <div
-                  className={styles.thumb}
-                  style={s.posterUrl ? { backgroundImage: `url(${s.posterUrl})` } : undefined}
-                />
-                <div className={styles.info}>
-                  <div className={styles.title}>{s.title}</div>
-                  {s.year != null && <div className={styles.year}>{s.year}</div>}
-                </div>
-              </button>
-            ))
+            suggestions.map((s) => <SearchSuggestionCard key={s.imdbId} suggestion={s} />)
           )}
         </div>
       )}

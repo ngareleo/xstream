@@ -5,12 +5,12 @@ import { type FC, useCallback } from "react";
 import { graphql, useFragment, useMutation } from "react-relay";
 import { Link } from "react-router-dom";
 
+import { isLinkSearchCancelledEvent } from "~/components/link-search/LinkSearch.events.js";
+import { LinkSearch } from "~/components/link-search/LinkSearch.js";
 import {
-  isLinkSearchCancelledEvent,
   isSuggestionSelectedEvent,
   type SuggestionSelectedData,
-} from "~/components/link-search/LinkSearch.events.js";
-import { LinkSearch } from "~/components/link-search/LinkSearch.js";
+} from "~/components/search-suggestion-card/SearchSuggestionCard.events.js";
 import { IconClose, IconEdit, IconPlay } from "~/lib/icons.js";
 import type { FilmDetailPane_video$key } from "~/relay/__generated__/FilmDetailPane_video.graphql.js";
 import type { FilmDetailPaneMatchMutation } from "~/relay/__generated__/FilmDetailPaneMatchMutation.graphql.js";

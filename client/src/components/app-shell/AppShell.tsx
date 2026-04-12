@@ -9,6 +9,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useMemo,
   useState,
 } from "react";
 
@@ -33,18 +34,25 @@ export interface LibraryInfo {
   fileCount: number;
 }
 
-const LibrariesContext = createContext<LibraryInfo[]>([]);
-const SetLibrariesContext = createContext<(libs: LibraryInfo[]) => void>(() => {});
+interface LibrariesCtx {
+  libraries: LibraryInfo[];
+  setLibraries: (libs: LibraryInfo[]) => void;
+}
+
+const LibrariesContext = createContext<LibrariesCtx>({
+  libraries: [],
+  setLibraries: () => {},
+});
 
 export function useLibraries(): LibraryInfo[] {
-  return useContext(LibrariesContext);
+  return useContext(LibrariesContext).libraries;
 }
 
 export function useProvideLibraries(libs: LibraryInfo[]): void {
-  const set = useContext(SetLibrariesContext);
+  const { setLibraries } = useContext(LibrariesContext);
   useEffect(() => {
-    set(libs);
-  }, [libs, set]);
+    setLibraries(libs);
+  }, [libs, setLibraries]);
 }
 
 // ─── Header actions slot ──────────────────────────────────────────────────────
@@ -80,6 +88,7 @@ export const AppShell: FC<AppShellProps> = ({ children }) => {
   const [collapsed, setCollapsed] = useState(false);
   const [actions, setActions] = useState<ReactNode>(null);
   const [libraries, setLibraries] = useState<LibraryInfo[]>([]);
+  const librariesCtx = useMemo<LibrariesCtx>(() => ({ libraries, setLibraries }), [libraries]);
   const styles = useAppShellStyles();
 
   const sidebarInterceptor = useCallback(
@@ -96,24 +105,22 @@ export const AppShell: FC<AppShellProps> = ({ children }) => {
   return (
     <DevToolsProvider>
       <LoadingBarProvider>
-        <SetLibrariesContext.Provider value={setLibraries}>
-          <LibrariesContext.Provider value={libraries}>
-            <HeaderActionsContext.Provider value={{ actions, setActions }}>
-              <div className={mergeClasses(styles.root, collapsed && styles.rootCollapsed)}>
-                <RouterNavigationLoader />
-                <LoadingBar />
-                <AppHeader actions={actions} />
-                <NovaEventingInterceptor interceptor={sidebarInterceptor}>
-                  <Suspense fallback={null}>
-                    <SidebarAsync collapsed={collapsed} />
-                  </Suspense>
-                </NovaEventingInterceptor>
-                <div className={styles.main}>{children}</div>
-              </div>
-              <DevPanelAsync />
-            </HeaderActionsContext.Provider>
-          </LibrariesContext.Provider>
-        </SetLibrariesContext.Provider>
+        <LibrariesContext.Provider value={librariesCtx}>
+          <HeaderActionsContext.Provider value={{ actions, setActions }}>
+            <div className={mergeClasses(styles.root, collapsed && styles.rootCollapsed)}>
+              <RouterNavigationLoader />
+              <LoadingBar />
+              <AppHeader actions={actions} />
+              <NovaEventingInterceptor interceptor={sidebarInterceptor}>
+                <Suspense fallback={null}>
+                  <SidebarAsync collapsed={collapsed} />
+                </Suspense>
+              </NovaEventingInterceptor>
+              <div className={styles.main}>{children}</div>
+            </div>
+            <DevPanelAsync />
+          </HeaderActionsContext.Provider>
+        </LibrariesContext.Provider>
       </LoadingBarProvider>
     </DevToolsProvider>
   );

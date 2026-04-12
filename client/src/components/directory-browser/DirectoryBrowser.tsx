@@ -3,7 +3,10 @@ import { useNovaEventing } from "@nova/react";
 import { type FC, useCallback, useEffect, useState } from "react";
 import { fetchQuery, graphql, useRelayEnvironment } from "react-relay";
 
-import type { DirectoryBrowserQuery } from "~/relay/__generated__/DirectoryBrowserQuery.graphql.js";
+import type {
+  DirectoryBrowserQuery,
+  DirectoryBrowserQuery$data,
+} from "~/relay/__generated__/DirectoryBrowserQuery.graphql.js";
 
 import { createFolderSelectedEvent } from "./DirectoryBrowser.events.js";
 import { strings } from "./DirectoryBrowser.strings.js";
@@ -18,10 +21,7 @@ const DIRECTORY_QUERY = graphql`
   }
 `;
 
-interface DirectoryEntry {
-  name: string;
-  path: string;
-}
+type DirectoryEntry = DirectoryBrowserQuery$data["listDirectory"][number];
 
 interface Props {
   initialPath: string;
@@ -42,7 +42,7 @@ export const DirectoryBrowser: FC<Props> = ({ initialPath }) => {
       setLoading(true);
       fetchQuery<DirectoryBrowserQuery>(environment, DIRECTORY_QUERY, { path }).subscribe({
         next: (data) => {
-          setEntries((data.listDirectory ?? []) as DirectoryEntry[]);
+          setEntries([...(data.listDirectory ?? [])]);
           setLoading(false);
         },
         error: () => setLoading(false),
