@@ -54,7 +54,10 @@ type Story = StoryObj<typeof VideoPlayer>;
 export const Idle: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await expect(canvas.getByRole("button", { name: /play/i })).toBeInTheDocument();
+    // ControlBar renders a play button at two breakpoints (large + small);
+    // getAllByRole handles multiple matches.
+    const playBtns = canvas.getAllByRole("button", { name: /play/i });
+    await expect(playBtns.length).toBeGreaterThan(0);
     await expect(canvasElement.querySelector("video")).toBeInTheDocument();
   },
 };

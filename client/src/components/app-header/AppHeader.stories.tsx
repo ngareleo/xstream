@@ -22,7 +22,8 @@ export const ProfilesActive: Story = {
   parameters: { router: { initialEntries: ["/"] } },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await expect(canvas.getByText("Profiles")).toBeInTheDocument();
+    // AppHeader contains the brand name; nav tabs live in the Sidebar.
+    await expect(canvas.getByText("MORAN")).toBeInTheDocument();
   },
 };
 

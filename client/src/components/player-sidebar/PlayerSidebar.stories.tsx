@@ -33,6 +33,38 @@ const MOCK_UP_NEXT = [
   { id: "v-4", title: "The Road Warrior", metadata: { year: 1981, posterUrl: null } },
 ];
 
+// Relay's MockPayloadGenerator applies the Video resolver to every Video
+// instance in the response tree, including Up Next nodes. A stateful counter
+// lets us return distinct IDs so the `v.id !== data.id` filter in
+// PlayerSidebar doesn't remove all Up Next items.
+const makeWithMetadataResolvers = (): Record<string, unknown> => {
+  const responses = [
+    {
+      id: "v-1",
+      title: "mad.max.fury.road.2015.4k.mkv",
+      durationSeconds: 7200,
+      metadata: {
+        title: "Mad Max: Fury Road",
+        year: 2015,
+        genre: "Action, Adventure",
+        plot: "In a post-apocalyptic wasteland, Max teams up with Furiosa to outrun a warlord in a desperate bid for freedom.",
+        posterUrl: null,
+      },
+      library: { videos: { edges: MOCK_UP_NEXT.map((v) => ({ node: v })) } },
+      videoStream: { height: 2160, width: 3840 },
+    },
+    ...MOCK_UP_NEXT.map((v) => ({
+      ...v,
+      durationSeconds: 5400,
+      metadata: { ...v.metadata, genre: "Action", plot: null },
+      library: { videos: { edges: [] } },
+      videoStream: { height: 1080, width: 1920 },
+    })),
+  ];
+  let i = 0;
+  return { Video: () => responses[i++] ?? responses[0] };
+};
+
 const meta: Meta<WrapperProps> = {
   title: "Components/PlayerSidebar",
   component: PlayerSidebarWrapper,
@@ -43,24 +75,7 @@ const meta: Meta<WrapperProps> = {
       query: STORY_QUERY,
       variables: { videoId: "Video:mock" },
       getReferenceEntry: (result: PlayerSidebarStoryQuery["response"]) => ["video", result.video],
-      mockResolvers: {
-        Video: () => ({
-          id: "v-1",
-          title: "mad.max.fury.road.2015.4k.mkv",
-          durationSeconds: 7200,
-          metadata: {
-            title: "Mad Max: Fury Road",
-            year: 2015,
-            genre: "Action, Adventure",
-            plot: "In a post-apocalyptic wasteland, Max teams up with Furiosa to outrun a warlord in a desperate bid for freedom.",
-            posterUrl: null,
-          },
-          library: {
-            videos: { edges: MOCK_UP_NEXT.map((v) => ({ node: v })) },
-          },
-          videoStream: { height: 2160, width: 3840 },
-        }),
-      },
+      mockResolvers: makeWithMetadataResolvers(),
     },
   },
 };

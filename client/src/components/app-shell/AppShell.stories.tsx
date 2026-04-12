@@ -2,6 +2,8 @@ import React from "react";
 import { expect, within } from "storybook/test";
 import type { Meta, StoryObj } from "storybook-react-rsbuild";
 
+import { withNovaEventing } from "~/storybook/withNovaEventing.js";
+
 import { AppShell } from "./AppShell.js";
 
 /**
@@ -28,6 +30,7 @@ const Placeholder = (): JSX.Element => (
 const meta: Meta<typeof AppShell> = {
   title: "Components/AppShell",
   component: AppShell,
+  decorators: [withNovaEventing],
   parameters: {
     layout: "fullscreen",
     router: { initialEntries: ["/"] },
@@ -47,7 +50,8 @@ export const Default: Story = {
   ),
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await expect(canvas.getByText("Profiles")).toBeInTheDocument();
+    // AppShell renders the brand name in the header and the sidebar nav.
+    await expect(canvas.getByText("MORAN")).toBeInTheDocument();
   },
 };
 
