@@ -46,7 +46,7 @@ export const useNewProfilePaneStyles = makeStyles({
   // ── Form body ─────────────────────────────────────────────────────────────
   body: {
     flex: "1",
-    overflowY: "auto",
+    overflowY: "visible",
     padding: "20px 18px",
     display: "flex",
     flexDirection: "column",
@@ -105,7 +105,20 @@ export const useNewProfilePaneStyles = makeStyles({
     boxSizing: "border-box",
   },
 
-  // ── Path row ──────────────────────────────────────────────────────────────
+  // ── Path row + floating browser ───────────────────────────────────────────
+  pathSection: {
+    position: "relative",
+  },
+  browserFloat: {
+    position: "absolute",
+    top: "calc(100% + 4px)",
+    left: "0",
+    right: "0",
+    zIndex: 50,
+    boxShadow: "0 8px 32px rgba(0,0,0,0.6)",
+    borderRadius: tokens.radiusSm,
+    overflow: "hidden",
+  },
   pathRow: {
     display: "flex",
     gap: "6px",

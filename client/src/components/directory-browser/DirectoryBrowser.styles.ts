@@ -4,7 +4,6 @@ import { tokens } from "~/styles/tokens";
 
 export const useDirectoryBrowserStyles = makeStyles({
   panel: {
-    marginTop: "4px",
     backgroundColor: tokens.colorSurface3,
     border: `1px solid ${tokens.colorBorder}`,
     borderRadius: tokens.radiusSm,

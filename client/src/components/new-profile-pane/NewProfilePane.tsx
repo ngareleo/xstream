@@ -131,30 +131,34 @@ export const NewProfilePane: FC = () => {
 
         <div className={styles.fieldGroup}>
           <label className={styles.label}>{strings.labelPath}</label>
-          <div className={styles.pathRow}>
-            <input
-              className={styles.pathInput}
-              placeholder={strings.placeholderPath}
-              value={path}
-              onChange={(e) => {
-                setPath(e.target.value);
-                if (browseOpen) setBrowseOpen(false);
-              }}
-            />
-            <button
-              className={mergeClasses(styles.browseBtn, browseOpen && styles.browseBtnActive)}
-              onClick={() => setBrowseOpen((prev) => !prev)}
-              type="button"
-              title={strings.browseTitle}
-            >
-              <IconFolder size={13} />
-            </button>
+          <div className={styles.pathSection}>
+            <div className={styles.pathRow}>
+              <input
+                className={styles.pathInput}
+                placeholder={strings.placeholderPath}
+                value={path}
+                onChange={(e) => {
+                  setPath(e.target.value);
+                  if (browseOpen) setBrowseOpen(false);
+                }}
+              />
+              <button
+                className={mergeClasses(styles.browseBtn, browseOpen && styles.browseBtnActive)}
+                onClick={() => setBrowseOpen((prev) => !prev)}
+                type="button"
+                title={strings.browseTitle}
+              >
+                <IconFolder size={13} />
+              </button>
+            </div>
+            {browseOpen && (
+              <div className={styles.browserFloat}>
+                <NovaEventingInterceptor interceptor={browserInterceptor}>
+                  <DirectoryBrowser initialPath={path.trim() || "/"} />
+                </NovaEventingInterceptor>
+              </div>
+            )}
           </div>
-          {browseOpen && (
-            <NovaEventingInterceptor interceptor={browserInterceptor}>
-              <DirectoryBrowser initialPath={path.trim() || "/"} />
-            </NovaEventingInterceptor>
-          )}
         </div>
 
         <div className={styles.fieldGroup}>
