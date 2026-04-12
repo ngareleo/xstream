@@ -7,38 +7,39 @@
  * part of the same design language rather than a default browser screen.
  */
 
+import { mergeClasses } from "@griffel/react";
 import { type FC } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { AppHeader } from "../../components/AppHeader/AppHeader.js";
 import { IconArrowLeft, IconSearch } from "../../lib/icons.js";
-import "./NotFound.css";
+import { useNotFoundStyles } from "./NotFound.styles.js";
 
 export const NotFound: FC = () => {
   const navigate = useNavigate();
+  const s = useNotFoundStyles();
 
   return (
     <>
       <AppHeader collapsed={false} />
 
       <div className="main">
-        <div className="nf-root">
-          {/* Atmospheric background */}
-          <div className="nf-bg" />
-          <div className="nf-grain" />
+        <div className={s.root}>
+          <div className={s.bg} />
+          <div className={s.grain} />
 
-          <div className="nf-body">
-            <div className="nf-code">404</div>
-            <div className="nf-title">Page not found</div>
-            <div className="nf-sub">
+          <div className={s.body}>
+            <div className={s.code}>404</div>
+            <div className={s.title}>Page not found</div>
+            <div className={s.sub}>
               The page you're looking for doesn't exist or has been moved.
             </div>
 
-            <div className="nf-actions">
-              <button className="btn btn-ghost btn-md" onClick={() => navigate(-1)}>
+            <div className={s.actions}>
+              <button className={mergeClasses(s.btnGhost, s.btnMd)} onClick={() => navigate(-1)}>
                 <IconArrowLeft size={14} />
                 Go back
               </button>
-              <Link to="/" className="btn btn-red btn-md">
+              <Link to="/" className={mergeClasses(s.btnRed, s.btnMd)}>
                 <IconSearch size={14} />
                 Browse library
               </Link>

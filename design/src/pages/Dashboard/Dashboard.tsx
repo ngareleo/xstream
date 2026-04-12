@@ -31,11 +31,13 @@
  *   - "scanning" state → transcodeJobUpdated subscription or scanLibraries mutation result
  */
 
+import { mergeClasses } from "@griffel/react";
 import { type FC, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useSplitResize } from "../../hooks/useSplitResize.js";
 import { AppHeader } from "../../components/AppHeader/AppHeader.js";
 import { Slideshow } from "../../components/Slideshow/Slideshow.js";
+import { LinkSearch, type Suggestion } from "../../components/LinkSearch/LinkSearch.js";
 import {
   IconRefresh,
   IconPlus,
@@ -45,7 +47,7 @@ import {
   IconDocument,
   IconWarning,
   IconPlay,
-  IconPencil,
+  IconEdit,
   IconClose,
 } from "../../lib/icons.js";
 import {
@@ -58,7 +60,8 @@ import {
 import { useSimulatedLoad } from "../../hooks/useSimulatedLoad.js";
 import { usePageLoading } from "../../components/LoadingBar/LoadingBarContext.js";
 import { DevThrowTarget } from "../../components/DevTools/DevToolsContext.js";
-import "./Dashboard.css";
+import { useDashboardStyles } from "./Dashboard.styles.js";
+import { useAppHeaderStyles, useHeaderActionStyles } from "../../components/AppHeader/AppHeader.styles.js";
 
 function getGreeting(): string {
   const h = new Date().getHours();
@@ -76,20 +79,36 @@ const EXT_OPTIONS = [".mkv", ".mp4", ".mov", ".avi", ".webm", ".m4v", ".ts", ".m
 // ── Small shared components ────────────────────────────────────────────────
 
 const ResolutionBadge: FC<{ res: string }> = ({ res }) => {
-  const cls = res === "4K" ? "badge badge-red" : "badge badge-gray";
-  return <span className={cls} style={{ fontSize: 9, padding: "1px 5px" }}>{res}</span>;
+  const s = useDashStyles();
+  return (
+    <span
+      className={mergeClasses(s.badge, res === "4K" ? s.badgeRed : s.badgeGray)}
+      style={{ fontSize: 9, padding: "1px 5px" }}
+    >
+      {res}
+    </span>
+  );
 };
+
+// Griffel styles accessors — declared outside components so hooks can be called inside
+// sub-components without prop drilling.
+const useDashStyles = useDashboardStyles;
+const useHdrStyles = useAppHeaderStyles;
+const useHdrActionStyles = useHeaderActionStyles;
 
 // Inline match-rate bar shown in the profile directory row.
 // Turns yellow when there are unmatched files.
-const MatchBar: FC<{ pct: number; warn: boolean }> = ({ pct, warn }) => (
-  <div className="match-bar">
-    <div className="match-track">
-      <div className={`match-fill${warn ? " warn" : ""}`} style={{ width: `${pct}%` }} />
+const MatchBar: FC<{ pct: number; warn: boolean }> = ({ pct, warn }) => {
+  const s = useDashStyles();
+  return (
+    <div className={s.matchBar}>
+      <div className={s.matchTrack}>
+        <div className={mergeClasses(s.matchFill, warn && s.matchFillWarn)} style={{ width: `${pct}%` }} />
+      </div>
+      <span style={{ fontSize: 11, color: warn ? "var(--yellow)" : "var(--muted)" }}>{pct}%</span>
     </div>
-    <span style={{ fontSize: 11, color: warn ? "var(--yellow)" : "var(--muted)" }}>{pct}%</span>
-  </div>
-);
+  );
+};
 
 // ── FilmRow ───────────────────────────────────────────────────────────────
 // A single file entry inside an expanded profile. Clicking the row opens the
@@ -99,17 +118,22 @@ const FilmRow: FC<{
   film: Film;
   onSelect: (id: string) => void;
   onEdit:   (id: string) => void;
-}> = ({ film, onSelect, onEdit }) => {
+  paneOpen: boolean;
+}> = ({ film, onSelect, onEdit, paneOpen }) => {
+  const s = useDashStyles();
+  const [hovering, setHovering] = useState(false);
   const isUnmatched = !film.matched;
   const isTv        = film.mediaType === "tv";
   const label       = film.title ?? film.filename;
 
   return (
     <div
-      className={`dir-child-row${isUnmatched ? " unmatched-child" : ""}`}
+      className={mergeClasses(s.dirChildRow, paneOpen && s.dirChildRowOpen)}
       onClick={() => onSelect(film.id)}
+      onMouseEnter={() => setHovering(true)}
+      onMouseLeave={() => setHovering(false)}
     >
-      <div className="child-icon">
+      <div className={mergeClasses(s.childIcon, isUnmatched && s.childIconWarn)}>
         {isUnmatched ? (
           <IconWarning size={14} style={{ color: "rgba(245,197,24,0.5)" }} />
         ) : isTv ? (
@@ -118,32 +142,30 @@ const FilmRow: FC<{
           <IconDocument size={14} style={{ color: "var(--muted2)" }} />
         )}
       </div>
-      <div className="dir-name-cell">
-        <div className="child-name">{label}</div>
-        <div className="child-filename">{film.filename}</div>
+      <div className={s.childNameCell}>
+        <div className={mergeClasses(s.childName, isUnmatched && s.childNameWarn)}>{label}</div>
+        <div className={s.childFilename}>{film.filename}</div>
       </div>
-      <div className="child-cell dir-files">
+      <div className={s.childCell} style={{ display: paneOpen ? "none" : undefined }}>
         {film.year ? `${film.year} · ${film.duration}` : film.duration}
       </div>
-      <div className="child-cell dir-matched">
+      <div className={s.childCell}>
         <ResolutionBadge res={film.resolution} />
       </div>
-      <div className="child-cell mono dir-size">{film.size}</div>
-      <div className="child-actions" style={{ gap: 3 }}>
+      <div className={mergeClasses(s.childCell, s.childCellMono)} style={{ display: paneOpen ? "none" : undefined }}>{film.size}</div>
+      <div className={mergeClasses(s.childActions, hovering && s.childActionsVisible)} style={{ gap: 3 }}>
         <button
-          className="btn btn-surface btn-xs"
+          className={s.btnSurfaceXs}
           onClick={(e) => { e.stopPropagation(); onEdit(film.id); }}
-          style={{ padding: "3px 7px" }}
           data-tip="Edit link"
         >
-          <IconPencil size={11} />
+          <IconEdit size={11} />
         </button>
         {isUnmatched ? (
           // Unmatched file: offer a "Link" action to manually connect it to metadata.
           <button
-            className="btn btn-surface btn-xs"
+            className={s.btnYellow}
             onClick={(e) => { e.stopPropagation(); onEdit(film.id); }}
-            style={{ color: "var(--yellow)", borderColor: "rgba(245,197,24,0.2)" }}
           >
             Link
           </button>
@@ -151,9 +173,8 @@ const FilmRow: FC<{
           // Matched file: direct play link — pushes to history so Back returns here.
           <Link
             to={`/player/${film.id}`}
-            className="btn btn-red btn-xs"
+            className={s.btnRedXs}
             onClick={(e) => e.stopPropagation()}
-            style={{ padding: "3px 8px" }}
           >
             <IconPlay size={10} />
           </Link>
@@ -172,11 +193,14 @@ const ProfileRow: FC<{
   profile:       Profile;
   expanded:      boolean;
   selected:      boolean;
+  paneOpen:      boolean;
   onToggle:      () => void;
   onSelect:      () => void;
   onFilmSelect:  (id: string) => void;
   onFilmEdit:    (id: string) => void;
-}> = ({ profile, expanded, selected, onToggle, onSelect, onFilmSelect, onFilmEdit }) => {
+}> = ({ profile, expanded, selected, paneOpen, onToggle, onSelect, onFilmSelect, onFilmEdit }) => {
+  const s = useDashStyles();
+  const [hovering, setHovering] = useState(false);
   const profileFilms = films.filter((f) => f.profile === profile.id);
   const totalItems   = profile.type === "tv" ? (profile.episodeCount ?? 0) : (profile.filmCount ?? 0);
   const matchPct     = totalItems > 0 ? Math.round((profile.matched / totalItems) * 100) : 0;
@@ -189,11 +213,13 @@ const ProfileRow: FC<{
   return (
     <>
       <div
-        className={`dir-row${expanded ? " expanded" : ""}${selected ? " selected" : ""}${profile.scanning ? " scanning" : ""}`}
+        className={mergeClasses(s.dirRow, paneOpen && s.dirRowOpen, selected && s.dirRowSelected, profile.scanning && s.dirRowScanning)}
         onClick={() => { onToggle(); onSelect(); }}
+        onMouseEnter={() => setHovering(true)}
+        onMouseLeave={() => setHovering(false)}
       >
-        <div className="dir-icon">
-          <span className="chevron">
+        <div className={s.dirIcon}>
+          <span className={s.chevron}>
             <IconChevronDown
               size={10}
               style={{
@@ -203,46 +229,47 @@ const ProfileRow: FC<{
             />
           </span>
         </div>
-        <div className="dir-name-cell" style={{ paddingLeft: 4 }}>
-          <div className="dir-name">{profile.name}</div>
-          <div className="dir-path">{profile.path}</div>
+        <div className={s.dirNameCell} style={{ paddingLeft: 4 }}>
+          <div className={s.dirName}>{profile.name}</div>
+          <div className={s.dirPath}>{profile.path}</div>
         </div>
-        <div className="dir-cell dir-files">{typeLabel}</div>
-        <div className="dir-cell dir-matched">
+        <div className={s.dirCell} style={{ display: paneOpen ? "none" : undefined }}>{typeLabel}</div>
+        <div className={s.dirCell} style={{ display: paneOpen ? "none" : undefined }}>
           {profile.scanning ? (
             // Scanning: live progress indicator.
             // In production, driven by the scanLibraries mutation + subscription.
-            <div className="scan-inline">
-              <div className="scan-spinner" />
+            <div className={s.scanInline}>
+              <div className={s.scanSpinner} />
               {profile.scanProgress?.done}/{profile.scanProgress?.total}
             </div>
           ) : (
             <MatchBar pct={matchPct} warn={hasWarn} />
           )}
         </div>
-        <div className="dir-cell mono dir-size">{profile.size}</div>
-        <div className="dir-actions">
+        <div className={mergeClasses(s.dirCell, s.dirCellMono)} style={{ display: paneOpen ? "none" : undefined }}>{profile.size}</div>
+        <div className={mergeClasses(s.dirActions, (hovering || selected) && s.dirActionsVisible)}>
           {profile.scanning ? (
             <span style={{ fontSize: 10, color: "var(--green)" }}>Scanning…</span>
           ) : (
             <>
-              <button className="btn btn-surface btn-xs" data-tip="Re-scan" onClick={(e) => e.stopPropagation()}>
+              <button className={s.btnSurfaceXs} data-tip="Re-scan" onClick={(e) => e.stopPropagation()}>
                 <IconRefresh size={11} />
               </button>
-              <button className="btn btn-surface btn-xs" data-tip="Edit" onClick={(e) => e.stopPropagation()}>
-                <IconPencil size={11} />
+              <button className={s.btnSurfaceXs} data-tip="Edit" onClick={(e) => e.stopPropagation()}>
+                <IconEdit size={11} />
               </button>
             </>
           )}
         </div>
       </div>
 
-      {/* Child film rows — animated with CSS max-height transition via .dir-children.open */}
-      <div className={`dir-children${expanded ? " open" : ""}`}>
+      {/* Child film rows — animated with CSS max-height transition */}
+      <div className={mergeClasses(s.dirChildren, expanded && s.dirChildrenOpen)}>
         {profileFilms.map((film) => (
           <FilmRow
             key={film.id}
             film={film}
+            paneOpen={paneOpen}
             onSelect={onFilmSelect}
             onEdit={onFilmEdit}
           />
@@ -257,6 +284,7 @@ const ProfileRow: FC<{
 // "Create & Scan" button fires the createLibrary mutation followed by
 // scanLibraries, and the pane closes on success.
 const NewProfilePane: FC<{ onClose: () => void }> = ({ onClose }) => {
+  const s = useDashStyles();
   const [activeExts, setActiveExts] = useState(new Set([".mkv", ".mp4", ".mov"]));
 
   const toggleExt = (ext: string) => {
@@ -270,7 +298,7 @@ const NewProfilePane: FC<{ onClose: () => void }> = ({ onClose }) => {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-      <div className="right-pane-head">
+      <div className={s.paneHeader}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div>
             <div style={{ fontSize: 14, fontWeight: 700, color: "var(--white)" }}>New Profile</div>
@@ -278,40 +306,40 @@ const NewProfilePane: FC<{ onClose: () => void }> = ({ onClose }) => {
               Add a directory to your library
             </div>
           </div>
-          <button className="icon-btn" onClick={onClose} title="Close">
+          <button className={s.paneCloseBtn} onClick={onClose} title="Close">
             <IconClose size={13} />
           </button>
         </div>
       </div>
-      <div className="right-pane-body" style={{ padding: 18 }}>
-        <div className="form-group">
-          <label className="form-label">Profile Name</label>
-          <input className="form-input" type="text" placeholder="e.g. Endurance Movies" />
-          <div className="form-hint">A friendly name for this library.</div>
+      <div className={s.paneBody} style={{ padding: 18 }}>
+        <div className={s.formGroup}>
+          <label className={s.formLabel}>Profile Name</label>
+          <input className={s.formInput} type="text" placeholder="e.g. Endurance Movies" />
+          <div className={s.formHint}>A friendly name for this library.</div>
         </div>
-        <div className="form-group">
-          <label className="form-label">Directory Path</label>
-          <div className="form-row">
-            <input className="form-input" type="text" placeholder="/home/user/Videos/Movies" />
-            <button className="btn btn-surface btn-sm">Browse</button>
+        <div className={s.formGroup}>
+          <label className={s.formLabel}>Directory Path</label>
+          <div className={s.formRow}>
+            <input className={s.formInput} type="text" placeholder="/home/user/Videos/Movies" />
+            <button className={s.btnSurface}>Browse</button>
           </div>
-          <div className="form-hint">Moran scans all subdirectories recursively.</div>
+          <div className={s.formHint}>Moran scans all subdirectories recursively.</div>
         </div>
-        <div className="form-group">
-          <label className="form-label">Media Type</label>
-          <select className="form-input">
+        <div className={s.formGroup}>
+          <label className={s.formLabel}>Media Type</label>
+          <select className={s.formSelect}>
             <option>Movies</option>
             <option>TV Shows</option>
             <option>Mixed</option>
           </select>
         </div>
-        <div className="form-group">
-          <label className="form-label" style={{ marginBottom: 10 }}>File Extensions</label>
-          <div className="ext-chips">
+        <div className={s.formGroup}>
+          <label className={s.formLabel} style={{ marginBottom: 10 }}>File Extensions</label>
+          <div className={s.extChips}>
             {EXT_OPTIONS.map((ext) => (
               <span
                 key={ext}
-                className={`ext-chip${activeExts.has(ext) ? " on" : ""}`}
+                className={mergeClasses(s.extChip, activeExts.has(ext) && s.extChipOn)}
                 onClick={() => toggleExt(ext)}
               >
                 {ext}
@@ -320,11 +348,11 @@ const NewProfilePane: FC<{ onClose: () => void }> = ({ onClose }) => {
           </div>
         </div>
       </div>
-      <div className="right-pane-foot">
-        <button className="btn btn-red" style={{ flex: 1, justifyContent: "center" }}>
+      <div className={s.paneFoot}>
+        <button className={s.btnRed}>
           Create &amp; Scan
         </button>
-        <button className="btn btn-surface" onClick={onClose}>Cancel</button>
+        <button className={s.btnCancel} onClick={onClose}>Cancel</button>
       </div>
     </div>
   );
@@ -334,45 +362,50 @@ const NewProfilePane: FC<{ onClose: () => void }> = ({ onClose }) => {
 // Slide-in detail view for a specific file. The 200px poster area uses the
 // film's gradient as a placeholder — in production replace with a real
 // poster/backdrop image from the metadata provider (TMDB, etc).
-const FilmDetailPane: FC<{ film: Film; onClose: () => void }> = ({ film, onClose }) => {
+//
+// `linking` and `onSetLinking` are owned by the parent (URL-encoded) so that:
+//   - switching to a different film always starts with linking=false
+//   - the browser Back button can exit linking mode
+const FilmDetailPane: FC<{
+  film: Film;
+  linking: boolean;
+  onSetLinking: (v: boolean) => void;
+  onClose: () => void;
+}> = ({ film, linking, onSetLinking, onClose }) => {
+  const s = useDashStyles();
+
+  const handleLinked = (_suggestion: Suggestion) => {
+    onSetLinking(false);
+  };
+
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       {/* Poster area with overlaid action bar */}
-      <div
-        style={{
-          height: 200,
-          position: "relative",
-          overflow: "hidden",
-          flexShrink: 0,
-          background: film.gradient,
-        }}
-      >
+      <div style={{ height: 200, position: "relative", overflow: "hidden", flexShrink: 0, background: film.gradient }}>
         <div style={{
           position: "absolute", inset: 0,
           background: "linear-gradient(to bottom,rgba(0,0,0,0.58) 0%,transparent 40%,rgba(0,0,0,0.84) 100%)",
         }} />
-        <div className="fd-actions">
-          {/* Play uses <Link> so the router pushes a history entry;
-              Back in the Player will return here with the pane still open. */}
-          <Link to={`/player/${film.id}`} className="fd-action-btn primary">
+        <div className={s.fdActions}>
+          <Link to={`/player/${film.id}`} className={mergeClasses(s.fdActionBtn, s.fdActionBtnPrimary)}>
             <IconPlay size={10} />
             PLAY
           </Link>
-          <div className="fd-action-sep" />
-          <button className="fd-action-btn">
-            <IconPencil size={10} />
+          <div className={s.fdActionSep} />
+          <button
+            className={mergeClasses(s.fdActionBtn, linking && s.fdActionBtnActive)}
+            onClick={() => onSetLinking(!linking)}
+          >
+            <IconEdit size={10} />
             RE-LINK
           </button>
           <div style={{ flex: 1 }} />
-          <button className="fd-action-close" onClick={onClose}>
+          <button className={s.fdActionClose} onClick={onClose}>
             <IconClose size={13} />
           </button>
         </div>
         <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, padding: "12px 16px", zIndex: 2 }}>
-          <div style={{
-            fontFamily: "var(--font-head)", fontSize: 22,
-            letterSpacing: ".06em", color: "var(--white)", lineHeight: 1,
-          }}>
+          <div style={{ fontFamily: "var(--font-head)", fontSize: 22, letterSpacing: ".06em", color: "var(--white)", lineHeight: 1 }}>
             {film.title ?? film.filename}
           </div>
           {film.year && (
@@ -383,30 +416,30 @@ const FilmDetailPane: FC<{ film: Film; onClose: () => void }> = ({ film, onClose
         </div>
       </div>
 
-      {/* Scrollable detail body */}
-      <div className="right-pane-body" style={{ padding: 0 }}>
+      {/* Link search replaces the body when RE-LINK is active */}
+      {linking ? (
+        <LinkSearch
+          filename={film.filename}
+          onLink={handleLinked}
+          onCancel={() => onSetLinking(false)}
+        />
+      ) : (
+      /* Scrollable detail body */
+      <div className={s.rightPaneBody}>
         {/* Technical spec badges: resolution, HDR format, codec, audio */}
         {film.rating && (
-          <div style={{
-            display: "flex", gap: 5, flexWrap: "wrap",
-            padding: "12px 16px", borderBottom: "1px solid var(--border)",
-          }}>
-            <span className="badge badge-red">{film.resolution}</span>
-            {film.hdr && <span className="badge badge-gray">{film.hdr}</span>}
-            <span className="badge badge-gray">{film.codec}</span>
-            <span className="badge badge-gray">{film.audio}</span>
-            <span className="badge badge-gray">{film.audioChannels}</span>
+          <div style={{ display: "flex", gap: 5, flexWrap: "wrap", padding: "12px 16px", borderBottom: `1px solid var(--border)` }}>
+            <span className={mergeClasses(s.badge, s.badgeRed)}>{film.resolution}</span>
+            {film.hdr && <span className={mergeClasses(s.badge, s.badgeGray)}>{film.hdr}</span>}
+            <span className={mergeClasses(s.badge, s.badgeGray)}>{film.codec}</span>
+            <span className={mergeClasses(s.badge, s.badgeGray)}>{film.audio}</span>
+            <span className={mergeClasses(s.badge, s.badgeGray)}>{film.audioChannels}</span>
           </div>
         )}
 
         {film.rating && (
-          <div style={{
-            display: "flex", alignItems: "center", gap: 12,
-            padding: "10px 16px", borderBottom: "1px solid var(--border)",
-          }}>
-            <span style={{ fontSize: 15, fontWeight: 700, color: "var(--yellow)" }}>
-              {film.rating}
-            </span>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 16px", borderBottom: `1px solid var(--border)` }}>
+            <span style={{ fontSize: 15, fontWeight: 700, color: "var(--yellow)" }}>{film.rating}</span>
             <span style={{ fontSize: 11, color: "var(--muted)" }}>IMDb</span>
             <span style={{ fontSize: 11, color: "var(--muted2)" }}>·</span>
             <span style={{ fontSize: 11, color: "var(--muted)" }}>{film.duration}</span>
@@ -414,20 +447,18 @@ const FilmDetailPane: FC<{ film: Film; onClose: () => void }> = ({ film, onClose
         )}
 
         {film.plot && (
-          <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--border)" }}>
-            <div className="section-label">Synopsis</div>
-            <div style={{ fontSize: 12, color: "rgba(255,255,255,0.55)", lineHeight: 1.7 }}>
-              {film.plot}
-            </div>
+          <div style={{ padding: "12px 16px", borderBottom: `1px solid var(--border)` }}>
+            <div className={s.sectionLabel}>Synopsis</div>
+            <div style={{ fontSize: 12, color: "rgba(255,255,255,0.55)", lineHeight: 1.7 }}>{film.plot}</div>
           </div>
         )}
 
         {film.cast.length > 0 && (
-          <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--border)" }}>
-            <div className="section-label">Cast</div>
-            <div className="detail-cast">
+          <div style={{ padding: "12px 16px", borderBottom: `1px solid var(--border)` }}>
+            <div className={s.sectionLabel}>Cast</div>
+            <div className={s.detailCast}>
               {film.cast.map((c) => (
-                <span key={c} className="cast-chip">{c}</span>
+                <span key={c} className={s.castChip}>{c}</span>
               ))}
             </div>
           </div>
@@ -435,7 +466,7 @@ const FilmDetailPane: FC<{ film: Film; onClose: () => void }> = ({ film, onClose
 
         {/* Raw file metadata — filename, container, size, bitrate, frame rate */}
         <div style={{ padding: "12px 16px" }}>
-          <div className="section-label">File</div>
+          <div className={s.sectionLabel}>File</div>
           {[
             ["Filename",   film.filename],
             ["Container",  film.container],
@@ -443,18 +474,14 @@ const FilmDetailPane: FC<{ film: Film; onClose: () => void }> = ({ film, onClose
             ["Bitrate",    film.bitrate],
             ["Frame Rate", film.frameRate],
           ].map(([k, v]) => (
-            <div key={k} className="fd-info-row">
-              <span style={{
-                fontSize: 10, color: "var(--muted2)", fontWeight: 600,
-                letterSpacing: "0.06em", textTransform: "uppercase",
-              }}>{k}</span>
-              <span style={{ fontSize: 12, color: "rgba(245,245,245,0.75)", fontFamily: "monospace" }}>
-                {v}
-              </span>
+            <div key={k} className={s.fdInfoRow}>
+              <span style={{ fontSize: 10, color: "var(--muted2)", fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase" }}>{k}</span>
+              <span style={{ fontSize: 12, color: "rgba(245,245,245,0.75)", fontFamily: "monospace" }}>{v}</span>
             </div>
           ))}
         </div>
       </div>
+      )}
     </div>
   );
 };
@@ -464,11 +491,22 @@ export const Dashboard: FC = () => {
   const loading = useSimulatedLoad();
   usePageLoading(loading);
 
+  const ds = useDashStyles();
+  const ahs = useHdrStyles();
+  const hs = useHdrActionStyles();
+
   const { paneWidth, containerRef, onResizeMouseDown } = useSplitResize(360);
 
   // Profile rows that are expanded (showing their child film list).
   // Local state only — not URL-encoded because expansion is transient UX.
-  const [expandedIds,       setExpandedIds]       = useState<Set<string>>(new Set());
+  // Seeded from the URL's filmId so that deep-linking to a film detail
+  // automatically expands the profile that contains it.
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(() => {
+    const filmId = new URLSearchParams(window.location.search).get("filmId");
+    if (!filmId) return new Set();
+    const film = films.find((f) => f.id === filmId);
+    return film ? new Set([film.profile]) : new Set();
+  });
   const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null);
 
   // Pane state lives in the URL so Back/Forward navigates through pane history.
@@ -479,8 +517,17 @@ export const Dashboard: FC = () => {
   const paneParam    = searchParams.get("pane") as PaneMode | null;
   const paneMode: PaneMode = paneParam ?? "none";
   const selectedFilmId     = searchParams.get("filmId");
+  // `linking` lives in the URL so switching films naturally resets it and
+  // the browser Back button exits linking mode.
+  const linking = searchParams.get("linking") === "true";
 
   const closePane = () => setSearchParams({});
+
+  const setLinking = (v: boolean) => {
+    const params: Record<string, string> = { pane: "film-detail", filmId: selectedFilmId! };
+    if (v) params.linking = "true";
+    setSearchParams(params);
+  };
 
   const toggleProfile = (id: string) => {
     setExpandedIds((prev) => {
@@ -493,6 +540,7 @@ export const Dashboard: FC = () => {
 
   // Selecting a film row toggles the detail pane.
   // Clicking the same row twice closes the pane (deselect behaviour).
+  // Note: no `linking` param → linking resets to false for the new film.
   const openFilmDetail = (id: string) => {
     if (paneMode === "film-detail" && selectedFilmId === id) {
       closePane();
@@ -501,27 +549,33 @@ export const Dashboard: FC = () => {
     }
   };
 
+  // Opens the detail pane with linking mode active from the start.
+  // Used by the edit icon button on film rows.
+  const openFilmLinking = (id: string) => {
+    setSearchParams({ pane: "film-detail", filmId: id, linking: "true" });
+  };
+
   const paneOpen   = paneMode !== "none";
   const selectedFilm = selectedFilmId ? films.find((f) => f.id === selectedFilmId) : null;
 
-  const totalFiles = profiles.reduce((s, p) => s + (p.filmCount ?? p.episodeCount ?? 0), 0);
+  const totalFiles = profiles.reduce((sum, p) => sum + (p.filmCount ?? p.episodeCount ?? 0), 0);
   const totalSize  = "4.3 TB";
 
   return (
     <DevThrowTarget id="Dashboard">
       <>
       <AppHeader collapsed={false}>
-        <span className="topbar-sub" id="topbarSub" />
-        <div className="header-actions">
+        <span className={ds.topbarSub} id="topbarSub" />
+        <div className={ahs.actionsSlot}>
           {/* Scan All triggers a full re-scan of every library.
               In production: fires scanLibraries mutation, then subscribes to progress. */}
-          <button className="header-action-btn" data-tip="Rescan all libraries" onClick={() => {}}>
+          <button className={hs.btn} data-tip="Rescan all libraries" onClick={() => {}}>
             <IconRefresh size={14} />
             Scan All
           </button>
-          <div className="header-action-sep" />
+          <div className={hs.sep}><div className={hs.sepLine} /></div>
           <button
-            className="header-action-btn primary"
+            className={mergeClasses(hs.btn, hs.btnPrimary)}
             onClick={() => setSearchParams({ pane: "new-profile" })}
           >
             <IconPlus size={14} />
@@ -539,70 +593,77 @@ export const Dashboard: FC = () => {
          */}
         <div
           ref={containerRef}
-          className={`split-body${paneOpen ? " pane-open" : ""}`}
+          className={ds.splitBody}
           style={paneOpen ? { gridTemplateColumns: `1fr 4px ${paneWidth}px` } : undefined}
         >
-          <div className="split-left" style={{ padding: 0, display: "flex", flexDirection: "column", minHeight: 0 }}>
+          <div className={ds.splitLeft} style={{ padding: 0, display: "flex", flexDirection: "column", minHeight: 0 }}>
 
             {/* Hero: slideshow fills the container; greeting overlays the left third */}
-            <div className="dashboard-hero">
+            <div className={ds.hero}>
               <Slideshow />
-              <div className="dashboard-greeting">
-                <div className="greeting-text">
-                  {getGreeting()}, <span className="greeting-name">{user.name}</span>
+              <div className={ds.greeting}>
+                <div className={ds.greetingText}>
+                  {getGreeting()}, <span className={ds.greetingName}>{user.name}</span>
                 </div>
-                <div className="greeting-sub">
+                <div className={ds.greetingSub}>
                   {profiles.length} profiles &nbsp;·&nbsp; {totalFiles} files &nbsp;·&nbsp; {totalSize} on disk
                 </div>
               </div>
             </div>
 
 
-            {/* Directory column headers — hidden when pane is open (CSS) */}
-            <div className="dir-header">
+            {/* Directory column headers */}
+            <div className={mergeClasses(ds.dirHeader, paneOpen && ds.dirHeaderOpen)}>
               <div />
-              <div className="dir-col sortable" style={{ paddingLeft: 20 }}>Name</div>
-              <div className="dir-col dir-files">Files</div>
-              <div className="dir-col dir-matched">Matched</div>
-              <div className="dir-col dir-size">Size</div>
-              <div className="dir-col" />
+              <div className={ds.dirCol} style={{ paddingLeft: 20 }}>Name</div>
+              <div className={ds.dirCol} style={{ display: paneOpen ? "none" : undefined }}>Files</div>
+              <div className={ds.dirCol} style={{ display: paneOpen ? "none" : undefined }}>Matched</div>
+              <div className={ds.dirCol} style={{ display: paneOpen ? "none" : undefined }}>Size</div>
+              <div className={ds.dirCol} />
             </div>
 
             {/* Scrollable profile + film tree */}
-            <div className="dir-list">
+            <div className={ds.dirList}>
               {profiles.map((p) => (
                 <ProfileRow
                   key={p.id}
                   profile={p}
                   expanded={expandedIds.has(p.id)}
                   selected={selectedProfileId === p.id}
+                  paneOpen={paneOpen}
                   onToggle={() => toggleProfile(p.id)}
                   onSelect={() => setSelectedProfileId(p.id)}
                   onFilmSelect={openFilmDetail}
-                  onFilmEdit={openFilmDetail}
+                  onFilmEdit={openFilmLinking}
                 />
               ))}
             </div>
 
-            <div className="dir-footer">
-              <div className="dir-footer-stat"><span>{profiles.length}</span> profiles</div>
-              <div className="dir-footer-stat"><span>{totalFiles}</span> total files</div>
-              <div className="dir-footer-stat"><span>{totalSize}</span> on disk</div>
+            <div className={ds.dirFooter}>
+              <div className={ds.dirFooterStat}><span className={ds.dirFooterStatNum}>{profiles.length}</span> profiles</div>
+              <div className={ds.dirFooterStat}><span className={ds.dirFooterStatNum}>{totalFiles}</span> total files</div>
+              <div className={ds.dirFooterStat}><span className={ds.dirFooterStatNum}>{totalSize}</span> on disk</div>
             </div>
           </div>
 
           {/* Resize handle — only present when pane is open */}
           {paneOpen && (
-            <div className="split-resize-handle" onMouseDown={onResizeMouseDown} />
+            <div className={ds.resizeHandle} onMouseDown={onResizeMouseDown} />
           )}
 
           {/* Right pane — renders the active pane mode or nothing */}
-          <div className="right-pane">
+          <div className={ds.rightPane}>
             {paneMode === "new-profile" && (
               <NewProfilePane onClose={closePane} />
             )}
             {paneMode === "film-detail" && selectedFilm && (
-              <FilmDetailPane film={selectedFilm} onClose={closePane} />
+              <FilmDetailPane
+                key={selectedFilm.id}
+                film={selectedFilm}
+                linking={linking}
+                onSetLinking={setLinking}
+                onClose={closePane}
+              />
             )}
           </div>
         </div>

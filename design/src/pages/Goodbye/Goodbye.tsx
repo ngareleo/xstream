@@ -8,17 +8,19 @@
  * This is outside AppShell so there is no sidebar or header.
  */
 
+import { mergeClasses } from "@griffel/react";
 import { type FC, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { user } from "../../data/mock.js";
 import { LogoShield } from "../../lib/icons.js";
-import "./Goodbye.css";
+import { useGoodbyeStyles } from "./Goodbye.styles.js";
 
 const REDIRECT_DELAY = 4; // seconds
 
 export const Goodbye: FC = () => {
   const navigate = useNavigate();
   const [countdown, setCountdown] = useState(REDIRECT_DELAY);
+  const s = useGoodbyeStyles();
 
   useEffect(() => {
     if (countdown <= 0) {
@@ -30,28 +32,30 @@ export const Goodbye: FC = () => {
   }, [countdown, navigate]);
 
   return (
-    <div className="goodbye-root">
-      <div className="goodbye-grain" />
-      <div className="goodbye-glow" />
+    <div className={s.root}>
+      <div className={s.grain} />
+      <div className={s.glow} />
 
-      <div className="goodbye-body">
-        <div className="goodbye-ghost">GOODBYE</div>
+      <div className={s.body}>
+        <div className={s.ghost}>GOODBYE</div>
 
-        <LogoShield />
+        <div style={{ width: 44, height: 52, opacity: 0.5, marginBottom: 4 }}>
+          <LogoShield />
+        </div>
 
-        <div className="goodbye-title">See you next time, {user.name}.</div>
-        <div className="goodbye-sub">
+        <div className={s.title}>See you next time, {user.name}.</div>
+        <div className={s.sub}>
           Your library will be right here when you get back.
         </div>
 
-        <div className="goodbye-actions">
+        <div className={s.actions}>
           <button
-            className="btn btn-red btn-md"
+            className={mergeClasses(s.btnRed, s.btnMd)}
             onClick={() => navigate("/", { replace: true })}
           >
             Back to home
           </button>
-          <span className="goodbye-countdown">
+          <span className={s.countdown}>
             Redirecting in {countdown}s…
           </span>
         </div>

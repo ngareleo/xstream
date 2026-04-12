@@ -1,3 +1,4 @@
+import { mergeClasses } from "@griffel/react";
 import { type FC, useState } from "react";
 import { AppHeader } from "../../components/AppHeader/AppHeader.js";
 import { IconSearch, IconFilm, IconPlay, IconClose } from "../../lib/icons.js";
@@ -5,7 +6,7 @@ import { watchlist, films } from "../../data/mock.js";
 import { useSimulatedLoad } from "../../hooks/useSimulatedLoad.js";
 import { usePageLoading } from "../../components/LoadingBar/LoadingBarContext.js";
 import { DevThrowTarget } from "../../components/DevTools/DevToolsContext.js";
-import "./Watchlist.css";
+import { useWatchlistStyles } from "./Watchlist.styles.js";
 
 
 // ── Watchlist (page root) ─────────────────────────────────────────────────
@@ -28,58 +29,60 @@ export const Watchlist: FC = () => {
     ? films.filter((f) => f.title?.toLowerCase().includes(search.toLowerCase()))
     : [];
 
+  const w = useWatchlistStyles();
+
   return (
     <DevThrowTarget id="Watchlist">
     <>
       <AppHeader collapsed={false}>
-        <span className="topbar-title">Watchlist</span>
-        <span className="topbar-sep" />
-        <span className="topbar-sub">{visible.length} titles</span>
+        <span className={w.topbarTitle}>Watchlist</span>
+        <span className={w.topbarSep} />
+        <span className={w.topbarSub}>{visible.length} titles</span>
       </AppHeader>
 
       <div className="main">
-        <div className="content">
-          <div className="wl-stats">
+        <div className={w.content}>
+          <div className={w.stats}>
             <div>
-              <div className="stat-num">{visible.length}</div>
-              <div className="stat-label">Queued</div>
+              <div className={w.statNum}>{visible.length}</div>
+              <div className={w.statLabel}>Queued</div>
             </div>
             <div>
-              <div className="stat-num green">{inProgress.length}</div>
-              <div className="stat-label">In Progress</div>
+              <div className={mergeClasses(w.statNum, w.statNumGreen)}>{inProgress.length}</div>
+              <div className={w.statLabel}>In Progress</div>
             </div>
             <div>
-              <div className="stat-num red">{watchlist.length - visible.length}</div>
-              <div className="stat-label">Watched</div>
+              <div className={mergeClasses(w.statNum, w.statNumRed)}>{watchlist.length - visible.length}</div>
+              <div className={w.statLabel}>Watched</div>
             </div>
           </div>
 
-          <div className="wl-layout">
+          <div className={w.layout}>
             <div>
               {inProgress.length > 0 && (
                 <>
-                  <div className="wl-section-head">Continue Watching</div>
-                  <div className="wl-items">
+                  <div className={w.sectionHead}>Continue Watching</div>
+                  <div className={w.items}>
                     {inProgress.map((item) => (
-                      <div key={item.id} className="wl-item available">
-                        <div className="wl-thumb" style={{ background: "var(--surface3)" }}>
+                      <div key={item.id} className={mergeClasses(w.item, w.itemAvailable)}>
+                        <div className={w.thumb} style={{ background: "#1C1C1C" }}>
                           <IconFilm size={16} style={{ color: "rgba(255,255,255,0.2)" }} />
                         </div>
                         <div>
-                          <div className="wl-title">{item.title}</div>
-                          <div className="wl-meta">{item.year} · {item.genre} · {item.duration}</div>
+                          <div className={w.title}>{item.title}</div>
+                          <div className={w.meta}>{item.year} · {item.genre} · {item.duration}</div>
                           {item.progress && (
                             <div style={{ marginTop: 5, height: 3, width: 120, background: "rgba(255,255,255,0.1)", borderRadius: 2 }}>
-                              <div style={{ height: "100%", width: `${item.progress}%`, background: "var(--red)", borderRadius: 2 }} />
+                              <div style={{ height: "100%", width: `${item.progress}%`, background: "#CE1126", borderRadius: 2 }} />
                             </div>
                           )}
                         </div>
-                        <div className="wl-right">
-                          <span className="badge badge-gray">{item.resolution}</span>
-                          <a href={`/player/${item.filmId}`} className="wl-play">
+                        <div className={w.right}>
+                          <span className={mergeClasses(w.badge, w.badgeGray)}>{item.resolution}</span>
+                          <a href={`/player/${item.filmId}`} className={w.play}>
                             <IconPlay size={10} /> Play
                           </a>
-                          <button className="wl-remove" onClick={() => setRemoved((s) => new Set([...s, item.id]))}>
+                          <button className={w.remove} onClick={() => setRemoved((s) => new Set([...s, item.id]))}>
                             <IconClose size={15} />
                           </button>
                         </div>
@@ -89,28 +92,28 @@ export const Watchlist: FC = () => {
                 </>
               )}
 
-              <div className="wl-section-head">Up Next</div>
-              <div className="wl-items">
+              <div className={w.sectionHead}>Up Next</div>
+              <div className={w.items}>
                 {queued.map((item) => (
-                  <div key={item.id} className="wl-item">
-                    <div className="wl-thumb" style={{ background: "var(--surface3)" }}>
+                  <div key={item.id} className={w.item}>
+                    <div className={w.thumb} style={{ background: "#1C1C1C" }}>
                       <IconFilm size={16} style={{ color: "rgba(255,255,255,0.2)" }} />
                     </div>
                     <div>
-                      <div className="wl-title">{item.title}</div>
-                      <div className="wl-meta">{item.year} · {item.genre} · {item.duration}</div>
+                      <div className={w.title}>{item.title}</div>
+                      <div className={w.meta}>{item.year} · {item.genre} · {item.duration}</div>
                       {item.notes && (
-                        <div style={{ fontSize: 10, color: "var(--muted2)", marginTop: 2, fontStyle: "italic" }}>
+                        <div style={{ fontSize: 10, color: "#3E3E3E", marginTop: 2, fontStyle: "italic" }}>
                           {item.notes}
                         </div>
                       )}
                     </div>
-                    <div className="wl-right">
-                      <span className="badge badge-gray">{item.resolution}</span>
-                      <a href={`/player/${item.filmId}`} className="wl-play">
+                    <div className={w.right}>
+                      <span className={mergeClasses(w.badge, w.badgeGray)}>{item.resolution}</span>
+                      <a href={`/player/${item.filmId}`} className={w.play}>
                         <IconPlay size={10} /> Play
                       </a>
-                      <button className="wl-remove" onClick={() => setRemoved((s) => new Set([...s, item.id]))}>
+                      <button className={w.remove} onClick={() => setRemoved((s) => new Set([...s, item.id]))}>
                         <IconClose size={15} />
                       </button>
                     </div>
@@ -119,22 +122,23 @@ export const Watchlist: FC = () => {
               </div>
 
               {visible.length === 0 && (
-                <div className="empty-state">
-                  <div className="empty-icon" style={{ color: "var(--muted2)" }}>
+                <div className={w.emptyState}>
+                  <div className={w.emptyIcon} style={{ color: "#3E3E3E" }}>
                     <IconSearch size={36} />
                   </div>
-                  <div className="empty-title">Your watchlist is empty</div>
-                  <div className="empty-sub">Search for titles on the right to add them</div>
+                  <div className={w.emptyTitle}>Your watchlist is empty</div>
+                  <div className={w.emptySub}>Search for titles on the right to add them</div>
                 </div>
               )}
             </div>
 
-            <div className="add-panel">
-              <div className="add-panel-head">
-                <div className="add-panel-title">Add to Watchlist</div>
-                <div className="search-wrap">
-                  <span className="search-icon"><IconSearch size={13} /></span>
+            <div className={w.addPanel}>
+              <div className={w.addPanelHead}>
+                <div className={w.addPanelTitle}>Add to Watchlist</div>
+                <div className={w.searchWrap}>
+                  <span className={w.searchIcon}><IconSearch size={13} /></span>
                   <input
+                    className={w.searchInput}
                     type="text"
                     placeholder="Search your library…"
                     value={search}
@@ -142,24 +146,24 @@ export const Watchlist: FC = () => {
                   />
                 </div>
               </div>
-              <div className="add-panel-body">
+              <div className={w.addPanelBody}>
                 {searchResults.length > 0 ? (
                   searchResults.map((film) => (
-                    <div key={film.id} className="search-res-item">
-                      <div className="search-res-thumb" style={{ background: film.gradient }}>
+                    <div key={film.id} className={w.searchResItem}>
+                      <div className={w.searchResThumb} style={{ background: film.gradient }}>
                         <IconFilm size={14} style={{ color: "rgba(255,255,255,0.2)" }} />
                       </div>
                       <div>
-                        <div className="search-res-title">{film.title}</div>
-                        <div className="search-res-meta">
+                        <div className={w.searchResTitle}>{film.title}</div>
+                        <div className={w.searchResMeta}>
                           {film.year} · {film.genre}
-                          {film.matched && <span className="on-disk"> · On disk</span>}
+                          {film.matched && <span className={w.onDisk}> · On disk</span>}
                         </div>
                       </div>
                     </div>
                   ))
                 ) : (
-                  <div style={{ fontSize: 12, color: "var(--muted2)", padding: "8px 0", textAlign: "center" }}>
+                  <div style={{ fontSize: 12, color: "#3E3E3E", padding: "8px 0", textAlign: "center" }}>
                     {search.trim() ? "No matching titles" : "Start typing to search…"}
                   </div>
                 )}

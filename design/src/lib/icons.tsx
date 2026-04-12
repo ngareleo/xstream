@@ -68,6 +68,12 @@ export const IconPencil = (p: IconProps) =>
     p,
   );
 
+export const IconEdit = (p: IconProps) =>
+  base(
+    <path d="M13.232 3.23233L16.768 6.76833M14.732 1.73233C15.2009 1.26343 15.8369 1 16.5 1C17.1631 1 17.7991 1.26343 18.268 1.73233C18.7369 2.20123 19.0003 2.8372 19.0003 3.50033C19.0003 4.16346 18.7369 4.79943 18.268 5.26833L4.5 19.0363H1V15.4643L14.732 1.73233Z" />,
+    { ...p, viewBox: "0 0 20 20", strokeWidth: 2 },
+  );
+
 export const IconRefresh = (p: IconProps) =>
   base(
     <path d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" />,
@@ -193,6 +199,21 @@ export const IconBug = (p: IconProps) =>
     p,
   );
 
+export const IconSpinner = ({ size = 16, className, ...rest }: IconProps) => (
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth={2}
+    strokeLinecap="round"
+    className={className}
+    {...rest}
+    style={{ width: size, height: size, flexShrink: 0, animation: "spin 0.8s linear infinite" }}
+  >
+    <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+  </svg>
+);
+
 export const IconSignOut = (p: IconProps) =>
   base(
     <path d="M8.25 9V5.25A2.25 2.25 0 0 1 10.5 3h6a2.25 2.25 0 0 1 2.25 2.25v13.5A2.25 2.25 0 0 1 16.5 21h-6a2.25 2.25 0 0 1-2.25-2.25V15M12 9l3 3m0 0-3 3m3-3H2.25" />,
@@ -206,7 +227,7 @@ export const IconHome = (p: IconProps) =>
   );
 
 export const LogoShield = () => (
-  <svg className="logo-shield" viewBox="0 0 24 28" fill="none">
+  <svg viewBox="0 0 24 28" fill="none" width={24} height={28} style={{ flexShrink: 0 }}>
     <path d="M12 1L23 6v13Q23 26 12 27Q1 26 1 19V6Z" fill="#CE1126" opacity="0.15" stroke="#CE1126" strokeWidth="0.8" />
     <path d="M12 5L19 9v10Q19 23 12 25Q5 23 5 19V9Z" fill="#CE1126" opacity="0.2" />
     <line x1="12" y1="1.5" x2="12" y2="26.5" stroke="white" strokeWidth="1.2" opacity="0.6" />

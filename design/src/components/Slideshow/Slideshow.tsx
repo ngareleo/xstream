@@ -1,5 +1,6 @@
+import { mergeClasses } from "@griffel/react";
 import { type FC, useEffect, useState } from "react";
-import "./Slideshow.css";
+import { useSlideshowStyles } from "./Slideshow.styles.js";
 
 const IMAGES = [
   "/images/pexels-droneafrica-13338819.jpg",
@@ -41,22 +42,24 @@ export const Slideshow: FC = () => {
     }, 300);
   };
 
+  const styles = useSlideshowStyles();
+
   return (
-    <div className="slideshow">
+    <div className={styles.root}>
       {IMAGES.map((src, i) => (
         <div
           key={src}
-          className={`slideshow-slide ${i === current ? "active" : ""} ${i === current && fading ? "fading" : ""}`}
+          className={mergeClasses(styles.slide, i === current && styles.slideActive, i === current && fading && styles.slideFading)}
           style={{ backgroundImage: `url(${src})` }}
         />
       ))}
-      <div className="slideshow-overlay" />
-      <div className="slideshow-caption">{CAPTIONS[current]}</div>
-      <div className="slideshow-dots">
+      <div className={styles.overlay} />
+      <div className={styles.caption}>{CAPTIONS[current]}</div>
+      <div className={styles.dots}>
         {IMAGES.map((_, i) => (
           <button
             key={i}
-            className={`slideshow-dot ${i === current ? "active" : ""}`}
+            className={mergeClasses(styles.dot, i === current && styles.dotActive)}
             onClick={() => goTo(i)}
             aria-label={`Slide ${i + 1}`}
           />

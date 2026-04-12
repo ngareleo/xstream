@@ -1,3 +1,4 @@
+import { mergeClasses } from "@griffel/react";
 import { type FC, useEffect, useRef, useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import {
@@ -11,10 +12,9 @@ import {
   IconHome,
   IconSignOut,
   IconWarning,
-  LogoShield,
 } from "../../lib/icons.js";
 import { user, profiles } from "../../data/mock.js";
-import "./Sidebar.css";
+import { useSidebarStyles } from "./Sidebar.styles.js";
 
 interface SidebarProps {
   collapsed: boolean;
@@ -26,29 +26,32 @@ interface SidebarProps {
 const SignOutDialog: FC<{ onCancel: () => void; onConfirm: () => void }> = ({
   onCancel,
   onConfirm,
-}) => (
-  <div className="dialog-overlay" onClick={onCancel}>
-    <div className="dialog" onClick={(e) => e.stopPropagation()}>
-      <div className="dialog-icon">
-        <IconWarning size={20} />
-      </div>
-      <div className="dialog-title">Sign out of Moran?</div>
-      <div className="dialog-body">
-        You'll need to sign back in to access your library. Any active
-        streams will stop.
-      </div>
-      <div className="dialog-actions">
-        <button className="btn btn-ghost btn-sm" onClick={onCancel}>
-          Cancel
-        </button>
-        <button className="btn btn-danger btn-sm" onClick={onConfirm}>
-          <IconSignOut size={12} />
-          Sign out
-        </button>
+}) => {
+  const styles = useSidebarStyles();
+  return (
+    <div className={styles.dialogOverlay} onClick={onCancel}>
+      <div className={styles.dialog} onClick={(e) => e.stopPropagation()}>
+        <div className={styles.dialogIcon}>
+          <IconWarning size={20} />
+        </div>
+        <div className={styles.dialogTitle}>Sign out of Moran?</div>
+        <div className={styles.dialogBody}>
+          You'll need to sign back in to access your library. Any active
+          streams will stop.
+        </div>
+        <div className={styles.dialogActions}>
+          <button className={styles.btnGhost} onClick={onCancel}>
+            Cancel
+          </button>
+          <button className={styles.btnDanger} onClick={onConfirm}>
+            <IconSignOut size={12} />
+            Sign out
+          </button>
+        </div>
       </div>
     </div>
-  </div>
-);
+  );
+};
 
 // ── ProfileMenu ───────────────────────────────────────────────────────────────
 
@@ -80,29 +83,30 @@ const ProfileMenu: FC<{
     return () => document.removeEventListener("keydown", handler);
   }, [onClose]);
 
+  const styles = useSidebarStyles();
   const go = (path: string) => { navigate(path); onClose(); };
 
   return (
     <div
       ref={ref}
-      className={`profile-menu${collapsed ? " profile-menu-collapsed" : ""}`}
+      className={mergeClasses(styles.profileMenu, collapsed && styles.profileMenuCollapsed)}
     >
       {/* User info */}
-      <div className="pm-user-head">
-        <div className="pm-avatar">{user.avatar}</div>
-        <div className="pm-user-info">
-          <div className="pm-user-name">{user.name}</div>
-          <div className="pm-user-email">{user.email}</div>
+      <div className={styles.pmUserHead}>
+        <div className={styles.pmAvatar}>{user.avatar}</div>
+        <div className={styles.pmUserInfo}>
+          <div className={styles.pmUserName}>{user.name}</div>
+          <div className={styles.pmUserEmail}>{user.email}</div>
         </div>
       </div>
 
       {/* Profiles */}
-      <div className="pm-section-label">Profiles</div>
+      <div className={styles.pmSectionLabel}>Profiles</div>
       {profiles.map((p) => (
-        <button key={p.id} className="pm-item" onClick={() => go("/")}>
-          <span className="pm-item-dot" />
-          <span className="pm-item-name">{p.name}</span>
-          <span className="pm-item-count">
+        <button key={p.id} className={styles.pmItem} onClick={() => go(`/library?profile=${p.id}`)}>
+          <span className={styles.pmItemDot} />
+          <span className={styles.pmItemName}>{p.name}</span>
+          <span className={styles.pmItemCount}>
             {p.type === "tv"
               ? `${p.showCount ?? 0} shows`
               : `${p.filmCount ?? 0} films`}
@@ -110,23 +114,23 @@ const ProfileMenu: FC<{
         </button>
       ))}
 
-      <div className="pm-divider" />
+      <div className={styles.pmDivider} />
 
-      <button className="pm-item" onClick={() => go("/")}>
+      <button className={styles.pmItem} onClick={() => go("/")}>
         <IconHome size={13} />
-        <span className="pm-item-name">Go to home</span>
+        <span className={styles.pmItemName}>Go to home</span>
       </button>
 
-      <button className="pm-item" onClick={() => go("/settings?section=account")}>
+      <button className={styles.pmItem} onClick={() => go("/settings?section=account")}>
         <IconUser size={13} />
-        <span className="pm-item-name">Account settings</span>
+        <span className={styles.pmItemName}>Account settings</span>
       </button>
 
-      <div className="pm-divider" />
+      <div className={styles.pmDivider} />
 
-      <button className="pm-item pm-item-danger" onClick={() => { onClose(); onSignOut(); }}>
+      <button className={mergeClasses(styles.pmItem, styles.pmItemDanger)} onClick={() => { onClose(); onSignOut(); }}>
         <IconSignOut size={13} />
-        <span className="pm-item-name">Sign out</span>
+        <span className={styles.pmItemName}>Sign out</span>
       </button>
     </div>
   );
@@ -138,52 +142,61 @@ export const Sidebar: FC<SidebarProps> = ({ collapsed, onToggle }) => {
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
   const [confirmSignOut, setConfirmSignOut] = useState(false);
+  const styles = useSidebarStyles();
 
   const handleSignOut = () => {
     setConfirmSignOut(false);
     navigate("/goodbye");
   };
 
+  const navItemClass = (isActive: boolean) =>
+    mergeClasses(
+      styles.navItem,
+      isActive && styles.navItemActive,
+      collapsed && styles.navItemCollapsed,
+      isActive && collapsed && styles.navItemCollapsedActive,
+    );
+
   return (
     <>
-      <nav className={`sidebar${collapsed ? " collapsed" : ""}`}>
-        <NavLink to="/" className={({ isActive }) => `nav-item${isActive ? " active" : ""}`} end>
-          <IconSquares size={40} className="nav-card-icon" />
-          <span className="nav-label">Profiles</span>
-          <span className="nav-side-tip" aria-hidden="true">Profiles</span>
+      <nav className={mergeClasses(styles.root, collapsed && styles.rootCollapsed)}>
+        <NavLink to="/" className={({ isActive }) => navItemClass(isActive)} end>
+          <IconSquares size={40} className={mergeClasses(styles.navCardIcon, collapsed && styles.navCardIconCollapsed)} />
+          <span className={mergeClasses(styles.navLabel, collapsed && styles.navLabelHidden)}>Profiles</span>
+          <span className={mergeClasses(styles.navSideTip, collapsed && styles.navSideTipVisible, !collapsed && styles.navSideTipHidden)} aria-hidden="true">Profiles</span>
         </NavLink>
 
-        <NavLink to="/library" className={({ isActive }) => `nav-item${isActive ? " active" : ""}`}>
-          <IconFilm size={40} className="nav-card-icon" />
-          <span className="nav-label">Library</span>
-          <span className="nav-side-tip" aria-hidden="true">Library</span>
+        <NavLink to="/library" className={({ isActive }) => navItemClass(isActive)}>
+          <IconFilm size={40} className={mergeClasses(styles.navCardIcon, collapsed && styles.navCardIconCollapsed)} />
+          <span className={mergeClasses(styles.navLabel, collapsed && styles.navLabelHidden)}>Library</span>
+          <span className={mergeClasses(styles.navSideTip, collapsed && styles.navSideTipVisible, !collapsed && styles.navSideTipHidden)} aria-hidden="true">Library</span>
         </NavLink>
 
-        <NavLink to="/settings" className={({ isActive }) => `nav-item${isActive ? " active" : ""}`}>
-          <IconAdjustments size={40} className="nav-card-icon" />
-          <span className="nav-label">Settings</span>
-          <span className="nav-side-tip" aria-hidden="true">Settings</span>
+        <NavLink to="/settings" className={({ isActive }) => navItemClass(isActive)}>
+          <IconAdjustments size={40} className={mergeClasses(styles.navCardIcon, collapsed && styles.navCardIconCollapsed)} />
+          <span className={mergeClasses(styles.navLabel, collapsed && styles.navLabelHidden)}>Settings</span>
+          <span className={mergeClasses(styles.navSideTip, collapsed && styles.navSideTipVisible, !collapsed && styles.navSideTipHidden)} aria-hidden="true">Settings</span>
         </NavLink>
 
-        <NavLink to="/feedback" className={({ isActive }) => `nav-item${isActive ? " active" : ""}`}>
-          <IconChat size={40} className="nav-card-icon" />
-          <span className="nav-label">Feedback</span>
-          <span className="nav-side-tip" aria-hidden="true">Feedback</span>
+        <NavLink to="/feedback" className={({ isActive }) => navItemClass(isActive)}>
+          <IconChat size={40} className={mergeClasses(styles.navCardIcon, collapsed && styles.navCardIconCollapsed)} />
+          <span className={mergeClasses(styles.navLabel, collapsed && styles.navLabelHidden)}>Feedback</span>
+          <span className={mergeClasses(styles.navSideTip, collapsed && styles.navSideTipVisible, !collapsed && styles.navSideTipHidden)} aria-hidden="true">Feedback</span>
         </NavLink>
 
-        <div className="nav-spacer" />
+        <div className={styles.navSpacer} />
 
         <button
-          className="sidebar-collapse-btn"
+          className={mergeClasses(styles.collapseBtn, collapsed && styles.collapseBtnCollapsed)}
           onClick={onToggle}
           aria-label="Toggle navigation"
         >
-          <IconChevronLeft size={15} />
-          <span className="nav-label">Collapse</span>
+          <IconChevronLeft size={15} className={mergeClasses(styles.collapseBtnIcon, collapsed && styles.collapseBtnIconRotated)} />
+          <span className={mergeClasses(styles.navLabel, collapsed && styles.navLabelHidden)}>Collapse</span>
         </button>
 
         {/* Profile button */}
-        <div className="sidebar-user-wrap">
+        <div className={styles.userWrap}>
           {menuOpen && (
             <ProfileMenu
               onClose={() => setMenuOpen(false)}
@@ -192,19 +205,19 @@ export const Sidebar: FC<SidebarProps> = ({ collapsed, onToggle }) => {
             />
           )}
           <button
-            className={`sidebar-user${menuOpen ? " menu-open" : ""}`}
+            className={mergeClasses(styles.userBtn, menuOpen && styles.userBtnMenuOpen, collapsed && styles.userBtnCollapsed)}
             onClick={() => setMenuOpen((o) => !o)}
             aria-label="Open profile menu"
             aria-expanded={menuOpen}
           >
-            <div className="avatar">{user.avatar}</div>
+            <div className={styles.avatar}>{user.avatar}</div>
             {!collapsed && (
               <>
-                <div className="sidebar-user-text">
-                  <div className="user-name">{user.name}</div>
-                  <div className="user-sub">{user.totalProfiles} profiles · {user.totalFiles} files</div>
+                <div className={styles.userText}>
+                  <div className={styles.userName}>{user.name}</div>
+                  <div className={styles.userSub}>{user.totalProfiles} profiles · {user.totalFiles} files</div>
                 </div>
-                <IconChevronRight size={12} className={`user-chevron${menuOpen ? " open" : ""}`} />
+                <IconChevronRight size={12} className={mergeClasses(styles.userChevron, menuOpen && styles.userChevronOpen)} />
               </>
             )}
           </button>

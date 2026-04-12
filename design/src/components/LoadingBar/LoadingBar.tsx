@@ -14,9 +14,10 @@
  * visual confirmation that the load succeeded without abruptly vanishing.
  */
 
+import { mergeClasses } from "@griffel/react";
 import { type FC, useEffect, useState } from "react";
 import { useLoadingBarState } from "./LoadingBarContext.js";
-import "./LoadingBar.css";
+import { useLoadingBarStyles } from "./LoadingBar.styles.js";
 
 type Phase = "idle" | "loading" | "completing";
 
@@ -43,13 +44,15 @@ export const LoadingBar: FC = () => {
     return () => clearTimeout(t);
   }, [phase]);
 
+  const styles = useLoadingBarStyles();
+
   if (phase === "idle") return null;
 
   return (
-    <div className="lb-root" aria-hidden="true">
-      <div className={`lb-track lb-track--${phase}`}>
-        <div className="lb-sheen" />
-        <div className="lb-spark" />
+    <div className={styles.root} aria-hidden="true">
+      <div className={mergeClasses(styles.track, phase === "loading" && styles.trackLoading, phase === "completing" && styles.trackCompleting)}>
+        <div className={styles.sheen} />
+        <div className={styles.spark} />
       </div>
     </div>
   );

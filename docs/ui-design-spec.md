@@ -30,15 +30,33 @@ must live in the URL search params** — never in component state — so that:
 - Deep-linking to a URL with a pane param restores the pane immediately.
 - Navigating to the Player and pressing Back returns to the exact pane state.
 
-| Page | Open pane URL | Param key |
+| Page | Open pane URL | Notes |
 |---|---|---|
-| Profiles | `/?pane=film-detail&filmId=<id>` | `filmId` |
-| Profiles | `/?pane=new-profile` | — |
-| Library | `/library?film=<id>` | `film` |
+| Profiles | `/?pane=film-detail&filmId=<id>` | Opens film detail pane |
+| Profiles | `/?pane=film-detail&filmId=<id>&linking=true` | Opens film detail pane in RE-LINK mode |
+| Profiles | `/?pane=new-profile` | Opens new profile form |
+| Library | `/library?film=<id>` | Opens film detail pane |
+| Library | `/library?profile=<id>` | Activates profile filter chip |
+| Library | `/library?profile=<id>&film=<id>` | Filter + pane both active |
 
 Close by removing all params: `setSearchParams({})`.
 
 Toggle: clicking an item that is already open in the pane **closes** it.
+
+### RE-LINK mode (Profiles)
+
+The `linking` param is URL-encoded so that:
+- Switching to a different film always starts with `linking=false` (the new
+  `setSearchParams` call omits the param).
+- The browser Back button exits RE-LINK mode without closing the pane.
+- Clicking the edit icon (✏) on a film row opens the pane **directly** in
+  RE-LINK mode (`openFilmLinking` sets `linking=true` in the same call).
+
+### Deep-link auto-expand (Profiles)
+
+When the page mounts with `filmId` in the URL, the profile that contains that
+film is automatically added to `expandedIds` (via lazy `useState` initialiser)
+so the file is visible in the directory tree without manual expansion.
 
 ---
 
@@ -307,7 +325,7 @@ above it (or to the right in collapsed state).
 
 **Menu items:**
 - User info header (avatar, name, email) — non-interactive
-- Profiles list — each navigates to `/`
+- Profiles list — each navigates to `/library?profile=<id>` (Library filtered to that profile)
 - Go to home → `/`
 - Account settings → `/settings?section=account`
 - Sign out → confirmation dialog
@@ -323,6 +341,56 @@ A modal with a blurred backdrop. "Cancel" dismisses; "Sign out" navigates to
 Invalid or absent values fall back to `"general"`. This is the only Settings
 URL param — section changes during a session remain in component state and do
 not update the URL.
+
+---
+
+## Styling system
+
+All component styles use **Griffel** (`@griffel/react`) — atomic CSS-in-JS.
+There are no per-component `.css` files. The rule is:
+
+- Each component has a colocated `ComponentName.styles.ts` that exports a
+  `useComponentNameStyles` hook built with `makeStyles`.
+- Conditional classes use `mergeClasses(s.base, condition && s.modifier)`.
+- `shared.css` is kept intentionally minimal: only global resets, CSS variable
+  declarations (the `--*` tokens), base element rules, `@keyframes`, scrollbar
+  overrides, `[data-tip]` tooltip attributes, and `body.resizing`.
+- `design.css` contains only the AppShell grid-area assignments for React Router
+  page roots (`.app-shell > .main`, `.app-shell > header.app-header`).
+
+**Forbidden patterns:**
+- Raw `className="..."` string literals referencing CSS class names in JSX.
+- Inline styles for anything that belongs in a design token.
+- Shorthand CSS properties that Griffel rejects (`borderColor`, `borderStyle`) —
+  use longhands (`borderTopColor`, `borderTopWidth: "0"`, etc.).
+
+---
+
+## Library page
+
+### Profile filter
+
+The active profile filter lives in the `?profile=<id>` URL param, not component
+state. This allows:
+- The profile menu to deep-link directly to a filtered view.
+- Bookmarking a filtered library URL.
+- Back navigation restoring the filter.
+
+`buildParams` is a local helper that preserves the current `profile` param when
+opening/closing the film detail pane, so the filter is never lost on pane
+interactions.
+
+### Scroll fade
+
+The grid and list scrollable areas are wrapped in a `scrollWrap` div that has a
+`::before` gradient overlay (`#080808 → transparent`, 48px tall). The overlay:
+- Has `opacity: 0` by default (no fade when at the top — labels are fully visible).
+- Transitions to `opacity: 1` (`0.2s ease`) as soon as `scrollTop > 0`.
+- Resets to hidden when the user switches between grid and list views.
+
+Implementation: `onScroll` on the scrollable element sets `scrolled` state;
+`mergeClasses(s.scrollWrap, scrolled && s.scrollWrapScrolled)` applies the
+modifier. `pointerEvents: none` ensures the overlay never blocks interactions.
 
 ---
 

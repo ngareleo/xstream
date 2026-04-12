@@ -23,61 +23,69 @@
  *   - Search + profile + type filtering → client-side on loaded data
  */
 
-import React, { type FC } from "react";
+import { mergeClasses } from "@griffel/react";
+import React, { type FC, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useSplitResize } from "../../hooks/useSplitResize.js";
 import { AppHeader } from "../../components/AppHeader/AppHeader.js";
+import { LinkSearch, type Suggestion } from "../../components/LinkSearch/LinkSearch.js";
 import {
   IconSearch,
   IconClose,
   IconPlay,
-  IconPencil,
+  IconEdit,
 } from "../../lib/icons.js";
 import { profiles, films, type Film } from "../../data/mock.js";
 import { useSimulatedLoad } from "../../hooks/useSimulatedLoad.js";
 import { usePageLoading } from "../../components/LoadingBar/LoadingBarContext.js";
 import { DevThrowTarget } from "../../components/DevTools/DevToolsContext.js";
-import "./Library.css";
+import { useLibraryStyles } from "./Library.styles.js";
+import { tokens } from "../../styles/tokens.js";
 
 type ViewMode = "grid" | "list";
 
 // ── PosterCard (grid view) ────────────────────────────────────────────────────
 
+const useLStyles = useLibraryStyles;
+
 const PosterCard: FC<{
   film:     Film;
   onSelect: (id: string) => void;
   selected: boolean;
-}> = ({ film, onSelect, selected }) => (
-  <div
-    className={`poster-card${selected ? " selected" : ""}`}
-    onClick={() => onSelect(film.id)}
-  >
-    <div className="poster-img" style={{ background: film.gradient }}>
-      {film.matched && film.resolution === "4K" && (
-        <span className="poster-res">
-          <span className="badge badge-red" style={{ fontSize: 9 }}>4K</span>
-        </span>
-      )}
-      {film.rating && (
-        <span className="poster-rating">{film.rating}</span>
-      )}
-      {!film.matched && (
-        <div style={{
-          color: "rgba(245,197,24,0.4)", display: "flex",
-          alignItems: "center", justifyContent: "center", height: "100%",
-        }}>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} style={{ width: 32, height: 32, opacity: 0.4 }}>
-            <path d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 5.25h.008v.008H12v-.008Z" />
-          </svg>
-        </div>
-      )}
+}> = ({ film, onSelect, selected }) => {
+  const s = useLStyles();
+  return (
+    <div
+      className={mergeClasses(s.posterCard, selected && s.posterCardSelected)}
+      onClick={() => onSelect(film.id)}
+    >
+      <div className={s.posterImg} style={{ background: film.gradient }}>
+        {film.matched && film.resolution === "4K" && (
+          <span style={{ position: "absolute", top: 5, left: 5 }}>
+            <span className={mergeClasses(s.badge, s.badgeRed)} style={{ fontSize: 9 }}>4K</span>
+          </span>
+        )}
+        {film.rating && (
+          <span style={{ position: "absolute", top: 5, right: 5, background: "rgba(0,0,0,0.75)", color: "var(--yellow)", fontSize: 10, fontWeight: 700, padding: "2px 6px", borderRadius: 3 }}>{film.rating}</span>
+        )}
+        {!film.matched && (
+          <div style={{
+            color: "rgba(245,197,24,0.4)", display: "flex",
+            alignItems: "center", justifyContent: "center", height: "100%",
+          }}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} style={{ width: 32, height: 32, opacity: 0.4 }}>
+              <path d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 5.25h.008v.008H12v-.008Z" />
+            </svg>
+          </div>
+        )}
+      </div>
+      <div className={s.posterInfo}>
+        <div className={s.posterTitle}>{film.title ?? film.filename}</div>
+        <div className={s.posterMeta}>{film.year ? `${film.year} · ${film.genre}` : "Unmatched"}</div>
+      </div>
     </div>
-    <div className="poster-info">
-      <div className="poster-title">{film.title ?? film.filename}</div>
-      <div className="poster-meta">{film.year ? `${film.year} · ${film.genre}` : "Unmatched"}</div>
-    </div>
-  </div>
-);
+  );
+};
 
 // ── FilmListRow (list view) ───────────────────────────────────────────────────
 
@@ -86,15 +94,16 @@ const FilmListRow: FC<{
   onSelect: (id: string) => void;
   selected: boolean;
 }> = ({ film, onSelect, selected }) => {
+  const s = useLStyles();
   const profile = profiles.find((p) => p.id === film.profile);
 
   return (
     <div
-      className={`film-list-row${selected ? " selected" : ""}`}
+      className={mergeClasses(s.listRow, selected && s.listRowSelected)}
       onClick={() => onSelect(film.id)}
     >
       {/* Thumbnail */}
-      <div className="flr-thumb" style={{ background: film.gradient }}>
+      <div className={s.listThumb} style={{ background: film.gradient }}>
         {!film.matched && (
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} style={{ width: 16, height: 16, opacity: 0.4, color: "rgba(245,197,24,0.6)" }}>
             <path d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 5.25h.008v.008H12v-.008Z" />
@@ -103,131 +112,180 @@ const FilmListRow: FC<{
       </div>
 
       {/* Title + meta */}
-      <div className="flr-info">
-        <div className="flr-title">{film.title ?? film.filename}</div>
-        <div className="flr-meta">
+      <div className={s.listInfo}>
+        <div className={s.listTitle}>{film.title ?? film.filename}</div>
+        <div className={s.listMeta}>
           {film.year ? `${film.year} · ${film.genre}` : "Unmatched"}
-          {profile && <span className="flr-profile">{profile.name}</span>}
+          {profile && <span className={s.listProfile}>{profile.name}</span>}
         </div>
       </div>
 
       {/* Badges */}
-      <div className="flr-badges">
-        {film.matched && <span className={`badge ${film.resolution === "4K" ? "badge-red" : "badge-gray"}`}>{film.resolution}</span>}
-        {film.hdr && <span className="badge badge-gray">{film.hdr}</span>}
+      <div className={s.listBadges}>
+        {film.matched && <span className={mergeClasses(s.badge, film.resolution === "4K" ? s.badgeRed : s.badgeGray)}>{film.resolution}</span>}
+        {film.hdr && <span className={mergeClasses(s.badge, s.badgeGray)}>{film.hdr}</span>}
       </div>
 
       {/* Rating */}
-      {film.rating ? (
-        <div className="flr-rating">{film.rating}</div>
-      ) : (
-        <div className="flr-rating" />
-      )}
+      <div className={s.listRating}>{film.rating}</div>
 
       {/* Duration */}
-      <div className="flr-duration">{film.duration}</div>
+      <div className={s.listDuration}>{film.duration}</div>
 
       {/* Size */}
-      <div className="flr-size">{film.size}</div>
+      <div className={s.listSize}>{film.size}</div>
     </div>
   );
 };
 
 // ── DetailPane ────────────────────────────────────────────────────────────────
 
-const DetailPane: FC<{ film: Film; onClose: () => void }> = ({ film, onClose }) => (
-  <div className="right-pane">
-    <div style={{ height: 200, position: "relative", overflow: "hidden", flexShrink: 0, background: film.gradient }}>
-      <div style={{
-        position: "absolute", inset: 0,
-        background: "linear-gradient(to bottom,rgba(0,0,0,0.58) 0%,transparent 40%,rgba(0,0,0,0.84) 100%)",
-      }} />
-      <div className="fd-actions">
-        <Link to={`/player/${film.id}`} className="fd-action-btn primary">
-          <IconPlay size={10} />
-          PLAY
-        </Link>
-        <div className="fd-action-sep" />
-        <button className="fd-action-btn" data-tip="Re-link metadata"><IconPencil size={10} /> RE-LINK</button>
-        <div style={{ flex: 1 }} />
-        <button className="fd-action-close" onClick={onClose}><IconClose size={13} /></button>
-      </div>
-      <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, padding: "12px 16px", zIndex: 2 }}>
+const DetailPane: FC<{ film: Film; onClose: () => void }> = ({ film, onClose }) => {
+  const [linking, setLinking] = useState(false);
+  const s = useLStyles();
+
+  const handleLinked = (_suggestion: Suggestion) => {
+    // In production: fire the re-link mutation with the chosen metadata ID.
+    // For the design lab we just close the search panel.
+    setLinking(false);
+  };
+
+  return (
+    <div className={s.rightPane}>
+      {/* Poster / header — always visible */}
+      <div style={{ height: 200, position: "relative", overflow: "hidden", flexShrink: 0, background: film.gradient }}>
         <div style={{
-          fontFamily: "var(--font-head)", fontSize: 22,
-          letterSpacing: ".06em", color: "var(--white)", lineHeight: 1,
-        }}>
-          {film.title ?? film.filename}
+          position: "absolute", inset: 0,
+          background: "linear-gradient(to bottom,rgba(0,0,0,0.58) 0%,transparent 40%,rgba(0,0,0,0.84) 100%)",
+        }} />
+        <div className={s.fdActions}>
+          <Link to={`/player/${film.id}`} className={mergeClasses(s.fdActionBtn, s.fdActionBtnPrimary)}>
+            <IconPlay size={10} />
+            PLAY
+          </Link>
+          <div className={s.fdActionSep} />
+          <button
+            className={mergeClasses(s.fdActionBtn, linking && s.fdActionBtnActive)}
+            onClick={() => setLinking((l) => !l)}
+            data-tip="Re-link metadata"
+          >
+            <IconEdit size={10} /> RE-LINK
+          </button>
+          <div style={{ flex: 1 }} />
+          <button className={s.fdActionClose} onClick={onClose}><IconClose size={13} /></button>
         </div>
-        {film.year && (
-          <div style={{ fontSize: 11, color: "rgba(255,255,255,0.6)", marginTop: 3 }}>
-            {film.year} · {film.genre}
+        <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, padding: "12px 16px", zIndex: 2 }}>
+          <div style={{
+            fontFamily: tokens.fontHead, fontSize: 22,
+            letterSpacing: ".06em", color: tokens.colorWhite, lineHeight: 1,
+          }}>
+            {film.title ?? film.filename}
           </div>
-        )}
+          {film.year && (
+            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.6)", marginTop: 3 }}>
+              {film.year} · {film.genre}
+            </div>
+          )}
+        </div>
       </div>
-    </div>
-    <div style={{ overflowY: "auto", flex: 1 }}>
-      {film.rating && (
-        <>
-          <div style={{
-            display: "flex", gap: 5, flexWrap: "wrap",
-            padding: "12px 16px", borderBottom: "1px solid var(--border)",
-          }}>
-            <span className="badge badge-red">{film.resolution}</span>
-            {film.hdr  && <span className="badge badge-gray">{film.hdr}</span>}
-            <span className="badge badge-gray">{film.codec}</span>
-            <span className="badge badge-gray">{film.audio}</span>
-          </div>
-          <div style={{
-            display: "flex", alignItems: "center", gap: 10,
-            padding: "10px 16px", borderBottom: "1px solid var(--border)",
-          }}>
-            <span style={{ fontSize: 15, fontWeight: 700, color: "var(--yellow)" }}>{film.rating}</span>
-            <span style={{ fontSize: 11, color: "var(--muted)" }}>IMDb · {film.duration}</span>
-          </div>
-        </>
-      )}
-      {film.plot && (
-        <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--border)" }}>
-          <div className="section-label">Synopsis</div>
-          <div style={{ fontSize: 12, color: "rgba(255,255,255,0.55)", lineHeight: 1.7 }}>
-            {film.plot}
-          </div>
+
+      {/* Content area — switches between detail view and link search */}
+      {linking ? (
+        <LinkSearch
+          filename={film.filename}
+          onLink={handleLinked}
+          onCancel={() => setLinking(false)}
+        />
+      ) : (
+        <div style={{ overflowY: "auto", flex: 1 }}>
+          {film.rating && (
+            <>
+              <div style={{
+                display: "flex", gap: 5, flexWrap: "wrap",
+                padding: "12px 16px", borderBottom: `1px solid ${tokens.colorBorder}`,
+              }}>
+                <span className={mergeClasses(s.badge, s.badgeRed)}>{film.resolution}</span>
+                {film.hdr  && <span className={mergeClasses(s.badge, s.badgeGray)}>{film.hdr}</span>}
+                <span className={mergeClasses(s.badge, s.badgeGray)}>{film.codec}</span>
+                <span className={mergeClasses(s.badge, s.badgeGray)}>{film.audio}</span>
+              </div>
+              <div style={{
+                display: "flex", alignItems: "center", gap: 10,
+                padding: "10px 16px", borderBottom: `1px solid ${tokens.colorBorder}`,
+              }}>
+                <span style={{ fontSize: 15, fontWeight: 700, color: tokens.colorYellow }}>{film.rating}</span>
+                <span style={{ fontSize: 11, color: tokens.colorMuted }}>IMDb · {film.duration}</span>
+              </div>
+            </>
+          )}
+          {film.plot && (
+            <div style={{ padding: "12px 16px", borderBottom: `1px solid ${tokens.colorBorder}` }}>
+              <div className={s.sectionLabel}>Synopsis</div>
+              <div style={{ fontSize: 12, color: "rgba(255,255,255,0.55)", lineHeight: 1.7 }}>
+                {film.plot}
+              </div>
+            </div>
+          )}
+          {film.cast.length > 0 && (
+            <div style={{ padding: "12px 16px" }}>
+              <div className={s.sectionLabel}>Cast</div>
+              <div className={s.detailCast}>
+                {film.cast.map((c) => <span key={c} className={s.castChip}>{c}</span>)}
+              </div>
+            </div>
+          )}
         </div>
       )}
-      {film.cast.length > 0 && (
-        <div style={{ padding: "12px 16px" }}>
-          <div className="section-label">Cast</div>
-          <div className="detail-cast">
-            {film.cast.map((c) => <span key={c} className="cast-chip">{c}</span>)}
-          </div>
-        </div>
-      )}
     </div>
-  </div>
-);
+  );
+};
 
 // ── Library (page root) ───────────────────────────────────────────────────────
 
 export const Library: FC = () => {
-  const [search,        setSearch]        = React.useState("");
-  const [viewMode,      setViewMode]      = React.useState<ViewMode>("grid");
-  const [profileFilter, setProfileFilter] = React.useState<string | null>(null);
-  const [typeFilter,    setTypeFilter]    = React.useState("all");
+  const [search,     setSearch]     = React.useState("");
+  const [viewMode,   setViewMode]   = React.useState<ViewMode>("grid");
+  const [typeFilter, setTypeFilter] = React.useState("all");
+  const [scrolled,   setScrolled]   = React.useState(false);
+
+  // Reset fade when switching view modes — the new list/grid starts at top.
+  React.useEffect(() => { setScrolled(false); }, [viewMode]);
 
   const loading = useSimulatedLoad();
   usePageLoading(loading);
 
   const { paneWidth, containerRef, onResizeMouseDown } = useSplitResize(360);
 
+  // `profile` and `film` live in the URL so that:
+  //   - navigating from the profile menu (/library?profile=xxx) activates the chip
+  //   - deep links like /library?profile=xxx&film=yyy open both filter and pane
   const [searchParams, setSearchParams] = useSearchParams();
+  const profileFilter  = searchParams.get("profile");
   const selectedFilmId = searchParams.get("film");
   const selectedFilm   = selectedFilmId ? films.find((f) => f.id === selectedFilmId) : null;
   const paneOpen       = selectedFilm != null;
 
+  // Build params helper — always preserves the profile filter across film selections.
+  const buildParams = (overrides: Record<string, string | null>) => {
+    const base: Record<string, string> = {};
+    if (profileFilter) base.profile = profileFilter;
+    if (selectedFilmId) base.film = selectedFilmId;
+    for (const [k, v] of Object.entries(overrides)) {
+      if (v === null) delete base[k];
+      else base[k] = v;
+    }
+    return base;
+  };
+
   const selectFilm = (id: string) => {
-    if (selectedFilmId === id) setSearchParams({});
-    else setSearchParams({ film: id });
+    if (selectedFilmId === id) setSearchParams(buildParams({ film: null }));
+    else setSearchParams(buildParams({ film: id }));
+  };
+
+  const setProfileFilter = (id: string | null) => {
+    // Changing the profile filter closes the detail pane (film may not be in new profile).
+    if (id) setSearchParams({ profile: id });
+    else setSearchParams({});
   };
 
   const filteredFilms = React.useMemo(() => {
@@ -256,27 +314,30 @@ export const Library: FC = () => {
     return result;
   }, [profileFilter, typeFilter, search]);
 
+  const s = useLStyles();
+
   return (
     <DevThrowTarget id="Library">
       <>
       <AppHeader collapsed={false}>
-        <span className="topbar-title">Library</span>
+        <span className={s.topbarTitle}>Library</span>
       </AppHeader>
 
       <div className="main">
         <div
           ref={containerRef}
-          className={`split-body${paneOpen ? " pane-open" : ""}`}
+          className={s.splitBody}
           style={paneOpen ? { gridTemplateColumns: `1fr 4px ${paneWidth}px` } : undefined}
         >
-          <div className="split-left">
+          <div className={s.splitLeft}>
 
             {/* ── Filter bar ── */}
-            <div className="filter-bar">
+            <div className={s.filterBar}>
               {/* Search */}
-              <div className="search-wrap" style={{ flex: 1, minWidth: 180 }}>
-                <span className="search-icon"><IconSearch size={13} /></span>
+              <div className={s.searchWrap} style={{ flex: 1, minWidth: 180 }}>
+                <span className={s.searchIcon}><IconSearch size={13} /></span>
                 <input
+                  className={s.searchInput}
                   type="text"
                   placeholder="Search titles, genres, filenames…"
                   value={search}
@@ -286,7 +347,7 @@ export const Library: FC = () => {
 
               {/* Type filter */}
               <select
-                className="filter-select"
+                className={s.filterSelect}
                 value={typeFilter}
                 onChange={(e) => setTypeFilter(e.target.value)}
               >
@@ -298,7 +359,7 @@ export const Library: FC = () => {
               {/* View toggle */}
               <div style={{ display: "flex", gap: 4 }}>
                 <button
-                  className={`icon-btn${viewMode === "grid" ? " active" : ""}`}
+                  className={mergeClasses(s.iconBtn, viewMode === "grid" && s.iconBtnActive)}
                   onClick={() => setViewMode("grid")}
                   title="Grid view"
                   data-tip="Grid"
@@ -308,7 +369,7 @@ export const Library: FC = () => {
                   </svg>
                 </button>
                 <button
-                  className={`icon-btn${viewMode === "list" ? " active" : ""}`}
+                  className={mergeClasses(s.iconBtn, viewMode === "list" && s.iconBtnActive)}
                   onClick={() => setViewMode("list")}
                   title="List view"
                   data-tip="List"
@@ -321,24 +382,24 @@ export const Library: FC = () => {
             </div>
 
             {/* ── Profile chips ── */}
-            <div className="profile-chips">
+            <div className={s.profileChips}>
               <button
-                className={`profile-chip${profileFilter === null ? " active" : ""}`}
+                className={mergeClasses(s.chip, profileFilter === null && s.chipActive)}
                 onClick={() => setProfileFilter(null)}
               >
                 All profiles
-                <span className="chip-count">{films.length}</span>
+                <span className={s.chipCount}>{films.length}</span>
               </button>
               {profiles.map((p) => {
                 const count = films.filter((f) => f.profile === p.id).length;
                 return (
                   <button
                     key={p.id}
-                    className={`profile-chip${profileFilter === p.id ? " active" : ""}`}
+                    className={mergeClasses(s.chip, profileFilter === p.id && s.chipActive)}
                     onClick={() => setProfileFilter(profileFilter === p.id ? null : p.id)}
                   >
                     {p.name}
-                    <span className="chip-count">{count}</span>
+                    <span className={s.chipCount}>{count}</span>
                   </button>
                 );
               })}
@@ -346,32 +407,38 @@ export const Library: FC = () => {
 
             {/* ── Results ── */}
             {filteredFilms.length === 0 ? (
-              <div className="empty-state">
-                <div className="empty-icon" style={{ color: "var(--muted2)" }}>
+              <div className={s.emptyState}>
+                <div className={s.emptyIcon} style={{ color: tokens.colorMuted2 }}>
                   <IconSearch size={36} />
                 </div>
-                <div className="empty-title">No results</div>
-                <div className="empty-sub">Try a different search term or filter</div>
+                <div className={s.emptyTitle}>No results</div>
+                <div className={s.emptySub}>Try a different search term or filter</div>
               </div>
             ) : viewMode === "grid" ? (
-              <div className="films-grid">
-                {filteredFilms.map((film) => (
-                  <PosterCard
-                    key={film.id}
-                    film={film}
-                    onSelect={selectFilm}
-                    selected={selectedFilmId === film.id}
-                  />
-                ))}
+              <div className={mergeClasses(s.scrollWrap, scrolled && s.scrollWrapScrolled)}>
+              <div className={s.gridArea} onScroll={(e) => setScrolled(e.currentTarget.scrollTop > 0)}>
+                <div className={s.grid}>
+                  {filteredFilms.map((film) => (
+                    <PosterCard
+                      key={film.id}
+                      film={film}
+                      onSelect={selectFilm}
+                      selected={selectedFilmId === film.id}
+                    />
+                  ))}
+                </div>
+              </div>
               </div>
             ) : (
-              <div className="films-list">
-                <div className="flr-header">
-                  <div className="flr-header-title">Title</div>
-                  <div className="flr-header-badges">Format</div>
-                  <div className="flr-header-rating">Rating</div>
-                  <div className="flr-header-duration">Duration</div>
-                  <div className="flr-header-size">Size</div>
+              <div className={mergeClasses(s.scrollWrap, scrolled && s.scrollWrapScrolled)}>
+              <div className={s.listArea} onScroll={(e) => setScrolled(e.currentTarget.scrollTop > 0)}>
+                <div className={s.listHeader}>
+                  <div />
+                  <div className={s.listHeaderCell}>Title</div>
+                  <div className={s.listHeaderCell}>Format</div>
+                  <div className={s.listHeaderCell} style={{ textAlign: "right" }}>Rating</div>
+                  <div className={s.listHeaderCell} style={{ textAlign: "right" }}>Duration</div>
+                  <div className={s.listHeaderCell} style={{ textAlign: "right" }}>Size</div>
                 </div>
                 {filteredFilms.map((film) => (
                   <FilmListRow
@@ -382,17 +449,18 @@ export const Library: FC = () => {
                   />
                 ))}
               </div>
+              </div>
             )}
           </div>
 
           {/* Resize handle */}
           {paneOpen && (
-            <div className="split-resize-handle" onMouseDown={onResizeMouseDown} />
+            <div className={s.resizeHandle} onMouseDown={onResizeMouseDown} />
           )}
 
           {/* Detail pane */}
           {paneOpen && selectedFilm && (
-            <DetailPane film={selectedFilm} onClose={() => setSearchParams({})} />
+            <DetailPane film={selectedFilm} onClose={() => setSearchParams(buildParams({ film: null }))} />
           )}
         </div>
       </div>

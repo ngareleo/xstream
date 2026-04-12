@@ -51,8 +51,10 @@ import {
   IconPlay,
   IconSpeaker,
 } from "../../lib/icons.js";
+import { mergeClasses } from "@griffel/react";
 import { films, getFilmById, watchlist } from "../../data/mock.js";
-import "./Player.css";
+import { usePlayerStyles } from "./Player.styles.js";
+import { tokens } from "../../styles/tokens.js";
 
 // How long (ms) of inactivity before the chrome fades out.
 const INACTIVITY_MS = 3000;
@@ -205,14 +207,15 @@ export const Player: FC = () => {
     return `${m}:${String(sec).padStart(2, "0")}`;
   };
 
+  const p = usePlayerStyles();
   const suggestions = getSuggestions(film.id);
   const isIdle      = playerState === "idle";
   const isLoading   = playerState === "loading";
+  const controlsHidden = hidden && !isIdle;
 
   return (
     <div
-      // controls-hidden: fades topbar + controls + side panel, collapses panel column
-      className={`player-root${hidden && !isIdle ? " controls-hidden" : ""}`}
+      className={mergeClasses(p.root, controlsHidden && p.rootControlsHidden)}
       ref={rootRef}
       onMouseMove={resetInactivity}
       onKeyDown={resetInactivity}
@@ -220,125 +223,93 @@ export const Player: FC = () => {
       tabIndex={0}
     >
       {/* ── Video area ──────────────────────────────────────────────────── */}
-      <div className="video-area">
-        {/*
-         * The video element is always mounted so metadata loads immediately.
-         * In production: no `src` here — video is fed via MSE SourceBuffer.
-         * The element sits at z-index 1 above `.scene` (z-index 0) so the
-         * atmospheric background shows through until playback starts.
-         */}
+      <div className={p.videoArea}>
         <video
           ref={videoRef}
-          className="video-el"
+          className={p.videoEl}
           src="/videos/test.mp4"
           preload="metadata"
           onClick={togglePlay}
         />
-        {/* Atmospheric background visible during idle/loading and before the
-            video frame is ready. Layered: scene (gradient) → grain → letterbox */}
-        <div className="scene" />
-        <div className="grain" />
-        <div className="letterbox" />
+        <div className={p.scene} />
+        <div className={p.grain} />
+        <div className={p.letterbox} />
 
         {/* ── Idle / loading overlay ──────────────────────────────────── */}
-        {/*
-         * Shown when playerState is "idle" or "loading".
-         * Idle:    poster gradient + film title + large play button.
-         *          Clicking anywhere on the overlay (or the play button) starts playback.
-         * Loading: same poster but play button replaced with a spinner.
-         *          Not clickable — user must wait for the stream to buffer.
-         *
-         * The overlay sits at z-index 5, above all video layers but below the
-         * topbar (z-index 10) so the film title and Back button remain reachable.
-         */}
         {(isIdle || isLoading) && (
           <div
-            className={`pre-overlay${isLoading ? " pre-overlay--loading" : ""}`}
+            className={mergeClasses(p.preOverlay, isLoading && p.preOverlayLoading)}
             onClick={isIdle ? startPlayback : undefined}
           >
-            <div className="pre-poster" style={{ background: film.gradient }} />
-            <div className="pre-vignette" />
+            <div className={p.prePoster} style={{ background: film.gradient }} />
+            <div className={p.preVignette} />
             {isIdle && (
-              <div className="pre-play-wrap">
-                <button className="pre-play-btn" onClick={startPlayback}>
+              <div className={p.prePlayWrap}>
+                <button className={p.prePlayBtn} onClick={startPlayback}>
                   <IconPlay size={36} />
                 </button>
-                <div className="pre-film-title">{film.title ?? film.filename}</div>
-                <div className="pre-film-meta">
+                <div className={p.preFilmTitle}>{film.title ?? film.filename}</div>
+                <div className={p.preFilmMeta}>
                   {[film.year, film.genre, film.duration].filter(Boolean).join(" · ")}
                 </div>
               </div>
             )}
             {isLoading && (
-              <div className="pre-spinner-wrap">
-                <div className="pre-spinner" />
+              <div className={p.preSpinnerWrap}>
+                <div className={p.preSpinner} />
               </div>
             )}
           </div>
         )}
 
         {/* ── Topbar ──────────────────────────────────────────────────── */}
-        {/*
-         * Always rendered; hidden by .controls-hidden when inactive.
-         * Back button uses navigate(-1) to preserve the full history stack:
-         * if the user arrived from /library?film=dune-2 the pane reopens on return.
-         */}
-        <div className="player-topbar">
-          <button className="back-btn" onClick={() => navigate(-1)}>
+        <div className={mergeClasses(p.playerTopbar, controlsHidden && p.playerTopbarHidden)}>
+          <button className={p.backBtn} onClick={() => navigate(-1)}>
             <IconArrowLeft size={14} />
             Back
           </button>
           <div style={{ width: 1, height: 14, background: "rgba(255,255,255,0.12)" }} />
           <div>
-            <div className="player-film-title">{film.title ?? film.filename}</div>
-            <div className="player-film-meta">
+            <div className={p.playerFilmTitle}>{film.title ?? film.filename}</div>
+            <div className={p.playerFilmMeta}>
               {[film.year, film.genre, film.director, film.duration].filter(Boolean).join(" · ")}
             </div>
           </div>
           <div style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
             {film.resolution === "4K" && (
-              <span className="badge badge-red">
+              <span className={mergeClasses(p.badge, p.badgeRed)}>
                 {film.resolution}{film.hdr ? " HDR" : ""}
               </span>
             )}
-            {film.codec && <span className="badge badge-gray">{film.codec}</span>}
+            {film.codec && <span className={mergeClasses(p.badge, p.badgeGray)}>{film.codec}</span>}
           </div>
         </div>
 
         {/* ── Playback controls ───────────────────────────────────────── */}
-        {/*
-         * Gradient scrim fades from bottom so text stays readable over any frame.
-         * The progress bar shows two layers: buffered (lighter) and played (red).
-         * The thumb only appears on hover (CSS-only, no JS state needed).
-         * Skip buttons jump ±10s; volume track scrubs 0–1 linearly.
-         * The resolution selector is visual-only in the design — in production
-         * it triggers a resolution switch on the streaming pipeline.
-         */}
-        <div className="player-controls">
-          <div className="progress-times">
-            <span className="progress-time">{formatTime(elapsed)}</span>
-            {/* Prefer real duration once loaded; fall back to the metadata string */}
-            <span className="progress-time">{duration ? formatTime(duration) : film.duration}</span>
+        <div className={mergeClasses(p.playerControls, controlsHidden && p.playerControlsHidden)}>
+          <div className={p.progressTimes}>
+            <span className={p.progressTime}>{formatTime(elapsed)}</span>
+            <span className={p.progressTime}>{duration ? formatTime(duration) : film.duration}</span>
           </div>
-          <div className="progress-track" onClick={scrub}>
-            <div className="progress-buffered" style={{ width: `${buffered}%` }} />
-            <div className="progress-played"   style={{ width: `${progress}%` }} />
-            <div className="progress-thumb"    style={{ left:  `${progress}%` }} />
+          <div className={p.progressTrack} onClick={scrub}>
+            <div className={p.progressBuffered} style={{ width: `${buffered}%` }} />
+            <div className={p.progressPlayed}   style={{ width: `${progress}%` }} />
+            <div className={p.progressThumb}    style={{ left:  `${progress}%` }} />
           </div>
-          <div className="controls-row">
-            <button className="ctrl" data-tip="−10s" onClick={() => { if (videoRef.current) videoRef.current.currentTime -= 10; }}>
+          <div className={p.controlsRow}>
+            <button className={p.ctrl} data-tip="−10s" onClick={() => { if (videoRef.current) videoRef.current.currentTime -= 10; }}>
               <IconBackward size={20} />
             </button>
-            <button className="ctrl play" data-tip={playing ? "Pause" : "Play"} onClick={togglePlay}>
+            <button className={mergeClasses(p.ctrl, p.ctrlPlay)} data-tip={playing ? "Pause" : "Play"} onClick={togglePlay}>
               {playing ? <IconPause size={26} /> : <IconPlay size={26} />}
             </button>
-            <button className="ctrl" data-tip="+10s" onClick={() => { if (videoRef.current) videoRef.current.currentTime += 10; }}>
+            <button className={p.ctrl} data-tip="+10s" onClick={() => { if (videoRef.current) videoRef.current.currentTime += 10; }}>
               <IconForward size={20} />
             </button>
-            <div className="vol-wrap">
-              <button className="ctrl" data-tip="Volume"><IconSpeaker size={20} /></button>
+            <div className={p.volWrap}>
+              <button className={p.ctrl} data-tip="Volume"><IconSpeaker size={20} /></button>
               <div
-                className="vol-track"
+                className={p.volTrack}
                 onClick={(e) => {
                   const rect = e.currentTarget.getBoundingClientRect();
                   const v = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
@@ -346,13 +317,12 @@ export const Player: FC = () => {
                   if (videoRef.current) videoRef.current.volume = v;
                 }}
               >
-                <div className="vol-fill" style={{ width: `${volume * 100}%` }} />
+                <div className={p.volFill} style={{ width: `${volume * 100}%` }} />
               </div>
             </div>
-            <div className="ctrl-right">
-              {/* In production: changing resolution calls stopStream() + startStream(newRes) */}
+            <div className={p.ctrlRight}>
               <select
-                className="res-select"
+                className={p.resSelect}
                 value={resolution}
                 onChange={(e) => setResolution(e.target.value)}
               >
@@ -362,7 +332,7 @@ export const Player: FC = () => {
                 <option>480p</option>
                 <option>240p</option>
               </select>
-              <button className="ctrl" data-tip="Fullscreen" onClick={toggleFullscreen}>
+              <button className={p.ctrl} data-tip="Fullscreen" onClick={toggleFullscreen}>
                 <IconArrowsOut size={20} />
               </button>
             </div>
@@ -371,62 +341,48 @@ export const Player: FC = () => {
       </div>
 
       {/* ── Side panel ──────────────────────────────────────────────────── */}
-      {/*
-       * Slides out with the controls on inactivity (grid column → 0px).
-       * Divided into three sections:
-       *   panel-head : current film info + plot (truncated to 3 lines)
-       *   panel-body : Up Next (matched films, same library) + Watchlist
-       *   panel-foot : secondary actions (Open in VLC, Back)
-       *
-       * Up Next links navigate to /player/:id, replacing the current entry in
-       * the history stack so the Back button returns to the originating library
-       * page rather than building an unbounded player → player chain.
-       *
-       * Watchlist items show a green "On disk" indicator when the film exists
-       * locally; items not on disk show a muted "Not on disk yet" and no play button.
-       */}
-      <div className="side-panel">
-        <div className="panel-head">
-          <div className="panel-sec-label">Now Playing</div>
-          <div className="panel-now-title">{film.title ?? film.filename}</div>
-          <div className="panel-now-meta">
+      <div className={mergeClasses(p.sidePanel, controlsHidden && p.sidePanelHidden)}>
+        <div className={p.panelHead}>
+          <div className={p.panelSecLabel}>Now Playing</div>
+          <div className={p.panelNowTitle}>{film.title ?? film.filename}</div>
+          <div className={p.panelNowMeta}>
             {[film.year, film.genre, film.duration].filter(Boolean).join(" · ")}
           </div>
-          {film.plot && <p className="panel-plot">{film.plot}</p>}
+          {film.plot && <p className={p.panelPlot}>{film.plot}</p>}
         </div>
 
-        <div className="panel-body">
-          <div className="panel-section">
-            <div className="panel-sec-label">Up Next</div>
-            {suggestions.map((s) => (
-              <Link key={s.id} to={`/player/${s.id}`} className="panel-item">
-                <div className="panel-thumb" style={{ background: s.gradient }} />
+        <div className={p.panelBody}>
+          <div className={p.panelSection}>
+            <div className={p.panelSecLabel}>Up Next</div>
+            {suggestions.map((sg) => (
+              <Link key={sg.id} to={`/player/${sg.id}`} className={p.panelItem}>
+                <div className={p.panelThumb} style={{ background: sg.gradient }} />
                 <div>
-                  <div className="panel-item-title">{s.title}</div>
-                  <div className="panel-item-meta">{s.genre}</div>
+                  <div className={p.panelItemTitle}>{sg.title}</div>
+                  <div className={p.panelItemMeta}>{sg.genre}</div>
                 </div>
-                <button className="panel-play" onClick={(e) => e.stopPropagation()}>
+                <button className={p.panelPlay} onClick={(e) => e.stopPropagation()}>
                   <IconPlay size={10} />
                 </button>
               </Link>
             ))}
           </div>
 
-          <div className="panel-section">
-            <div className="panel-sec-label">From Your Watchlist</div>
+          <div className={p.panelSection}>
+            <div className={p.panelSecLabel}>From Your Watchlist</div>
             {watchlist.slice(0, 4).map((item) => {
               const wFilm = getFilmById(item.filmId);
               return (
-                <div key={item.id} className="panel-item">
+                <div key={item.id} className={p.panelItem}>
                   <div
-                    className="panel-thumb"
-                    style={{ background: wFilm?.gradient ?? "var(--surface3)" }}
+                    className={p.panelThumb}
+                    style={{ background: wFilm?.gradient ?? tokens.colorSurface3 }}
                   />
                   <div>
-                    <div className="panel-item-title">{item.title}</div>
+                    <div className={p.panelItemTitle}>{item.title}</div>
                     <div
-                      className="panel-item-meta"
-                      style={{ color: wFilm ? "var(--green)" : "rgba(255,255,255,0.3)" }}
+                      className={p.panelItemMeta}
+                      style={{ color: wFilm ? tokens.colorGreen : "rgba(255,255,255,0.3)" }}
                     >
                       {wFilm ? "✓ On disk" : "Not on disk yet"}
                     </div>
@@ -434,7 +390,7 @@ export const Player: FC = () => {
                   {wFilm && (
                     <Link
                       to={`/player/${wFilm.id}`}
-                      className="panel-play"
+                      className={p.panelPlay}
                       onClick={(e) => e.stopPropagation()}
                     >
                       <IconPlay size={10} />
@@ -446,16 +402,13 @@ export const Player: FC = () => {
           </div>
         </div>
 
-        <div className="panel-foot">
-          {/* Open in VLC: passes the local file path to the vlc:// URL scheme.
-              In production, resolve the absolute file path from the video record. */}
-          <button className="btn btn-surface btn-sm" style={{ justifyContent: "center" }}>
+        <div className={p.panelFoot}>
+          <button className={mergeClasses(p.btnSurface, p.btnSm)}>
             <IconFilm size={13} />
             Open in VLC
           </button>
           <button
-            className="btn btn-ghost btn-sm"
-            style={{ justifyContent: "center" }}
+            className={mergeClasses(p.btnGhost, p.btnSm)}
             onClick={() => navigate(-1)}
           >
             <IconArrowLeft size={13} />

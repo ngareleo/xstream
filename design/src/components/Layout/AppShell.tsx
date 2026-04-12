@@ -1,9 +1,11 @@
+import { mergeClasses } from "@griffel/react";
 import { type FC, type ReactNode, useState } from "react";
 import { Sidebar } from "../Sidebar/Sidebar.js";
 import { LoadingBar } from "../LoadingBar/LoadingBar.js";
 import { LoadingBarProvider } from "../LoadingBar/LoadingBarContext.js";
 import { DevPanel } from "../DevTools/DevPanel.js";
 import { DevToolsProvider } from "../DevTools/DevToolsContext.js";
+import { useAppShellStyles } from "./AppShell.styles.js";
 
 interface AppShellProps {
   children: ReactNode;
@@ -19,12 +21,13 @@ interface AppShellProps {
  */
 export const AppShell: FC<AppShellProps> = ({ children }) => {
   const [collapsed, setCollapsed] = useState(false);
+  const styles = useAppShellStyles();
 
   return (
     <DevToolsProvider>
       <LoadingBarProvider>
         <LoadingBar />
-        <div className={`app-shell${collapsed ? " nav-collapsed" : ""}`}>
+        <div className={mergeClasses(styles.root, collapsed && styles.rootCollapsed)}>
           {children}
           <Sidebar collapsed={collapsed} onToggle={() => setCollapsed((c) => !c)} />
         </div>

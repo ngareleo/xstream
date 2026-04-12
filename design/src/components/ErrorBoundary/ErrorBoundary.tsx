@@ -23,9 +23,10 @@
  * an error) wire resetKeys to the current pathname.
  */
 
+import { mergeClasses } from "@griffel/react";
 import { Component, type ErrorInfo, type FC, type ReactNode, useState } from "react";
 import { IconBug, IconRefresh, IconClose, IconChat, LogoShield } from "../../lib/icons.js";
-import "./ErrorBoundary.css";
+import { useErrorBoundaryStyles } from "./ErrorBoundary.styles.js";
 
 // ── DevErrorScreen ────────────────────────────────────────────────────────────
 // Shows in development mode: full error message, JS stack, React component stack.
@@ -38,6 +39,7 @@ const DevErrorScreen: FC<{
 }> = ({ error, errorInfo, onReset }) => {
   const [copied, setCopied] = useState(false);
   const [previewProd, setPreviewProd] = useState(false);
+  const s = useErrorBoundaryStyles();
 
   const fullText = [
     `${error.name}: ${error.message}`,
@@ -59,11 +61,10 @@ const DevErrorScreen: FC<{
   if (previewProd) {
     return (
       <div style={{ position: "relative" }}>
-        {/* Dev-only banner — not visible to customers */}
-        <div className="eb-preview-banner">
-          <span className="eb-preview-label">DEV PREVIEW</span>
-          <span className="eb-preview-sub">Customer view — no stack traces are shown below</span>
-          <button className="eb-action-btn eb-preview-back" onClick={() => setPreviewProd(false)}>
+        <div className={s.previewBanner}>
+          <span className={s.previewLabel}>DEV PREVIEW</span>
+          <span className={s.previewSub}>Customer view — no stack traces are shown below</span>
+          <button className={mergeClasses(s.actionBtn, s.previewBack)} onClick={() => setPreviewProd(false)}>
             ← Back to dev view
           </button>
         </div>
@@ -73,54 +74,50 @@ const DevErrorScreen: FC<{
   }
 
   return (
-    <div className="eb-root eb-dev">
-      <div className="eb-grain" />
+    <div className={mergeClasses(s.root, s.dev)}>
+      <div className={s.grain} />
 
-      <div className="eb-panel">
-        {/* Header */}
-        <div className="eb-head">
-          <div className="eb-head-left">
-            <span className="eb-icon-wrap">
+      <div className={s.panel}>
+        <div className={s.head}>
+          <div className={s.headLeft}>
+            <span className={s.iconWrap}>
               <IconBug size={16} />
             </span>
             <div>
-              <div className="eb-label">Unhandled render error</div>
-              <div className="eb-error-name">{error.name}</div>
+              <div className={s.label}>Unhandled render error</div>
+              <div className={s.errorName}>{error.name}</div>
             </div>
           </div>
-          <div className="eb-head-actions">
+          <div className={s.headActions}>
             <button
-              className="eb-action-btn eb-action-preview"
+              className={mergeClasses(s.actionBtn, s.actionPreview)}
               onClick={() => setPreviewProd(true)}
               title="See what a customer would see"
             >
               Preview customer view
             </button>
-            <button className="eb-action-btn" onClick={handleCopy} title="Copy error to clipboard">
+            <button className={s.actionBtn} onClick={handleCopy} title="Copy error to clipboard">
               {copied ? "Copied!" : "Copy"}
             </button>
-            <button className="eb-action-btn eb-action-primary" onClick={onReset}>
+            <button className={mergeClasses(s.actionBtn, s.actionPrimary)} onClick={onReset}>
               <IconRefresh size={12} />
               Try again
             </button>
-            <button className="eb-action-btn" onClick={() => window.location.reload()} title="Hard reload">
+            <button className={s.actionBtn} onClick={() => window.location.reload()} title="Hard reload">
               Reload page
             </button>
           </div>
         </div>
 
-        {/* Error message */}
-        <div className="eb-message">{error.message}</div>
+        <div className={s.message}>{error.message}</div>
 
-        {/* JS stack */}
-        <div className="eb-section-label">JavaScript stack</div>
-        <pre className="eb-code">{error.stack}</pre>
+        <div className={s.sectionLabel}>JavaScript stack</div>
+        <pre className={s.code}>{error.stack}</pre>
 
-        {/* React component stack */}
         {errorInfo.componentStack && (
           <>
-            <div className="eb-section-label">React component stack</div>
-            <pre className="eb-code eb-component-stack">
+            <div className={s.sectionLabel}>React component stack</div>
+            <pre className={mergeClasses(s.code, s.componentStack)}>
               {errorInfo.componentStack.trim()}
             </pre>
           </>
@@ -134,69 +131,73 @@ const DevErrorScreen: FC<{
 // Customer-facing help page. No stack traces, no internal detail.
 // Guides the user through self-service steps before offering a support contact.
 
-const ProdErrorScreen: FC<{ onReset: () => void }> = ({ onReset }) => (
-  <div className="eb-root eb-prod">
-    <div className="eb-grain" />
-    <div className="eb-prod-body">
-      <LogoShield />
-      <div className="eb-prod-title">Something went wrong</div>
-      <div className="eb-prod-sub">
-        Moran ran into an unexpected problem. Your library and watchlist
-        are safe — this is a display issue only.
-      </div>
+const ProdErrorScreen: FC<{ onReset: () => void }> = ({ onReset }) => {
+  const s = useErrorBoundaryStyles();
+  return (
+    <div className={mergeClasses(s.root, s.prod)}>
+      <div className={s.grain} />
+      <div className={s.prodBody}>
+        <LogoShield />
+        <div className={s.prodTitle}>Something went wrong</div>
+        <div className={s.prodSub}>
+          Moran ran into an unexpected problem. Your library and watchlist
+          are safe — this is a display issue only.
+        </div>
 
-      <div className="eb-prod-steps">
-        <div className="eb-prod-step-label">Things to try</div>
-        <div className="eb-prod-step">
-          <span className="eb-prod-step-num">1</span>
-          <div className="eb-prod-step-body">
-            <strong>Retry</strong> — tap the button below to reload just this screen without a full page refresh.
+        <div className={s.prodSteps}>
+          <div className={s.prodStepLabel}>Things to try</div>
+          <div className={s.prodStep}>
+            <span className={s.prodStepNum}>1</span>
+            <div className={s.prodStepBody}>
+              <strong>Retry</strong> — tap the button below to reload just this screen without a full page refresh.
+            </div>
+          </div>
+          <div className={s.prodStep}>
+            <span className={s.prodStepNum}>2</span>
+            <div className={s.prodStepBody}>
+              <strong>Reload the page</strong> — a full browser reload clears any stale state.
+            </div>
+          </div>
+          <div className={s.prodStep}>
+            <span className={s.prodStepNum}>3</span>
+            <div className={s.prodStepBody}>
+              <strong>Clear your cache</strong> — open your browser's history settings, clear cached files, then reload.
+            </div>
           </div>
         </div>
-        <div className="eb-prod-step">
-          <span className="eb-prod-step-num">2</span>
-          <div className="eb-prod-step-body">
-            <strong>Reload the page</strong> — a full browser reload clears any stale state.
-          </div>
-        </div>
-        <div className="eb-prod-step">
-          <span className="eb-prod-step-num">3</span>
-          <div className="eb-prod-step-body">
-            <strong>Clear your cache</strong> — open your browser's history settings, clear cached files, then reload.
-          </div>
-        </div>
-      </div>
 
-      <div className="eb-prod-actions">
-        <button className="btn btn-red btn-md" onClick={onReset}>
-          <IconRefresh size={14} />
-          Try again
-        </button>
-        <button
-          className="btn btn-ghost btn-md"
-          onClick={() => window.location.reload()}
-        >
-          <IconClose size={14} />
-          Reload page
-        </button>
-      </div>
+        <div className={s.prodActions}>
+          <button className={mergeClasses(s.actionBtn, s.actionPrimary)} onClick={onReset} style={{ fontSize: 13, padding: "10px 22px" }}>
+            <IconRefresh size={14} />
+            Try again
+          </button>
+          <button
+            className={mergeClasses(s.actionBtn, s.btnGhost)}
+            onClick={() => window.location.reload()}
+            style={{ fontSize: 13, padding: "10px 22px" }}
+          >
+            <IconClose size={14} />
+            Reload page
+          </button>
+        </div>
 
-      <div className="eb-prod-contact">
-        <IconChat size={13} />
-        <span>
-          Still having trouble?{" "}
-          <a className="eb-prod-link" href="mailto:support@moran.app">
-            Contact support
-          </a>
-          {" "}or visit{" "}
-          <a className="eb-prod-link" href="https://help.moran.app">
-            help.moran.app
-          </a>
-        </span>
+        <div className={s.prodContact}>
+          <IconChat size={13} />
+          <span>
+            Still having trouble?{" "}
+            <a className={s.prodLink} href="mailto:support@moran.app">
+              Contact support
+            </a>
+            {" "}or visit{" "}
+            <a className={s.prodLink} href="https://help.moran.app">
+              help.moran.app
+            </a>
+          </span>
+        </div>
       </div>
     </div>
-  </div>
-);
+  );
+};
 
 // ── ErrorBoundary (class) ─────────────────────────────────────────────────────
 
