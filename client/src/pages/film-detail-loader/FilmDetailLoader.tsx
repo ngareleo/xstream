@@ -1,5 +1,5 @@
 import { useNovaEventing } from "@nova/react";
-import { type FC, useEffect } from "react";
+import { type FC, useEffect, useRef } from "react";
 import { graphql, type PreloadedQuery, usePreloadedQuery } from "react-relay";
 
 import { FilmDetailPaneAsync } from "~/components/film-detail-pane/FilmDetailPaneAsync.js";
@@ -41,6 +41,21 @@ export const FilmDetailLoader: FC<Props> = ({ queryRef, linking = false }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [libraryId]);
 
+  // Capture the initial query data as a stable fragment key for LinkSearch.
+  // When the Relay store updates (e.g. searchOmdb results arrive), usePreloadedQuery
+  // returns a new `data` object. If we passed `data` directly, useRefetchableFragment
+  // inside LinkSearch would see a new fragmentRef and reset its subscription back to
+  // the parent's data (skip: true) — wiping suggestions mid-search.
+  // Freezing the ref here means LinkSearch always sees the same key; after refetch()
+  // it reads from its own internal query and is unaffected by parent rerenders.
+  const searchRefSnapshot = useRef(data);
+
   if (!data.video) return null;
-  return <FilmDetailPaneAsync video={data.video} linking={linking} searchRef={data} />;
+  return (
+    <FilmDetailPaneAsync
+      video={data.video}
+      linking={linking}
+      searchRef={searchRefSnapshot.current}
+    />
+  );
 };
