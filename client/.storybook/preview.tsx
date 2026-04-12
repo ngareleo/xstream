@@ -1,5 +1,4 @@
 import type { Preview } from "storybook-react-rsbuild";
-import { ChakraProvider, defaultSystem } from "@chakra-ui/react";
 import React, { Suspense } from "react";
 import { MemoryRouter } from "react-router-dom";
 
@@ -12,11 +11,9 @@ const preview: Preview = {
       const initialEntries: string[] = context.parameters.router?.initialEntries ?? ["/"];
       return (
         <MemoryRouter initialEntries={initialEntries}>
-          <ChakraProvider value={defaultSystem}>
-            <Suspense fallback={<div style={{ padding: 16, color: "#aaa" }}>Loading…</div>}>
-              <Story />
-            </Suspense>
-          </ChakraProvider>
+          <Suspense fallback={<div style={{ padding: 16, color: "#aaa" }}>Loading…</div>}>
+            <Story />
+          </Suspense>
         </MemoryRouter>
       );
     },
