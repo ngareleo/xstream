@@ -5,6 +5,7 @@ import {
   Suspense,
   useCallback,
   useDeferredValue,
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -18,7 +19,11 @@ import {
   FILM_DETAIL_QUERY,
   FilmDetailLoader,
 } from "~/components/film-detail-pane/FilmDetailLoader.js";
-import { isFilmDetailPaneClosedEvent } from "~/components/film-detail-pane/FilmDetailPane.events.js";
+import {
+  type FilmDetailPaneLinkingChangedData,
+  isFilmDetailPaneClosedEvent,
+  isFilmDetailPaneLinkingChangedEvent,
+} from "~/components/film-detail-pane/FilmDetailPane.events.js";
 import { LibraryChips } from "~/components/library-chips/LibraryChips.js";
 import { LibraryFilmListRow } from "~/components/library-film-list-row/LibraryFilmListRow.js";
 import {
@@ -114,6 +119,18 @@ const LibraryPage: FC = () => {
 
   const filmId = searchParams.get("film");
   const isPaneOpen = Boolean(filmId);
+  const linkingParam = searchParams.get("linking") === "true";
+
+  // Deep-link: if the page loads with a filmId already in the URL, kick off the
+  // query immediately so the detail pane has data when it mounts.
+  const didInitDetailQuery = useRef(false);
+  useEffect(() => {
+    if (!didInitDetailQuery.current && filmId) {
+      didInitDetailQuery.current = true;
+      loadDetailQuery({ videoId: filmId });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const closePane = useCallback((): void => {
     setSearchParams({});
@@ -127,6 +144,7 @@ const LibraryPage: FC = () => {
         // Kick off the network request immediately, before the URL update causes
         // DetailLoader to mount — avoids a wasted render cycle before fetching.
         loadDetailQuery({ videoId: id });
+        // Switching films always resets linking state
         setSearchParams({ film: id });
       }
     },
@@ -142,6 +160,15 @@ const LibraryPage: FC = () => {
       }
       if (isFilmDetailPaneClosedEvent(wrapper)) {
         closePane();
+        return undefined;
+      }
+      if (isFilmDetailPaneLinkingChangedEvent(wrapper)) {
+        const payload = wrapper.event.data?.() as FilmDetailPaneLinkingChangedData | undefined;
+        if (filmId) {
+          const params: Record<string, string> = { film: filmId };
+          if (payload?.linking) params.linking = "true";
+          setSearchParams(params);
+        }
         return undefined;
       }
       return wrapper;
@@ -249,7 +276,7 @@ const LibraryPage: FC = () => {
             <div className={styles.rightPane}>
               {isPaneOpen && detailQueryRef && (
                 <Suspense fallback={null}>
-                  <FilmDetailLoader queryRef={detailQueryRef} />
+                  <FilmDetailLoader queryRef={detailQueryRef} linking={linkingParam} />
                 </Suspense>
               )}
             </div>

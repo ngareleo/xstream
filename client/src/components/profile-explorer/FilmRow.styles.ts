@@ -2,11 +2,14 @@ import { makeStyles } from "@griffel/react";
 
 import { tokens } from "~/styles/tokens";
 
+// Shared grid template constants so FilmRow, ProfileRow, and the header always align.
+export const GRID_FULL = "28px 1fr 80px 1fr 70px 110px";
+export const GRID_COMPACT = "28px 1fr 110px";
+
 export const useFilmRowStyles = makeStyles({
   row: {
     display: "grid",
-    gridTemplateColumns:
-      "28px 1fr minmax(60px,80px) minmax(80px,1fr) minmax(50px,70px) minmax(80px,110px)",
+    gridTemplateColumns: GRID_FULL,
     alignItems: "center",
     padding: "0 24px 0 44px",
     height: "38px",
@@ -20,36 +23,39 @@ export const useFilmRowStyles = makeStyles({
       backgroundColor: "rgba(206,17,38,0.04)",
     },
   },
+  // Compact: pane is open — collapse to icon | name | actions
+  rowCompact: {
+    gridTemplateColumns: GRID_COMPACT,
+  },
   rowSelected: {
     backgroundColor: "rgba(206,17,38,0.07)",
     borderLeft: `2px solid ${tokens.colorRed}`,
     paddingLeft: "42px",
   },
-  rowUnmatched: {
-    // Handled by child icon/name colors below
-  },
 
-  // Tree line connector — rendered as a real child element
+  // First column: 28px — contains both the tree line and the icon
+  iconCol: {
+    position: "relative",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    color: tokens.colorMuted2,
+    flexShrink: "0",
+  },
   treeLineEl: {
     position: "absolute",
-    left: "37px",
+    left: "50%",
     top: "0",
     bottom: "0",
     width: "1px",
     background: "rgba(255,255,255,0.06)",
     pointerEvents: "none",
-  },
-
-  icon: {
-    display: "flex",
-    alignItems: "center",
-    color: tokens.colorMuted2,
-    flexShrink: "0",
+    transform: "translateX(-50%)",
   },
 
   nameCell: {
     minWidth: "0",
-    paddingRight: "12px",
+    paddingRight: "16px",
   },
   name: {
     fontSize: "12px",
@@ -76,6 +82,9 @@ export const useFilmRowStyles = makeStyles({
     fontSize: "11px",
     color: tokens.colorMuted2,
     whiteSpace: "nowrap",
+  },
+  cellMono: {
+    fontFamily: "monospace",
   },
 
   actions: {
@@ -110,7 +119,6 @@ export const useFilmRowStyles = makeStyles({
     color: tokens.colorMuted,
   },
 
-  // Tiny surface button
   btnSurface: {
     display: "inline-flex",
     alignItems: "center",

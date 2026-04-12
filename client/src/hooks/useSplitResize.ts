@@ -29,6 +29,7 @@ import { useCallback, useRef, useState } from "react";
 
 const MIN_PANE_WIDTH = 240;
 const MAX_PANE_WIDTH = 640;
+const MIN_LEFT_WIDTH = 280;
 const STORAGE_KEY = "tvke:pane-width";
 
 export interface SplitResizeResult {
@@ -68,7 +69,13 @@ export function useSplitResize(defaultWidth = 360): SplitResizeResult {
     const onMouseMove = (ev: MouseEvent) => {
       // Dragging left widens the right pane; dragging right narrows it.
       const delta = startX - ev.clientX;
-      const newWidth = Math.max(MIN_PANE_WIDTH, Math.min(MAX_PANE_WIDTH, startWidth + delta));
+      // Also cap so the left column never drops below MIN_LEFT_WIDTH.
+      const containerWidth = containerRef.current?.offsetWidth ?? Infinity;
+      const maxByContainer = containerWidth - MIN_LEFT_WIDTH - 4; // 4px handle
+      const newWidth = Math.max(
+        MIN_PANE_WIDTH,
+        Math.min(MAX_PANE_WIDTH, maxByContainer, startWidth + delta)
+      );
       paneWidthRef.current = newWidth;
       setPaneWidth(newWidth);
     };

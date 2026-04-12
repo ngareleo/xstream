@@ -6,9 +6,10 @@ import { Link } from "react-router-dom";
 
 import { IconPlay, IconQuestion } from "~/lib/icons.js";
 import type { PosterCard_video$key } from "~/relay/__generated__/PosterCard_video.graphql.js";
+import { upgradePosterUrl } from "~/utils/formatters.js";
 
 import { createPosterCardFilmSelectedEvent } from "./PosterCard.events.js";
-import { strings } from "./PosterCard.strings.js";
+import { playQuoteForId, strings } from "./PosterCard.strings.js";
 import { usePosterCardStyles } from "./PosterCard.styles.js";
 
 const POSTER_FRAGMENT = graphql`
@@ -57,9 +58,10 @@ export const PosterCard: FC<Props> = ({ video, isSelected = false }) => {
   const { bubble } = useNovaEventing();
 
   const isHd = (data.videoStream?.height ?? 0) >= 2160;
-  const bgStyle = data.metadata?.posterUrl
-    ? { backgroundImage: `url(${data.metadata.posterUrl})` }
-    : { background: gradientForId(data.id) };
+  const posterUrl = data.metadata?.posterUrl;
+  const bgStyle = posterUrl
+    ? { backgroundImage: `url(${upgradePosterUrl(posterUrl)})` }
+    : { backgroundImage: gradientForId(data.id) };
 
   const handleClick = (e: React.MouseEvent): void => {
     void bubble({ reactEvent: e, event: createPosterCardFilmSelectedEvent(data.id) });
@@ -81,7 +83,7 @@ export const PosterCard: FC<Props> = ({ video, isSelected = false }) => {
     >
       <div className={styles.inner}>
         {/* Background */}
-        <div className={styles.bg} style={bgStyle} />
+        <div className={mergeClasses(styles.bg, !posterUrl && styles.bgAnimated)} style={bgStyle} />
         <div className={styles.bottomGradient} />
         <div
           className={mergeClasses(styles.hoverOverlay, isSelected && styles.hoverOverlayVisible)}
@@ -111,7 +113,7 @@ export const PosterCard: FC<Props> = ({ video, isSelected = false }) => {
             onClick={(e) => e.stopPropagation()}
           >
             <IconPlay size={9} />
-            {strings.play}
+            {playQuoteForId(data.id)}
           </Link>
         )}
 

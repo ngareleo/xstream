@@ -20,8 +20,20 @@ export const useFilmDetailPaneStyles = makeStyles({
     position: "absolute",
     inset: "0",
     background:
-      "linear-gradient(to bottom, rgba(0,0,0,0.58) 0%, transparent 40%, rgba(0,0,0,0.84) 100%)",
+      "linear-gradient(to bottom, rgba(0,0,0,0.58) 0%, transparent 40%, rgba(0,0,0,0.5) 100%)",
     zIndex: "1",
+  },
+
+  // Gradient that bleeds the poster into the body background (#0F0F0F)
+  posterFade: {
+    position: "absolute",
+    bottom: "0",
+    left: "0",
+    right: "0",
+    height: "80px",
+    background: `linear-gradient(to bottom, transparent 0%, ${tokens.colorSurface} 100%)`,
+    zIndex: "2",
+    pointerEvents: "none",
   },
 
   // ── Actions bar (over poster) ─────────────────────────────────────────────
@@ -70,6 +82,13 @@ export const useFilmDetailPaneStyles = makeStyles({
     backgroundColor: "rgba(255,255,255,0.16)",
     color: tokens.colorWhite,
   },
+  actionBtnDanger: {
+    color: "rgba(206,17,38,0.75)",
+    ":hover": {
+      backgroundColor: tokens.colorRedDim,
+      color: tokens.colorRed,
+    },
+  },
   actionSep: {
     width: "12px",
     flexShrink: "0",
@@ -111,7 +130,7 @@ export const useFilmDetailPaneStyles = makeStyles({
     left: "0",
     right: "0",
     padding: "12px 16px",
-    zIndex: "2",
+    zIndex: "3",
   },
   posterTitle: {
     fontFamily: tokens.fontHead,

@@ -148,6 +148,7 @@ export const typeDefs = /* GraphQL */ `
     transcodeJob(id: ID!): TranscodeJob
     watchlist: [WatchlistItem!]!
     searchOmdb(query: String!, year: Int): [OmdbSearchResult!]!
+    omdbConfigured: Boolean!
   }
 
   type Mutation {
@@ -167,6 +168,14 @@ export const typeDefs = /* GraphQL */ `
     ): Library!
 
     deleteLibrary(id: ID!): Boolean!
+
+    updateLibrary(
+      id: ID!
+      name: String
+      path: String
+      mediaType: MediaType
+      extensions: [String!]
+    ): Library!
 
     matchVideo(videoId: ID!, imdbId: String!): Video!
     unmatchVideo(videoId: ID!): Video!

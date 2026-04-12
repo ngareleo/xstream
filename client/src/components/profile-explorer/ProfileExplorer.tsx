@@ -1,15 +1,16 @@
-import { type FC } from "react";
+import { mergeClasses } from "@griffel/react";
+import { type FC, type MouseEvent } from "react";
 import { graphql, useFragment } from "react-relay";
 
-import { ProfileRow } from "~/components/profile-row/ProfileRow.js";
-import type { DashboardLibraryList_library$key } from "~/relay/__generated__/DashboardLibraryList_library.graphql.js";
+import type { ProfileExplorer_library$key } from "~/relay/__generated__/ProfileExplorer_library.graphql.js";
 import { formatFileSize } from "~/utils/formatters.js";
 
-import { strings } from "./DashboardLibraryList.strings.js";
-import { useDashboardLibraryListStyles } from "./DashboardLibraryList.styles.js";
+import { strings } from "./ProfileExplorer.strings.js";
+import { useProfileExplorerStyles } from "./ProfileExplorer.styles.js";
+import { ProfileRow } from "./ProfileRow.js";
 
 const FRAGMENT = graphql`
-  fragment DashboardLibraryList_library on Library @relay(plural: true) {
+  fragment ProfileExplorer_library on Library @relay(plural: true) {
     id
     stats {
       totalCount
@@ -20,22 +21,30 @@ const FRAGMENT = graphql`
 `;
 
 interface Props {
-  libraries: DashboardLibraryList_library$key;
+  libraries: ProfileExplorer_library$key;
   expandedId: string | null;
   isPaneFilmDetail: boolean;
   isPaneOpen: boolean;
   selectedFilmId: string | null;
+  scanningLibraryId?: string | null;
+  scanProgress?: { done: number; total: number } | null;
+  activeProfileName?: string | null;
+  onClearProfile?: (e: MouseEvent) => void;
 }
 
-export const DashboardLibraryList: FC<Props> = ({
+export const ProfileExplorer: FC<Props> = ({
   libraries,
   expandedId,
   isPaneFilmDetail,
   isPaneOpen,
   selectedFilmId,
+  scanningLibraryId = null,
+  scanProgress = null,
+  activeProfileName = null,
+  onClearProfile,
 }) => {
   const data = useFragment(FRAGMENT, libraries);
-  const styles = useDashboardLibraryListStyles();
+  const styles = useProfileExplorerStyles();
 
   const totalFiles = data.reduce((s, l) => s + l.stats.totalCount, 0);
   const totalBytes = data.reduce((s, l) => s + l.stats.totalSizeBytes, 0);
@@ -48,17 +57,31 @@ export const DashboardLibraryList: FC<Props> = ({
           {strings.breadcrumbRoot}
         </span>
         <span className={styles.locSep}>{strings.breadcrumbSep}</span>
-        <span className={styles.locCurrent}>{strings.breadcrumbCurrent}</span>
+        {activeProfileName ? (
+          <span className={styles.locPill}>
+            {activeProfileName}
+            <button
+              className={styles.locPillX}
+              onClick={onClearProfile}
+              type="button"
+              aria-label="Clear profile filter"
+            >
+              ×
+            </button>
+          </span>
+        ) : (
+          <span className={styles.locCurrent}>{strings.breadcrumbCurrent}</span>
+        )}
       </div>
 
       {/* Column headers */}
-      <div className={styles.dirHeader}>
+      <div className={mergeClasses(styles.dirHeader, isPaneOpen && styles.dirHeaderCompact)}>
         <div />
         <div className={styles.dirCol}>{strings.colName}</div>
-        <div className={styles.dirCol}>{strings.colCount}</div>
-        <div className={styles.dirCol}>{strings.colMatch}</div>
-        <div className={styles.dirCol}>{strings.colSize}</div>
-        <div className={styles.dirCol}>{strings.colActions}</div>
+        {!isPaneOpen && <div className={styles.dirCol}>{strings.colCount}</div>}
+        {!isPaneOpen && <div className={styles.dirCol}>{strings.colMatch}</div>}
+        {!isPaneOpen && <div className={styles.dirCol}>{strings.colSize}</div>}
+        <div />
       </div>
 
       {/* Library rows */}
@@ -71,6 +94,8 @@ export const DashboardLibraryList: FC<Props> = ({
             selected={isPaneFilmDetail}
             selectedFilmId={selectedFilmId}
             isPaneOpen={isPaneOpen}
+            scanning={scanningLibraryId === lib.id}
+            scanProgress={scanningLibraryId === lib.id ? scanProgress : null}
           />
         ))}
       </div>

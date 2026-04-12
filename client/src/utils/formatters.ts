@@ -6,12 +6,22 @@ export function formatFileSize(bytes: number): string {
   return `${(bytes / 1e3).toFixed(0)} KB`;
 }
 
+/** HH:MM:SS / MM:SS — used in the player control bar */
 export function formatDuration(seconds: number): string {
   const h = Math.floor(seconds / 3600);
   const m = Math.floor((seconds % 3600) / 60);
   const s = Math.floor(seconds % 60);
   if (h > 0) return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
   return `${m}:${String(s).padStart(2, "0")}`;
+}
+
+/** "2h 46m" / "46m" — used in list/detail views */
+export function formatDurationHuman(seconds: number): string {
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  if (h > 0 && m > 0) return `${h}h ${m}m`;
+  if (h > 0) return `${h}h`;
+  return `${m}m`;
 }
 
 export function resolutionLabel(
@@ -33,4 +43,12 @@ export function maxResolutionForHeight(
   width?: number | null
 ): Resolution {
   return resolutionLabel(height, width) ?? "240p";
+}
+
+/**
+ * Upgrades an OMDb/Amazon CDN poster URL from the default 300px width to a
+ * higher resolution. The CDN accepts arbitrary _SX<width> values in the URL.
+ */
+export function upgradePosterUrl(url: string, width = 800): string {
+  return url.replace(/_SX\d+/, `_SX${width}`);
 }

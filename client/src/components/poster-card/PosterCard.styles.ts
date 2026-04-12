@@ -39,6 +39,15 @@ export const usePosterCardStyles = makeStyles({
     backgroundPosition: "center",
   },
 
+  // Applied only on gradient placeholders — drifts the gradient slowly
+  bgAnimated: {
+    backgroundSize: "300% 300%",
+    animationName: "gradient-drift",
+    animationDuration: "12s",
+    animationTimingFunction: "ease-in-out",
+    animationIterationCount: "infinite",
+  },
+
   // Bottom gradient for text legibility
   bottomGradient: {
     position: "absolute",
@@ -156,11 +165,13 @@ export const usePosterCardStyles = makeStyles({
     letterSpacing: "0.04em",
     textDecoration: "none",
     opacity: "0",
+    pointerEvents: "none",
     transitionProperty: "opacity",
     transitionDuration: tokens.transition,
     cursor: "pointer",
   },
   playChipVisible: {
     opacity: "1",
+    pointerEvents: "auto",
   },
 });

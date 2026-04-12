@@ -1,6 +1,6 @@
 import { mergeClasses } from "@griffel/react";
 import { useNovaEventing } from "@nova/react";
-import React, { type FC, useState } from "react";
+import React, { type FC } from "react";
 import { graphql, useFragment, useMutation } from "react-relay";
 import { Link } from "react-router-dom";
 
@@ -8,15 +8,39 @@ import { LinkSearch, type OmdbSuggestion } from "~/components/link-search/LinkSe
 import { IconClose, IconEdit, IconPlay } from "~/lib/icons.js";
 import type { FilmDetailPane_video$key } from "~/relay/__generated__/FilmDetailPane_video.graphql.js";
 import type { FilmDetailPaneMatchMutation } from "~/relay/__generated__/FilmDetailPaneMatchMutation.graphql.js";
-import { formatDuration, formatFileSize } from "~/utils/formatters.js";
+import type { FilmDetailPaneUnmatchMutation } from "~/relay/__generated__/FilmDetailPaneUnmatchMutation.graphql.js";
+import { formatDuration, formatFileSize, upgradePosterUrl } from "~/utils/formatters.js";
 
-import { createFilmDetailPaneClosedEvent } from "./FilmDetailPane.events.js";
+import {
+  createFilmDetailPaneClosedEvent,
+  createFilmDetailPaneLinkingChangedEvent,
+} from "./FilmDetailPane.events.js";
 import { strings } from "./FilmDetailPane.strings.js";
 import { useFilmDetailPaneStyles } from "./FilmDetailPane.styles.js";
 
 const MATCH_MUTATION = graphql`
   mutation FilmDetailPaneMatchMutation($videoId: ID!, $imdbId: String!) {
     matchVideo(videoId: $videoId, imdbId: $imdbId) {
+      id
+      matched
+      metadata {
+        imdbId
+        title
+        year
+        genre
+        director
+        cast
+        rating
+        plot
+        posterUrl
+      }
+    }
+  }
+`;
+
+const UNMATCH_MUTATION = graphql`
+  mutation FilmDetailPaneUnmatchMutation($videoId: ID!) {
+    unmatchVideo(videoId: $videoId) {
       id
       matched
       metadata {
@@ -71,20 +95,29 @@ const DETAIL_FRAGMENT = graphql`
 
 interface Props {
   video: FilmDetailPane_video$key;
+  linking?: boolean;
 }
 
-export const FilmDetailPane: FC<Props> = ({ video }) => {
+export const FilmDetailPane: FC<Props> = ({ video, linking = false }) => {
   const data = useFragment(DETAIL_FRAGMENT, video);
   const styles = useFilmDetailPaneStyles();
   const { bubble } = useNovaEventing();
-  const [linking, setLinking] = useState(false);
   const [commitMatch] = useMutation<FilmDetailPaneMatchMutation>(MATCH_MUTATION);
+  const [commitUnmatch] = useMutation<FilmDetailPaneUnmatchMutation>(UNMATCH_MUTATION);
 
-  const handleLinked = (suggestion: OmdbSuggestion): void => {
-    commitMatch({
-      variables: { videoId: data.id, imdbId: suggestion.imdbId },
-      onCompleted: () => setLinking(false),
-    });
+  const handleLinked = (suggestion: OmdbSuggestion, e: React.MouseEvent): void => {
+    // Optimistically close the link-search UI immediately
+    void bubble({ reactEvent: e, event: createFilmDetailPaneLinkingChangedEvent(false) });
+    // Fire the mutation to persist the match
+    commitMatch({ variables: { videoId: data.id, imdbId: suggestion.imdbId } });
+  };
+
+  const handleCancelLinking = (e: React.MouseEvent): void => {
+    void bubble({ reactEvent: e, event: createFilmDetailPaneLinkingChangedEvent(false) });
+  };
+
+  const handleUnlink = (): void => {
+    commitUnmatch({ variables: { videoId: data.id } });
   };
 
   const meta = data.metadata;
@@ -97,7 +130,7 @@ export const FilmDetailPane: FC<Props> = ({ video }) => {
 
   const posterStyle = meta?.posterUrl
     ? {
-        backgroundImage: `url(${meta.posterUrl})`,
+        backgroundImage: `url(${upgradePosterUrl(meta.posterUrl)})`,
         backgroundSize: "cover",
         backgroundPosition: "center",
       }
@@ -108,6 +141,7 @@ export const FilmDetailPane: FC<Props> = ({ video }) => {
       {/* Poster area */}
       <div className={styles.posterArea} style={posterStyle}>
         <div className={styles.posterOverlay} />
+        <div className={styles.posterFade} />
 
         {/* Action bar */}
         <div className={styles.actionBar}>
@@ -123,11 +157,29 @@ export const FilmDetailPane: FC<Props> = ({ video }) => {
           </div>
           <button
             className={mergeClasses(styles.actionBtn, linking && styles.actionBtnActive)}
-            onClick={() => setLinking((l) => !l)}
+            onClick={(e) =>
+              void bubble({
+                reactEvent: e,
+                event: createFilmDetailPaneLinkingChangedEvent(!linking),
+              })
+            }
           >
             <IconEdit size={10} />
             {data.matched ? strings.reLink : strings.link}
           </button>
+          {data.matched && (
+            <>
+              <div className={styles.actionSep}>
+                <div className={styles.actionSepLine} />
+              </div>
+              <button
+                className={mergeClasses(styles.actionBtn, styles.actionBtnDanger)}
+                onClick={handleUnlink}
+              >
+                {strings.unlink}
+              </button>
+            </>
+          )}
           <div className={styles.actionSpacer} />
           <button
             className={styles.closeBtn}
@@ -152,7 +204,7 @@ export const FilmDetailPane: FC<Props> = ({ video }) => {
         <LinkSearch
           filename={data.filename}
           onLinked={handleLinked}
-          onCancel={() => setLinking(false)}
+          onCancel={handleCancelLinking}
         />
       ) : null}
       <div className={styles.body} style={linking ? { display: "none" } : undefined}>

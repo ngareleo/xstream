@@ -55,7 +55,13 @@ export default defineConfig({
     // Generate an interactive HTML bundle report in CI. Output lands at
     // dist/stats.html, which the CI workflow uploads as an artifact.
     ...(process.env.CI
-      ? { bundleAnalyze: { analyzerMode: "static", openAnalyzer: false, reportFilename: "stats.html" } }
+      ? {
+          bundleAnalyze: {
+            analyzerMode: "static",
+            openAnalyzer: false,
+            reportFilename: "stats.html",
+          },
+        }
       : {}),
 
     /**

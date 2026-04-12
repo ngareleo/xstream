@@ -4,6 +4,7 @@ export const strings = new LocalizedStrings({
   en: {
     play: "Play",
     reLink: "Re-link",
+    unlink: "Unlink",
     link: "Link",
     close: "Close",
     sectionDetails: "Details",

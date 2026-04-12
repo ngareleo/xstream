@@ -3,12 +3,16 @@ import { useNovaEventing } from "@nova/react";
 import React, { type FC, type MouseEvent, useState } from "react";
 import { graphql, useFragment } from "react-relay";
 
-import { FilmRow } from "~/components/film-row/FilmRow.js";
 import { IconChevronDown, IconEdit, IconRefresh } from "~/lib/icons.js";
 import type { ProfileRow_library$key } from "~/relay/__generated__/ProfileRow_library.graphql.js";
 import { formatFileSize } from "~/utils/formatters.js";
 
-import { createProfileRowToggledEvent } from "./ProfileRow.events.js";
+import { FilmRow } from "./FilmRow.js";
+import {
+  createProfileRowEditRequestedEvent,
+  createProfileRowScanRequestedEvent,
+  createProfileRowToggledEvent,
+} from "./ProfileRow.events.js";
 import { strings } from "./ProfileRow.strings.js";
 import { useProfileRowStyles } from "./ProfileRow.styles.js";
 
@@ -77,7 +81,11 @@ export const ProfileRow: FC<Props> = ({
   return (
     <>
       <div
-        className={mergeClasses(styles.row, selected && styles.rowSelected)}
+        className={mergeClasses(
+          styles.row,
+          isPaneOpen && styles.rowCompact,
+          selected && styles.rowSelected
+        )}
         onClick={handleRowClick}
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
@@ -99,35 +107,34 @@ export const ProfileRow: FC<Props> = ({
           <div className={styles.path}>{data.path}</div>
         </div>
 
-        <div className={styles.cell} style={isPaneOpen ? { display: "none" } : undefined}>
-          {typeLabel}
-        </div>
+        {!isPaneOpen && <div className={styles.cell}>{typeLabel}</div>}
 
-        <div className={styles.cell} style={isPaneOpen ? { display: "none" } : undefined}>
-          {scanning ? (
-            <div className={styles.scanInline}>
-              <div className={styles.scanSpinner} />
-              {scanProgress ? `${scanProgress.done}/${scanProgress.total}` : "…"}
-            </div>
-          ) : (
-            <div className={styles.matchBar}>
-              <div className={styles.matchTrack}>
-                <div
-                  className={mergeClasses(styles.matchFill, hasWarn && styles.matchFillWarn)}
-                  style={{ width: `${matchPct}%` }}
-                />
+        {!isPaneOpen && (
+          <div className={styles.cell}>
+            {scanning ? (
+              <div className={styles.scanInline}>
+                <div className={styles.scanSpinner} />
+                {scanProgress ? `${scanProgress.done}/${scanProgress.total}` : "…"}
               </div>
-              <span style={{ fontSize: 11, color: hasWarn ? "#F5C518" : "#666" }}>{matchPct}%</span>
-            </div>
-          )}
-        </div>
+            ) : (
+              <div className={styles.matchBar}>
+                <div className={styles.matchTrack}>
+                  <div
+                    className={mergeClasses(styles.matchFill, hasWarn && styles.matchFillWarn)}
+                    style={{ width: `${matchPct}%` }}
+                  />
+                </div>
+                <span style={{ fontSize: 11, color: hasWarn ? "#F5C518" : "#666" }}>
+                  {matchPct}%
+                </span>
+              </div>
+            )}
+          </div>
+        )}
 
-        <div
-          className={mergeClasses(styles.cell, "mono")}
-          style={isPaneOpen ? { display: "none" } : undefined}
-        >
-          {formatFileSize(data.stats.totalSizeBytes)}
-        </div>
+        {!isPaneOpen && (
+          <div className={styles.cell}>{formatFileSize(data.stats.totalSizeBytes)}</div>
+        )}
 
         <div
           className={mergeClasses(styles.actions, (hovered || selected) && styles.actionsVisible)}
@@ -138,14 +145,26 @@ export const ProfileRow: FC<Props> = ({
             <>
               <button
                 className={styles.iconBtn}
-                onClick={(e) => e.stopPropagation()}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  void bubble({
+                    reactEvent: e,
+                    event: createProfileRowScanRequestedEvent(data.id),
+                  });
+                }}
                 title={strings.refreshTitle}
               >
                 <IconRefresh size={11} />
               </button>
               <button
                 className={styles.iconBtn}
-                onClick={(e) => e.stopPropagation()}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  void bubble({
+                    reactEvent: e,
+                    event: createProfileRowEditRequestedEvent(data.id),
+                  });
+                }}
                 title={strings.editTitle}
               >
                 <IconEdit size={11} />

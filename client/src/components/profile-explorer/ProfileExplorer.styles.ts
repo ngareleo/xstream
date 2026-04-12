@@ -2,7 +2,9 @@ import { makeStyles } from "@griffel/react";
 
 import { tokens } from "~/styles/tokens";
 
-export const useDashboardLibraryListStyles = makeStyles({
+import { GRID_COMPACT, GRID_FULL } from "./FilmRow.styles.js";
+
+export const useProfileExplorerStyles = makeStyles({
   locationBar: {
     display: "flex",
     alignItems: "center",
@@ -22,15 +24,41 @@ export const useDashboardLibraryListStyles = makeStyles({
     fontWeight: "600",
     color: tokens.colorWhite,
   },
+  locPill: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "5px",
+    fontSize: "11px",
+    fontWeight: "600",
+    color: tokens.colorWhite,
+    backgroundColor: tokens.colorRedDim,
+    border: `1px solid ${tokens.colorRedBorder}`,
+    borderRadius: "4px",
+    padding: "1px 7px 1px 8px",
+  },
+  locPillX: {
+    fontSize: "12px",
+    cursor: "pointer",
+    color: "rgba(255,255,255,0.5)",
+    lineHeight: "1",
+    background: "none",
+    border: "none",
+    padding: "0",
+    ":hover": { color: tokens.colorWhite },
+  },
+
+  // Column header row
   dirHeader: {
     display: "grid",
-    gridTemplateColumns:
-      "28px 1fr minmax(60px,80px) minmax(80px,1fr) minmax(50px,70px) minmax(80px,110px)",
+    gridTemplateColumns: GRID_FULL,
     alignItems: "center",
     padding: "0 24px",
     height: "32px",
     borderBottom: `1px solid ${tokens.colorBorder}`,
     flexShrink: "0",
+  },
+  dirHeaderCompact: {
+    gridTemplateColumns: GRID_COMPACT,
   },
   dirCol: {
     fontSize: "10px",
@@ -42,10 +70,12 @@ export const useDashboardLibraryListStyles = makeStyles({
     overflow: "hidden",
     textOverflow: "ellipsis",
   },
+
   dirList: {
     flex: "1",
     overflowY: "auto",
   },
+
   dirFooter: {
     display: "flex",
     alignItems: "center",

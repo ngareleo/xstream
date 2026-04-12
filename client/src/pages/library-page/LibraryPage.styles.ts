@@ -56,7 +56,7 @@ export const useLibraryStyles = makeStyles({
   grid: {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))",
-    gap: "12px",
+    gap: "20px",
   },
 
   // ── List view container ────────────────────────────────────────────────────

@@ -6,7 +6,7 @@ import { Link } from "react-router-dom";
 
 import { IconDocument, IconEdit, IconPlay, IconTv, IconWarning } from "~/lib/icons.js";
 import type { FilmRow_video$key } from "~/relay/__generated__/FilmRow_video.graphql.js";
-import { formatDuration } from "~/utils/formatters.js";
+import { formatDurationHuman, formatFileSize } from "~/utils/formatters.js";
 
 import { createFilmSelectedEvent } from "./FilmRow.events.js";
 import { strings } from "./FilmRow.strings.js";
@@ -16,10 +16,13 @@ const FILM_FRAGMENT = graphql`
   fragment FilmRow_video on Video {
     id
     title
+    filename
     durationSeconds
+    fileSizeBytes
     matched
     mediaType
     metadata {
+      title
       year
     }
     videoStream {
@@ -43,9 +46,10 @@ export const FilmRow: FC<Props> = ({ video, isSelected, paneOpen = false }) => {
 
   const isUnmatched = !data.matched;
   const isTv = data.mediaType === "TV_SHOWS";
+  const displayTitle = data.metadata?.title ?? data.title;
   const label = data.metadata?.year
-    ? `${data.metadata.year} · ${formatDuration(data.durationSeconds)}`
-    : formatDuration(data.durationSeconds);
+    ? `${data.metadata.year} · ${formatDurationHuman(data.durationSeconds)}`
+    : formatDurationHuman(data.durationSeconds);
   const isHd = (data.videoStream?.height ?? 0) >= 2160;
 
   const handleClick = (e: MouseEvent): void => {
@@ -60,13 +64,17 @@ export const FilmRow: FC<Props> = ({ video, isSelected, paneOpen = false }) => {
 
   return (
     <div
-      className={mergeClasses(styles.row, isSelected && styles.rowSelected)}
+      className={mergeClasses(
+        styles.row,
+        paneOpen && styles.rowCompact,
+        isSelected && styles.rowSelected
+      )}
       onClick={handleClick}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
-      <div className={styles.treeLineEl} aria-hidden="true" />
-      <div className={mergeClasses(styles.icon, isUnmatched ? "" : "")}>
+      <div className={styles.iconCol}>
+        <div className={styles.treeLineEl} aria-hidden="true" />
         {isUnmatched ? (
           <IconWarning size={14} style={{ color: "rgba(245,197,24,0.5)" }} />
         ) : isTv ? (
@@ -78,21 +86,26 @@ export const FilmRow: FC<Props> = ({ video, isSelected, paneOpen = false }) => {
 
       <div className={styles.nameCell}>
         <div className={mergeClasses(styles.name, isUnmatched && styles.nameUnmatched)}>
-          {data.title}
+          {displayTitle}
         </div>
+        <div className={styles.filename}>{data.filename}</div>
       </div>
 
-      <div className={styles.cell} style={paneOpen ? { display: "none" } : undefined}>
-        {label}
-      </div>
+      {!paneOpen && <div className={styles.cell}>{label}</div>}
 
-      <div className={styles.cell}>
-        <span className={mergeClasses(styles.badge, isHd ? styles.badgeRed : styles.badgeGray)}>
-          {isHd ? strings.badge4K : strings.badgeHD}
-        </span>
-      </div>
+      {!paneOpen && (
+        <div className={styles.cell}>
+          <span className={mergeClasses(styles.badge, isHd ? styles.badgeRed : styles.badgeGray)}>
+            {isHd ? strings.badge4K : strings.badgeHD}
+          </span>
+        </div>
+      )}
 
-      <div className={styles.cell} style={paneOpen ? { display: "none" } : undefined} />
+      {!paneOpen && (
+        <div className={mergeClasses(styles.cell, styles.cellMono)}>
+          {formatFileSize(data.fileSizeBytes)}
+        </div>
+      )}
 
       <div
         className={mergeClasses(styles.actions, (hovered || isSelected) && styles.actionsVisible)}

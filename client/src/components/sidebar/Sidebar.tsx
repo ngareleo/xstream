@@ -2,6 +2,7 @@ import { mergeClasses } from "@griffel/react";
 import { type FC, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 
+import { useLibraries } from "~/components/app-shell/AppShell.js";
 import {
   IconAdjustments,
   IconBookmark,
@@ -36,6 +37,7 @@ const ProfileMenu: FC<ProfileMenuProps> = ({ collapsed, onClose, onSignOut }) =>
   const navigate = useNavigate();
   const styles = useSidebarStyles();
   const ref = useRef<HTMLDivElement>(null);
+  const libraries = useLibraries();
 
   useEffect(() => {
     const handler = (e: MouseEvent): void => {
@@ -84,6 +86,17 @@ const ProfileMenu: FC<ProfileMenuProps> = ({ collapsed, onClose, onSignOut }) =>
         <div className={styles.pmItemDot} />
         <span className={styles.pmItemName}>{strings.pmAllLibraries}</span>
       </button>
+      {libraries.map((lib) => (
+        <button
+          key={lib.id}
+          className={styles.pmItem}
+          onClick={() => go(`/?libraryId=${encodeURIComponent(lib.id)}`)}
+          type="button"
+        >
+          <div className={styles.pmItemDot} />
+          <span className={styles.pmItemName}>{lib.name}</span>
+        </button>
+      ))}
 
       <div className={styles.pmDivider} />
 
@@ -121,6 +134,9 @@ export const Sidebar: FC<SidebarProps> = ({ collapsed, onToggle }) => {
   const styles = useSidebarStyles();
   const [menuOpen, setMenuOpen] = useState(false);
   const [confirmSignOut, setConfirmSignOut] = useState(false);
+  const libraries = useLibraries();
+  const totalFiles = libraries.reduce((s, l) => s + l.fileCount, 0);
+  const userSub = `${libraries.length} profiles · ${totalFiles} files`;
 
   const navClass = ({ isActive }: { isActive: boolean }): string =>
     mergeClasses(
@@ -255,7 +271,7 @@ export const Sidebar: FC<SidebarProps> = ({ collapsed, onToggle }) => {
               <>
                 <div className={styles.userText}>
                   <div className={styles.userName}>{strings.userName}</div>
-                  <div className={styles.userSub}>{strings.userSub}</div>
+                  <div className={styles.userSub}>{userSub}</div>
                 </div>
                 <IconChevronRight
                   size={12}

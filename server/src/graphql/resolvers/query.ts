@@ -2,7 +2,7 @@ import { getJobById } from "../../db/queries/jobs.js";
 import { getAllLibraries, getLibraryById } from "../../db/queries/libraries.js";
 import { getVideoById } from "../../db/queries/videos.js";
 import { getWatchlist, getWatchlistItemById } from "../../db/queries/watchlist.js";
-import { searchOmdbList } from "../../services/omdbService.js";
+import { isOmdbConfigured, searchOmdbList } from "../../services/omdbService.js";
 import {
   type GQLLibrary,
   type GQLTranscodeJob,
@@ -83,6 +83,10 @@ export const queryResolvers = {
         posterUrl: r.posterUrl,
         plot: r.plot,
       }));
+    },
+
+    omdbConfigured(): boolean {
+      return isOmdbConfigured();
     },
   },
 

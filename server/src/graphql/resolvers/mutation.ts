@@ -1,4 +1,4 @@
-import { createLibrary, deleteLibrary } from "../../db/queries/libraries.js";
+import { createLibrary, deleteLibrary, updateLibrary } from "../../db/queries/libraries.js";
 import { setSetting } from "../../db/queries/userSettings.js";
 import { deleteVideoMetadata, upsertVideoMetadata } from "../../db/queries/videoMetadata.js";
 import { getVideoById } from "../../db/queries/videos.js";
@@ -78,6 +78,27 @@ export const mutationResolvers = {
     deleteLibrary(_: unknown, { id }: { id: string }): boolean {
       const { id: localId } = fromGlobalId(id);
       return deleteLibrary(localId);
+    },
+
+    updateLibrary(
+      _: unknown,
+      {
+        id,
+        name,
+        path,
+        mediaType,
+        extensions,
+      }: { id: string; name?: string; path?: string; mediaType?: string; extensions?: string[] }
+    ): GQLLibrary {
+      const { id: localId } = fromGlobalId(id);
+      const updated = updateLibrary(localId, {
+        name,
+        path,
+        mediaType: mediaType ? gqlMediaTypeToInternal(mediaType) : undefined,
+        extensions,
+      });
+      if (!updated) throw new Error("Library not found");
+      return presentLibrary(updated);
     },
 
     async matchVideo(

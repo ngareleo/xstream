@@ -2,12 +2,12 @@ import { makeStyles } from "@griffel/react";
 
 import { tokens } from "~/styles/tokens";
 
+import { GRID_COMPACT, GRID_FULL } from "./FilmRow.styles.js";
+
 export const useProfileRowStyles = makeStyles({
-  // ── Profile (dir) row ─────────────────────────────────────────────────────
   row: {
     display: "grid",
-    gridTemplateColumns:
-      "28px 1fr minmax(60px,80px) minmax(80px,1fr) minmax(50px,70px) minmax(80px,110px)",
+    gridTemplateColumns: GRID_FULL,
     alignItems: "center",
     padding: "0 24px",
     height: "46px",
@@ -21,12 +21,15 @@ export const useProfileRowStyles = makeStyles({
       backgroundColor: tokens.colorSurface2,
     },
   },
+  // Compact: pane is open — collapse to chevron | name | actions
+  rowCompact: {
+    gridTemplateColumns: GRID_COMPACT,
+  },
   rowSelected: {
     backgroundColor: "rgba(206,17,38,0.05)",
     borderLeftColor: tokens.colorRed,
   },
 
-  // Chevron icon cell
   chevron: {
     display: "flex",
     alignItems: "center",
@@ -85,7 +88,6 @@ export const useProfileRowStyles = makeStyles({
     opacity: "1",
   },
 
-  // ── Scan progress ─────────────────────────────────────────────────────────
   scanInline: {
     display: "flex",
     alignItems: "center",
@@ -108,7 +110,6 @@ export const useProfileRowStyles = makeStyles({
     flexShrink: "0",
   },
 
-  // ── Match bar ─────────────────────────────────────────────────────────────
   matchBar: {
     display: "flex",
     alignItems: "center",
@@ -131,7 +132,6 @@ export const useProfileRowStyles = makeStyles({
     backgroundColor: tokens.colorYellow,
   },
 
-  // ── Children container ────────────────────────────────────────────────────
   children: {
     overflow: "hidden",
     maxHeight: "0",
@@ -143,7 +143,6 @@ export const useProfileRowStyles = makeStyles({
     maxHeight: "2000px",
   },
 
-  // ── Small buttons ─────────────────────────────────────────────────────────
   iconBtn: {
     width: "28px",
     height: "26px",

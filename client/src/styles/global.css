@@ -44,6 +44,14 @@ a {
   to { transform: rotate(360deg); }
 }
 
+@keyframes gradient-drift {
+  0%   { background-position: 0%   0%;   }
+  25%  { background-position: 80%  20%;  }
+  50%  { background-position: 60%  100%; }
+  75%  { background-position: 20%  60%;  }
+  100% { background-position: 0%   0%;   }
+}
+
 button {
   cursor: pointer;
   border: none;

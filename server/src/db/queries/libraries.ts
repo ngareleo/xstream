@@ -59,3 +59,32 @@ export function getLibraryById(id: string): LibraryRow | null {
     .prepare("SELECT * FROM libraries WHERE id = $id")
     .get({ $id: id }) as LibraryRow | null;
 }
+
+export function updateLibrary(
+  id: string,
+  updates: { name?: string; path?: string; mediaType?: MediaType; extensions?: string[] }
+): LibraryRow | null {
+  const parts: string[] = [];
+  const params: Record<string, string> = { $id: id };
+  if (updates.name !== undefined) {
+    parts.push("name = $name");
+    params.$name = updates.name;
+  }
+  if (updates.path !== undefined) {
+    parts.push("path = $path");
+    params.$path = updates.path;
+  }
+  if (updates.mediaType !== undefined) {
+    parts.push("media_type = $media_type");
+    params.$media_type = updates.mediaType;
+  }
+  if (updates.extensions !== undefined) {
+    parts.push("video_extensions = $video_extensions");
+    params.$video_extensions = JSON.stringify(updates.extensions);
+  }
+  if (parts.length === 0) return getLibraryById(id);
+  getDb()
+    .prepare(`UPDATE libraries SET ${parts.join(", ")} WHERE id = $id`)
+    .run(params);
+  return getLibraryById(id);
+}
