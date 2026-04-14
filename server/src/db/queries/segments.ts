@@ -29,3 +29,7 @@ export function getSegment(jobId: string, index: number): SegmentRow | null {
     .prepare("SELECT * FROM segments WHERE job_id = $job_id AND segment_index = $index")
     .get({ $job_id: jobId, $index: index }) as SegmentRow | null;
 }
+
+export function deleteSegmentsByJob(jobId: string): void {
+  getDb().prepare("DELETE FROM segments WHERE job_id = $job_id").run({ $job_id: jobId });
+}

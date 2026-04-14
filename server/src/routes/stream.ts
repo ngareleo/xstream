@@ -3,7 +3,8 @@ import { join } from "path";
 
 import { getJobById } from "../db/queries/jobs.js";
 import { getSegmentsByJob } from "../db/queries/segments.js";
-import { getJob } from "../services/jobStore.js";
+import { killJob } from "../services/chunker.js";
+import { addConnection, getJob, removeConnection } from "../services/jobStore.js";
 
 function writeLengthPrefixed(controller: ReadableStreamDefaultController, data: Uint8Array): void {
   const header = new Uint8Array(4);
@@ -40,9 +41,13 @@ export async function handleStream(req: Request): Promise<Response> {
     // have restored it. If it reaches here, we'll still try to stream below.
   }
 
+  const CONNECTION_TIMEOUT_MS = 90_000;
+
   const stream = new ReadableStream({
     async start(controller) {
       console.log(`[stream] ${jobId.slice(0, 8)} — start (from=${fromIndex})`);
+      addConnection(jobId);
+      let lastSentAt = Date.now();
 
       // Wait for init segment (up to 10 s), re-fetching the job each iteration so
       // that jobs added to memory after the stream started are detected promptly.
@@ -65,6 +70,7 @@ export async function handleStream(req: Request): Promise<Response> {
           : false;
         if (!initExists || !fsInitPath) {
           console.error(`[stream] ${jobId.slice(0, 8)} — init segment never became ready`);
+          removeConnection(jobId);
           controller.error(new Error("Init segment not ready"));
           return;
         }
@@ -78,6 +84,7 @@ export async function handleStream(req: Request): Promise<Response> {
         (dbJobFallback ? join(dbJobFallback.segment_dir, "init.mp4") : null);
 
       if (!initPath) {
+        removeConnection(jobId);
         controller.error(new Error("Init segment path unavailable"));
         return;
       }
@@ -87,7 +94,9 @@ export async function handleStream(req: Request): Promise<Response> {
         const initBytes = await readFile(initPath);
         console.log(`[stream] ${jobId.slice(0, 8)} — sending init (${initBytes.byteLength} bytes)`);
         writeLengthPrefixed(controller, new Uint8Array(initBytes));
+        lastSentAt = Date.now();
       } catch (err) {
+        removeConnection(jobId);
         controller.error(err);
         return;
       }
@@ -107,8 +116,10 @@ export async function handleStream(req: Request): Promise<Response> {
             `[stream] ${jobId.slice(0, 8)} — serving ${remaining.length} segments from DB`
           );
           for (const seg of remaining) {
+            if (req.signal?.aborted) break;
             const segBytes = await readFile(seg.path);
             writeLengthPrefixed(controller, new Uint8Array(segBytes));
+            lastSentAt = Date.now();
             sentCount++;
           }
           break;
@@ -132,6 +143,7 @@ export async function handleStream(req: Request): Promise<Response> {
           try {
             const segBytes = await readFile(path);
             writeLengthPrefixed(controller, new Uint8Array(segBytes));
+            lastSentAt = Date.now();
             index++;
             sentCount++;
             if (sentCount % 20 === 0) {
@@ -152,6 +164,19 @@ export async function handleStream(req: Request): Promise<Response> {
         } else {
           // Segment not yet produced; wait for the encoder
           await Bun.sleep(100);
+
+          // 90-second idle timeout: if no segment has been sent for 90s and we're
+          // still waiting, the job may be stalled or the client silently disconnected.
+          if (Date.now() - lastSentAt > CONNECTION_TIMEOUT_MS) {
+            console.log(`[stream] ${jobId.slice(0, 8)} — 90s idle timeout, closing`);
+            removeConnection(jobId);
+            const idleJob = getJob(jobId);
+            if (idleJob && idleJob.connections === 0 && idleJob.status === "running") {
+              killJob(jobId);
+            }
+            controller.close();
+            return;
+          }
         }
 
         // Check if client disconnected
@@ -159,10 +184,22 @@ export async function handleStream(req: Request): Promise<Response> {
           console.log(
             `[stream] ${jobId.slice(0, 8)} — client disconnected after ${sentCount} segments`
           );
-          break;
+          removeConnection(jobId);
+          const disconnectedJob = getJob(jobId);
+          if (
+            disconnectedJob &&
+            disconnectedJob.connections === 0 &&
+            disconnectedJob.status === "running"
+          ) {
+            killJob(jobId);
+          }
+          controller.close();
+          return;
         }
       }
 
+      // Natural end of stream (job complete or served all DB segments)
+      removeConnection(jobId);
       console.log(`[stream] ${jobId.slice(0, 8)} — done, sent ${sentCount} media segments`);
       controller.close();
     },

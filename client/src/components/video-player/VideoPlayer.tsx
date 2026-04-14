@@ -27,6 +27,7 @@ import { useVideoPlayerStyles } from "./VideoPlayer.styles.js";
 const VIDEO_FRAGMENT = graphql`
   fragment VideoPlayer_video on Video {
     id
+    durationSeconds
     videoStream {
       height
       width
@@ -55,7 +56,12 @@ export const VideoPlayer: FC<Props> = ({ video }) => {
   const [jobProgress, setJobProgress] = useState<JobProgress | null>(null);
   const [controlsVisible, setControlsVisible] = useState(true);
 
-  const { status, error, startPlayback } = useVideoPlayback(videoRef, data.id, setActiveJobId);
+  const { status, error, startPlayback } = useVideoPlayback(
+    videoRef,
+    data.id,
+    data.durationSeconds,
+    setActiveJobId
+  );
 
   useJobSubscription(activeJobId, (progress) => {
     setJobProgress(progress);

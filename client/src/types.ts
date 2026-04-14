@@ -1,6 +1,6 @@
 // Re-export the Resolution enum from the relay-generated mutation type.
 // The GraphQL schema is the single source of truth — never redefine this type locally.
-export type { Resolution as GQLResolution } from "./relay/__generated__/useVideoPlaybackStartTranscodeMutation.graphql.js";
+export type { Resolution as GQLResolution } from "./relay/__generated__/useChunkedPlaybackStartChunkMutation.graphql.js";
 
 // Human-readable display labels that map 1:1 to GQLResolution values.
 // Keep these in sync with RESOLUTION_PROFILES in server/src/config.ts.

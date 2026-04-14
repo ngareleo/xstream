@@ -112,6 +112,38 @@ export const useDevPanelStyles = makeStyles({
     },
   },
 
+  logsRow: {
+    padding: "4px 14px 8px",
+  },
+
+  logsToggleBtn: {
+    fontSize: "11px",
+    fontWeight: "600",
+    fontFamily: "'SF Mono', 'Fira Code', monospace",
+    padding: "5px 10px",
+    borderRadius: "4px",
+    background: "rgba(74,222,128,0.06)",
+    color: "rgba(74,222,128,0.5)",
+    border: "1px solid rgba(74,222,128,0.15)",
+    cursor: "pointer",
+    width: "100%",
+    textAlign: "left",
+    transitionProperty: "background, color, border-color",
+    transitionDuration: "0.15s",
+    transitionTimingFunction: "ease",
+    ":hover": {
+      background: "rgba(74,222,128,0.12)",
+      color: "rgba(74,222,128,0.8)",
+      ...shorthands.borderColor("rgba(74,222,128,0.3)"),
+    },
+  },
+
+  logsToggleBtnActive: {
+    background: "rgba(74,222,128,0.12)",
+    color: "#4ade80",
+    ...shorthands.borderColor("rgba(74,222,128,0.35)"),
+  },
+
   footer: {
     padding: "8px 14px 10px",
     fontSize: "10px",

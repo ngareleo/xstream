@@ -119,4 +119,6 @@ export interface ActiveJob extends TranscodeJobRow {
   segments: string[]; // ordered list of completed segment paths
   initSegmentPath: string | null;
   subscribers: Set<ReadableStreamDefaultController>;
+  /** Number of active /stream/:jobId HTTP connections consuming this job. */
+  connections: number;
 }

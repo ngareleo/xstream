@@ -67,3 +67,38 @@ export function getInterruptedJobs(): TranscodeJobRow[] {
     .prepare("SELECT * FROM transcode_jobs WHERE status = 'running'")
     .all() as TranscodeJobRow[];
 }
+
+export function deleteJobById(id: string): void {
+  getDb().prepare("DELETE FROM transcode_jobs WHERE id = $id").run({ $id: id });
+}
+
+/**
+ * Returns completed jobs sorted by updated_at ASC (oldest first) along with
+ * their total segment size in bytes — used by the LRU disk eviction logic.
+ */
+export function getLruJobs(): Array<TranscodeJobRow & { total_size_bytes: number }> {
+  return getDb()
+    .prepare(
+      `
+      SELECT j.*, COALESCE(SUM(s.size_bytes), 0) AS total_size_bytes
+      FROM transcode_jobs j
+      LEFT JOIN segments s ON s.job_id = j.id
+      WHERE j.status = 'complete'
+      GROUP BY j.id
+      ORDER BY j.updated_at ASC
+    `
+    )
+    .all() as Array<TranscodeJobRow & { total_size_bytes: number }>;
+}
+
+/**
+ * Marks a job as evicted so the next stream request for the same content range
+ * will trigger a fresh transcode rather than trying to serve missing files.
+ */
+export function markJobEvicted(id: string): void {
+  getDb()
+    .prepare(
+      `UPDATE transcode_jobs SET status = 'error', error = 'evicted', updated_at = $updated_at WHERE id = $id`
+    )
+    .run({ $id: id, $updated_at: new Date().toISOString() });
+}

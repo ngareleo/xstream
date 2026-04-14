@@ -33,7 +33,7 @@ const THROW_TARGETS = [
 
 export const DevPanelInner: FC = () => {
   const [open, setOpen] = useState(false);
-  const { setThrowTarget } = useDevTools();
+  const { setThrowTarget, streamingLogsOpen, setStreamingLogsOpen } = useDevTools();
   const { pathname } = useLocation();
   const panelRef = useRef<HTMLDivElement>(null);
   const styles = useDevPanelStyles();
@@ -73,6 +73,20 @@ export const DevPanelInner: FC = () => {
           <div className={styles.header}>
             <span className={styles.title}>DevTools</span>
             <span className={styles.route}>{pathname}</span>
+          </div>
+
+          <div className={styles.sectionLabel}>Streaming</div>
+          <div className={styles.logsRow}>
+            <button
+              className={mergeClasses(
+                styles.logsToggleBtn,
+                streamingLogsOpen && styles.logsToggleBtnActive
+              )}
+              onClick={() => setStreamingLogsOpen(!streamingLogsOpen)}
+              type="button"
+            >
+              {streamingLogsOpen ? "● Stream Logs ON" : "○ Stream Logs OFF"}
+            </button>
           </div>
 
           <div className={styles.sectionLabel}>Kill switch — force throw</div>

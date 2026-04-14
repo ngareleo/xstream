@@ -21,6 +21,7 @@ import { LoadingBarProvider } from "~/components/loading-bar/LoadingBarContext.j
 import { RouterNavigationLoader } from "~/components/router-navigation-loader/RouterNavigationLoader.js";
 import { isSidebarToggledEvent } from "~/components/sidebar/Sidebar.events.js";
 import { SidebarAsync } from "~/components/sidebar/SidebarAsync.js";
+import { StreamingLogOverlayAsync } from "~/components/stream-log-overlay/StreamingLogOverlayAsync.js";
 
 import { useAppShellStyles } from "./AppShell.styles.js";
 
@@ -119,6 +120,7 @@ export const AppShell: FC<AppShellProps> = ({ children }) => {
               <div className={styles.main}>{children}</div>
             </div>
             <DevPanelAsync />
+            <StreamingLogOverlayAsync />
           </HeaderActionsContext.Provider>
         </LibrariesContext.Provider>
       </LoadingBarProvider>

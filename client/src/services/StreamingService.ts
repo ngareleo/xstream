@@ -1,3 +1,5 @@
+import { StreamingLogger } from "./StreamingLogger.js";
+
 export type SegmentCallback = (data: ArrayBuffer, isInit: boolean) => void;
 export type ErrorCallback = (err: Error) => void;
 
@@ -17,24 +19,42 @@ export class StreamingService {
     this.abortController = new AbortController();
     let response: Response;
 
+    const url = `/stream/${jobId}${fromIndex > 0 ? `?from=${fromIndex}` : ""}`;
+    StreamingLogger.push({ category: "STREAM", message: `Fetching ${url}`, isError: false });
+
     try {
-      const url = `/stream/${jobId}${fromIndex > 0 ? `?from=${fromIndex}` : ""}`;
       response = await fetch(url, { signal: this.abortController.signal });
     } catch (err) {
-      if ((err as Error).name !== "AbortError") onError(err as Error);
+      if ((err as Error).name !== "AbortError") {
+        StreamingLogger.push({
+          category: "STREAM",
+          message: (err as Error).message,
+          isError: true,
+        });
+        onError(err as Error);
+      }
       return;
     }
 
     if (!response.ok) {
       const text = await response.text().catch(() => "");
-      onError(new Error(`Stream request failed: ${response.status}${text ? ` — ${text}` : ""}`));
+      const msg = `HTTP ${response.status}${text ? ` — ${text}` : ""}`;
+      StreamingLogger.push({ category: "STREAM", message: msg, isError: true });
+      onError(new Error(`Stream request failed: ${msg}`));
       return;
     }
 
     if (!response.body) {
+      StreamingLogger.push({ category: "STREAM", message: "No response body", isError: true });
       onError(new Error("No response body"));
       return;
     }
+
+    StreamingLogger.push({
+      category: "STREAM",
+      message: `HTTP ${response.status} — stream open`,
+      isError: false,
+    });
 
     this.reader = response.body.getReader();
     let buffer = new Uint8Array(0);
@@ -65,26 +85,41 @@ export class StreamingService {
           if (buffer.length < 4 + segLen) break;
 
           const segData = buffer.slice(4, 4 + segLen).buffer;
+          StreamingLogger.push({
+            category: "STREAM",
+            message: `Segment parsed — ${segLen}B${isFirstSegment ? " (init)" : ""}`,
+            isError: false,
+          });
           onSegment(segData, isFirstSegment);
           isFirstSegment = false;
 
           buffer = buffer.slice(4 + segLen);
         }
       }
+      StreamingLogger.push({ category: "STREAM", message: "Stream complete", isError: false });
       onDone();
     } catch (err) {
-      if ((err as Error).name !== "AbortError") onError(err as Error);
+      if ((err as Error).name !== "AbortError") {
+        StreamingLogger.push({
+          category: "STREAM",
+          message: (err as Error).message,
+          isError: true,
+        });
+        onError(err as Error);
+      }
     }
   }
 
   pause(): void {
     this.paused = true;
+    StreamingLogger.push({ category: "STREAM", message: "Paused (buffer full)", isError: false });
   }
 
   resume(): void {
     this.paused = false;
     this.resumeResolve?.();
     this.resumeResolve = null;
+    StreamingLogger.push({ category: "STREAM", message: "Resumed", isError: false });
   }
 
   cancel(): void {
@@ -94,5 +129,6 @@ export class StreamingService {
     this.abortController?.abort();
     this.reader?.cancel().catch(() => {});
     this.reader = null;
+    StreamingLogger.push({ category: "STREAM", message: "Cancelled", isError: false });
   }
 }

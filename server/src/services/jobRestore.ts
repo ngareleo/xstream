@@ -105,6 +105,7 @@ async function tryRestore(job: TranscodeJobRow): Promise<ActiveJob | null> {
     segments,
     initSegmentPath: initPath,
     subscribers: new Set(),
+    connections: 0,
   };
 
   setJob(restored);

@@ -14,6 +14,17 @@ export function removeJob(id: string): void {
   store.delete(id);
 }
 
+export function addConnection(id: string): void {
+  const job = store.get(id);
+  if (job) job.connections++;
+}
+
+export function removeConnection(id: string): void {
+  const job = store.get(id);
+  if (!job) return;
+  job.connections = Math.max(0, job.connections - 1);
+}
+
 export function getAllJobs(): ActiveJob[] {
   return Array.from(store.values());
 }

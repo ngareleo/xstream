@@ -3,7 +3,10 @@ import { graphql, useLazyLoadQuery } from "react-relay";
 import { useParams } from "react-router-dom";
 
 import { DevThrowTarget } from "~/components/dev-throw-target/DevThrowTarget.js";
+import { DevPanelAsync } from "~/components/dev-tools/DevPanelAsync.js";
+import { DevToolsProvider } from "~/components/dev-tools/DevToolsContext.js";
 import { PlayerContent } from "~/components/player-content/PlayerContent.js";
+import { StreamingLogOverlayAsync } from "~/components/stream-log-overlay/StreamingLogOverlayAsync.js";
 import type { PlayerPageQuery } from "~/relay/__generated__/PlayerPageQuery.graphql.js";
 
 import { strings } from "./PlayerPage.strings.js";
@@ -44,25 +47,27 @@ export const PlayerPage: FC = () => {
   const { videoId } = useParams<{ videoId: string }>();
   const styles = usePlayerStyles();
 
-  if (!videoId) {
-    return (
-      <DevThrowTarget id="Player">
-        <div className={styles.notFound}>{strings.invalidVideoId}</div>
-      </DevThrowTarget>
-    );
-  }
-
   return (
-    <DevThrowTarget id="Player">
-      <Suspense
-        fallback={
-          <div className={styles.rootFallback}>
-            <div className={styles.spinner} />
-          </div>
-        }
-      >
-        <PlayerPageInner videoId={resolveVideoId(videoId)} />
-      </Suspense>
-    </DevThrowTarget>
+    <DevToolsProvider>
+      {!videoId ? (
+        <DevThrowTarget id="Player">
+          <div className={styles.notFound}>{strings.invalidVideoId}</div>
+        </DevThrowTarget>
+      ) : (
+        <DevThrowTarget id="Player">
+          <Suspense
+            fallback={
+              <div className={styles.rootFallback}>
+                <div className={styles.spinner} />
+              </div>
+            }
+          >
+            <PlayerPageInner videoId={resolveVideoId(videoId)} />
+          </Suspense>
+        </DevThrowTarget>
+      )}
+      <DevPanelAsync />
+      <StreamingLogOverlayAsync />
+    </DevToolsProvider>
   );
 };

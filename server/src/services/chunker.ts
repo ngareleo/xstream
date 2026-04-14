@@ -19,6 +19,9 @@ ffmpeg.setFfprobePath(ffprobeInstaller.path);
 // Tracks all ffmpeg processes currently encoding so they can be killed on shutdown.
 const activeCommands = new Map<string, FfmpegCommand>();
 
+/** Maximum number of concurrently running ffmpeg jobs. */
+const MAX_CONCURRENT_JOBS = 3;
+
 /**
  * Gracefully shuts down all active ffmpeg jobs:
  * 1. Sends SIGTERM to every running process.
@@ -66,6 +69,22 @@ function jobId(contentKey: string, resolution: Resolution, start?: number, end?:
     .digest("hex");
 }
 
+/**
+ * Kills the ffmpeg process for a specific job. Safe to call even if the job has
+ * already finished — the command map won't contain it in that case.
+ */
+export function killJob(id: string): void {
+  const command = activeCommands.get(id);
+  if (!command) return;
+  console.log(`[chunker] Killing job ${id.slice(0, 8)} — no active connections`);
+  try {
+    command.kill("SIGTERM");
+  } catch {
+    // already gone
+  }
+  // The 'error' event handler in runFfmpeg() calls activeCommands.delete(id)
+}
+
 export async function startTranscodeJob(
   videoId: string,
   resolution: Resolution,
@@ -81,6 +100,13 @@ export async function startTranscodeJob(
   const existing = getJob(id);
   if (existing && existing.status !== "error") return existing;
 
+  // Guard against runaway resource use — cap concurrent ffmpeg processes
+  if (activeCommands.size >= MAX_CONCURRENT_JOBS) {
+    throw new Error(
+      `Too many concurrent streams (limit: ${MAX_CONCURRENT_JOBS}). Close another player tab and try again.`
+    );
+  }
+
   // Restore a completed job from a previous server session without re-encoding
   const dbJob = getJobById(id);
   if (dbJob && dbJob.status === "complete") {
@@ -95,6 +121,7 @@ export async function startTranscodeJob(
         segments,
         initSegmentPath: join(dbJob.segment_dir, "init.mp4"),
         subscribers: new Set(),
+        connections: 0,
       };
       setJob(restored);
       console.log(
@@ -124,6 +151,7 @@ export async function startTranscodeJob(
     segments: [],
     initSegmentPath: null,
     subscribers: new Set(),
+    connections: 0,
   };
 
   insertJob(job);
