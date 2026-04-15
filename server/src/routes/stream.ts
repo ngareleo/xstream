@@ -1,4 +1,4 @@
-import { access, readFile } from "fs/promises";
+import { access, readdir, readFile } from "fs/promises";
 import { join } from "path";
 
 import { getJobById } from "../db/queries/jobs.js";
@@ -49,15 +49,56 @@ export async function handleStream(req: Request): Promise<Response> {
       addConnection(jobId);
       let lastSentAt = Date.now();
 
-      // Wait for init segment (up to 10 s), re-fetching the job each iteration so
+      // Wait for init segment (up to 60 s), re-fetching the job each iteration so
       // that jobs added to memory after the stream started are detected promptly.
+      // 60s accommodates slow ffprobe runs on large 4K HEVC files before init.mp4
+      // is written.
+      //
+      // Implementation notes on Bun quirks:
+      //   • req.signal may already be aborted on the first iteration (Bun can mark
+      //     the signal aborted before the coroutine runs its first await).
+      //   • Bun.sleep() may throw when the underlying HTTP connection closes while
+      //     the coroutine is suspended — wrap in try/catch so the error doesn't
+      //     silently swallow the rest of the handler.
+      //   • Both cases are logged so they show up in server logs for diagnosis.
       let attempts = 0;
-      while (!getJob(jobId)?.initSegmentPath && attempts < 100) {
-        await Bun.sleep(100);
+      let clientGone = false;
+      const onAbort = (): void => {
+        clientGone = true;
+      };
+      req.signal?.addEventListener?.("abort", onAbort);
+
+      while (!getJob(jobId)?.initSegmentPath && attempts < 600) {
+        if (clientGone || req.signal?.aborted) {
+          clientGone = true;
+          break;
+        }
+        try {
+          await Bun.sleep(100);
+        } catch {
+          // Bun cancelled this coroutine because the HTTP connection closed.
+          clientGone = true;
+          break;
+        }
         attempts++;
       }
+
+      req.signal?.removeEventListener?.("abort", onAbort);
+
+      if (clientGone) {
+        console.log(
+          `[stream] ${jobId.slice(0, 8)} — client disconnected during init wait (${attempts} iters)`
+        );
+        removeConnection(jobId);
+        controller.close();
+        return;
+      }
+
       // Acquire the job reference after waiting — it may now be in memory.
       const activeJob = getJob(jobId);
+      console.log(
+        `[stream] ${jobId.slice(0, 8)} — waited ${attempts} × 100ms, initSegmentPath=${activeJob?.initSegmentPath ?? "null"}`
+      );
 
       if (!activeJob?.initSegmentPath) {
         // Last resort: check DB + filesystem
@@ -68,6 +109,9 @@ export async function handleStream(req: Request): Promise<Response> {
               .then(() => true)
               .catch(() => false)
           : false;
+        console.log(
+          `[stream] ${jobId.slice(0, 8)} — filesystem fallback: fsInitPath=${fsInitPath}, exists=${initExists}`
+        );
         if (!initExists || !fsInitPath) {
           console.error(`[stream] ${jobId.slice(0, 8)} — init segment never became ready`);
           removeConnection(jobId);
@@ -109,11 +153,39 @@ export async function handleStream(req: Request): Promise<Response> {
         const currentJob = getJob(jobId);
 
         if (!currentJob) {
-          // Job evicted from memory — serve remaining segments from DB
+          // Job evicted from memory — serve remaining segments from DB,
+          // falling back to filesystem scan if DB has no segment records
+          // (can happen when the file watcher missed events, e.g. after restart).
           const dbSegments = getSegmentsByJob(jobId);
-          const remaining = dbSegments.filter((s) => s.segment_index >= index);
+          let remaining = dbSegments
+            .filter((s) => s.segment_index >= index)
+            .sort((a, b) => a.segment_index - b.segment_index);
+
+          if (remaining.length === 0) {
+            // DB fallback: scan segment_dir directly
+            const dbJobForFs = getJobById(jobId);
+            if (dbJobForFs?.segment_dir) {
+              const entries = await readdir(dbJobForFs.segment_dir).catch(() => [] as string[]);
+              const segFiles = entries
+                .filter((f) => /^segment_\d{4}\.m4s$/.test(f))
+                .sort()
+                .filter((f) => {
+                  const idx = parseInt(f.replace("segment_", "").replace(".m4s", ""), 10);
+                  return idx >= index;
+                });
+              remaining = segFiles.map((f) => ({
+                id: 0,
+                job_id: jobId,
+                segment_index: parseInt(f.replace("segment_", "").replace(".m4s", ""), 10),
+                path: join(dbJobForFs.segment_dir, f),
+                duration_seconds: null,
+                size_bytes: 0,
+              }));
+            }
+          }
+
           console.log(
-            `[stream] ${jobId.slice(0, 8)} — serving ${remaining.length} segments from DB`
+            `[stream] ${jobId.slice(0, 8)} — serving ${remaining.length} segments from DB/fs`
           );
           for (const seg of remaining) {
             if (req.signal?.aborted) break;
@@ -154,7 +226,11 @@ export async function handleStream(req: Request): Promise<Response> {
               `[stream] ${jobId.slice(0, 8)} — readFile failed for segment ${index}:`,
               (err as Error).message
             );
-            await Bun.sleep(50);
+            try {
+              await Bun.sleep(50);
+            } catch {
+              break; // Bun cancelled coroutine — connection closed
+            }
           }
         } else if (currentJob.status === "complete" || currentJob.status === "error") {
           console.log(
@@ -163,7 +239,11 @@ export async function handleStream(req: Request): Promise<Response> {
           break;
         } else {
           // Segment not yet produced; wait for the encoder
-          await Bun.sleep(100);
+          try {
+            await Bun.sleep(100);
+          } catch {
+            break; // Bun cancelled coroutine — connection closed
+          }
 
           // 90-second idle timeout: if no segment has been sent for 90s and we're
           // still waiting, the job may be stalled or the client silently disconnected.

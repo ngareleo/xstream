@@ -2,7 +2,8 @@ import ffmpegInstaller from "@ffmpeg-installer/ffmpeg";
 import ffprobeInstaller from "@ffprobe-installer/ffprobe";
 import { createHash } from "crypto";
 import ffmpeg, { type FfmpegCommand } from "fluent-ffmpeg";
-import { mkdir, stat, watch } from "fs/promises";
+import { watch } from "fs";
+import { access, mkdir, rm, stat } from "fs/promises";
 import { join, resolve } from "path";
 
 import { config, RESOLUTION_PROFILES } from "../config.js";
@@ -18,6 +19,12 @@ ffmpeg.setFfprobePath(ffprobeInstaller.path);
 
 // Tracks all ffmpeg processes currently encoding so they can be killed on shutdown.
 const activeCommands = new Map<string, FfmpegCommand>();
+
+// Job IDs that were deliberately killed (SIGTERM/SIGKILL). When ffmpeg exits cleanly
+// after a SIGTERM it fires .on("end") rather than .on("error"), which would otherwise
+// mark the job "complete" with a truncated segment set. This set lets the "end" handler
+// detect a kill and treat the exit as an error instead.
+const killedJobs = new Set<string>();
 
 /** Maximum number of concurrently running ffmpeg jobs. */
 const MAX_CONCURRENT_JOBS = 3;
@@ -40,9 +47,11 @@ export async function killAllActiveJobs(timeoutMs = 5000): Promise<void> {
       command.once("end", cleanup);
       command.once("error", cleanup);
       console.log(`[chunker] Killing job ${id.slice(0, 8)}`);
+      killedJobs.add(id);
       try {
         command.kill("SIGTERM");
       } catch {
+        killedJobs.delete(id);
         cleanup();
       }
     });
@@ -77,12 +86,15 @@ export function killJob(id: string): void {
   const command = activeCommands.get(id);
   if (!command) return;
   console.log(`[chunker] Killing job ${id.slice(0, 8)} — no active connections`);
+  // Mark as killed BEFORE sending the signal. ffmpeg sometimes exits cleanly on
+  // SIGTERM (firing .on("end") instead of .on("error")), which would mark the job
+  // "complete" with a truncated segment set. The killedJobs set prevents that.
+  killedJobs.add(id);
   try {
     command.kill("SIGTERM");
   } catch {
-    // already gone
+    killedJobs.delete(id);
   }
-  // The 'error' event handler in runFfmpeg() calls activeCommands.delete(id)
 }
 
 export async function startTranscodeJob(
@@ -107,31 +119,56 @@ export async function startTranscodeJob(
     );
   }
 
-  // Restore a completed job from a previous server session without re-encoding
+  // Restore a completed job from a previous server session without re-encoding.
+  // Verify the init segment actually exists on disk — a "complete" entry whose
+  // segment dir was wiped (or was left truncated by old restore logic) must be
+  // treated as an error so startTranscodeJob re-encodes cleanly.
   const dbJob = getJobById(id);
   if (dbJob && dbJob.status === "complete") {
-    const dbSegments = getSegmentsByJob(id);
-    if (dbSegments.length > 0) {
-      const segments: string[] = [];
-      for (const seg of dbSegments) {
-        segments[seg.segment_index] = seg.path;
+    const initPath = join(dbJob.segment_dir, "init.mp4");
+    const initExists = await access(initPath)
+      .then(() => true)
+      .catch(() => false);
+
+    if (initExists) {
+      const dbSegments = getSegmentsByJob(id);
+      if (dbSegments.length > 0) {
+        const segments: string[] = [];
+        for (const seg of dbSegments) {
+          segments[seg.segment_index] = seg.path;
+        }
+        const restored: ActiveJob = {
+          ...dbJob,
+          segments,
+          initSegmentPath: initPath,
+          subscribers: new Set(),
+          connections: 0,
+        };
+        setJob(restored);
+        console.log(
+          `[chunker] Restored completed job ${id.slice(0, 8)} from DB (${dbSegments.length} segments)`
+        );
+        return restored;
       }
-      const restored: ActiveJob = {
-        ...dbJob,
-        segments,
-        initSegmentPath: join(dbJob.segment_dir, "init.mp4"),
-        subscribers: new Set(),
-        connections: 0,
-      };
-      setJob(restored);
-      console.log(
-        `[chunker] Restored completed job ${id.slice(0, 8)} from DB (${dbSegments.length} segments)`
+    } else {
+      // Segment dir was wiped or never fully written — force re-encode
+      console.warn(
+        `[chunker] Completed job ${id.slice(0, 8)} missing init.mp4 on disk — treating as error`
       );
-      return restored;
+      updateJobStatus(id, "error", { error: "Segment dir missing — will re-encode" });
     }
   }
 
   const segmentDir = resolve(config.segmentDir, id);
+
+  // If the previous encode was killed/errored, its segment dir may contain stale
+  // partial data (a tiny init.mp4 + incomplete segment). Wipe it so the stream
+  // handler doesn't serve those stale files to the client.
+  if (dbJob && dbJob.status === "error") {
+    await rm(segmentDir, { recursive: true, force: true });
+    console.log(`[chunker] Cleared stale segment dir for errored job ${id.slice(0, 8)}`);
+  }
+
   await mkdir(segmentDir, { recursive: true });
 
   const now = new Date().toISOString();
@@ -201,9 +238,23 @@ async function runFfmpeg(
   // Register the inotify watch BEFORE calling .run() so the kernel queues events
   // from the very first file ffmpeg writes (init.mp4 and segment_0000.m4s).
   // Calling watchSegments after .on("start") risks missing early segment events.
-  void watchSegments(job, segmentDir, initPath);
+  watchSegments(job, segmentDir, initPath);
 
   activeCommands.set(job.id, command);
+
+  // Kill orphaned jobs — prefetched chunks that start encoding but whose stream
+  // connection is never opened (e.g. user seeks away before the stream starts).
+  // If connections is still 0 after 30 s, no client is watching: kill ffmpeg.
+  const ORPHAN_TIMEOUT_MS = 30_000;
+  const orphanTimer = setTimeout(() => {
+    const currentJob = getJob(job.id);
+    if (currentJob && currentJob.connections === 0 && currentJob.status === "running") {
+      console.log(
+        `[chunker] Job ${job.id.slice(0, 8)} — no connections after ${ORPHAN_TIMEOUT_MS / 1000}s, killing orphan`
+      );
+      killJob(job.id);
+    }
+  }, ORPHAN_TIMEOUT_MS);
 
   file
     .applyOutputOptions(command, profile, segmentPattern, segmentDir)
@@ -213,6 +264,7 @@ async function runFfmpeg(
       console.log(`[chunker] cmd: ${cmd.slice(0, 120)}…`);
     })
     .on("error", (err) => {
+      clearTimeout(orphanTimer);
       activeCommands.delete(job.id);
       console.error(`[chunker] Job ${job.id.slice(0, 8)} error:`, err.message);
       job.status = "error";
@@ -221,7 +273,23 @@ async function runFfmpeg(
       notifySubscribers(job);
     })
     .on("end", () => {
+      clearTimeout(orphanTimer);
       activeCommands.delete(job.id);
+
+      if (killedJobs.has(job.id)) {
+        // ffmpeg exited cleanly after SIGTERM — treat as error, not completion,
+        // so the next startTranscodeJob call will wipe the stale segment dir and
+        // re-encode rather than serving a truncated stream.
+        killedJobs.delete(job.id);
+        const msg = "ffmpeg process was killed";
+        console.log(`[chunker] Job ${job.id.slice(0, 8)} killed (end event) — marking error`);
+        job.status = "error";
+        job.error = msg;
+        updateJobStatus(job.id, "error", { error: msg });
+        notifySubscribers(job);
+        return;
+      }
+
       console.log(
         `[chunker] Job ${job.id.slice(0, 8)} complete. ${job.segments.filter(Boolean).length} segments`
       );
@@ -236,24 +304,27 @@ async function runFfmpeg(
     .run();
 }
 
-async function watchSegments(job: ActiveJob, segmentDir: string, initPath: string): Promise<void> {
+function watchSegments(job: ActiveJob, segmentDir: string, initPath: string): void {
   const seenFiles = new Set<string>();
 
-  try {
-    // Registering the watcher first ensures the kernel queues all file events
-    // from this point on — even if they arrive before for-await starts iterating.
-    const watcher = watch(segmentDir);
+  // Use fs.watch() (EventEmitter API) — fs/promises.watch() async iterable is not
+  // reliably supported in Bun and may silently produce no events.
+  const watcher = watch(segmentDir, { persistent: false });
 
-    for await (const event of watcher) {
-      if (job.status === "error") break;
+  watcher.on("change", (eventType, rawFilename) => {
+    if (job.status === "error" || job.status === "complete") {
+      watcher.close();
+      return;
+    }
 
-      const filename = event.filename;
-      if (!filename) continue;
+    const filename = typeof rawFilename === "string" ? rawFilename : null;
+    if (!filename) return;
 
-      // HLS fMP4 mode writes init.mp4 before any media segments.
-      // The inotify event fires on file creation (before ffmpeg finishes writing),
-      // so we stat-poll until the file has content before marking it ready.
-      if (filename === "init.mp4" && !job.initSegmentPath) {
+    // HLS fMP4 mode writes init.mp4 before any media segments.
+    // The inotify event fires on file creation (before ffmpeg finishes writing),
+    // so we stat-poll until the file has content before marking it ready.
+    if (filename === "init.mp4" && !job.initSegmentPath) {
+      void (async () => {
         let initSize = 0;
         for (let i = 0; i < 40; i++) {
           try {
@@ -278,14 +349,16 @@ async function watchSegments(job: ActiveJob, segmentDir: string, initPath: strin
             `[chunker] Init segment for job ${job.id.slice(0, 8)} still empty after polling — skipping`
           );
         }
-        continue;
-      }
+      })();
+      return;
+    }
 
-      // Track numbered media segment files
-      if (/^segment_\d{4}\.m4s$/.test(filename) && !seenFiles.has(filename)) {
-        seenFiles.add(filename);
-        const fullPath = join(segmentDir, filename);
+    // Track numbered media segment files
+    if (/^segment_\d{4}\.m4s$/.test(filename) && !seenFiles.has(filename)) {
+      seenFiles.add(filename);
+      const fullPath = join(segmentDir, filename);
 
+      void (async () => {
         try {
           const fileStat = await stat(fullPath);
           const index = parseInt(filename.replace("segment_", "").replace(".m4s", ""), 10);
@@ -306,13 +379,14 @@ async function watchSegments(job: ActiveJob, segmentDir: string, initPath: strin
         } catch {
           // File might not be fully written; stream.ts will fall back to the filesystem
         }
-      }
-
-      if (job.status === "complete") break;
+      })();
     }
-  } catch (err) {
-    console.warn(`[chunker] Watcher ended for job ${job.id.slice(0, 8)}:`, (err as Error).message);
-  }
+  });
+
+  watcher.on("error", (err) => {
+    console.warn(`[chunker] Watcher error for job ${job.id.slice(0, 8)}:`, err.message);
+    watcher.close();
+  });
 }
 
 function notifySubscribers(job: ActiveJob): void {

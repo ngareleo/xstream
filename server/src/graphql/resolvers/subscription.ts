@@ -25,7 +25,15 @@ export const subscriptionResolvers = {
         _: unknown,
         { jobId }: { jobId: string }
       ): AsyncGenerator<{ transcodeJobUpdated: GQLTranscodeJob | null }> {
-        const { id: localId } = fromGlobalId(jobId);
+        // Guard against empty or invalid global IDs (the client sends "" when
+        // jobId is null — don't crash, just subscribe to nothing).
+        if (!jobId) return;
+        let localId: string;
+        try {
+          ({ id: localId } = fromGlobalId(jobId));
+        } catch {
+          return;
+        }
 
         for await (const job of subscribeToJob(localId)) {
           yield { transcodeJobUpdated: job ? presentJob(job) : null };

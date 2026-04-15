@@ -66,6 +66,7 @@ export class StreamingService {
           await new Promise<void>((resolve) => {
             this.resumeResolve = resolve;
           });
+          if (!this.reader) return; // cancelled during pause
         }
 
         const { done, value } = await this.reader.read();

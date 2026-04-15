@@ -128,22 +128,53 @@ export function useChunkedPlayback(
       onError: (err: Error) => void
     ): StreamingService => {
       const svc = new StreamingService();
+      let totalMediaBytes = 0;
+
       void svc.start(
         rawJobId,
         0,
         async (segData, isInit) => {
+          // Continuation chunks (chunk 2, 3, …) must NOT re-append the init
+          // segment. The SourceBuffer was initialised by chunk 0's init and
+          // the codec doesn't change between chunks. Re-appending an init —
+          // especially one produced with a different -ss start time, which
+          // causes ffmpeg to emit a different moov box — stalls the decoder
+          // and causes visible buffering / MSE errors.
+          if (isInit && !isFirstChunk) {
+            StreamingLogger.push({
+              category: "PLAYBACK",
+              message: `[chunk] Skipping init for continuation chunk ${rawJobId.slice(0, 8)}`,
+              isError: false,
+            });
+            return;
+          }
+
+          if (!isInit) {
+            totalMediaBytes += segData.byteLength;
+          }
+
           try {
             await buffer.appendSegment(segData);
-            // On the init segment of the very first chunk: wait for startup buffer
-            // before calling video.play() so playback starts smoothly.
+            // On the init segment of the very first chunk: arm the startup-buffer
+            // check that calls video.play() once enough content is buffered.
             if (isFirstChunk && isInit && !hasStartedPlaybackRef.current) {
               const videoEl = videoRef.current;
               if (videoEl) {
                 const startupTarget = STARTUP_BUFFER_S[res];
-                const checkReady = (): void => {
-                  if (hasStartedPlaybackRef.current) return;
+
+                const tryStart = (): void => {
+                  if (hasStartedPlaybackRef.current) {
+                    buffer.setAfterAppend(null);
+                    return;
+                  }
                   if (buffer.bufferedEnd >= startupTarget) {
                     hasStartedPlaybackRef.current = true;
+                    buffer.setAfterAppend(null);
+                    // Cancel any pending RAF so it doesn't double-fire.
+                    if (rafRef.current !== null) {
+                      cancelAnimationFrame(rafRef.current);
+                      rafRef.current = null;
+                    }
                     videoEl.play().catch(() => {});
                     setStatus("playing");
                     StreamingLogger.push({
@@ -151,11 +182,24 @@ export function useChunkedPlayback(
                       message: `video.play() — status: playing (buffered ${buffer.bufferedEnd.toFixed(1)}s >= ${startupTarget}s)`,
                       isError: false,
                     });
-                  } else {
+                  }
+                };
+
+                // Fire after every real append (handles fast disk-cache paths where
+                // all segments arrive before requestAnimationFrame fires, e.g. in
+                // Playwright headless or on a warm SSD).
+                buffer.setAfterAppend(tryStart);
+
+                // Also poll via RAF as a fallback for slow live-transcode paths
+                // where no segment may be ready for many seconds.
+                const checkReady = (): void => {
+                  if (hasStartedPlaybackRef.current) return;
+                  tryStart();
+                  if (!hasStartedPlaybackRef.current) {
                     rafRef.current = requestAnimationFrame(checkReady);
                   }
                 };
-                checkReady();
+                rafRef.current = requestAnimationFrame(checkReady);
               }
             }
           } catch (err) {
@@ -165,7 +209,25 @@ export function useChunkedPlayback(
           }
         },
         onError,
-        onDone
+        () => {
+          // ffmpeg writes a tiny placeholder segment (~24B) when the seek position
+          // is past the actual encoded content. Any chunk with < 1KB of total media
+          // bytes has no real frames — real video segments are always much larger
+          // (several KB even at the lowest bitrate). Stop chaining and signal
+          // end-of-stream so the <video> element ends cleanly.
+          const hasRealContent = totalMediaBytes >= 1024;
+          if (!hasRealContent) {
+            StreamingLogger.push({
+              category: "PLAYBACK",
+              message: `[chunk] ${rawJobId.slice(0, 8)} had only ${totalMediaBytes}B of media — marking stream done`,
+              isError: false,
+            });
+            buffer.markStreamDone();
+            onJobCreatedRef.current?.(null);
+            return;
+          }
+          onDone();
+        }
       );
       return svc;
     },
@@ -263,7 +325,7 @@ export function useChunkedPlayback(
                         buffer.markStreamDone();
                         onJobCreatedRef.current?.(null);
                       }
-                    : onDone,
+                    : () => startChunkSeries(res, nextEnd, buffer, false),
                   (err) => setError(err.message)
                 );
                 activeStreamRef.current = nextSvc;
@@ -323,6 +385,45 @@ export function useChunkedPlayback(
     },
     [videoRef, videoDurationS, requestChunk]
   );
+
+  // ── Buffering detection ────────────────────────────────────────────────────
+
+  useEffect(() => {
+    const videoEl = videoRef.current;
+    if (!videoEl) return;
+
+    const onWaiting = (): void => {
+      StreamingLogger.push({
+        category: "PLAYBACK",
+        message: "Buffering — waiting for data",
+        isError: false,
+      });
+    };
+    const onStalled = (): void => {
+      StreamingLogger.push({
+        category: "PLAYBACK",
+        message: "Stalled — network slow",
+        isError: true,
+      });
+    };
+    const onPlaying = (): void => {
+      StreamingLogger.push({
+        category: "PLAYBACK",
+        message: "Buffering resolved — playing",
+        isError: false,
+      });
+    };
+
+    videoEl.addEventListener("waiting", onWaiting);
+    videoEl.addEventListener("stalled", onStalled);
+    videoEl.addEventListener("playing", onPlaying);
+
+    return () => {
+      videoEl.removeEventListener("waiting", onWaiting);
+      videoEl.removeEventListener("stalled", onStalled);
+      videoEl.removeEventListener("playing", onPlaying);
+    };
+  }, [videoRef]);
 
   // ── Seek handler ───────────────────────────────────────────────────────────
 
@@ -443,7 +544,7 @@ export function useChunkedPlayback(
               const bgSvc = streamChunk(
                 rawJobId,
                 bgBuffer,
-                false,
+                true, // background buffer is fresh — it needs the init segment
                 newRes,
                 () => {
                   /* chunk done — swap may already have happened */

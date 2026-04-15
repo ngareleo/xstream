@@ -40,7 +40,14 @@ export default defineConfig({
     port: 5173,
     proxy: {
       "/graphql": { target: "http://localhost:3001", ws: true },
-      "/stream": { target: "http://localhost:3001" },
+      "/stream": {
+        target: "http://localhost:3001",
+        // Streaming responses are long-lived — disable proxy timeout so the
+        // connection isn't killed before init.mp4 is written (ffprobe can take
+        // 10+ seconds on large 4K files before the first byte is sent).
+        proxyTimeout: 0,
+        timeout: 0,
+      },
     },
   },
 

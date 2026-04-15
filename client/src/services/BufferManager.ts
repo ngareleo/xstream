@@ -13,11 +13,13 @@ export class BufferManager {
   private videoEl: HTMLVideoElement;
   private onPause: BufferPauseCallback;
   private onResume: BufferResumeCallback;
-  private appendQueue: ArrayBuffer[] = [];
+  private appendQueue: Array<{ data: ArrayBuffer; resolve: () => void }> = [];
   private isAppending = false;
   private streamDone = false;
   private forwardTarget: number;
   private forwardResume: number;
+  private streamPaused = false;
+  private afterAppendCb: (() => void) | null = null;
 
   constructor(
     videoEl: HTMLVideoElement,
@@ -52,6 +54,9 @@ export class BufferManager {
           try {
             this.sourceBuffer = ms.addSourceBuffer(mimeType);
             this.sourceBuffer.mode = "sequence";
+            // Drive back-pressure checks as the video plays forward, so a paused
+            // stream gets resumed even when no new segments are being appended.
+            this.videoEl.addEventListener("timeupdate", this.handleTimeUpdate);
             StreamingLogger.push({
               category: "BUFFER",
               message: "MSE open — sourceBuffer added (mode=sequence)",
@@ -72,20 +77,37 @@ export class BufferManager {
     });
   }
 
+  /**
+   * Register a callback that fires synchronously after each segment is appended
+   * to the SourceBuffer. Pass null to unregister. Used by the startup check in
+   * useChunkedPlayback to detect when bufferedEnd crosses the startup threshold
+   * without relying solely on requestAnimationFrame (which fires too slowly in
+   * headless environments such as Playwright).
+   */
+  setAfterAppend(cb: (() => void) | null): void {
+    this.afterAppendCb = cb;
+  }
+
   async appendSegment(data: ArrayBuffer): Promise<void> {
-    this.appendQueue.push(data);
-    if (!this.isAppending) {
-      await this.drainQueue();
-    }
+    return new Promise<void>((resolve) => {
+      this.appendQueue.push({ data, resolve });
+      if (!this.isAppending) {
+        void this.drainQueue();
+      }
+    });
   }
 
   private async drainQueue(): Promise<void> {
     this.isAppending = true;
     while (this.appendQueue.length > 0) {
-      const data = this.appendQueue.shift();
-      if (data === undefined) break;
+      const item = this.appendQueue.shift();
+      if (item === undefined) break;
+      const { data, resolve } = item;
       const sb = this.sourceBuffer;
-      if (!sb) break;
+      if (!sb) {
+        resolve();
+        break;
+      }
       await this.waitForUpdateEnd();
       try {
         sb.appendBuffer(data);
@@ -104,8 +126,10 @@ export class BufferManager {
         });
         console.error("[BufferManager] appendBuffer error:", err);
       }
+      resolve();
       await this.evictBackBuffer();
       this.checkForwardBuffer();
+      this.afterAppendCb?.();
     }
     this.isAppending = false;
 
@@ -141,20 +165,26 @@ export class BufferManager {
     }
   }
 
+  private handleTimeUpdate = (): void => {
+    this.checkForwardBuffer();
+  };
+
   private checkForwardBuffer(): void {
     const sb = this.sourceBuffer;
     if (!sb || sb.buffered.length === 0) return;
 
     const bufferedAhead = sb.buffered.end(sb.buffered.length - 1) - this.videoEl.currentTime;
 
-    if (bufferedAhead > this.forwardTarget) {
+    if (bufferedAhead > this.forwardTarget && !this.streamPaused) {
+      this.streamPaused = true;
       StreamingLogger.push({
         category: "BUFFER",
         message: `Forward buffer ${bufferedAhead.toFixed(1)}s — pausing`,
         isError: false,
       });
       this.onPause();
-    } else if (bufferedAhead < this.forwardResume) {
+    } else if (bufferedAhead < this.forwardResume && this.streamPaused) {
+      this.streamPaused = false;
       StreamingLogger.push({
         category: "BUFFER",
         message: `Forward buffer ${bufferedAhead.toFixed(1)}s — resuming`,
@@ -229,9 +259,13 @@ export class BufferManager {
     await this.waitForUpdateEnd();
     sb.remove(0, Infinity);
     await this.waitForUpdateEnd();
+    // Resolve pending promises so callers don't hang after a seek flush.
+    for (const item of this.appendQueue) item.resolve();
     this.appendQueue = [];
+    this.afterAppendCb = null;
     this.isAppending = false;
     this.streamDone = false;
+    this.streamPaused = false;
     this.videoEl.currentTime = timeSeconds;
     StreamingLogger.push({
       category: "BUFFER",
@@ -247,6 +281,7 @@ export class BufferManager {
    * the background buffer swap.
    */
   teardown(clearVideoEl = true): void {
+    this.videoEl.removeEventListener("timeupdate", this.handleTimeUpdate);
     if (clearVideoEl) {
       this.videoEl.src = "";
     }
@@ -256,9 +291,13 @@ export class BufferManager {
     }
     this.mediaSource = null;
     this.sourceBuffer = null;
+    // Resolve any pending segment promises so callers don't hang after teardown.
+    for (const item of this.appendQueue) item.resolve();
     this.appendQueue = [];
+    this.afterAppendCb = null;
     this.isAppending = false;
     this.streamDone = false;
+    this.streamPaused = false;
     StreamingLogger.push({
       category: "BUFFER",
       message: "Teardown — ObjectURL revoked",

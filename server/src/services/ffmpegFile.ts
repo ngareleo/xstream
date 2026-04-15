@@ -191,6 +191,7 @@ export class FFmpegFile {
     const bufSize = `${Math.round(parseInt(profile.videoBitrate) * 2)}k`;
 
     return [
+      `-preset veryfast`,
       `-profile:v high`,
       `-level:v ${profile.h264Level}`,
       `-b:v ${profile.videoBitrate}`,
