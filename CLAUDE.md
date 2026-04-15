@@ -607,6 +607,144 @@ Always test at `http://localhost:5173`, not at any other port that happens to re
 
 ---
 
+### Zombie ffmpeg processes consuming memory
+
+Symptoms: `ps aux | grep ffmpeg` shows multiple identical ffmpeg processes (same video, resolution, and time range); server RAM climbs continuously; `pgrep ffmpeg | wc -l` is higher than the number of active player tabs.
+
+**Diagnosis**
+
+Each process line will look identical — same input file, same `-ss`/`-t` flags, same output pattern. That confirms they're encoding the same chunk, not different ones.
+
+```sh
+ps aux | grep ffmpeg | grep -v grep
+# Look for 2+ lines with the same -ss, -t, and segment_dir
+```
+
+**Root cause — async initialization window**
+
+The most common cause is a race condition in `startTranscodeJob` (`server/src/services/chunker.ts`): the duplicate-check (`getJob(id)`) and the concurrent-job cap (`activeCommands.size`) are both evaluated *before* the new job is registered. If two calls arrive during the window between the first `await` (e.g. `access`, `mkdir`) and the `setJob()` call that makes the job visible, both pass all guards and each spawns an independent ffmpeg process.
+
+The fix is a synchronous `inflightJobIds = new Set<string>()` that is updated before any `await`:
+
+```ts
+inflightJobIds.add(id);   // before first await
+// ... async work (access, mkdir) ...
+insertJob(job);
+setJob(job);
+inflightJobIds.delete(id); // job now visible in jobStore
+```
+
+Include `inflightJobIds.size` in the `MAX_CONCURRENT_JOBS` check:
+```ts
+if (activeCommands.size + inflightJobIds.size >= MAX_CONCURRENT_JOBS) { ... }
+```
+
+And for duplicate IDs, poll `getJob(id)` rather than proceeding:
+```ts
+if (inflightJobIds.has(id)) {
+  for (let i = 0; i < 50; i++) {
+    await Bun.sleep(100);
+    const pending = getJob(id);
+    if (pending) return pending;
+  }
+}
+```
+
+**Kill existing zombies**
+
+```sh
+ps aux | grep ffmpeg | grep -v grep | awk '{print $2}' | xargs -r kill -9
+```
+
+`pkill ffmpeg` may return exit code 1 (no match) or 144 (signal delivery issue on some kernels) even when processes are killed — use the `awk | xargs kill` form instead and verify with a follow-up `pgrep ffmpeg | wc -l`.
+
+---
+
+### React state persisting across React Router navigation (component reuse)
+
+Symptoms: navigating from page A to page B (same route pattern, different params) leaves stale state visible — e.g. an "ended" playback overlay shows on the new video, or a detail pane shows data from the previous item.
+
+**Root cause**
+
+React Router v6 reuses the component instance when navigating between routes with the same pattern (e.g. `/player/:id → /player/:otherId`). `useState` values are not reset; only props change. Any state that is logically "per-item" (ended, selected, open) must be explicitly reset when the item changes.
+
+**Fix — reset state in a `useEffect` keyed on the changing identifier**
+
+```tsx
+// Reset ended/selected/open state when the item changes
+useEffect(() => {
+  setIsEnded(false);
+}, [data.id]);   // or whatever the unique identifier is
+```
+
+**Detection**
+
+Use Playwright (or manual testing) to navigate between two items and check that no state from item A leaks into item B. Specifically test:
+
+1. Trigger the state on item A (play to end, open a pane, select something)
+2. Navigate to item B via a link/route change (not a page reload)
+3. Verify item B starts with clean state
+
+If the bug is subtle (e.g. only visible for one render frame before the effect fires), add a `key` prop at the route level to force a full remount instead:
+
+```tsx
+<VideoPlayer key={videoId} video={data} />
+```
+
+Use the `useEffect` reset for lightweight state; use `key` remounting when the component has refs, subscriptions, or MSE pipelines that need full teardown.
+
+---
+
+### Griffel style property type errors
+
+Symptoms: TypeScript errors like `Type '"rgba(...)"' is not assignable to type 'undefined'` or `Object literal may only specify known properties` inside a `makeStyles()` call, even though the value looks correct.
+
+**Common causes**
+
+1. **Wrong shorthand vs longhand in pseudo-selectors.** Inside `:hover`, `:focus`, etc., Griffel requires the same shorthand form used in the base rule. If the base rule uses the `border` shorthand, the hover rule must also use `border` (not `borderColor`, `borderWidth`, etc. separately). Mixing shorthands and longhands in the same property tree causes TypeScript to infer `undefined` for the longhand variant.
+
+   ```ts
+   // Wrong — borderColor alone inside :hover when base uses `border` shorthand
+   ":hover": { borderColor: "rgba(255,255,255,0.35)" }
+
+   // Correct — repeat the full shorthand
+   ":hover": { border: "1px solid rgba(255,255,255,0.35)" }
+   ```
+
+2. **Non-Griffel CSS property names.** Griffel uses camelCase React CSS property names (`backgroundColor`, not `background-color`). Vendor-prefixed properties use the React convention (`WebkitLineClamp`, not `-webkit-line-clamp`).
+
+3. **`animationName` must use a keyframe object, not a string.** Griffel generates class names for keyframes inline:
+   ```ts
+   animationName: { to: { transform: "rotate(360deg)" } }  // correct
+   animationName: "spin"  // wrong — Griffel doesn't accept string keyframe names
+   ```
+
+**Debugging approach:** When a property inside a pseudo-selector errors, check the base rule for that element first. If the base uses a shorthand, the pseudo-selector must use the same shorthand. TypeScript's error message will say `undefined` but the real issue is property name mismatch.
+
+---
+
+### `useCallback`/`useEffect` ordering: hook used before it is declared
+
+Symptoms: TypeScript error `Block-scoped variable 'X' used before its declaration` on a `useEffect` that references a `useCallback` defined later in the file.
+
+**Root cause**
+
+React hooks must be called in consistent order (Rules of Hooks), but `useCallback`/`useEffect` are just function calls — JavaScript hoists `const` declarations to the top of the block but does not initialize them (temporal dead zone). A `useEffect` that closes over a `useCallback` declared below it will fail at runtime and at compile time.
+
+**Fix — declare `useCallback` hooks before any `useEffect` that references them**
+
+Reorder the hooks so dependencies are always declared above their consumers. A natural ordering is:
+
+1. Fragment reads (`useFragment`)
+2. State declarations (`useState`)
+3. Refs (`useRef`)
+4. Callbacks (`useCallback`) — in dependency order (callbacks used by other callbacks go first)
+5. Effects (`useEffect`) — after all callbacks they reference
+
+When an effect and a callback have a circular dependency, extract the shared logic into a plain (non-hook) function called by both.
+
+---
+
 ## Future Direction — Rust Server Rewrite
 
 The Bun/JS server is a **prototype** used to validate the architecture quickly. Once the design is proven, the server will be rewritten in Rust for performance gains (critical at 4K bitrates). The React/Relay client is intended to remain **completely untouched** across this rewrite.
