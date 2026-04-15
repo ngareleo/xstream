@@ -47,7 +47,9 @@ describe("StreamingService frame parser", () => {
     await service.start(
       "job1",
       0,
-      (data, isInit) => segments.push({ data, isInit }),
+      async (data, isInit) => {
+        segments.push({ data, isInit });
+      },
       (err) => {
         throw err;
       },
@@ -71,7 +73,9 @@ describe("StreamingService frame parser", () => {
     await service.start(
       "job1",
       0,
-      (_, isInit) => initFlags.push(isInit),
+      async (_, isInit) => {
+        initFlags.push(isInit);
+      },
       (err) => {
         throw err;
       },
@@ -95,7 +99,9 @@ describe("StreamingService frame parser", () => {
     await service.start(
       "job1",
       0,
-      (data) => segments.push(data),
+      async (data) => {
+        segments.push(data);
+      },
       (err) => {
         throw err;
       },
@@ -120,7 +126,9 @@ describe("StreamingService frame parser", () => {
     await service.start(
       "job1",
       0,
-      (data) => payloads.push(new Uint8Array(data)),
+      async (data) => {
+        payloads.push(new Uint8Array(data));
+      },
       (err) => {
         throw err;
       },
@@ -141,7 +149,7 @@ describe("StreamingService frame parser", () => {
     await service.start(
       "job1",
       0,
-      () => {},
+      async () => {},
       (err) => {
         throw err;
       },
@@ -161,7 +169,7 @@ describe("StreamingService frame parser", () => {
     await service.start(
       "job42",
       5,
-      () => {},
+      async () => {},
       () => {},
       () => {}
     );
@@ -187,7 +195,7 @@ describe("StreamingService frame parser", () => {
     const startPromise = service.start(
       "job1",
       0,
-      () => {},
+      async () => {},
       (e) => errors.push(e),
       () => {}
     );

@@ -1,6 +1,6 @@
 import { StreamingLogger } from "./StreamingLogger.js";
 
-export type SegmentCallback = (data: ArrayBuffer, isInit: boolean) => void;
+export type SegmentCallback = (data: ArrayBuffer, isInit: boolean) => Promise<void>;
 export type ErrorCallback = (err: Error) => void;
 
 export class StreamingService {
@@ -78,7 +78,11 @@ export class StreamingService {
         merged.set(value, buffer.length);
         buffer = merged;
 
-        // Extract all complete length-prefixed frames
+        // Extract all complete length-prefixed frames.
+        // Await each onSegment call so back-pressure can fire between segments —
+        // without this, a fast cache-hit response floods the append queue with
+        // hundreds of segments before checkForwardBuffer() has a chance to pause
+        // the stream, overflowing the SourceBuffer quota.
         while (buffer.length >= 4) {
           const view = new DataView(buffer.buffer, buffer.byteOffset);
           const segLen = view.getUint32(0, false); // big-endian
@@ -91,10 +95,19 @@ export class StreamingService {
             message: `Segment parsed — ${segLen}B${isFirstSegment ? " (init)" : ""}`,
             isError: false,
           });
-          onSegment(segData, isFirstSegment);
+          await onSegment(segData, isFirstSegment);
           isFirstSegment = false;
 
           buffer = buffer.slice(4 + segLen);
+
+          // Re-check pause after each segment so back-pressure applies immediately
+          // rather than only at the top of the outer reader.read() loop.
+          if (this.paused) {
+            await new Promise<void>((resolve) => {
+              this.resumeResolve = resolve;
+            });
+            if (!this.reader) return; // cancelled during pause
+          }
         }
       }
       StreamingLogger.push({ category: "STREAM", message: "Stream complete", isError: false });

@@ -109,22 +109,43 @@ export class BufferManager {
         break;
       }
       await this.waitForUpdateEnd();
-      try {
-        sb.appendBuffer(data);
-        await this.waitForUpdateEnd();
-        const bufferedEnd = sb.buffered.length > 0 ? sb.buffered.end(sb.buffered.length - 1) : 0;
-        StreamingLogger.push({
-          category: "BUFFER",
-          message: `Appended ${data.byteLength}B — buffered to ${bufferedEnd.toFixed(2)}s`,
-          isError: false,
-        });
-      } catch (err) {
-        StreamingLogger.push({
-          category: "BUFFER",
-          message: `appendBuffer error: ${(err as Error).message}`,
-          isError: true,
-        });
-        console.error("[BufferManager] appendBuffer error:", err);
+      // Retry loop: on QuotaExceededError, evict the back-buffer and try again.
+      // Without a retry the segment is silently dropped and every subsequent
+      // append also fails because the SourceBuffer stays full.
+      let appended = false;
+      for (let attempt = 0; attempt <= 3 && !appended; attempt++) {
+        if (attempt > 0) {
+          // Buffer is full — evict everything behind currentTime before retrying.
+          StreamingLogger.push({
+            category: "BUFFER",
+            message: `QuotaExceeded (attempt ${attempt}) — evicting back-buffer and retrying`,
+            isError: true,
+          });
+          await this.evictBackBuffer();
+          await this.waitForUpdateEnd();
+        }
+        try {
+          sb.appendBuffer(data);
+          await this.waitForUpdateEnd();
+          appended = true;
+          const bufferedEnd = sb.buffered.length > 0 ? sb.buffered.end(sb.buffered.length - 1) : 0;
+          StreamingLogger.push({
+            category: "BUFFER",
+            message: `Appended ${data.byteLength}B — buffered to ${bufferedEnd.toFixed(2)}s`,
+            isError: false,
+          });
+        } catch (err) {
+          if ((err as DOMException).name === "QuotaExceededError" && attempt < 3) {
+            continue; // retry after eviction
+          }
+          StreamingLogger.push({
+            category: "BUFFER",
+            message: `appendBuffer error: ${(err as Error).message}`,
+            isError: true,
+          });
+          console.error("[BufferManager] appendBuffer error:", err);
+          break;
+        }
       }
       resolve();
       await this.evictBackBuffer();
