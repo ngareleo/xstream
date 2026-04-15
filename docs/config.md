@@ -87,7 +87,7 @@ tmp/
 ├── tvke.db-shm                # WAL shared memory file
 ├── tvke.db-wal                # WAL write-ahead log
 └── segments/
-    └── <jobId>/               # SHA-1 of (content_fingerprint + resolution + start + end)
+    └── <jobId>/               # SHA-1 of (content_fingerprint + resolution + startS + endS)
         ├── init.mp4           # fMP4 init segment (moov box)
         ├── segment_0000.m4s
         ├── segment_0001.m4s
@@ -95,7 +95,9 @@ tmp/
         └── segments.txt       # ffmpeg segment list (internal use)
 ```
 
-`tmp/` is gitignored. In dev it accumulates indefinitely. In production, implement a cleanup policy (e.g. evict job directories older than 24h when disk usage exceeds a threshold).
+Job IDs are deterministic — the same video, resolution, start time, and end time always produce the same ID. If a client requests a chunk that was previously encoded, the server finds the existing directory on disk and streams from cache without launching a new ffmpeg process.
+
+`tmp/` is gitignored. In dev it accumulates indefinitely. In production, implement a cleanup policy (e.g. evict job directories older than 24h when disk usage exceeds a threshold). See `docs/todo.md` for `CACHE-001`.
 
 ---
 

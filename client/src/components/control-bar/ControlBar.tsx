@@ -5,6 +5,7 @@ import { graphql, useFragment } from "react-relay";
 
 import { useVideoSync } from "~/hooks/useVideoSync.js";
 import {
+  IconArrowsIn,
   IconArrowsOut,
   IconBackward,
   IconForward,
@@ -43,9 +44,17 @@ interface Props {
   resolution: Resolution;
   status: "idle" | "loading" | "playing";
   isVisible: boolean;
+  isFullscreen: boolean;
 }
 
-export const ControlBar: FC<Props> = ({ video, videoRef, resolution, status, isVisible }) => {
+export const ControlBar: FC<Props> = ({
+  video,
+  videoRef,
+  resolution,
+  status,
+  isVisible,
+  isFullscreen,
+}) => {
   const data = useFragment(VIDEO_FRAGMENT, video);
   const styles = useControlBarStyles();
   const { currentTime, isPlaying } = useVideoSync(videoRef);
@@ -206,8 +215,12 @@ export const ControlBar: FC<Props> = ({ video, videoRef, resolution, status, isV
             )}
           </div>
 
-          <button className={styles.btn} aria-label="Fullscreen" onClick={handleFullscreen}>
-            <IconArrowsOut size={18} />
+          <button
+            className={styles.btn}
+            aria-label={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
+            onClick={handleFullscreen}
+          >
+            {isFullscreen ? <IconArrowsIn size={18} /> : <IconArrowsOut size={18} />}
           </button>
         </div>
       </div>

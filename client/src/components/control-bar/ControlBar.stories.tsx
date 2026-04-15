@@ -68,6 +68,7 @@ function ControlBarWrapper({ video, resolution, status }: WrapperProps): JSX.Ele
           resolution={resolution}
           status={status}
           isVisible={true}
+          isFullscreen={false}
         />
       </NovaEventingProvider>
     </div>

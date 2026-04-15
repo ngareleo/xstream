@@ -62,16 +62,26 @@ The server generates the init segment by running a zero-duration ffmpeg pass on 
 
 `server/src/routes/stream.ts`:
 
-1. Wait for `job.initSegmentPath` to be set (polling 100ms, max 10s)
-2. Read init segment bytes from disk → write `[4-byte length][bytes]` to response
-3. Loop:
-   - If `index < job.segments.length` and segment file exists → read → write frame → increment index
-   - Else if `job.status === 'complete'` → break
-   - Else if `job.status === 'error'` → break
-   - Else → `await sleep(100)` and retry
-4. Close response
+1. `addConnection(jobId)` — increments the in-memory connection counter for this job.
+2. Wait for `job.initSegmentPath` to be set (polling 100ms, max 60s).
+   - Uses `req.signal.addEventListener("abort", ...)` to detect early disconnects (Bun may mark the signal aborted before the coroutine runs its first `await`).
+   - Each `Bun.sleep()` is wrapped in try/catch; a thrown error means Bun cancelled the coroutine because the underlying TCP connection closed.
+3. Read init segment bytes from disk → write `[4-byte length][bytes]` to response.
+4. Loop over segments:
+   - If segment file exists at the expected path → read → write frame → increment index.
+   - If `job.status === 'complete'` or `'error'` → break.
+   - Else → `await sleep(100)` and retry.
+   - **90-second idle timeout**: if no segment has been sent for 90s while waiting for the encoder, close the connection and kill the job (see below).
+5. On `req.signal.aborted` (client disconnect): `removeConnection(jobId)`. If `connections === 0` and job is `running` → `killJob(jobId)` (SIGTERM).
+6. On natural stream end: `removeConnection(jobId)` and close.
 
-The `?from=N` query parameter skips directly to segment index N (used for seeking). The init segment is always sent regardless of `from`.
+**Connection counting + ffmpeg lifecycle:**
+- `ActiveJob.connections` tracks how many HTTP connections are consuming each job.
+- When the last connection drops (or times out), `killJob` sends SIGTERM to the ffmpeg process. This prevents zombie processes when users navigate away.
+- Multiple tabs on the same job share a `connections` count; ffmpeg is only killed when **all** connections close.
+- Maximum concurrent running jobs: `MAX_CONCURRENT_JOBS = 3`. A 4th `startTranscode` call while 3 are running throws `"Too many concurrent streams"`.
+
+The `?from=N` query parameter skips directly to segment index N. The init segment is always sent regardless of `from`.
 
 ---
 
@@ -113,31 +123,53 @@ The MSE `SourceBuffer` has strict rules:
 
 ## Seeking Protocol
 
-1. Client determines target segment index: `Math.floor(seekTime / segmentDuration)`
-2. `StreamingService.cancel()` — aborts the current fetch
-3. `BufferManager.seek(seekTime)`:
+Seeks always flush and restart at a 300-second chunk boundary:
+
+1. `"seeking"` event fires on the `<video>` element.
+2. `StreamingService.cancel()` — aborts the current fetch.
+3. Snap seek time to chunk boundary: `snapTime = Math.floor(seekTime / 300) * 300`.
+4. `BufferManager.seek(snapTime)`:
    - `await waitForUpdateEnd()`
    - `sourceBuffer.remove(0, Infinity)` — clear all buffered content
    - `await waitForUpdateEnd()`
-   - Reset append queue and flags
-   - Set `video.currentTime = seekTime`
-4. `StreamingService.start(jobId, segmentIndex, ...)` — new fetch with `?from=<index>`
-5. Server streams init segment + media segments starting from index
+   - Reset append queue, flags, and `afterAppendCb`
+   - Set `video.currentTime = snapTime`
+5. `startChunkSeries(res, snapTime, buffer)` — fires a new `startTranscode` mutation for `[snapTime, snapTime+300s)` and begins streaming.
+6. Server streams init segment + all media segments from the beginning of the chunk.
 
-**Note:** Seeking accuracy depends on segment boundary alignment. With 2-second segments and forced keyframes every 2s, seek precision is ±2s at worst.
+Snapping to a 300-second boundary ensures the new job reuses an existing cached segment directory if the same chunk was previously encoded.
+
+**Note:** Because seeks always restart at a chunk boundary, seek accuracy is at most `video.currentTime - snapTime` (up to 300s) from the user's target. The video element then fast-forwards through the already-buffered content to reach the actual seek point.
 
 ---
 
+## Startup Buffer
+
+`useChunkedPlayback` waits until `bufferedEnd >= STARTUP_BUFFER_S[res]` before calling `video.play()`. This keeps the loading spinner up long enough for smooth initial playback, calibrated per resolution:
+
+| Resolution | Startup threshold |
+|---|---|
+| `240p` | 2s |
+| `360p` | 2s |
+| `480p` | 3s |
+| `720p` | 4s |
+| `1080p` | 6s |
+| `4k` | 10s |
+
+Detection is driven by `BufferManager.setAfterAppend(tryStart)` — a callback that fires synchronously inside `drainQueue` after every real `appendBuffer` call. This works correctly in headless environments (Playwright, CI) where `requestAnimationFrame` fires slowly or not at all between segment appends. A RAF loop is also started as a fallback for slow live-transcode paths where no new segment arrives for several seconds.
+
 ## Back-Pressure
 
-The client pauses fetching when the forward buffer exceeds 20 seconds to avoid unbounded memory growth:
+The client pauses fetching when the forward buffer exceeds a configurable threshold (default 20 seconds) to avoid unbounded memory growth:
 
 ```
 after each appendBuffer:
   bufferedAhead = sourceBuffer.buffered.end(last) - video.currentTime
-  if bufferedAhead > 20s → StreamingService.pause()
-  if bufferedAhead < 15s → StreamingService.resume()
+  if bufferedAhead > forwardTarget   → StreamingService.pause()
+  if bufferedAhead < forwardTarget×0.75 → StreamingService.resume()
 ```
+
+`forwardTarget` defaults to 20s and is passed as a constructor argument to `BufferManager`. The resume threshold is 75% of the target (15s at the default).
 
 Back buffer eviction keeps at most 5 seconds behind `currentTime`:
 

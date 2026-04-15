@@ -66,18 +66,19 @@ tvke is split into two workspaces: a Bun server and an Rsbuild/React client. The
 
 | Component | File | Responsibility |
 |---|---|---|
-| Entry | `src/main.tsx` | Mounts providers: Relay, Chakra, `NovaEventingProvider` (`AppEventing`), Router |
+| Entry | `src/main.tsx` | Mounts providers: Relay, `NovaEventingProvider` (`AppEventing`), Router |
 | Router | `src/router.tsx` | `/` → LibraryPage, `/play/:videoId` → PlayerPage |
 | Relay env | `src/relay/environment.ts` | HTTP fetch + WebSocket subscribe network layer |
 | Library page | `src/pages/LibraryPage.tsx` | Queries all libraries, renders grids, subscribes to scan state for live spinner |
 | Player page | `src/pages/PlayerPage.tsx` | Loads video metadata, renders VideoPlayer |
 | Library grid | `src/components/library-grid/LibraryGrid.tsx` | Relay fragment over a Library's videos connection |
 | Video card | `src/components/video-card/VideoCard.tsx` | Relay fragment, clickable tile with title + duration |
-| Video player | `src/components/video-player/VideoPlayer.tsx` | `NovaEventingInterceptor` for ControlBar events; delegates MSE + transcoding to `useVideoPlayback` |
+| Video player | `src/components/video-player/VideoPlayer.tsx` | `NovaEventingInterceptor` for ControlBar events; delegates MSE + transcoding to `useChunkedPlayback` |
 | Control bar | `src/components/control-bar/ControlBar.tsx` | Seek slider, play/pause, resolution selector; raises events via `useNovaEventing().bubble()` |
 | Control bar events | `src/components/control-bar/ControlBar.events.ts` | Event type constants, factory functions, and type guards for ControlBar events |
+| Chunked playback hook | `src/hooks/useChunkedPlayback.ts` | Client-driven chunk scheduling, prefetch, seek restart, resolution switch via background buffer |
 | Streaming service | `src/services/StreamingService.ts` | Fetch loop, length-prefix frame parser, pause/resume/cancel |
-| Buffer manager | `src/services/BufferManager.ts` | MSE SourceBuffer wrapper, sliding window eviction, back-pressure |
+| Buffer manager | `src/services/BufferManager.ts` | MSE SourceBuffer wrapper, sliding window eviction, back-pressure, `setAfterAppend` notification |
 
 ---
 
@@ -128,25 +129,35 @@ The content fingerprint is `"<sizeBytes>:<sha1hex>"` over the first 64 KB of the
 
 ## Data Flow: Playback
 
+The client drives transcoding in **300-second chunks** rather than encoding the full video upfront. Each chunk is a separate ffmpeg job covering a time window `[startS, endS)`.
+
 ```
 User clicks Play (resolution selected)
       │
       ▼
-VideoPlayer → startTranscode mutation → POST /graphql
+useChunkedPlayback.startPlayback(res)
+  → BufferManager.init(mimeType)        ← creates MediaSource, arms SourceBuffer
+  → startChunkSeries(res, 0, buffer)    ← fires chunk [0s, 300s)
+  → startPrefetchLoop(res, buffer)      ← RAF loop watching for prefetch trigger
       │
       ▼
-Server: chunker.startTranscodeJob()
-  → mkdir tmp/segments/<jobId>/
-  → insertJob() into DB
-  → setJob() into jobStore
-  → ffmpeg command (async)
-  → watchSegments() monitors output dir
+startChunkSeries → startTranscode mutation → POST /graphql
+  variables: { videoId, resolution, startTimeSeconds: 0, endTimeSeconds: 300 }
+      │
+      ▼
+Server: chunker.startTranscodeJob(videoId, res, start, end)
+  → jobId = SHA-1(fingerprint + res + start + end)  ← deterministic (cache-friendly)
+  → if tmp/segments/<jobId>/init.mp4 exists → restore from cache (no new ffmpeg)
+  → else: mkdir, insertJob, setJob(connections=0), ffmpeg, watchSegments()
       │
       ▼
 Server: stream.ts GET /stream/<jobId>
-  → wait for initSegmentPath
+  → addConnection(jobId)                ← increment connection counter
+  → wait up to 60s for initSegmentPath
   → writeLengthPrefixed(init.mp4)
   → loop: writeLengthPrefixed(segment_NNNN.m4s) as they appear
+  → on client disconnect: removeConnection; if connections=0 → killJob(ffmpeg)
+  → on 90s idle timeout: removeConnection; if connections=0 → killJob(ffmpeg)
       │
       ▼
 Client: StreamingService.start()
@@ -157,13 +168,63 @@ Client: StreamingService.start()
       │
       ▼
 Client: BufferManager.appendSegment(data)
-  → first call: SourceBuffer.appendBuffer(initData)  ← mandatory first
-  → subsequent calls: SourceBuffer.appendBuffer(mediaData)
-  → after each append: evictBackBuffer(), checkForwardBuffer()
+  → SourceBuffer.appendBuffer(data) via serialised queue
+  → after each append: evictBackBuffer(), checkForwardBuffer(), afterAppendCb?.()
+      │
+      ▼
+First chunk, first media segment:
+  afterAppendCb = tryStart()
+  → if bufferedEnd >= STARTUP_BUFFER_S[res] → video.play(), status = "playing"
+  → RAF loop fires as fallback for slow live-transcode paths
       │
       ▼
 Browser MSE decoder → <video> element renders
+
+During playback (RAF prefetch loop):
+  → when video.currentTime > chunkEnd - 60s:
+       fire startTranscode for next chunk [300s, 600s) (prefetch)
+  → when chunk stream ends → chain to next chunk using prefetched jobId
 ```
+
+### Chunk Chaining
+
+When the current chunk stream finishes, `startChunkSeries` chains to the next chunk. If prefetch fired in time, the next job's ID is already available (`nextJobIdRef`) — no mutation RTT before streaming begins. If prefetch hasn't fired yet, a new mutation is fired on demand.
+
+Continuation chunks skip re-appending the init segment; the SourceBuffer (in `mode="sequence"`) picks up the new media segments seamlessly.
+
+### Connection-Aware ffmpeg Lifecycle
+
+`ActiveJob.connections` tracks how many `/stream/:jobId` HTTP connections are open for each job:
+- `addConnection(id)` increments on stream open.
+- `removeConnection(id)` decrements on disconnect, stream completion, or idle timeout.
+- When `connections` drops to `0` and the job is still `running`, `killJob(id)` sends `SIGTERM` to the ffmpeg process.
+
+This means ffmpeg is killed within seconds of the last tab closing — no zombie processes.
+
+**Concurrent stream limit:** `chunker.startTranscodeJob` enforces `MAX_CONCURRENT_JOBS = 3`. A fourth simultaneous transcode throws `"Too many concurrent streams"`, surfaced as a playback error.
+
+### Seek Behaviour
+
+On `"seeking"` event:
+1. Cancel the active `StreamingService`.
+2. `BufferManager.seek(snapTime)` — flushes the SourceBuffer and sets `video.currentTime`.
+3. Snap the seek position to the chunk boundary: `Math.floor(seekTime / 300) * 300`.
+4. `startChunkSeries(res, snapTime, buffer)` — starts a new chunk at the boundary.
+
+Snapping to a boundary ensures the new job aligns with cached segment directories.
+
+### Resolution Switch (Background Buffer)
+
+When the user selects a different resolution while playing:
+1. A second `BufferManager` (`bgBuffer`) is initialised with `initBackground()` — attached to a temporary offscreen video element so `sourceopen` fires without affecting the live `<video>`.
+2. A new chunk job starts at the current chunk boundary, streaming into `bgBuffer` silently.
+3. A RAF loop polls `bgBuffer.bufferedEnd`. When it reaches `STARTUP_BUFFER_S[newRes]`:
+   - The foreground stream is cancelled and its `BufferManager` torn down.
+   - `video.src` is swapped to the background buffer's object URL.
+   - `video.currentTime` is restored; `video.play()` is called.
+   - The background buffer is promoted to foreground.
+
+The viewer experiences a brief pause (typically < 1s for lower resolutions) while the background buffer fills.
 
 ---
 

@@ -26,6 +26,12 @@ const activeCommands = new Map<string, FfmpegCommand>();
 // detect a kill and treat the exit as an error instead.
 const killedJobs = new Set<string>();
 
+// Job IDs currently being initialized — between the start of startTranscodeJob and
+// the setJob() call that makes them visible in jobStore. Guards against concurrent
+// calls with identical parameters spawning duplicate ffmpeg processes during the
+// async window (ffprobe, mkdir) before setJob() registers the job.
+const inflightJobIds = new Set<string>();
+
 /** Maximum number of concurrently running ffmpeg jobs. */
 const MAX_CONCURRENT_JOBS = 3;
 
@@ -112,92 +118,121 @@ export async function startTranscodeJob(
   const existing = getJob(id);
   if (existing && existing.status !== "error") return existing;
 
-  // Guard against runaway resource use — cap concurrent ffmpeg processes
-  if (activeCommands.size >= MAX_CONCURRENT_JOBS) {
+  // If a concurrent call is already initializing this exact job (between this
+  // function's entry and the setJob() call below), wait for it to register rather
+  // than spawning a second ffmpeg process.
+  if (inflightJobIds.has(id)) {
+    for (let i = 0; i < 50; i++) {
+      await Bun.sleep(100);
+      const pending = getJob(id);
+      if (pending) return pending;
+    }
+    // If still not registered after 5 s, fall through and let this call proceed.
+    console.warn(`[chunker] Inflight dedup timeout for job ${id.slice(0, 8)} — proceeding`);
+  }
+
+  // Guard against runaway resource use — cap concurrent ffmpeg processes.
+  // Include inflightJobIds in the count: those jobs haven't called activeCommands.set
+  // yet (that happens after ffprobe inside runFfmpeg), so activeCommands.size alone
+  // would undercount concurrent work during the initialization window.
+  if (activeCommands.size + inflightJobIds.size >= MAX_CONCURRENT_JOBS) {
     throw new Error(
       `Too many concurrent streams (limit: ${MAX_CONCURRENT_JOBS}). Close another player tab and try again.`
     );
   }
 
-  // Restore a completed job from a previous server session without re-encoding.
-  // Verify the init segment actually exists on disk — a "complete" entry whose
-  // segment dir was wiped (or was left truncated by old restore logic) must be
-  // treated as an error so startTranscodeJob re-encodes cleanly.
-  const dbJob = getJobById(id);
-  if (dbJob && dbJob.status === "complete") {
-    const initPath = join(dbJob.segment_dir, "init.mp4");
-    const initExists = await access(initPath)
-      .then(() => true)
-      .catch(() => false);
+  // Register synchronously before the first await so any concurrent call with the
+  // same parameters sees this job as in-flight and waits rather than proceeding.
+  inflightJobIds.add(id);
 
-    if (initExists) {
-      const dbSegments = getSegmentsByJob(id);
-      if (dbSegments.length > 0) {
-        const segments: string[] = [];
-        for (const seg of dbSegments) {
-          segments[seg.segment_index] = seg.path;
+  try {
+    // Restore a completed job from a previous server session without re-encoding.
+    // Verify the init segment actually exists on disk — a "complete" entry whose
+    // segment dir was wiped (or was left truncated by old restore logic) must be
+    // treated as an error so startTranscodeJob re-encodes cleanly.
+    const dbJob = getJobById(id);
+    if (dbJob && dbJob.status === "complete") {
+      const initPath = join(dbJob.segment_dir, "init.mp4");
+      const initExists = await access(initPath)
+        .then(() => true)
+        .catch(() => false);
+
+      if (initExists) {
+        const dbSegments = getSegmentsByJob(id);
+        if (dbSegments.length > 0) {
+          const segments: string[] = [];
+          for (const seg of dbSegments) {
+            segments[seg.segment_index] = seg.path;
+          }
+          const restored: ActiveJob = {
+            ...dbJob,
+            segments,
+            initSegmentPath: initPath,
+            subscribers: new Set(),
+            connections: 0,
+          };
+          setJob(restored);
+          console.log(
+            `[chunker] Restored completed job ${id.slice(0, 8)} from DB (${dbSegments.length} segments)`
+          );
+          return restored;
         }
-        const restored: ActiveJob = {
-          ...dbJob,
-          segments,
-          initSegmentPath: initPath,
-          subscribers: new Set(),
-          connections: 0,
-        };
-        setJob(restored);
-        console.log(
-          `[chunker] Restored completed job ${id.slice(0, 8)} from DB (${dbSegments.length} segments)`
+      } else {
+        // Segment dir was wiped or never fully written — force re-encode
+        console.warn(
+          `[chunker] Completed job ${id.slice(0, 8)} missing init.mp4 on disk — treating as error`
         );
-        return restored;
+        updateJobStatus(id, "error", { error: "Segment dir missing — will re-encode" });
       }
-    } else {
-      // Segment dir was wiped or never fully written — force re-encode
-      console.warn(
-        `[chunker] Completed job ${id.slice(0, 8)} missing init.mp4 on disk — treating as error`
-      );
-      updateJobStatus(id, "error", { error: "Segment dir missing — will re-encode" });
     }
+
+    const segmentDir = resolve(config.segmentDir, id);
+
+    // If the previous encode was killed/errored, its segment dir may contain stale
+    // partial data (a tiny init.mp4 + incomplete segment). Wipe it so the stream
+    // handler doesn't serve those stale files to the client.
+    if (dbJob && dbJob.status === "error") {
+      await rm(segmentDir, { recursive: true, force: true });
+      console.log(`[chunker] Cleared stale segment dir for errored job ${id.slice(0, 8)}`);
+    }
+
+    await mkdir(segmentDir, { recursive: true });
+
+    const now = new Date().toISOString();
+    const job: ActiveJob = {
+      id,
+      video_id: videoId,
+      resolution,
+      status: "pending",
+      segment_dir: segmentDir,
+      total_segments: null,
+      completed_segments: 0,
+      start_time_seconds: startTimeSeconds ?? null,
+      end_time_seconds: endTimeSeconds ?? null,
+      created_at: now,
+      updated_at: now,
+      error: null,
+      segments: [],
+      initSegmentPath: null,
+      subscribers: new Set(),
+      connections: 0,
+    };
+
+    insertJob(job);
+    setJob(job);
+    // Job is now in jobStore — any concurrent duplicate can find it via getJob().
+    // Remove from inflight before the fire-and-forget so the slot isn't held longer
+    // than necessary (activeCommands.set will track it once ffprobe finishes).
+    inflightJobIds.delete(id);
+
+    // Probe the file then start transcoding asynchronously (fire-and-forget)
+    void runFfmpeg(job, video.path, resolution, segmentDir, startTimeSeconds, endTimeSeconds);
+
+    return job;
+  } catch (err) {
+    inflightJobIds.delete(id);
+    throw err;
   }
-
-  const segmentDir = resolve(config.segmentDir, id);
-
-  // If the previous encode was killed/errored, its segment dir may contain stale
-  // partial data (a tiny init.mp4 + incomplete segment). Wipe it so the stream
-  // handler doesn't serve those stale files to the client.
-  if (dbJob && dbJob.status === "error") {
-    await rm(segmentDir, { recursive: true, force: true });
-    console.log(`[chunker] Cleared stale segment dir for errored job ${id.slice(0, 8)}`);
-  }
-
-  await mkdir(segmentDir, { recursive: true });
-
-  const now = new Date().toISOString();
-  const job: ActiveJob = {
-    id,
-    video_id: videoId,
-    resolution,
-    status: "pending",
-    segment_dir: segmentDir,
-    total_segments: null,
-    completed_segments: 0,
-    start_time_seconds: startTimeSeconds ?? null,
-    end_time_seconds: endTimeSeconds ?? null,
-    created_at: now,
-    updated_at: now,
-    error: null,
-    segments: [],
-    initSegmentPath: null,
-    subscribers: new Set(),
-    connections: 0,
-  };
-
-  insertJob(job);
-  setJob(job);
-
-  // Probe the file then start transcoding asynchronously (fire-and-forget)
-  void runFfmpeg(job, video.path, resolution, segmentDir, startTimeSeconds, endTimeSeconds);
-
-  return job;
 }
 
 async function runFfmpeg(
