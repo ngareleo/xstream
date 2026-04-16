@@ -123,22 +123,26 @@ tvke/
     │   ├── player-content/        # PlayerContent — video + control bar layout
     │   ├── player-sidebar/        # PlayerSidebar — Now Playing + Up Next panel
     │   ├── control-bar/           # ControlBar — seek bar, play/pause, resolution; bubbles Nova events
-    │   ├── video-player/          # VideoPlayer — MSE orchestration; intercepts ControlBar events
+    │   ├── video-player/          # VideoPlayer — MSE orchestration; intercepts ControlBar events; click-to-play/pause on <video> element directly
+    │   ├── player-end-screen/     # PlayerEndScreen + PlayerEndScreenAsync — up-next cards + Replay; lazy-loaded
+    │   ├── stream-log-overlay/    # StreamingLogOverlay + StreamingLogPanel — dev-only stream event log panel
     │   ├── watchlist-content/     # WatchlistContent — watchlist rails + empty state
     │   ├── directory-browser/     # DirectoryBrowser — filesystem path picker for new library form
     │   ├── sign-out-dialog/       # SignOutDialog — confirmation before signing out
     │   ├── not-found/             # NotFound — inline 404 message (used within pages)
     │   ├── router-navigation-loader/ # RouterNavigationLoader — bridges React Router to LoadingBar
-    │   ├── dev-tools/             # DevPanel + DevPanelAsync — dev-only throw tester (prod-excluded)
+    │   ├── dev-tools/             # DevPanel + DevPanelAsync — dev-only throw tester + stream log toggle (prod-excluded)
     │   └── dev-throw-target/      # DevThrowTarget — wraps content; throws on demand from DevPanel
     ├── hooks/
-    │   ├── useVideoPlayback.ts    # MSE + StreamingService + BufferManager pipeline
+    │   ├── useChunkedPlayback.ts  # client-driven chunk scheduling, prefetch, seek restart, background-buffer resolution switch; returns { status, error, startPlayback, seekTo }
+    │   ├── useVideoPlayback.ts    # thin wrapper around useChunkedPlayback preserving original VideoPlayer call-site signature
     │   ├── useVideoSync.ts        # syncs currentTime + isPlaying from <video> via RAF
     │   ├── useJobSubscription.ts  # subscribes to transcodeJobUpdated for a given jobId
     │   └── useSplitResize.ts      # drag-to-resize for split-pane layouts
     ├── services/
-    │   ├── StreamingService.ts    # fetch loop, length-prefix parser, pause/resume/cancel
-    │   └── BufferManager.ts       # MSE SourceBuffer wrapper, sliding window eviction
+    │   ├── StreamingService.ts    # fetch loop, length-prefix parser, async pause/resume (resumeResolve promise), cancel
+    │   ├── BufferManager.ts       # MSE SourceBuffer wrapper, sliding window eviction, setAfterAppend callback, offscreen element for background buffer, promoteToForeground()
+    │   └── StreamingLogger.ts     # in-memory event log (dev only); subscribe/push/clear; no-ops in production
     ├── storybook/
     │   ├── withNovaEventing.tsx   # decorator: no-op NovaEventingProvider for stories
     │   ├── withLayout.tsx         # decorator: wraps story in a sized <div>
@@ -331,7 +335,8 @@ describe("myParser", () => {
 Run with `bun test` from `server/`.
 
 **Hooks (see `client/src/hooks/`):**
-- `useVideoPlayback(videoRef, videoId, onJobCreated?)` — owns the full MSE + StreamingService + BufferManager pipeline including `START_TRANSCODE_MUTATION`; returns `{ status, error, startPlayback }`
+- `useChunkedPlayback(videoRef, videoId, resolution, onJobCreated?)` — primary playback hook; owns client-driven chunk scheduling, prefetch trigger at `chunkEnd - 60s`, seek restart at chunk boundaries, and background-buffer resolution switch; returns `{ status, error, startPlayback, seekTo }`
+- `useVideoPlayback(videoRef, videoId, onJobCreated?)` — thin wrapper around `useChunkedPlayback` that preserves the original `VideoPlayer` call-site signature; returns `{ status, error, startPlayback }`
 - `useVideoSync(videoRef)` — syncs `currentTime` and `isPlaying` from a `<video>` element using `requestAnimationFrame`; returns `{ currentTime, isPlaying }`
 - `useJobSubscription(jobId, onProgress)` — subscribes to `transcodeJobUpdated` for the given job ID and calls `onProgress` on each update; pass `null` to unsubscribe
 - `useSplitResize(defaultWidth)` — drag-to-resize for split-pane layouts; returns `{ paneWidth, containerRef, onResizeMouseDown }`
@@ -396,7 +401,7 @@ Event files are colocated with their component (`ControlBar.events.ts` next to `
 - Components receive fragment keys (`$key`), not raw data props
 - The GraphQL schema is the single source of truth for types — import from relay-generated artifacts or `src/types.ts`, never redefine locally
 - Fragment naming: `<ComponentName>_<propName>` (e.g. `VideoCard_video`)
-- **Operation naming**: the graphql tag's operation name must start with the containing module's filename. In `useVideoPlayback.ts`, the mutation must be `useVideoPlaybackStartTranscodeMutation`; in `PlayerPage.tsx`, the query must be `PlayerPageQuery`. relay-compiler enforces this and will error on mismatches.
+- **Operation naming**: the graphql tag's operation name must start with the containing module's filename. In `useChunkedPlayback.ts`, the mutation must be `useChunkedPlaybackStartChunkMutation`; in `PlayerPage.tsx`, the query must be `PlayerPageQuery`. relay-compiler enforces this and will error on mismatches.
 
 **Component definition style — always use `React.FC`:**
 ```tsx
@@ -745,6 +750,24 @@ When an effect and a callback have a circular dependency, extract the shared log
 
 ---
 
+### Stream log disappears after navigating to the player
+
+Symptoms: stream log overlay was visible on the dashboard/library page, but after clicking through to `/player/:id` the overlay is gone and logs do not appear during playback.
+
+**Root cause**
+
+`DevToolsContext` (which holds `streamingLogsOpen`) is mounted at the app root and resets to its default state (`false`) on each React Router navigation that unmounts and remounts the context subtree. The overlay toggle is not persisted to `localStorage` or any server-side setting — it is ephemeral UI state.
+
+**Fix for e2e / manual testing**
+
+After navigating to the player page, re-open the DEV panel (bottom-right pill) and re-enable **"Stream Logs ON"** before starting playback. This is a known workflow quirk and is documented in the `/e2e_test` skill.
+
+**Fix if persistence is needed**
+
+Persist `streamingLogsOpen` to `localStorage` inside `DevToolsContext`. On mount, read the stored value and initialise from it. Use a `useEffect` to write back when the value changes. Key: `"devtools.streamingLogsOpen"`.
+
+---
+
 ## Future Direction — Rust Server Rewrite
 
 The Bun/JS server is a **prototype** used to validate the architecture quickly. Once the design is proven, the server will be rewritten in Rust for performance gains (critical at 4K bitrates). The React/Relay client is intended to remain **completely untouched** across this rewrite.
@@ -753,7 +776,7 @@ GraphQL and the binary stream endpoint are the stable contracts between server a
 
 - The **GraphQL schema SDL** must be identical — same types, field names, enum values, and nullability
 - **Global ID encoding** must match: `base64("TypeName:localId")` — Relay's cache depends on this
-- **`/stream/:jobId` binary framing** must match: 4-byte big-endian uint32 length prefix + raw fMP4 bytes, init segment always first — documented in `docs/streaming-protocol.md`
+- **`/stream/:jobId` binary framing** must match: 4-byte big-endian uint32 length prefix + raw fMP4 bytes, init segment always first — documented in `docs/Streaming Protocol.md`
 - **WebSocket subscriptions** must use the `graphql-ws` subprotocol (not the legacy `subscriptions-transport-ws`)
 
 Do not couple the client to anything server-implementation-specific. All client↔server communication must go through the GraphQL endpoint or the `/stream/` binary endpoint.

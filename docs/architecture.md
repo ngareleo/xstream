@@ -244,4 +244,4 @@ The first frame is always the init segment (contains the `moov` box — codec an
 
 The client accumulates incoming `Uint8Array` chunks from the `ReadableStream`, reads the 4-byte header, waits until the full segment is buffered, extracts it, then advances the buffer pointer.
 
-See `docs/streaming-protocol.md` for full detail.
+See `docs/Streaming Protocol.md` for full detail.

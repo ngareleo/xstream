@@ -1,5 +1,3 @@
-# Streaming Protocol
-
 ## Overview
 
 Video is delivered over a single HTTP GET request using chunked transfer encoding. The body is a continuous binary stream of length-prefixed fMP4 segments. The client uses the browser's Media Source Extensions (MSE) API to decode and render frames as segments arrive.
