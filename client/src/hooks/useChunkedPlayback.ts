@@ -51,8 +51,12 @@ const START_CHUNK_MUTATION = graphql`
 export type PlaybackStatus = "idle" | "loading" | "playing";
 
 export interface UseChunkedPlaybackResult {
+  /** Current pipeline state: idle (not started), loading (buffering), or playing. */
   status: PlaybackStatus;
+  /** Human-readable error message, or null when no error is active. */
   error: string | null;
+  /** Start (or restart) playback at the given resolution. While playing, this
+   * triggers a background-buffer resolution switch instead of a full teardown. */
   startPlayback: (res: Resolution) => void;
   /** Seek to an absolute position. Stores the intended target before triggering
    * the seeking DOM event so handleSeeking reads the unclamped value. */
@@ -211,6 +215,11 @@ export function useChunkedPlayback(
 
                 // Also poll via RAF as a fallback for slow live-transcode paths
                 // where no segment may be ready for many seconds.
+                // checkReady re-schedules itself via requestAnimationFrame until
+                // hasStartedPlaybackRef is set, polling at display frame rate
+                // (~60fps) without blocking the main thread between checks.
+                // startupRafRef holds the pending frame ID so teardown() can
+                // cancel the loop at any point.
                 const checkReady = (): void => {
                   if (hasStartedPlaybackRef.current) return;
                   tryStart();

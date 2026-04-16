@@ -12,15 +12,11 @@ export const useVideoPlayerStyles = makeStyles({
   },
 
   // ── Video element ──────────────────────────────────────────────────────────
-  // pointer-events: none prevents the video's compositing layer (which Chrome
-  // renders above in-flow DOM content) from intercepting clicks meant for the
-  // ControlBar overlay. Click-to-play/pause is handled by the root container.
   video: {
     width: "100%",
     height: "100%",
     display: "block",
     objectFit: "contain",
-    pointerEvents: "none",
   },
 
   // ── Idle overlay (pre-play) ────────────────────────────────────────────────

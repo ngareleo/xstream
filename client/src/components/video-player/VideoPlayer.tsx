@@ -1,6 +1,6 @@
 import { NovaEventingInterceptor } from "@nova/react";
 import type { EventWrapper } from "@nova/types";
-import React, { type FC, useCallback, useEffect, useRef, useState } from "react";
+import React, { type FC, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { graphql, useFragment } from "react-relay";
 
 import {
@@ -16,7 +16,7 @@ import {
   type VolumeChangedData,
 } from "~/components/control-bar/ControlBar.events.js";
 import { ControlBar } from "~/components/control-bar/ControlBar.js";
-import { PlayerEndScreen } from "~/components/player-end-screen/PlayerEndScreen.js";
+import { PlayerEndScreenAsync } from "~/components/player-end-screen/PlayerEndScreenAsync.js";
 import type { JobProgress } from "~/hooks/useJobSubscription.js";
 import { useJobSubscription } from "~/hooks/useJobSubscription.js";
 import { useVideoPlayback } from "~/hooks/useVideoPlayback.js";
@@ -188,29 +188,22 @@ export const VideoPlayer: FC<Props> = ({ video }) => {
         if (hideTimerRef.current !== null) clearTimeout(hideTimerRef.current);
         setControlsVisible(false);
       }}
-      onClick={(e) => {
-        // Handle click-to-play/pause on the player area. The video element has
-        // pointer-events:none so clicks fall through to this container. Ignore
-        // clicks that originated on the ControlBar or other overlays.
-        const target = e.target as HTMLElement;
-        const isControlBarClick =
-          target.closest('[class*="track"]') !== null ||
-          target.closest('[class*="row"]') !== null ||
-          target.tagName === "BUTTON" ||
-          target.tagName === "A";
-        if (isControlBarClick) return;
-        if (status === "idle") {
-          handlePlay();
-          return;
-        }
-        if (isEnded) return;
-        const el = videoRef.current;
-        if (!el) return;
-        if (el.paused) void el.play();
-        else el.pause();
-      }}
     >
-      <video ref={videoRef} className={styles.video} controls={false} />
+      {/* Click-to-play/pause is handled directly on the video element.
+          The ControlBar and overlay siblings intercept their own clicks before
+          they can reach the video, so no manual filtering is needed. */}
+      <video
+        ref={videoRef}
+        className={styles.video}
+        controls={false}
+        onClick={() => {
+          if (status !== "playing" || isEnded) return;
+          const el = videoRef.current;
+          if (!el) return;
+          if (el.paused) void el.play();
+          else el.pause();
+        }}
+      />
 
       {/* Pre-play overlay — shown in idle state */}
       {status === "idle" && !isEnded && (
@@ -234,8 +227,12 @@ export const VideoPlayer: FC<Props> = ({ video }) => {
       {/* Error overlay */}
       {error && <div className={styles.errorOverlay}>{error}</div>}
 
-      {/* End screen — shown when playback reaches the end */}
-      {isEnded && <PlayerEndScreen video={data} />}
+      {/* End screen — shown when playback reaches the end (lazy-loaded) */}
+      {isEnded && (
+        <Suspense fallback={null}>
+          <PlayerEndScreenAsync video={data} />
+        </Suspense>
+      )}
 
       <NovaEventingInterceptor interceptor={interceptor}>
         <ControlBar

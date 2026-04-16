@@ -61,8 +61,15 @@ export class StreamingService {
     let isFirstSegment = true;
 
     try {
+      // This loop is NOT a busy-wait. Each iteration suspends on
+      // `reader.read()`, which resolves only when the next network chunk
+      // arrives. The pause path also suspends: it stores the Promise's
+      // `resolve` callback in `resumeResolve` so that calling `resume()`
+      // (from BufferManager's back-pressure callback) unblocks the loop
+      // without any polling.
       while (true) {
         if (this.paused) {
+          // Suspend here until resume() calls this.resumeResolve().
           await new Promise<void>((resolve) => {
             this.resumeResolve = resolve;
           });
@@ -102,6 +109,7 @@ export class StreamingService {
 
           // Re-check pause after each segment so back-pressure applies immediately
           // rather than only at the top of the outer reader.read() loop.
+          // Same suspend-on-promise pattern: resume() resolves this via resumeResolve.
           if (this.paused) {
             await new Promise<void>((resolve) => {
               this.resumeResolve = resolve;
