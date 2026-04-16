@@ -51,6 +51,16 @@ export default defineConfig({
     },
   },
 
+  tools: {
+    rspack: {
+      optimization: {
+        // Name the Rspack runtime chunk so it shows up as "runtime" in bundle
+        // analysis instead of an anonymous numeric ID.
+        runtimeChunk: { name: "runtime" },
+      },
+    },
+  },
+
   performance: {
     // Print each chunk's raw and gzip size after every production build.
     printFileSize: {
@@ -98,6 +108,15 @@ export default defineConfig({
             name: "vendor-misc",
             chunks: "all" as const,
             priority: -10,
+          },
+          // App source modules shared by 2+ async page/component chunks.
+          // Without this, Rspack auto-generates an anonymous numeric chunk.
+          shared: {
+            name: "shared",
+            minChunks: 2,
+            chunks: "async" as const,
+            priority: -20,
+            reuseExistingChunk: true,
           },
         },
       },

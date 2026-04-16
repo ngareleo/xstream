@@ -6,6 +6,6 @@ import type { PlayerEndScreen as PlayerEndScreenType } from "./PlayerEndScreen.j
 
 export const PlayerEndScreenAsync: LazyExoticComponent<typeof PlayerEndScreenType> =
   lazyNamedExport(
-    () => import("./PlayerEndScreen.js"),
+    () => import(/* webpackChunkName: "PlayerEndScreen" */ "./PlayerEndScreen.js"),
     (m) => m.PlayerEndScreen
   );

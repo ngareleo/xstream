@@ -3,12 +3,14 @@ import { type ComponentType, lazy, type LazyExoticComponent } from "react";
 /**
  * Creates a lazy-loaded component from a named module export.
  * Use this in *Async.tsx files to split a component into its own chunk.
- * The chunk name is derived from the imported module's filename by the bundler.
+ *
+ * Always include a `webpackChunkName` magic comment in the import() call so
+ * Rspack emits a named chunk instead of a numeric ID (e.g. `async_123`).
  *
  * @example
  * // VideoPlayerAsync.tsx
  * export const VideoPlayer = lazyNamedExport(
- *   () => import("./VideoPlayer.js"),
+ *   () => import(\/* webpackChunkName: "VideoPlayer" *\/ "./VideoPlayer.js"),
  *   (m) => m.VideoPlayer
  * );
  */
