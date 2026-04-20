@@ -2,6 +2,7 @@ node_modules/
 tmp/
 dist/
 .env
+.seq-credentials
 *.db
 *.db-shm
 *.db-wal

@@ -7,6 +7,7 @@ set -euo pipefail
 SEQ_CONTAINER=seq
 SEQ_PORT=5341
 SEQ_STORE="${SEQ_STORE:-$HOME/.seq-store}"
+CREDS_FILE="$(cd "$(dirname "$0")/.." && pwd)/.seq-credentials"
 
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -16,6 +17,19 @@ NC='\033[0m'
 info()    { echo -e "${GREEN}[seq]${NC} $*"; }
 skipped() { echo -e "${YELLOW}[seq]${NC} $*"; }
 fail()    { echo -e "${RED}[seq]${NC} $*" >&2; }
+
+# ── Credentials ──────────────────────────────────────────────────────────────
+# Generate a random admin password on first run and persist it in .seq-credentials
+# (gitignored). All scripts and skills read from this file — never hardcode credentials.
+
+if [[ ! -f "$CREDS_FILE" ]]; then
+  info "Generating Seq credentials → .seq-credentials"
+  _PASS=$(openssl rand -base64 24 | tr -d '/+=' | head -c 32)
+  printf 'SEQ_ADMIN_USERNAME=admin\nSEQ_ADMIN_PASSWORD=%s\n' "$_PASS" > "$CREDS_FILE"
+  info "Credentials saved. Run: cat .seq-credentials"
+fi
+# shellcheck source=/dev/null
+source "$CREDS_FILE"
 
 # ── Sudo askpass setup ────────────────────────────────────────────────────────
 # Create a zenity-based askpass helper so sudo can prompt for a password
@@ -91,12 +105,12 @@ else
     --name "${SEQ_CONTAINER}" \
     --restart unless-stopped \
     -e ACCEPT_EULA=Y \
+    -e SEQ_FIRSTRUN_ADMINPASSWORD="${SEQ_ADMIN_PASSWORD}" \
     -p "${SEQ_PORT}:80" \
     -v "${SEQ_STORE}:/data" \
     datalust/seq:latest
+  echo ""
+  info "Seq available at http://localhost:${SEQ_PORT}"
+  info "Login: username=admin  password=$(grep '^SEQ_ADMIN_PASSWORD=' "$CREDS_FILE" | cut -d= -f2)"
+  info "Credentials file: ${CREDS_FILE} (gitignored — do not commit)"
 fi
-
-echo ""
-info "Seq available at http://localhost:${SEQ_PORT}"
-info "Create an API key: Settings → API Keys → Add API Key"
-info "Paste the key into .env as: OTEL_EXPORTER_OTLP_HEADERS=X-Seq-ApiKey=<key>"

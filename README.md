@@ -126,34 +126,32 @@ See [`docs/architecture.md`](docs/architecture.md) for a full system overview.
 
 xstream uses [OpenTelemetry](https://opentelemetry.io/) for structured logs and distributed traces. In development, telemetry is routed to a local [Seq](https://datalust.co/seq) instance. Switching to a cloud backend (e.g. Axiom) in production requires only env var changes — no code changes.
 
-### Setup
-
-1. Copy the example env file and fill in the credentials:
+### Local Seq setup
 
 ```bash
-cp .env.example .env
+bun run seq:start
 ```
 
-2. Start Seq:
+On first run this generates a random admin password and stores it in `.seq-credentials` (gitignored), then starts the Seq Docker container with that password. Open the file to find your login:
 
 ```bash
-bun seq:start
+cat .seq-credentials
 ```
 
-3. Open [http://localhost:5341](http://localhost:5341), sign in, then create an API key under **Settings → API Keys**.
+Then open [http://localhost:5341](http://localhost:5341) and sign in with `username=admin` and the generated password.
 
-4. Add the key to `.env`:
+To stop Seq: `bun run seq:stop`
 
+**Resetting Seq** (e.g. to rotate credentials or after a schema change):
+
+```bash
+bun run seq:stop
+docker rm seq
+rm .seq-credentials        # optional — deletes the old password
+bun run seq:start          # generates a new password and fresh container
 ```
-OTEL_EXPORTER_OTLP_HEADERS=X-Seq-ApiKey=<your-key>
-PUBLIC_OTEL_HEADERS=X-Seq-ApiKey=<your-key>
-```
 
-5. Restart the dev server — logs and traces will start appearing in Seq immediately.
-
-To stop Seq: `bun seq:stop`
-
-See [`docs/observability.md`](docs/observability.md) for the full telemetry architecture and instructions for switching to a production backend.
+See [`docs/observability.md`](docs/observability.md) for the full telemetry architecture and instructions for switching to a production backend (Axiom, Grafana Cloud, etc.).
 
 ---
 
