@@ -2,10 +2,22 @@
 name: e2e-test
 description: Run an end-to-end test of the xstream video streaming app using the Playwright MCP browser tools
 disable-model-invocation: true
-allowed-tools: Bash(bun *) Bash(lsof *)
+allowed-tools: Bash(bun *) Bash(lsof *) Bash(mkdir *) Bash(rm *)
 ---
 
 You are running an end-to-end test of the xstream video streaming app using the Playwright MCP browser tools.
+
+## Screenshots
+
+All screenshots must be saved to `.claude/screenshots/` relative to the project root.
+**Never** save screenshots to the project root or any other directory.
+Before taking the first screenshot, ensure the directory exists:
+
+```sh
+mkdir -p .claude/screenshots
+```
+
+Use descriptive filenames prefixed with the step number, e.g. `.claude/screenshots/01-home.png`, `.claude/screenshots/04-library-created.png`.
 
 Follow these steps exactly:
 
@@ -48,13 +60,14 @@ Take a screenshot confirming the stream log overlay is visible (it appears as a 
 
 If the dashboard shows "No libraries have been added yet" or the library is empty:
 
-1. Click **"+ New Profile"** (top-right of the dashboard) or **"CREATE LIBRARY"** button.
-2. In the new profile form:
-   - Set the **name** to `local`
-   - Set the **directory** to `/home/dag/Videos`
-3. Submit the form to create the profile.
-4. Wait for the library scan to complete (the scanning indicator disappears).
-5. If the library is still empty after scanning (no video files found in `/home/dag/Videos`), report "No videos available to test" and stop.
+1. **Ask the user** for the profile details using `AskUserQuestion` before touching the browser:
+   - "No library found. What should the profile name be?" (suggest: `local`)
+   - "What directory should it scan?" (suggest: `/home/dag/Videos`)
+2. Click **"+ New Profile"** (top-right of the dashboard) or **"CREATE LIBRARY"** button.
+3. In the new profile form fill in the name and directory the user provided.
+4. Submit the form to create the profile.
+5. Wait for the library scan to complete (the scanning indicator disappears).
+6. If the library is still empty after scanning (no video files found), report "No videos available to test" and stop.
 
 ## 5. Navigate to a video
 
@@ -82,6 +95,7 @@ Report the result:
 ## Notes
 
 - If the servers fail to start after the port check (fetch errors, blank page after starting), report the startup error output and stop.
-- If `/home/dag/Videos` is empty after scanning, report "No videos available to test".
+- If the scanned directory is empty after scanning, report "No videos available to test".
+- All screenshots go in `.claude/screenshots/` — never in the project root or elsewhere.
 - The stream log panel is toggled from the DEV button → "Stream Logs" toggle. It appears as a floating overlay in the bottom portion of the screen.
 - Error entries in the log are highlighted in red; normal entries are white/grey.
