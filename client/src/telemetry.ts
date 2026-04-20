@@ -46,8 +46,8 @@ function parseHeadersEnv(raw: string | undefined): Record<string, string> {
 
 // PUBLIC_ prefix is required for Rsbuild to expose env vars to the browser bundle.
 // Default to the Rsbuild dev proxy path so no extra config is needed in dev.
-const endpoint = (import.meta.env["PUBLIC_OTEL_ENDPOINT"] as string | undefined) ?? "/ingest/otlp";
-const headers = parseHeadersEnv(import.meta.env["PUBLIC_OTEL_HEADERS"] as string | undefined);
+const endpoint = (import.meta.env.PUBLIC_OTEL_ENDPOINT as string | undefined) ?? "/ingest/otlp";
+const headers = parseHeadersEnv(import.meta.env.PUBLIC_OTEL_HEADERS as string | undefined);
 
 // ── Providers ──────────────────────────────────────────────────────────────────
 
