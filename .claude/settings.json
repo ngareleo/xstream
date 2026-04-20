@@ -1,0 +1,17 @@
+{
+  "hooks": {
+    "PreCompact": [
+      {
+        "matcher": "auto",
+        "hooks": [
+          {
+            "type": "agent",
+            "prompt": "You are running an automatic reflection pass for the xstream project at /home/dag/Projects/xstream. The conversation is about to be compacted. Before that happens, review this session's transcript to find any learnings that should be captured in the project's skill files.\n\nSteps:\n1. Find the current session transcript: run `ls -t ~/.claude/projects/$(ls -t ~/.claude/projects/ | head -1)/*.jsonl 2>/dev/null | head -1` to locate the most recent .jsonl file, then read it.\n2. Scan the transcript for: user corrections ('no', 'stop', 'wrong approach'), repeated failed attempts, surprising constraints, effective multi-step workflows, and approaches that definitively don't work.\n3. For each genuine learning (non-obvious, prevents a real gotcha): add a concise imperative note to the relevant skill file in /home/dag/Projects/xstream/.claude/skills/ or to /home/dag/Projects/xstream/CLAUDE.md.\n4. Skip anything already documented. Skip narrative summaries — only write actionable instructions.\n5. Return a one-line summary of what was added, or 'No new learnings to capture' if nothing warranted an update.",
+            "timeout": 120,
+            "statusMessage": "Reflecting on session learnings..."
+          }
+        ]
+      }
+    ]
+  }
+}
