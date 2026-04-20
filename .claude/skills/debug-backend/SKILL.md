@@ -1,3 +1,9 @@
+---
+name: debug-backend
+description: Diagnose and fix issues in the Bun server — GraphQL API, streaming endpoint, chunker, DB. Use when server returns unexpected results, jobs get stuck, or streams fail.
+allowed-tools: Bash(bun *) Bash(curl *) Bash(sqlite3 *) Bash(ffprobe *) Bash(ls *)
+---
+
 # Debug Backend
 
 Diagnose and fix issues in the Bun server (GraphQL API, streaming endpoint, chunker, DB).

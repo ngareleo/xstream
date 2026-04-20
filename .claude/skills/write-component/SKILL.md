@@ -1,3 +1,9 @@
+---
+name: write-component
+description: Create or modify a React component in client/src/ following project conventions — Relay fragments, Griffel styles, Nova eventing, and Storybook stories. Use when adding a new UI component or updating an existing one.
+allowed-tools: Bash(bun *)
+---
+
 # Write React Component
 
 Use this skill when creating or modifying a React component in `client/src/`.

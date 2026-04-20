@@ -1,3 +1,10 @@
+---
+name: resolve-comments
+description: Fetch all open review comments on the current PR and address them systematically
+disable-model-invocation: true
+allowed-tools: Bash(gh *)
+---
+
 # Resolve PR Comments
 
 Fetch all open review comments on the current PR and address them systematically.

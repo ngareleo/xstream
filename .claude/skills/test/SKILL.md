@@ -1,3 +1,9 @@
+---
+name: test
+description: Run, analyse, and fix tests across the xstream monorepo. Use when tests are failing, adding new tests, or verifying a fix.
+allowed-tools: Bash(bun *) Bash(cd *)
+---
+
 # Testing Agent
 
 Run, analyse, and fix tests across the xstream monorepo.

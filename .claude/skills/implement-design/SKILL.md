@@ -1,3 +1,9 @@
+---
+name: implement-design
+description: Port a page or component from the design lab (design/) into the production client (client/src/). Use when implementing a new page, matching a design spec, or porting UI from the design sandbox.
+allowed-tools: Bash(bun *) Bash(cd *)
+---
+
 # Implement Design Spec
 
 Use this skill when porting a page or component from the design lab (`design/`)

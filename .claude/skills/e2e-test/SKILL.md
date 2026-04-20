@@ -1,3 +1,10 @@
+---
+name: e2e-test
+description: Run an end-to-end test of the xstream video streaming app using the Playwright MCP browser tools
+disable-model-invocation: true
+allowed-tools: Bash(bun *) Bash(lsof *)
+---
+
 You are running an end-to-end test of the xstream video streaming app using the Playwright MCP browser tools.
 
 Follow these steps exactly:
