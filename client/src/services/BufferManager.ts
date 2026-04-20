@@ -119,6 +119,19 @@ export class BufferManager {
         resolve();
         break;
       }
+      // Bail immediately if the MediaSource is no longer open — every subsequent
+      // appendBuffer call would throw InvalidStateError, producing a cascade of
+      // identical errors for every segment still in the queue.
+      if (this.mediaSource?.readyState !== "open") {
+        log.warn("MediaSource not open — aborting append queue", {
+          ready_state: this.mediaSource?.readyState ?? "null",
+          queued_segments: this.appendQueue.length + 1,
+        });
+        resolve();
+        for (const remaining of this.appendQueue) remaining.resolve();
+        this.appendQueue = [];
+        break;
+      }
       await this.waitForUpdateEnd();
       if (this.seekAbort) {
         resolve();
@@ -133,6 +146,7 @@ export class BufferManager {
       //   2 — aggressive: remove everything behind currentTime (no keep window)
       //   3 — nuclear: remove all buffered content
       let appended = false;
+      let fatalError = false;
       for (let attempt = 0; attempt <= 3 && !appended && !this.seekAbort; attempt++) {
         if (attempt > 0) {
           log.warn(`QuotaExceededError — evicting buffer and retrying (attempt ${attempt}/3)`, {
@@ -173,11 +187,19 @@ export class BufferManager {
             continue; // retry after eviction
           }
           log.error("appendBuffer error", { message: (err as Error).message });
+          fatalError = true;
           break;
         }
       }
       resolve();
-      if (this.seekAbort) break;
+      // A non-recoverable append error (e.g. InvalidStateError from a closed
+      // MediaSource) means every remaining segment will also fail. Drain the
+      // queue immediately so callers don't block, then stop.
+      if (fatalError || this.seekAbort) {
+        for (const remaining of this.appendQueue) remaining.resolve();
+        this.appendQueue = [];
+        break;
+      }
       await this.evictBackBuffer();
       this.checkForwardBuffer();
       this.afterAppendCb?.();
