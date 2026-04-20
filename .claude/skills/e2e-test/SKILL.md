@@ -35,7 +35,7 @@ Do not proceed until both ports show LISTEN.
 
 Navigate to http://localhost:5173. Take a screenshot. Verify the page loaded by checking for the main navigation or content area. If the page shows an error or blank screen, report it and stop.
 
-## 2. Enable stream logs
+## 3. Enable stream logs
 
 Before navigating to a video:
 - Click the **DEV** pill button fixed to the bottom-right corner of the screen to open the DevTools panel.
@@ -44,22 +44,34 @@ Before navigating to a video:
 
 Take a screenshot confirming the stream log overlay is visible (it appears as a panel showing log entries or the "No entries yet" empty state).
 
-## 3. Navigate to a video
+## 4. Ensure a library exists
+
+If the dashboard shows "No libraries have been added yet" or the library is empty:
+
+1. Click **"+ New Profile"** (top-right of the dashboard) or **"CREATE LIBRARY"** button.
+2. In the new profile form:
+   - Set the **name** to `local`
+   - Set the **directory** to `/home/dag/Videos`
+3. Submit the form to create the profile.
+4. Wait for the library scan to complete (the scanning indicator disappears).
+5. If the library is still empty after scanning (no video files found in `/home/dag/Videos`), report "No videos available to test" and stop.
+
+## 5. Navigate to a video
 
 From the current page (Dashboard or Library), find any video poster card or film title link and click it to open the detail pane or navigate to the player page. If you land on a detail pane with a "Play" or "Watch" button, click it to go to the player page. Take a screenshot confirming you are on a player page (URL contains `/player/`).
 
-## 4. Start playback
+## 6. Start playback
 
 Click the **Play** button (aria-label "Play") to begin playback. Take a screenshot after clicking. Wait up to 10 seconds for the loading spinner to disappear and video to start playing.
 
-## 5. Let it play
+## 7. Let it play
 
 Wait for **2 minutes** of playback. During this time, take a screenshot every 30 seconds to confirm:
 - The video is still playing (the timestamp in the ControlBar is advancing).
 - No red error overlay has appeared on the player.
 - No error message is visible in the stream log panel.
 
-## 6. Check the stream log for errors
+## 8. Check the stream log for errors
 
 After 2 minutes, take a screenshot of the stream log panel (scroll it if necessary to see the most recent entries). Look for any entries styled in red (error entries). 
 
@@ -70,6 +82,6 @@ Report the result:
 ## Notes
 
 - If the servers fail to start after the port check (fetch errors, blank page after starting), report the startup error output and stop.
-- If no videos are in the library (empty state), report "No videos available to test".
+- If `/home/dag/Videos` is empty after scanning, report "No videos available to test".
 - The stream log panel is toggled from the DEV button → "Stream Logs" toggle. It appears as a floating overlay in the bottom portion of the screen.
 - Error entries in the log are highlighted in red; normal entries are white/grey.
