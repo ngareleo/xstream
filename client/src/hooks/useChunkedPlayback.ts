@@ -1,15 +1,18 @@
+import { context, trace } from "@opentelemetry/api";
 import { type RefObject, useCallback, useEffect, useRef, useState } from "react";
 import { graphql, useMutation } from "react-relay";
 
+import type { useChunkedPlaybackRecordSessionMutation } from "~/relay/__generated__/useChunkedPlaybackRecordSessionMutation.graphql.js";
 import type { useChunkedPlaybackStartChunkMutation } from "~/relay/__generated__/useChunkedPlaybackStartChunkMutation.graphql.js";
 import { BufferManager } from "~/services/BufferManager.js";
-import { StreamingLogger } from "~/services/StreamingLogger.js";
+import { clearSessionContext, setSessionContext } from "~/services/playbackSession.js";
 import { StreamingService } from "~/services/StreamingService.js";
-import { getClientLogger } from "~/telemetry.js";
+import { getClientLogger, getClientTracer } from "~/telemetry.js";
 import type { Resolution } from "~/types.js";
 import { DISPLAY_TO_GQL, RESOLUTION_MIME_TYPE } from "~/types.js";
 
 const playbackLog = getClientLogger("playback");
+const playbackTracer = getClientTracer("playback");
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -49,6 +52,20 @@ const START_CHUNK_MUTATION = graphql`
   }
 `;
 
+const RECORD_SESSION_MUTATION = graphql`
+  mutation useChunkedPlaybackRecordSessionMutation(
+    $traceId: String!
+    $videoId: ID!
+    $resolution: Resolution!
+  ) {
+    recordPlaybackSession(traceId: $traceId, videoId: $videoId, resolution: $resolution) {
+      id
+      traceId
+      startedAt
+    }
+  }
+`;
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export type PlaybackStatus = "idle" | "loading" | "playing";
@@ -75,6 +92,8 @@ export function useChunkedPlayback(
   onJobCreated?: (jobId: string | null) => void
 ): UseChunkedPlaybackResult {
   const [startChunk] = useMutation<useChunkedPlaybackStartChunkMutation>(START_CHUNK_MUTATION);
+  const [recordSession] =
+    useMutation<useChunkedPlaybackRecordSessionMutation>(RECORD_SESSION_MUTATION);
 
   const [status, setStatus] = useState<PlaybackStatus>("idle");
   const [error, setError] = useState<string | null>(null);
@@ -85,6 +104,7 @@ export function useChunkedPlayback(
   const bgBufferRef = useRef<BufferManager | null>(null);
   const bgStreamRef = useRef<StreamingService | null>(null);
 
+  const sessionSpanRef = useRef<ReturnType<typeof playbackTracer.startSpan> | null>(null);
   const resolutionRef = useRef<Resolution>("240p");
   const chunkEndRef = useRef(0); // absolute time (s) where current chunk ends
   const nextJobIdRef = useRef<string | null>(null); // prefetched next chunk raw job ID
@@ -150,8 +170,11 @@ export function useChunkedPlayback(
     hasStartedPlaybackRef.current = false;
     seekTargetRef.current = null;
 
+    sessionSpanRef.current?.end();
+    sessionSpanRef.current = null;
+    clearSessionContext();
+
     onJobCreatedRef.current?.(null);
-    StreamingLogger.push({ category: "PLAYBACK", message: "Teardown", isError: false });
     playbackLog.info("Playback teardown");
   }, []);
 
@@ -185,11 +208,6 @@ export function useChunkedPlayback(
           // causes ffmpeg to emit a different moov box — stalls the decoder
           // and causes visible buffering / MSE errors.
           if (isInit && !isFirstChunk) {
-            StreamingLogger.push({
-              category: "PLAYBACK",
-              message: `[chunk] Skipping init for continuation chunk ${rawJobId.slice(0, 8)}`,
-              isError: false,
-            });
             return;
           }
 
@@ -216,15 +234,13 @@ export function useChunkedPlayback(
                     buffer.setAfterAppend(null);
                     videoEl.play().catch(() => {});
                     setStatus("playing");
-                    StreamingLogger.push({
-                      category: "PLAYBACK",
-                      message: `video.play() — status: playing (buffered ${buffer.bufferedEnd.toFixed(1)}s >= ${startupTarget}s)`,
-                      isError: false,
-                    });
-                    playbackLog.info("Playback started", {
-                      buffered_s: parseFloat(buffer.bufferedEnd.toFixed(1)),
-                      startup_target_s: startupTarget,
-                    });
+                    playbackLog.info(
+                      `video.play() — buffered ${buffer.bufferedEnd.toFixed(1)}s >= ${startupTarget}s threshold`,
+                      {
+                        buffered_s: parseFloat(buffer.bufferedEnd.toFixed(1)),
+                        startup_target_s: startupTarget,
+                      }
+                    );
                   }
                 };
 
@@ -251,8 +267,6 @@ export function useChunkedPlayback(
               }
             }
           } catch (err) {
-            const msg = `Buffer error: ${(err as Error).message}`;
-            StreamingLogger.push({ category: "PLAYBACK", message: msg, isError: true });
             playbackLog.error("Buffer append error", { message: (err as Error).message });
             onError(err as Error);
           }
@@ -266,10 +280,9 @@ export function useChunkedPlayback(
           // end-of-stream so the <video> element ends cleanly.
           const hasRealContent = totalMediaBytes >= 1024;
           if (!hasRealContent) {
-            StreamingLogger.push({
-              category: "PLAYBACK",
-              message: `[chunk] ${rawJobId.slice(0, 8)} had only ${totalMediaBytes}B of media — marking stream done`,
-              isError: false,
+            playbackLog.info("Chunk had no real content — marking stream done", {
+              job_id: rawJobId,
+              total_media_bytes: totalMediaBytes,
             });
             buffer.markStreamDone();
             onJobCreatedRef.current?.(null);
@@ -292,10 +305,9 @@ export function useChunkedPlayback(
     (res: Resolution, startS: number, endS: number): Promise<string> => {
       const clampedEnd = Math.min(endS, videoDurationS);
       return new Promise((resolve, reject) => {
-        StreamingLogger.push({
-          category: "PLAYBACK",
-          message: `startTranscode chunk [${startS}s, ${clampedEnd}s)`,
-          isError: false,
+        playbackLog.info(`Requesting chunk [${startS}s, ${clampedEnd}s)`, {
+          start_s: startS,
+          end_s: clampedEnd,
         });
         startChunk({
           variables: {
@@ -309,18 +321,15 @@ export function useChunkedPlayback(
           onCompleted: (response) => {
             const rawJobId = atob(response.startTranscode.id).replace("TranscodeJob:", "");
             onJobCreatedRef.current?.(response.startTranscode.id);
-            StreamingLogger.push({
-              category: "PLAYBACK",
-              message: `Job created — rawJobId: ${rawJobId} [${startS}s, ${clampedEnd}s)`,
-              isError: false,
-            });
+            playbackLog.info(
+              `Chunk job ${rawJobId.slice(0, 8)} created for [${startS}s, ${clampedEnd}s)`,
+              { job_id: rawJobId, start_s: startS, end_s: clampedEnd }
+            );
             resolve(rawJobId);
           },
           onError: (err) => {
-            const msg = `Mutation error: ${err.message}`;
-            StreamingLogger.push({ category: "PLAYBACK", message: msg, isError: true });
             playbackLog.error("Chunk mutation error", { message: err.message });
-            reject(new Error(msg));
+            reject(new Error(`Mutation error: ${err.message}`));
           },
         });
       });
@@ -351,11 +360,7 @@ export function useChunkedPlayback(
             if (isLast) {
               buffer.markStreamDone();
               onJobCreatedRef.current?.(null);
-              StreamingLogger.push({
-                category: "PLAYBACK",
-                message: "Final chunk done",
-                isError: false,
-              });
+              playbackLog.info("Final chunk done");
             } else {
               // Continue to the next chunk — use prefetched job ID if available,
               // otherwise request it now (prefetch may not have fired yet).
@@ -413,11 +418,14 @@ export function useChunkedPlayback(
             prefetchFiredRef.current = true;
             const nextStart = chunkEnd;
             const nextEnd = Math.min(nextStart + CHUNK_DURATION_S, videoDurationS);
-            StreamingLogger.push({
-              category: "PLAYBACK",
-              message: `Prefetch chunk [${nextStart}s, ${nextEnd}s) — ${timeUntilEnd.toFixed(1)}s before current chunk end`,
-              isError: false,
-            });
+            playbackLog.info(
+              `Prefetching next chunk [${nextStart}s, ${nextEnd}s) — ${timeUntilEnd.toFixed(1)}s before current chunk end`,
+              {
+                next_start_s: nextStart,
+                next_end_s: nextEnd,
+                time_until_end_s: parseFloat(timeUntilEnd.toFixed(1)),
+              }
+            );
             void requestChunk(res, nextStart, nextEnd)
               .then((rawJobId) => {
                 nextJobIdRef.current = rawJobId;
@@ -443,11 +451,6 @@ export function useChunkedPlayback(
     if (!videoEl) return;
 
     const onWaiting = (): void => {
-      StreamingLogger.push({
-        category: "PLAYBACK",
-        message: "Buffering — waiting for data",
-        isError: false,
-      });
       // Only debounce-show the spinner for mid-playback stalls (not during the
       // initial startup loading phase which already has its own spinner path).
       if (!hasStartedPlaybackRef.current) return;
@@ -456,21 +459,15 @@ export function useChunkedPlayback(
         bufferingTimerRef.current = null;
         setStatus("loading");
         const stallDurationMs = Date.now() - stallStartedAt;
-        StreamingLogger.push({
-          category: "PLAYBACK",
-          message: "Buffering stall >2s — showing spinner",
-          isError: false,
-        });
-        playbackLog.warn("Buffering stall", { stall_duration_ms: stallDurationMs });
+        playbackLog.warn(
+          `Buffering stall >2s — showing spinner (stalled for ${stallDurationMs}ms)`,
+          { stall_duration_ms: stallDurationMs }
+        );
       }, 2000);
     };
 
     const onStalled = (): void => {
-      StreamingLogger.push({
-        category: "PLAYBACK",
-        message: "Stalled — network slow",
-        isError: true,
-      });
+      playbackLog.warn("Stalled — network slow");
     };
 
     const onPlaying = (): void => {
@@ -485,11 +482,6 @@ export function useChunkedPlayback(
       if (statusRef.current === "loading" && hasStartedPlaybackRef.current) {
         setStatus("playing");
       }
-      StreamingLogger.push({
-        category: "PLAYBACK",
-        message: "Buffering resolved — playing",
-        isError: false,
-      });
     };
 
     videoEl.addEventListener("waiting", onWaiting);
@@ -537,10 +529,8 @@ export function useChunkedPlayback(
       }
       if (alreadyBuffered) {
         pendingSeekTargetRef.current = null;
-        StreamingLogger.push({
-          category: "PLAYBACK",
-          message: `Seek to ${seekTime.toFixed(1)}s — already buffered, no flush`,
-          isError: false,
+        playbackLog.info(`Seek to ${seekTime.toFixed(1)}s — already buffered, resuming naturally`, {
+          seek_target_s: parseFloat(seekTime.toFixed(1)),
         });
         return;
       }
@@ -569,15 +559,13 @@ export function useChunkedPlayback(
       }
       setStatus("loading");
 
-      StreamingLogger.push({
-        category: "PLAYBACK",
-        message: `Seek to ${seekTime.toFixed(1)}s → snapping to chunk boundary ${snapTime}s`,
-        isError: false,
-      });
-      playbackLog.info("Seek", {
-        seek_target_s: parseFloat(seekTime.toFixed(1)),
-        snapped_to_s: snapTime,
-      });
+      playbackLog.info(
+        `Seek to ${seekTime.toFixed(1)}s → flushing buffer, restarting from chunk boundary ${snapTime}s`,
+        {
+          seek_target_s: parseFloat(seekTime.toFixed(1)),
+          snapped_to_s: snapTime,
+        }
+      );
 
       // Cancel active stream and flush the buffer
       activeStreamRef.current?.cancel();
@@ -607,11 +595,13 @@ export function useChunkedPlayback(
             buf.setAfterAppend(null);
             videoEl.play().catch(() => {});
             setStatus("playing");
-            StreamingLogger.push({
-              category: "PLAYBACK",
-              message: `Seek ready — buffered ${buf.bufferedEnd.toFixed(1)}s >= ${startupTarget}s, resuming`,
-              isError: false,
-            });
+            playbackLog.info(
+              `Seek ready — ${buf.bufferedEnd.toFixed(1)}s buffered, resuming playback`,
+              {
+                buffered_s: parseFloat(buf.bufferedEnd.toFixed(1)),
+                startup_target_s: startupTarget,
+              }
+            );
           }
         };
 
@@ -641,15 +631,13 @@ export function useChunkedPlayback(
       const chunkStart = Math.floor(savedTime / CHUNK_DURATION_S) * CHUNK_DURATION_S;
       const mimeType = RESOLUTION_MIME_TYPE[newRes];
 
-      StreamingLogger.push({
-        category: "PLAYBACK",
-        message: `Resolution switch → ${newRes} — background buffer starting at ${chunkStart}s`,
-        isError: false,
-      });
-      playbackLog.info("Resolution switch initiated", {
-        to: newRes,
-        chunk_start_s: chunkStart,
-      });
+      playbackLog.info(
+        `Resolution switch → ${newRes} — buffering from ${chunkStart}s in background`,
+        {
+          to: newRes,
+          chunk_start_s: chunkStart,
+        }
+      );
 
       // Cancel any in-flight background buffer
       bgStreamRef.current?.cancel();
@@ -671,10 +659,9 @@ export function useChunkedPlayback(
           const onReady = (): void => {
             // Swap: save currentTime, reassign src, seek, play
             const swapTime = videoRef.current?.currentTime ?? savedTime;
-            StreamingLogger.push({
-              category: "PLAYBACK",
-              message: `Resolution swap → ${newRes} at ${swapTime.toFixed(1)}s`,
-              isError: false,
+            playbackLog.info(`Resolution swapped to ${newRes} at ${swapTime.toFixed(1)}s`, {
+              to: newRes,
+              swap_time_s: parseFloat(swapTime.toFixed(1)),
             });
 
             // Tear down foreground (don't clear videoEl.src yet)
@@ -729,30 +716,18 @@ export function useChunkedPlayback(
                   /* chunk done — swap may already have happened */
                 },
                 (err) => {
-                  StreamingLogger.push({
-                    category: "PLAYBACK",
-                    message: `BG stream error: ${err.message}`,
-                    isError: true,
-                  });
+                  playbackLog.error("Background stream error", { message: err.message });
                 }
               );
               bgStreamRef.current = bgSvc;
               checkReady();
             })
             .catch((err: Error) => {
-              StreamingLogger.push({
-                category: "PLAYBACK",
-                message: `BG chunk error: ${err.message}`,
-                isError: true,
-              });
+              playbackLog.error("Background chunk error", { message: err.message });
             });
         })
         .catch((err: Error) => {
-          StreamingLogger.push({
-            category: "PLAYBACK",
-            message: `BG MSE init failed: ${err.message}`,
-            isError: true,
-          });
+          playbackLog.error("Background MSE init failed", { message: err.message });
         });
     },
     [videoRef, videoDurationS, requestChunk, streamChunk, startPrefetchLoop]
@@ -778,16 +753,42 @@ export function useChunkedPlayback(
       resolutionRef.current = res;
       hasStartedPlaybackRef.current = false;
 
-      StreamingLogger.push({
-        category: "PLAYBACK",
-        message: `startPlayback — resolution: ${res}, videoDuration: ${videoDurationS}s`,
-        isError: false,
+      // Start a root span for this playback session. All child spans (fetch,
+      // buffer appends) will link to this trace via W3C traceparent propagation.
+      const sessionSpan = playbackTracer.startSpan("playback.session", {
+        attributes: { "video.id": videoId, "playback.resolution": res },
       });
-      playbackLog.info("Playback initiated", {
-        video_id: videoId,
-        resolution: res,
-        duration_s: videoDurationS,
+      sessionSpanRef.current = sessionSpan;
+      const traceId = sessionSpan.spanContext().traceId;
+
+      // Record the session in the DB so the user can look it up in Seq later.
+      recordSession({
+        variables: {
+          traceId,
+          videoId,
+          resolution: DISPLAY_TO_GQL[res] as Parameters<
+            typeof recordSession
+          >[0]["variables"]["resolution"],
+        },
+        onError: () => {},
       });
+
+      playbackLog.info(
+        `Playback started: ${res} for video ${videoId} (${videoDurationS}s total, traceId: ${traceId})`,
+        {
+          video_id: videoId,
+          resolution: res,
+          duration_s: videoDurationS,
+          trace_id: traceId,
+        }
+      );
+
+      // Store the session context module-wide so all log records emitted from
+      // async callbacks (fetch, RAF, Promise chains) carry this traceId.
+      // The browser has no AsyncLocalStorage, so context.with() alone is not
+      // enough — it only covers the synchronous frame.
+      const sessionCtx = trace.setSpan(context.active(), sessionSpan);
+      setSessionContext(sessionCtx);
 
       const buffer = new BufferManager(
         videoEl,
@@ -797,28 +798,30 @@ export function useChunkedPlayback(
       );
       bufferRef.current = buffer;
 
-      void buffer
-        .init(RESOLUTION_MIME_TYPE[res])
-        .then(() => {
-          StreamingLogger.push({
-            category: "PLAYBACK",
-            message: `MSE init OK — mimeType: ${RESOLUTION_MIME_TYPE[res]}`,
-            isError: false,
-          });
-          startChunkSeries(res, 0, buffer, true);
-          startPrefetchLoop(res, buffer);
-        })
-        .catch((err: Error) => {
-          const msg = `MSE init failed: ${err.message}`;
-          StreamingLogger.push({ category: "PLAYBACK", message: msg, isError: true });
-          setError(msg);
-          setStatus("idle");
-        });
+      void context.with(sessionCtx, () =>
+        buffer
+          .init(RESOLUTION_MIME_TYPE[res])
+          .then(() => {
+            playbackLog.info(`MSE ready: ${RESOLUTION_MIME_TYPE[res]}`, {
+              mime_type: RESOLUTION_MIME_TYPE[res],
+            });
+            startChunkSeries(res, 0, buffer, true);
+            startPrefetchLoop(res, buffer);
+          })
+          .catch((err: Error) => {
+            const msg = `MSE init failed: ${err.message}`;
+            playbackLog.error("MSE init failed", { message: err.message });
+            setError(msg);
+            setStatus("idle");
+          })
+      );
     },
     [
       videoRef,
+      videoId,
       status,
       videoDurationS,
+      recordSession,
       teardown,
       startChunkSeries,
       startPrefetchLoop,

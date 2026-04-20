@@ -46,6 +46,12 @@ If the page shows a login form:
 
 If the page already shows the events dashboard (already logged in), skip the login step.
 
+If Seq shows a **"password change required"** prompt after submitting credentials:
+- Generate a new password: `openssl rand -base64 24 | tr -d '/+=' | head -c 32`
+- Fill in **New password** and **Repeat new password** with the generated value
+- Click **Log in**
+- Update `.seq-credentials` with the new password: `printf 'SEQ_ADMIN_USERNAME=admin\nSEQ_ADMIN_PASSWORD=<new>\n' > .seq-credentials`
+
 If login fails (wrong credentials, error message), stop and report the failure with a screenshot.
 
 ## 4. Check for xstream-server events

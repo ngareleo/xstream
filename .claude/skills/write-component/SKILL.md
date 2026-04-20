@@ -149,3 +149,21 @@ If any `graphql` tag was added or changed:
 ```bash
 cd client && bun relay
 ```
+
+Then type-check:
+```bash
+cd client && bun run tsc --noEmit
+```
+
+## Verify in the browser — required
+
+After implementing any UI change, open the browser and visually confirm the feature works:
+
+1. Check both servers are running (`lsof -i :3001 -i :5173 | grep LISTEN`); start them if not.
+2. Navigate to the affected page/component at `http://localhost:5173`.
+3. Take a screenshot and save it to `.claude/screenshots/` with a descriptive name.
+4. Exercise the golden path (the main feature you just built).
+5. Check the browser console — no unexpected errors.
+6. If the change affects the video player or streaming pipeline, run `/e2e-test` to confirm playback still works end to end.
+
+**Never report a UI task as complete without having opened the browser and taken at least one screenshot.**

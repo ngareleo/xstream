@@ -1,6 +1,9 @@
+import { context } from "@opentelemetry/api";
 import { createClient } from "graphql-ws";
 import type { FetchFunction, SubscribeFunction } from "relay-runtime";
 import { Environment, Network, Observable, RecordSource, Store } from "relay-runtime";
+
+import { getSessionContext } from "~/services/playbackSession.js";
 
 const SERVER_URL = "/graphql";
 
@@ -10,11 +13,15 @@ const wsClient = createClient({
 });
 
 const fetchFn: FetchFunction = async (operation, variables) => {
-  const response = await fetch(SERVER_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ query: operation.text, variables }),
-  });
+  // Wrap fetch in the active session context so FetchInstrumentation injects
+  // the correct traceparent, linking GraphQL mutations to the playback trace.
+  const response = await context.with(getSessionContext(), () =>
+    fetch(SERVER_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ query: operation.text, variables }),
+    })
+  );
   return response.json();
 };
 

@@ -7,6 +7,7 @@
  * Resolver files should import from here instead of calling toGlobalId or
  * the mapper functions directly.
  */
+import type { PlaybackHistoryRow } from "../db/queries/playbackHistory.js";
 import type {
   LibraryRow,
   TranscodeJobRow,
@@ -14,7 +15,7 @@ import type {
   VideoRow,
   WatchlistItemRow,
 } from "../types.js";
-import type { ActiveJob } from "../types.js";
+import type { ActiveJob, Resolution } from "../types.js";
 import { internalMediaTypeToGql, internalResolutionToGql, internalStatusToGql } from "./mappers.js";
 import { toGlobalId } from "./relay.js";
 
@@ -148,6 +149,24 @@ export function presentJob(row: TranscodeJobRow | ActiveJob): GQLTranscodeJob {
     createdAt: row.created_at,
     error: row.error,
     _raw: row,
+  };
+}
+
+export interface GQLPlaybackSession {
+  id: string;
+  traceId: string;
+  videoTitle: string;
+  resolution: string;
+  startedAt: string;
+}
+
+export function presentPlaybackSession(row: PlaybackHistoryRow): GQLPlaybackSession {
+  return {
+    id: row.id,
+    traceId: row.trace_id,
+    videoTitle: row.video_title,
+    resolution: internalResolutionToGql(row.resolution as Resolution),
+    startedAt: row.started_at,
   };
 }
 

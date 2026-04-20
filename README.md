@@ -140,14 +140,21 @@ cat .seq-credentials
 
 Then open [http://localhost:5341](http://localhost:5341) and sign in with `username=admin` and the generated password.
 
+> **First login:** Seq will prompt you to change the initial password. Choose a new password (it must differ from the generated one), then update `.seq-credentials` manually:
+> ```bash
+> # replace <new-password> with what you typed into Seq
+> printf 'SEQ_ADMIN_USERNAME=admin\nSEQ_ADMIN_PASSWORD=<new-password>\n' > .seq-credentials
+> ```
+
 To stop Seq: `bun run seq:stop`
 
 **Resetting Seq** (e.g. to rotate credentials or after a schema change):
 
 ```bash
 bun run seq:stop
-docker rm seq
-rm .seq-credentials        # optional — deletes the old password
+sudo docker rm seq
+sudo rm -rf ~/.seq-store   # must delete the data store or SEQ_FIRSTRUN_ADMINPASSWORD is ignored
+rm .seq-credentials
 bun run seq:start          # generates a new password and fresh container
 ```
 

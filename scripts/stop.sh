@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# xstream stop — kill the server, client dev server, and any running ffmpeg jobs.
+# xstream stop — kill the server, client dev server, ffmpeg jobs, and Seq.
 # Safe to run at any time; reports what it killed and exits 0 even if nothing
-# was running.
+# was running. Preserves all persisted data (DB, segments, .seq-credentials,
+# ~/.seq-store).
 
 set -euo pipefail
 
@@ -29,10 +30,22 @@ kill_pattern() {
   fi
 }
 
+stop_seq() {
+  local container=seq
+  if docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^${container}$"; then
+    docker stop "${container}" >/dev/null
+    info "Stopped Seq container"
+    killed=$((killed + 1))
+  else
+    skipped "Seq — not running"
+  fi
+}
+
 # Kill in reverse start order so dependents go first
-kill_pattern "Vite dev server"  "vite"
-kill_pattern "Bun server"       "bun.*src/index"
-kill_pattern "ffmpeg jobs"      "ffmpeg"
+kill_pattern "Rsbuild dev server" "rsbuild"
+kill_pattern "Bun server"         "bun.*src/index"
+kill_pattern "ffmpeg jobs"        "ffmpeg"
+stop_seq
 
 echo ""
 if [ "$killed" -gt 0 ]; then

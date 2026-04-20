@@ -1,4 +1,9 @@
-import { StreamingLogger } from "./StreamingLogger.js";
+import { context } from "@opentelemetry/api";
+
+import { getSessionContext } from "~/services/playbackSession.js";
+import { getClientLogger } from "~/telemetry.js";
+
+const log = getClientLogger("streamingService");
 
 export type SegmentCallback = (data: ArrayBuffer, isInit: boolean) => Promise<void>;
 export type ErrorCallback = (err: Error) => void;
@@ -20,16 +25,21 @@ export class StreamingService {
     let response: Response;
 
     const url = `/stream/${jobId}${fromIndex > 0 ? `?from=${fromIndex}` : ""}`;
-    StreamingLogger.push({ category: "STREAM", message: `Fetching ${url}`, isError: false });
+    log.info(`Fetching ${url}`, { url, job_id: jobId });
 
     try {
-      response = await fetch(url, { signal: this.abortController.signal });
+      // context.with() makes the session span the active context for the
+      // synchronous fetch() call so FetchInstrumentation injects the correct
+      // traceparent — linking server spans to the client's playback.session.
+      const controller = this.abortController;
+      response = await context.with(getSessionContext(), () =>
+        fetch(url, { signal: controller?.signal })
+      );
     } catch (err) {
       if ((err as Error).name !== "AbortError") {
-        StreamingLogger.push({
-          category: "STREAM",
+        log.error(`Fetch failed: ${(err as Error).message}`, {
+          job_id: jobId,
           message: (err as Error).message,
-          isError: true,
         });
         onError(err as Error);
       }
@@ -39,26 +49,30 @@ export class StreamingService {
     if (!response.ok) {
       const text = await response.text().catch(() => "");
       const msg = `HTTP ${response.status}${text ? ` — ${text}` : ""}`;
-      StreamingLogger.push({ category: "STREAM", message: msg, isError: true });
+      log.error(`HTTP ${response.status} error${text ? `: ${text}` : ""}`, {
+        job_id: jobId,
+        status: response.status,
+        body: text,
+      });
       onError(new Error(`Stream request failed: ${msg}`));
       return;
     }
 
     if (!response.body) {
-      StreamingLogger.push({ category: "STREAM", message: "No response body", isError: true });
+      log.error("No response body", { job_id: jobId });
       onError(new Error("No response body"));
       return;
     }
 
-    StreamingLogger.push({
-      category: "STREAM",
-      message: `HTTP ${response.status} — stream open`,
-      isError: false,
+    log.info(`HTTP ${response.status} — stream open for job ${jobId.slice(0, 8)}`, {
+      job_id: jobId,
+      status: response.status,
     });
 
     this.reader = response.body.getReader();
     let buffer = new Uint8Array(0);
     let isFirstSegment = true;
+    let segmentCount = 0;
 
     try {
       // This loop is NOT a busy-wait. Each iteration suspends on
@@ -97,13 +111,9 @@ export class StreamingService {
           if (buffer.length < 4 + segLen) break;
 
           const segData = buffer.slice(4, 4 + segLen).buffer;
-          StreamingLogger.push({
-            category: "STREAM",
-            message: `Segment parsed — ${segLen}B${isFirstSegment ? " (init)" : ""}`,
-            isError: false,
-          });
           await onSegment(segData, isFirstSegment);
           isFirstSegment = false;
+          segmentCount++;
 
           buffer = buffer.slice(4 + segLen);
 
@@ -118,14 +128,16 @@ export class StreamingService {
           }
         }
       }
-      StreamingLogger.push({ category: "STREAM", message: "Stream complete", isError: false });
+      log.info(`Stream complete — ${segmentCount} segments received`, {
+        job_id: jobId,
+        segment_count: segmentCount,
+      });
       onDone();
     } catch (err) {
       if ((err as Error).name !== "AbortError") {
-        StreamingLogger.push({
-          category: "STREAM",
+        log.error(`Stream error: ${(err as Error).message}`, {
+          job_id: jobId,
           message: (err as Error).message,
-          isError: true,
         });
         onError(err as Error);
       }
@@ -134,14 +146,14 @@ export class StreamingService {
 
   pause(): void {
     this.paused = true;
-    StreamingLogger.push({ category: "STREAM", message: "Paused (buffer full)", isError: false });
+    log.info("Stream paused — buffer full");
   }
 
   resume(): void {
     this.paused = false;
     this.resumeResolve?.();
     this.resumeResolve = null;
-    StreamingLogger.push({ category: "STREAM", message: "Resumed", isError: false });
+    log.info("Stream resumed");
   }
 
   cancel(): void {
@@ -151,6 +163,6 @@ export class StreamingService {
     this.abortController?.abort();
     this.reader?.cancel().catch(() => {});
     this.reader = null;
-    StreamingLogger.push({ category: "STREAM", message: "Cancelled", isError: false });
+    log.info("Stream cancelled");
   }
 }

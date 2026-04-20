@@ -200,5 +200,20 @@ export function migrate(db: Database): void {
         value TEXT NOT NULL
       )
     `);
+
+    db.run(`
+      CREATE TABLE IF NOT EXISTS playback_history (
+        id          TEXT PRIMARY KEY,
+        trace_id    TEXT NOT NULL,
+        video_id    TEXT NOT NULL,
+        video_title TEXT NOT NULL,
+        resolution  TEXT NOT NULL,
+        started_at  TEXT NOT NULL
+      )
+    `);
+
+    db.run(
+      `CREATE INDEX IF NOT EXISTS playback_history_started_at ON playback_history(started_at DESC)`
+    );
   })();
 }

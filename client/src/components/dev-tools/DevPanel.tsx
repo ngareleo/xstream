@@ -33,7 +33,7 @@ const THROW_TARGETS = [
 
 export const DevPanelInner: FC = () => {
   const [open, setOpen] = useState(false);
-  const { setThrowTarget, streamingLogsOpen, setStreamingLogsOpen } = useDevTools();
+  const { setThrowTarget } = useDevTools();
   const { pathname } = useLocation();
   const panelRef = useRef<HTMLDivElement>(null);
   const styles = useDevPanelStyles();
@@ -73,26 +73,6 @@ export const DevPanelInner: FC = () => {
           <div className={styles.header}>
             <span className={styles.title}>DevTools</span>
             <span className={styles.route}>{pathname}</span>
-          </div>
-
-          <div className={styles.sectionLabel}>Streaming</div>
-          <div className={styles.logsRow}>
-            <button
-              className={mergeClasses(
-                styles.logsToggleBtn,
-                streamingLogsOpen && styles.logsToggleBtnActive
-              )}
-              onClick={() => {
-                const next = !streamingLogsOpen;
-                setStreamingLogsOpen(next);
-                // Close the DevPanel when enabling logs so only the log
-                // overlay is visible, giving it maximum screen real-estate.
-                if (next) setOpen(false);
-              }}
-              type="button"
-            >
-              {streamingLogsOpen ? "● Stream Logs ON" : "○ Stream Logs OFF"}
-            </button>
           </div>
 
           <div className={styles.sectionLabel}>Kill switch — force throw</div>

@@ -30,6 +30,8 @@ import {
 } from "@opentelemetry/sdk-logs";
 import { BatchSpanProcessor, WebTracerProvider } from "@opentelemetry/sdk-trace-web";
 
+import { getSessionContext } from "~/services/playbackSession.js";
+
 // ── Configuration ──────────────────────────────────────────────────────────────
 
 /** Parse "Key1=Val1,Key2=Val2" into a plain object, ignoring malformed pairs. */
@@ -124,12 +126,7 @@ export interface ClientLog {
   error(message: string, attributes?: Record<string, string | number | boolean>): void;
 }
 
-/**
- * Returns a structured logger for the given component.
- * Log records are forwarded to the OTLP backend alongside StreamingLogger
- * (which feeds the in-app overlay). Both coexist — OTel provides persistent
- * searchable storage; StreamingLogger provides immediate in-UI visibility.
- */
+/** Returns a structured logger for the given component. Log records are forwarded to the OTLP backend. */
 export function getClientLogger(component: string): ClientLog {
   const logger = loggerProvider?.getLogger(component);
   return {
@@ -139,6 +136,7 @@ export function getClientLogger(component: string): ClientLog {
         severityText: "INFO",
         body: message,
         attributes: { component, ...attributes },
+        context: getSessionContext(),
       });
     },
     warn(message, attributes): void {
@@ -147,6 +145,7 @@ export function getClientLogger(component: string): ClientLog {
         severityText: "WARN",
         body: message,
         attributes: { component, ...attributes },
+        context: getSessionContext(),
       });
     },
     error(message, attributes): void {
@@ -155,6 +154,7 @@ export function getClientLogger(component: string): ClientLog {
         severityText: "ERROR",
         body: message,
         attributes: { component, ...attributes },
+        context: getSessionContext(),
       });
     },
   };

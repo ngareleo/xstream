@@ -223,7 +223,12 @@ grep '^SEQ_ADMIN_PASSWORD=' .seq-credentials | cut -d= -f2
 
 If the file is missing, run `bun run seq:start` to generate it (and create the Seq container).
 
-To reset Seq with a new password: `bun run seq:stop && docker rm seq && rm .seq-credentials && bun run seq:start`
+To reset Seq with a new password: `bun run seq:stop && sudo docker rm seq && sudo rm -rf ~/.seq-store && rm .seq-credentials && bun run seq:start`
+
+> **`~/.seq-store` must be deleted alongside the container.** `SEQ_FIRSTRUN_ADMINPASSWORD` is only applied when Seq initialises its data directory for the first time. If the store directory already exists, the env var is silently ignored and the old password remains in effect.
+
+> **First login after a fresh container forces a password change.** Seq rejects reusing the initial password — choose a new one and update `.seq-credentials` immediately after:
+> `printf 'SEQ_ADMIN_USERNAME=admin\nSEQ_ADMIN_PASSWORD=<new>\n' > .seq-credentials`
 
 ### Verifying OTel logs
 
@@ -864,6 +869,22 @@ Do not couple the client to anything server-implementation-specific. All client�
 
 ### Screenshots
 All screenshots taken by skills or agents must be saved to `.claude/screenshots/` relative to the project root. Never save screenshots to the project root or any other directory. Use descriptive filenames prefixed with the step number (e.g. `.claude/screenshots/01-home.png`).
+
+### Verify UI changes in the browser — required
+
+After implementing any UI feature or component, always verify it works before reporting the task complete:
+
+1. Check servers are running: `lsof -i :3001 -i :5173 | grep LISTEN`
+2. Navigate to the affected page at `http://localhost:5173` using the Playwright browser tools.
+3. Take a screenshot saved to `.claude/screenshots/` with a descriptive name.
+4. Exercise the golden path — confirm the feature behaves as expected.
+5. Check the browser console for unexpected errors.
+
+**If the change touches the streaming pipeline** (BufferManager, StreamingService, useChunkedPlayback, server stream route, or chunker): run `/e2e-test` to confirm end-to-end playback is unbroken.
+
+**If the change is a significant backend modification** (new GraphQL resolver, DB schema change, stream protocol change): run `/e2e-test` before reporting complete.
+
+Never report a task complete without having opened the browser and taken at least one screenshot confirming the feature works.
 
 ### Reflect skill
 After any significant session, run `/reflect` to capture non-obvious learnings into skill files and CLAUDE.md. The PreCompact hook runs this automatically before context compaction. Only write actionable gotcha-prevention notes — not narrative summaries of what was done.

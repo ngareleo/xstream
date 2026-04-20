@@ -1,5 +1,6 @@
 import ffmpegInstaller from "@ffmpeg-installer/ffmpeg";
 import ffprobeInstaller from "@ffprobe-installer/ffprobe";
+import type { Context as OtelContext } from "@opentelemetry/api";
 import { createHash } from "crypto";
 import ffmpeg, { type FfmpegCommand } from "fluent-ffmpeg";
 import { watch } from "fs";
@@ -119,7 +120,8 @@ export async function startTranscodeJob(
   videoId: string,
   resolution: Resolution,
   startTimeSeconds?: number,
-  endTimeSeconds?: number
+  endTimeSeconds?: number,
+  parentOtelCtx?: OtelContext
 ): Promise<ActiveJob> {
   const video = getVideoById(videoId);
   if (!video) throw new Error(`Video not found: ${videoId}`);
@@ -242,7 +244,15 @@ export async function startTranscodeJob(
     // ffprobe). Deleting it here would open a window where neither activeCommands
     // nor inflightJobIds counts this job, letting the MAX_CONCURRENT_JOBS cap be
     // bypassed by a concurrent call during the ffprobe window.
-    void runFfmpeg(job, video.path, resolution, segmentDir, startTimeSeconds, endTimeSeconds);
+    void runFfmpeg(
+      job,
+      video.path,
+      resolution,
+      segmentDir,
+      startTimeSeconds,
+      endTimeSeconds,
+      parentOtelCtx
+    );
 
     return job;
   } catch (err) {
@@ -257,19 +267,25 @@ async function runFfmpeg(
   resolution: Resolution,
   segmentDir: string,
   startTime?: number,
-  endTime?: number
+  endTime?: number,
+  parentOtelCtx?: OtelContext
 ): Promise<void> {
   job.status = "running";
   updateJobStatus(job.id, "running");
 
-  const jobSpan = chunkerTracer.startSpan("transcode.job", {
-    attributes: {
-      "job.id": job.id,
-      "job.resolution": resolution,
-      "job.chunk_start_s": startTime ?? 0,
-      "job.chunk_duration_s": endTime !== undefined ? endTime - (startTime ?? 0) : -1,
+  const jobSpan = chunkerTracer.startSpan(
+    "transcode.job",
+    {
+      attributes: {
+        "job.id": job.id,
+        "job.video_id": job.video_id,
+        "job.resolution": resolution,
+        "job.chunk_start_s": startTime ?? 0,
+        "job.chunk_duration_s": endTime !== undefined ? endTime - (startTime ?? 0) : -1,
+      },
     },
-  });
+    parentOtelCtx
+  );
 
   const profile = RESOLUTION_PROFILES[resolution];
   const initPath = join(segmentDir, "init.mp4");
@@ -277,14 +293,34 @@ async function runFfmpeg(
 
   // Probe the file to derive correct transcode parameters
   const file = new FFmpegFile(inputPath);
+  const probeStart = Date.now();
   try {
     await file.probe();
-    log.info("ffprobe complete", { job_id: job.id, summary: file.summary() });
-    jobSpan.addEvent("probe_complete", { summary: file.summary() });
+    const probeDurationMs = Date.now() - probeStart;
+    log.info("ffprobe complete", {
+      job_id: job.id,
+      video_id: job.video_id,
+      resolution,
+      probe_duration_ms: probeDurationMs,
+    });
+    jobSpan.addEvent("probe_complete", {
+      probe_duration_ms: probeDurationMs,
+      summary: file.summary(),
+    });
   } catch (err) {
+    const probeDurationMs = Date.now() - probeStart;
     const msg = `ffprobe failed: ${(err as Error).message}`;
-    log.error("ffprobe failed", { job_id: job.id, message: (err as Error).message });
-    jobSpan.addEvent("probe_error", { message: (err as Error).message });
+    log.error("ffprobe failed", {
+      job_id: job.id,
+      video_id: job.video_id,
+      resolution,
+      probe_duration_ms: probeDurationMs,
+      message: (err as Error).message,
+    });
+    jobSpan.addEvent("probe_error", {
+      probe_duration_ms: probeDurationMs,
+      message: (err as Error).message,
+    });
     jobSpan.end();
     job.status = "error";
     job.error = msg;
@@ -320,12 +356,19 @@ async function runFfmpeg(
     }
   }, ORPHAN_TIMEOUT_MS);
 
+  let encodeStart = 0;
   file
     .applyOutputOptions(command, profile, segmentPattern, segmentDir)
     .output(join(segmentDir, "playlist.m3u8"))
     .on("start", (cmd) => {
-      log.info("Transcode started", { job_id: job.id, resolution, cmd: cmd.slice(0, 120) });
-      jobSpan.addEvent("transcode_started");
+      encodeStart = Date.now();
+      log.info("Transcode started", {
+        job_id: job.id,
+        video_id: job.video_id,
+        resolution,
+        cmd: cmd.slice(0, 120),
+      });
+      jobSpan.addEvent("transcode_started", { resolution });
     })
     .on("error", (err) => {
       clearTimeout(orphanTimer);
@@ -334,8 +377,18 @@ async function runFfmpeg(
       // both .on("error") and .on("end") depending on the OS; clearing here ensures
       // the entry doesn't linger if the error path fires instead of the end path.
       killedJobs.delete(job.id);
-      log.error("Transcode error", { job_id: job.id, message: err.message });
-      jobSpan.addEvent("transcode_error", { message: err.message });
+      const encodeDurationMs = encodeStart > 0 ? Date.now() - encodeStart : 0;
+      log.error("Transcode error", {
+        job_id: job.id,
+        video_id: job.video_id,
+        resolution,
+        encode_duration_ms: encodeDurationMs,
+        message: err.message,
+      });
+      jobSpan.addEvent("transcode_error", {
+        encode_duration_ms: encodeDurationMs,
+        message: err.message,
+      });
       jobSpan.end();
       job.status = "error";
       job.error = err.message;
@@ -352,7 +405,7 @@ async function runFfmpeg(
         // re-encode rather than serving a truncated stream.
         killedJobs.delete(job.id);
         const msg = "ffmpeg process was killed";
-        log.info("Transcode killed", { job_id: job.id });
+        log.info("Transcode killed", { job_id: job.id, video_id: job.video_id, resolution });
         jobSpan.addEvent("transcode_killed");
         jobSpan.end();
         job.status = "error";
@@ -363,8 +416,18 @@ async function runFfmpeg(
       }
 
       const segmentCount = job.segments.filter(Boolean).length;
-      log.info("Transcode complete", { job_id: job.id, segment_count: segmentCount });
-      jobSpan.addEvent("transcode_complete", { segment_count: segmentCount });
+      const encodeDurationMs = encodeStart > 0 ? Date.now() - encodeStart : 0;
+      log.info("Transcode complete", {
+        job_id: job.id,
+        video_id: job.video_id,
+        resolution,
+        segment_count: segmentCount,
+        encode_duration_ms: encodeDurationMs,
+      });
+      jobSpan.addEvent("transcode_complete", {
+        segment_count: segmentCount,
+        encode_duration_ms: encodeDurationMs,
+      });
       jobSpan.end();
       job.status = "complete";
       job.total_segments = segmentCount;

@@ -3,17 +3,20 @@ import { join } from "path";
 
 import { getJobById } from "../../db/queries/jobs.js";
 import { getAllLibraries, getLibraryById } from "../../db/queries/libraries.js";
+import { getPlaybackHistory } from "../../db/queries/playbackHistory.js";
 import { getVideoById, getVideos } from "../../db/queries/videos.js";
 import { getWatchlist, getWatchlistItemById } from "../../db/queries/watchlist.js";
 import { searchOmdbList } from "../../services/omdbService.js";
 import { gqlMediaTypeToInternal } from "../mappers.js";
 import {
   type GQLLibrary,
+  type GQLPlaybackSession,
   type GQLTranscodeJob,
   type GQLVideo,
   type GQLWatchlistItem,
   presentJob,
   presentLibrary,
+  presentPlaybackSession,
   presentVideo,
   presentWatchlistItem,
 } from "../presenters.js";
@@ -121,6 +124,10 @@ export const queryResolvers = {
       } catch {
         return [];
       }
+    },
+
+    playbackHistory(): GQLPlaybackSession[] {
+      return getPlaybackHistory().map(presentPlaybackSession);
     },
   },
 

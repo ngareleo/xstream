@@ -1,7 +1,5 @@
 import { getClientLogger } from "~/telemetry.js";
 
-import { StreamingLogger } from "./StreamingLogger.js";
-
 const log = getClientLogger("bufferManager");
 
 const DEFAULT_FORWARD_BUFFER_TARGET_S = 20;
@@ -77,18 +75,10 @@ export class BufferManager {
             // Drive back-pressure checks as the video plays forward, so a paused
             // stream gets resumed even when no new segments are being appended.
             this.videoEl.addEventListener("timeupdate", this.handleTimeUpdate);
-            StreamingLogger.push({
-              category: "BUFFER",
-              message: "MSE open — sourceBuffer added (mode=sequence)",
-              isError: false,
-            });
+            log.info(`MSE ready — sourceBuffer added (${mimeType})`, { mime_type: mimeType });
             resolve();
           } catch (err) {
-            StreamingLogger.push({
-              category: "BUFFER",
-              message: `addSourceBuffer failed: ${(err as Error).message}`,
-              isError: true,
-            });
+            log.error("addSourceBuffer failed", { message: (err as Error).message });
             reject(err);
           }
         },
@@ -145,10 +135,8 @@ export class BufferManager {
       let appended = false;
       for (let attempt = 0; attempt <= 3 && !appended && !this.seekAbort; attempt++) {
         if (attempt > 0) {
-          StreamingLogger.push({
-            category: "BUFFER",
-            message: `QuotaExceeded (attempt ${attempt}) — evicting and retrying`,
-            isError: true,
+          log.warn(`QuotaExceededError — evicting buffer and retrying (attempt ${attempt}/3)`, {
+            attempt,
           });
           if (attempt === 1) {
             await this.evictBackBuffer();
@@ -180,21 +168,10 @@ export class BufferManager {
           await this.waitForUpdateEnd();
           if (this.seekAbort) break;
           appended = true;
-          const bufferedEnd = sb.buffered.length > 0 ? sb.buffered.end(sb.buffered.length - 1) : 0;
-          StreamingLogger.push({
-            category: "BUFFER",
-            message: `Appended ${data.byteLength}B — buffered to ${bufferedEnd.toFixed(2)}s`,
-            isError: false,
-          });
         } catch (err) {
           if ((err as DOMException).name === "QuotaExceededError" && attempt < 3) {
             continue; // retry after eviction
           }
-          StreamingLogger.push({
-            category: "BUFFER",
-            message: `appendBuffer error: ${(err as Error).message}`,
-            isError: true,
-          });
           log.error("appendBuffer error", { message: (err as Error).message });
           break;
         }
@@ -254,11 +231,6 @@ export class BufferManager {
       await this.waitForUpdateEnd();
       sb.remove(bufStart, evictEnd);
       await this.waitForUpdateEnd();
-      StreamingLogger.push({
-        category: "BUFFER",
-        message: `Evicted [${bufStart.toFixed(1)}s, ${evictEnd.toFixed(1)}s)`,
-        isError: false,
-      });
     }
   }
 
@@ -274,19 +246,23 @@ export class BufferManager {
 
     if (bufferedAhead > this.forwardTarget && !this.streamPaused) {
       this.streamPaused = true;
-      StreamingLogger.push({
-        category: "BUFFER",
-        message: `Forward buffer ${bufferedAhead.toFixed(1)}s — pausing`,
-        isError: false,
-      });
+      log.info(
+        `Stream paused — ${bufferedAhead.toFixed(1)}s buffered ahead (target: ${this.forwardTarget}s)`,
+        {
+          buffered_ahead_s: parseFloat(bufferedAhead.toFixed(1)),
+          target_s: this.forwardTarget,
+        }
+      );
       this.onPause();
     } else if (bufferedAhead < this.forwardResume && this.streamPaused) {
       this.streamPaused = false;
-      StreamingLogger.push({
-        category: "BUFFER",
-        message: `Forward buffer ${bufferedAhead.toFixed(1)}s — resuming`,
-        isError: false,
-      });
+      log.info(
+        `Stream resumed — ${bufferedAhead.toFixed(1)}s buffered ahead (resume threshold: ${this.forwardResume}s)`,
+        {
+          buffered_ahead_s: parseFloat(bufferedAhead.toFixed(1)),
+          resume_threshold_s: this.forwardResume,
+        }
+      );
       this.onResume();
     }
   }
@@ -318,18 +294,12 @@ export class BufferManager {
             if (this.videoDurationS > 0) {
               ms.duration = this.videoDurationS;
             }
-            StreamingLogger.push({
-              category: "BUFFER",
-              message: "Background MSE open — sourceBuffer added (mode=sequence)",
-              isError: false,
+            log.info(`Background MSE ready — sourceBuffer added (${mimeType})`, {
+              mime_type: mimeType,
             });
             resolve(this.objectUrl as string);
           } catch (err) {
-            StreamingLogger.push({
-              category: "BUFFER",
-              message: `Background addSourceBuffer failed: ${(err as Error).message}`,
-              isError: true,
-            });
+            log.error("Background addSourceBuffer failed", { message: (err as Error).message });
             reject(err);
           }
         },
@@ -349,7 +319,7 @@ export class BufferManager {
     if (this.mediaSource?.readyState === "open") {
       try {
         this.mediaSource.endOfStream();
-        StreamingLogger.push({ category: "BUFFER", message: "endOfStream()", isError: false });
+        log.info("endOfStream");
       } catch {
         // May already be closed
       }
@@ -385,10 +355,9 @@ export class BufferManager {
       sb.timestampOffset = timeSeconds;
     }
     this.videoEl.currentTime = timeSeconds;
-    StreamingLogger.push({
-      category: "BUFFER",
-      message: `Seek flush → ${timeSeconds.toFixed(2)}s (timestampOffset reset to ${timeSeconds.toFixed(2)}s)`,
-      isError: false,
+    log.info(`Buffer flushed — seek to ${timeSeconds.toFixed(2)}s (timestampOffset reset)`, {
+      seek_target_s: parseFloat(timeSeconds.toFixed(2)),
+      timestamp_offset_s: parseFloat(timeSeconds.toFixed(2)),
     });
   }
 
@@ -423,10 +392,6 @@ export class BufferManager {
     this.streamDone = false;
     this.streamPaused = false;
     this.seekAbort = false;
-    StreamingLogger.push({
-      category: "BUFFER",
-      message: "Teardown — ObjectURL revoked",
-      isError: false,
-    });
+    log.info("Teardown — ObjectURL revoked");
   }
 }

@@ -63,6 +63,8 @@ export async function handleStream(req: Request): Promise<Response> {
 
   const stream = new ReadableStream({
     async start(controller) {
+      const streamStartAt = Date.now();
+      let totalBytesSent = 0;
       log.info("Stream started", { job_id: jobId, from_index: fromIndex });
       span.addEvent("stream_started", { from_index: fromIndex });
       addConnection(jobId);
@@ -105,8 +107,13 @@ export async function handleStream(req: Request): Promise<Response> {
       req.signal?.removeEventListener?.("abort", onAbort);
 
       if (clientGone) {
-        log.info("Client disconnected during init wait", { job_id: jobId, attempts });
-        span.addEvent("client_disconnected_early");
+        const initWaitMs = Date.now() - streamStartAt;
+        log.info("Client disconnected during init wait", {
+          job_id: jobId,
+          attempts,
+          init_wait_ms: initWaitMs,
+        });
+        span.addEvent("client_disconnected_early", { init_wait_ms: initWaitMs });
         span.end();
         removeConnection(jobId);
         controller.close();
@@ -115,11 +122,14 @@ export async function handleStream(req: Request): Promise<Response> {
 
       // Acquire the job reference after waiting — it may now be in memory.
       const activeJob = getJob(jobId);
+      const initWaitMs = Date.now() - streamStartAt;
       log.info("Init wait complete", {
         job_id: jobId,
         attempts,
+        init_wait_ms: initWaitMs,
         has_init: activeJob?.initSegmentPath != null,
       });
+      span.addEvent("init_wait_complete", { init_wait_ms: initWaitMs });
 
       if (!activeJob?.initSegmentPath) {
         // Last resort: check DB + filesystem
@@ -161,6 +171,7 @@ export async function handleStream(req: Request): Promise<Response> {
       // Send init segment first
       try {
         const initBytes = await readFile(initPath);
+        totalBytesSent += initBytes.byteLength;
         log.info("Sending init segment", { job_id: jobId, bytes: initBytes.byteLength });
         span.addEvent("init_sent", { bytes: initBytes.byteLength });
         writeLengthPrefixed(controller, new Uint8Array(initBytes));
@@ -239,12 +250,17 @@ export async function handleStream(req: Request): Promise<Response> {
         if (path) {
           try {
             const segBytes = await readFile(path);
+            totalBytesSent += segBytes.byteLength;
             writeLengthPrefixed(controller, new Uint8Array(segBytes));
             lastSentAt = Date.now();
             index++;
             sentCount++;
             if (sentCount % 20 === 0) {
-              log.info("Segment progress", { job_id: jobId, segments_sent: sentCount });
+              log.info("Segment progress", {
+                job_id: jobId,
+                segments_sent: sentCount,
+                total_bytes_sent: totalBytesSent,
+              });
             }
           } catch (err) {
             log.warn("Segment read failed", {
@@ -311,8 +327,21 @@ export async function handleStream(req: Request): Promise<Response> {
 
       // Natural end of stream (job complete or served all DB segments)
       removeConnection(jobId);
-      log.info("Stream complete", { job_id: jobId, segments_sent: sentCount });
-      span.addEvent("stream_complete", { segments_sent: sentCount });
+      const durationMs = Date.now() - streamStartAt;
+      const transferRateKbps = durationMs > 0 ? Math.round((totalBytesSent * 8) / durationMs) : 0;
+      log.info("Stream complete", {
+        job_id: jobId,
+        segments_sent: sentCount,
+        total_bytes_sent: totalBytesSent,
+        duration_ms: durationMs,
+        transfer_rate_kbps: transferRateKbps,
+      });
+      span.addEvent("stream_complete", {
+        segments_sent: sentCount,
+        total_bytes_sent: totalBytesSent,
+        duration_ms: durationMs,
+        transfer_rate_kbps: transferRateKbps,
+      });
       span.end();
       controller.close();
     },

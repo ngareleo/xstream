@@ -1,4 +1,7 @@
+import { randomUUID } from "crypto";
+
 import { createLibrary, deleteLibrary, updateLibrary } from "../../db/queries/libraries.js";
+import { insertPlaybackSession } from "../../db/queries/playbackHistory.js";
 import { setSetting } from "../../db/queries/userSettings.js";
 import { deleteVideoMetadata, upsertVideoMetadata } from "../../db/queries/videoMetadata.js";
 import { getVideoById } from "../../db/queries/videos.js";
@@ -7,6 +10,7 @@ import {
   removeWatchlistItem,
   updateWatchlistProgress,
 } from "../../db/queries/watchlist.js";
+import type { GQLContext } from "../../routes/graphql.js";
 import { startTranscodeJob } from "../../services/chunker.js";
 import { scanLibraries } from "../../services/libraryScanner.js";
 import { fetchOmdbById, isOmdbConfigured } from "../../services/omdbService.js";
@@ -14,11 +18,13 @@ import type { MediaType, VideoMetadataRow } from "../../types.js";
 import { gqlMediaTypeToInternal, gqlResolutionToInternal } from "../mappers.js";
 import {
   type GQLLibrary,
+  type GQLPlaybackSession,
   type GQLTranscodeJob,
   type GQLVideo,
   type GQLWatchlistItem,
   presentJob,
   presentLibrary,
+  presentPlaybackSession,
   presentVideo,
   presentWatchlistItem,
 } from "../presenters.js";
@@ -43,7 +49,8 @@ export const mutationResolvers = {
         resolution: string;
         startTimeSeconds?: number;
         endTimeSeconds?: number;
-      }
+      },
+      ctx: GQLContext
     ): Promise<GQLTranscodeJob> {
       const { id: localVideoId } = fromGlobalId(videoId);
       const internalResolution = gqlResolutionToInternal(resolution);
@@ -52,7 +59,8 @@ export const mutationResolvers = {
         localVideoId,
         internalResolution,
         startTimeSeconds,
-        endTimeSeconds
+        endTimeSeconds,
+        ctx.otelCtx
       );
 
       return presentJob(job);
@@ -165,6 +173,24 @@ export const mutationResolvers = {
     setSetting(_: unknown, { key, value }: { key: string; value: string }): boolean {
       setSetting(key, value);
       return true;
+    },
+
+    recordPlaybackSession(
+      _: unknown,
+      { traceId, videoId, resolution }: { traceId: string; videoId: string; resolution: string }
+    ): GQLPlaybackSession {
+      const { id: localVideoId } = fromGlobalId(videoId);
+      const video = getVideoById(localVideoId);
+      const row = {
+        id: randomUUID(),
+        trace_id: traceId,
+        video_id: localVideoId,
+        video_title: video ? (video.title ?? video.filename) : "Unknown",
+        resolution: gqlResolutionToInternal(resolution),
+        started_at: new Date().toISOString(),
+      };
+      insertPlaybackSession(row);
+      return presentPlaybackSession(row);
     },
   },
 };

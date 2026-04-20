@@ -52,6 +52,12 @@ cat .seq-credentials
 
 Report the username and that a password was generated (do NOT print the password in your response).
 
+**First-login password change:** On a fresh Seq container, the first login at `http://localhost:5341` will require a password change. Choose a new password (Seq rejects reusing the initial one), complete the login, then immediately update `.seq-credentials`:
+
+```sh
+printf 'SEQ_ADMIN_USERNAME=admin\nSEQ_ADMIN_PASSWORD=<new-password>\n' > .seq-credentials
+```
+
 ## 3. Set up environment variables
 
 Check if `.env` exists:

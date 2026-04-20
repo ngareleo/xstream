@@ -6,7 +6,6 @@ import { DevThrowTarget } from "~/components/dev-throw-target/DevThrowTarget.js"
 import { DevPanelAsync } from "~/components/dev-tools/DevPanelAsync.js";
 import { DevToolsProvider } from "~/components/dev-tools/DevToolsContext.js";
 import { PlayerContent } from "~/components/player-content/PlayerContent.js";
-import { StreamingLogOverlayAsync } from "~/components/stream-log-overlay/StreamingLogOverlayAsync.js";
 import type { PlayerPageQuery } from "~/relay/__generated__/PlayerPageQuery.graphql.js";
 
 import { strings } from "./PlayerPage.strings.js";
@@ -67,7 +66,6 @@ export const PlayerPage: FC = () => {
         </DevThrowTarget>
       )}
       <DevPanelAsync />
-      <StreamingLogOverlayAsync />
     </DevToolsProvider>
   );
 };

@@ -1,4 +1,6 @@
 import { makeExecutableSchema } from "@graphql-tools/schema";
+import type { Context as OtelContext } from "@opentelemetry/api";
+import { context, propagation } from "@opentelemetry/api";
 import { assertValidSchema } from "graphql";
 import { createYoga } from "graphql-yoga";
 
@@ -9,6 +11,10 @@ import { queryResolvers } from "../graphql/resolvers/query.js";
 import { subscriptionResolvers } from "../graphql/resolvers/subscription.js";
 import { videoResolvers } from "../graphql/resolvers/video.js";
 import { typeDefs } from "../graphql/schema.js";
+
+export interface GQLContext {
+  otelCtx: OtelContext;
+}
 
 export const schema = makeExecutableSchema({
   typeDefs,
@@ -32,11 +38,19 @@ export const schema = makeExecutableSchema({
 // no missing interface implementations, etc.). Throws on structural errors.
 assertValidSchema(schema);
 
-export const yoga = createYoga({
+export const yoga = createYoga<GQLContext>({
   schema,
   graphqlEndpoint: "/graphql",
   cors:
     process.env.NODE_ENV === "production"
       ? false
       : { origin: "http://localhost:5173", credentials: true },
+  context: ({ request }): GQLContext => {
+    const carrier: Record<string, string> = {};
+    request.headers.forEach((value, key) => {
+      carrier[key] = value;
+    });
+    const otelCtx = propagation.extract(context.active(), carrier);
+    return { otelCtx };
+  },
 });

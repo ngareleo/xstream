@@ -127,6 +127,7 @@ async function processFile(filePath: string, libraryId: string): Promise<void> {
       scanned_at: new Date().toISOString(),
       content_fingerprint,
     };
+    const isNew = !getVideoById(videoId);
     upsertVideo(videoRow);
 
     const streamRows: Omit<VideoStreamRow, "id">[] = streams
@@ -142,7 +143,12 @@ async function processFile(filePath: string, libraryId: string): Promise<void> {
         sample_rate: s.sample_rate ? Number(s.sample_rate) : null,
       }));
     replaceVideoStreams(videoId, streamRows);
-    log.info("Video indexed", { filename: basename(filePath) });
+    if (isNew) {
+      log.info(`New video discovered: ${basename(filePath)}`, {
+        filename: basename(filePath),
+        path: filePath,
+      });
+    }
   } catch (err) {
     log.warn("Failed to probe file", { path: filePath, message: (err as Error).message });
   }
