@@ -1,11 +1,15 @@
-import { context, trace } from "@opentelemetry/api";
+import { context, type Span, SpanStatusCode, trace } from "@opentelemetry/api";
 import { type RefObject, useCallback, useEffect, useRef, useState } from "react";
 import { graphql, useMutation } from "react-relay";
 
 import type { useChunkedPlaybackRecordSessionMutation } from "~/relay/__generated__/useChunkedPlaybackRecordSessionMutation.graphql.js";
 import type { useChunkedPlaybackStartChunkMutation } from "~/relay/__generated__/useChunkedPlaybackStartChunkMutation.graphql.js";
 import { BufferManager } from "~/services/BufferManager.js";
-import { clearSessionContext, setSessionContext } from "~/services/playbackSession.js";
+import {
+  clearSessionContext,
+  getSessionContext,
+  setSessionContext,
+} from "~/services/playbackSession.js";
 import { StreamingService } from "~/services/StreamingService.js";
 import { getClientLogger, getClientTracer } from "~/telemetry.js";
 import type { Resolution } from "~/types.js";
@@ -194,6 +198,32 @@ export function useChunkedPlayback(
       onDone: () => void,
       onError: (err: Error) => void
     ): StreamingService => {
+      const chunkSpan: Span = playbackTracer.startSpan(
+        "chunk.stream",
+        {
+          attributes: {
+            "chunk.job_id": rawJobId,
+            "chunk.resolution": res,
+            "chunk.is_first": isFirstChunk,
+          },
+        },
+        getSessionContext()
+      );
+      // Build a context with chunkSpan as the active span so that
+      // FetchInstrumentation propagates traceparent linking server's
+      // stream.request under this chunk.stream span.
+      const chunkCtx = trace.setSpan(getSessionContext(), chunkSpan);
+
+      const wrappedOnDone = (): void => {
+        chunkSpan.end();
+        onDone();
+      };
+      const wrappedOnError = (err: Error): void => {
+        chunkSpan.setStatus({ code: SpanStatusCode.ERROR, message: err.message });
+        chunkSpan.end();
+        onError(err);
+      };
+
       const svc = new StreamingService();
       let totalMediaBytes = 0;
 
@@ -268,10 +298,10 @@ export function useChunkedPlayback(
             }
           } catch (err) {
             playbackLog.error("Buffer append error", { message: (err as Error).message });
-            onError(err as Error);
+            wrappedOnError(err as Error);
           }
         },
-        onError,
+        wrappedOnError,
         () => {
           // ffmpeg writes a tiny placeholder segment (~24B) when the seek position
           // is past the actual encoded content. Any chunk with < 1KB of total media
@@ -286,10 +316,12 @@ export function useChunkedPlayback(
             });
             buffer.markStreamDone();
             onJobCreatedRef.current?.(null);
+            chunkSpan.end();
             return;
           }
-          onDone();
-        }
+          wrappedOnDone();
+        },
+        chunkCtx
       );
       return svc;
     },

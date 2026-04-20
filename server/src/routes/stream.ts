@@ -65,7 +65,6 @@ export async function handleStream(req: Request): Promise<Response> {
     async start(controller) {
       const streamStartAt = Date.now();
       let totalBytesSent = 0;
-      log.info("Stream started", { job_id: jobId, from_index: fromIndex });
       span.addEvent("stream_started", { from_index: fromIndex });
       addConnection(jobId);
       let lastSentAt = Date.now();
@@ -123,13 +122,11 @@ export async function handleStream(req: Request): Promise<Response> {
       // Acquire the job reference after waiting — it may now be in memory.
       const activeJob = getJob(jobId);
       const initWaitMs = Date.now() - streamStartAt;
-      log.info("Init wait complete", {
-        job_id: jobId,
-        attempts,
+      span.addEvent("init_wait_complete", {
         init_wait_ms: initWaitMs,
+        attempts,
         has_init: activeJob?.initSegmentPath != null,
       });
-      span.addEvent("init_wait_complete", { init_wait_ms: initWaitMs });
 
       if (!activeJob?.initSegmentPath) {
         // Last resort: check DB + filesystem
@@ -172,7 +169,6 @@ export async function handleStream(req: Request): Promise<Response> {
       try {
         const initBytes = await readFile(initPath);
         totalBytesSent += initBytes.byteLength;
-        log.info("Sending init segment", { job_id: jobId, bytes: initBytes.byteLength });
         span.addEvent("init_sent", { bytes: initBytes.byteLength });
         writeLengthPrefixed(controller, new Uint8Array(initBytes));
         lastSentAt = Date.now();

@@ -1,6 +1,5 @@
-import { context } from "@opentelemetry/api";
+import { type Context, context } from "@opentelemetry/api";
 
-import { getSessionContext } from "~/services/playbackSession.js";
 import { getClientLogger } from "~/telemetry.js";
 
 const log = getClientLogger("streamingService");
@@ -19,7 +18,8 @@ export class StreamingService {
     fromIndex: number,
     onSegment: SegmentCallback,
     onError: ErrorCallback,
-    onDone: () => void
+    onDone: () => void,
+    parentContext: Context
   ): Promise<void> {
     this.abortController = new AbortController();
     let response: Response;
@@ -28,11 +28,11 @@ export class StreamingService {
     log.info(`Fetching ${url}`, { url, job_id: jobId });
 
     try {
-      // context.with() makes the session span the active context for the
+      // context.with() makes the chunk span the active context for the
       // synchronous fetch() call so FetchInstrumentation injects the correct
-      // traceparent — linking server spans to the client's playback.session.
+      // traceparent — linking server's stream.request under the chunk.stream span.
       const controller = this.abortController;
-      response = await context.with(getSessionContext(), () =>
+      response = await context.with(parentContext, () =>
         fetch(url, { signal: controller?.signal })
       );
     } catch (err) {
@@ -146,14 +146,12 @@ export class StreamingService {
 
   pause(): void {
     this.paused = true;
-    log.info("Stream paused — buffer full");
   }
 
   resume(): void {
     this.paused = false;
     this.resumeResolve?.();
     this.resumeResolve = null;
-    log.info("Stream resumed");
   }
 
   cancel(): void {

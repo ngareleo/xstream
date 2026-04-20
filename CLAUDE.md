@@ -872,13 +872,7 @@ All screenshots taken by skills or agents must be saved to `.claude/screenshots/
 
 ### Verify UI changes in the browser — required
 
-After implementing any UI feature or component, always verify it works before reporting the task complete:
-
-1. Check servers are running: `lsof -i :3001 -i :5173 | grep LISTEN`
-2. Navigate to the affected page at `http://localhost:5173` using the Playwright browser tools.
-3. Take a screenshot saved to `.claude/screenshots/` with a descriptive name.
-4. Exercise the golden path — confirm the feature behaves as expected.
-5. Check the browser console for unexpected errors.
+After implementing any UI feature or component, always verify it works before reporting the task complete. Run `/debug-ui` for any UI interaction — navigating pages, taking screenshots, verifying feature behaviour, and inspecting runtime errors.
 
 **If the change touches the streaming pipeline** (BufferManager, StreamingService, useChunkedPlayback, server stream route, or chunker): run `/e2e-test` to confirm end-to-end playback is unbroken.
 

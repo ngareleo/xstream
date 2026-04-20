@@ -1,6 +1,6 @@
 import ffmpegInstaller from "@ffmpeg-installer/ffmpeg";
 import ffprobeInstaller from "@ffprobe-installer/ffprobe";
-import type { Context as OtelContext } from "@opentelemetry/api";
+import { type Context as OtelContext, SpanStatusCode } from "@opentelemetry/api";
 import { createHash } from "crypto";
 import ffmpeg, { type FfmpegCommand } from "fluent-ffmpeg";
 import { watch } from "fs";
@@ -69,7 +69,7 @@ export async function killAllActiveJobs(timeoutMs = 5000): Promise<void> {
       };
       command.once("end", cleanup);
       command.once("error", cleanup);
-      log.info("Killing job", { job_id: id });
+      log.info("Killing ffmpeg — server_shutdown", { job_id: id, kill_reason: "server_shutdown" });
       killedJobs.add(id);
       try {
         command.kill("SIGTERM");
@@ -134,9 +134,30 @@ export async function startTranscodeJob(
 
   const id = jobId(video.content_fingerprint, resolution, startTimeSeconds, endTimeSeconds);
 
+  const resolveSpan = chunkerTracer.startSpan(
+    "job.resolve",
+    {
+      attributes: {
+        "job.id": id,
+        "job.video_id": videoId,
+        "job.resolution": resolution,
+        "job.chunk_start_s": startTimeSeconds ?? 0,
+      },
+    },
+    parentOtelCtx
+  );
+
+  const endResolveSpan = (event: string, attrs?: Record<string, string | number>): void => {
+    resolveSpan.addEvent(event, attrs);
+    resolveSpan.end();
+  };
+
   // Return existing in-memory job if already running or complete
   const existing = getJob(id);
-  if (existing && existing.status !== "error") return existing;
+  if (existing && existing.status !== "error") {
+    endResolveSpan("job_cache_hit", { job_status: existing.status });
+    return existing;
+  }
 
   // If a concurrent call is already initializing this exact job (between this
   // function's entry and the setJob() call below), wait for it to register rather
@@ -145,7 +166,10 @@ export async function startTranscodeJob(
     for (let i = 0; i < INFLIGHT_DEDUP_MAX_RETRIES; i++) {
       await Bun.sleep(INFLIGHT_DEDUP_POLL_MS);
       const pending = getJob(id);
-      if (pending) return pending;
+      if (pending) {
+        endResolveSpan("job_inflight_resolved");
+        return pending;
+      }
     }
     // If still not registered after INFLIGHT_DEDUP_TIMEOUT_MS, fall through.
     log.warn("Inflight dedup timeout — proceeding", { job_id: id });
@@ -156,6 +180,11 @@ export async function startTranscodeJob(
   // yet (that happens after ffprobe inside runFfmpeg), so activeCommands.size alone
   // would undercount concurrent work during the initialization window.
   if (activeCommands.size + inflightJobIds.size >= MAX_CONCURRENT_JOBS) {
+    resolveSpan.setStatus({
+      code: SpanStatusCode.ERROR,
+      message: `Too many concurrent streams (limit: ${MAX_CONCURRENT_JOBS})`,
+    });
+    resolveSpan.end();
     throw new Error(
       `Too many concurrent streams (limit: ${MAX_CONCURRENT_JOBS}). Close another player tab and try again.`
     );
@@ -201,6 +230,7 @@ export async function startTranscodeJob(
             job_id: id,
             segment_count: dbSegments.length,
           });
+          endResolveSpan("job_restored_from_db", { segment_count: dbSegments.length });
           return restored;
         }
       } else {
@@ -245,6 +275,7 @@ export async function startTranscodeJob(
 
     insertJob(job);
     setJob(job);
+    endResolveSpan("job_started");
     // Job is now in jobStore — any concurrent duplicate can find it via getJob().
     // Keep id in inflightJobIds until runFfmpeg calls activeCommands.set() (after
     // ffprobe). Deleting it here would open a window where neither activeCommands
@@ -262,6 +293,8 @@ export async function startTranscodeJob(
 
     return job;
   } catch (err) {
+    resolveSpan.setStatus({ code: SpanStatusCode.ERROR, message: (err as Error).message });
+    resolveSpan.end();
     inflightJobIds.delete(id);
     throw err;
   }
@@ -367,13 +400,7 @@ async function runFfmpeg(
     .output(join(segmentDir, "playlist.m3u8"))
     .on("start", (cmd) => {
       encodeStart = Date.now();
-      log.info("Transcode started", {
-        job_id: job.id,
-        video_id: job.video_id,
-        resolution,
-        cmd: cmd.slice(0, 120),
-      });
-      jobSpan.addEvent("transcode_started", { resolution });
+      jobSpan.addEvent("transcode_started", { resolution, cmd: cmd.slice(0, 120) });
     })
     .on("error", (err) => {
       clearTimeout(orphanTimer);
