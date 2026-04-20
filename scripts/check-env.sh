@@ -1,0 +1,165 @@
+#!/usr/bin/env bash
+# xstream check-env — audit environment variable configuration.
+#
+# Usage:
+#   bash scripts/check-env.sh          # dev check (warns on missing optionals)
+#   bash scripts/check-env.sh --prod   # production check (errors on unsafe defaults)
+#
+# Exit codes:
+#   0  all checks passed
+#   1  one or more required variables are missing or unsafe for production
+
+set -euo pipefail
+
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+RED='\033[0;31m'
+CYAN='\033[0;36m'
+NC='\033[0m'
+
+info()    { echo -e "  ${GREEN}✔${NC}  $*"; }
+warn()    { echo -e "  ${YELLOW}!${NC}  $*"; }
+fail()    { echo -e "  ${RED}✘${NC}  $*" >&2; }
+section() { echo -e "\n${CYAN}$*${NC}"; }
+
+# ── Mode ──────────────────────────────────────────────────────────────────────
+
+PROD=false
+if [[ "${1:-}" == "--prod" || "${NODE_ENV:-}" == "production" ]]; then
+  PROD=true
+fi
+
+ERRORS=0
+WARNINGS=0
+
+# ── Helpers ───────────────────────────────────────────────────────────────────
+
+# check_default NAME DEFAULT DESCRIPTION
+# Var has a built-in fallback — always OK, but surface the effective value.
+check_default() {
+  local name="$1" default="$2" desc="$3"
+  if [[ -n "${!name:-}" ]]; then
+    info "$name=${!name}  ($desc)"
+  else
+    info "$name (unset — default: $default)  ($desc)"
+  fi
+}
+
+# check_optional NAME DESCRIPTION
+# Var has no fallback — functionality is limited without it, but not fatal.
+check_optional() {
+  local name="$1" desc="$2"
+  if [[ -n "${!name:-}" ]]; then
+    info "$name (set)  ($desc)"
+  else
+    warn "$name unset  ($desc)"
+    WARNINGS=$((WARNINGS + 1))
+  fi
+}
+
+# check_required NAME DESCRIPTION
+# Var must be set — exits non-zero if missing.
+check_required() {
+  local name="$1" desc="$2"
+  if [[ -n "${!name:-}" ]]; then
+    info "$name (set)  ($desc)"
+  else
+    fail "$name missing  ($desc)"
+    ERRORS=$((ERRORS + 1))
+  fi
+}
+
+# check_secret NAME DESCRIPTION
+# Sensitive var — name printed in green if set, red if not. Value never shown.
+check_secret() {
+  local name="$1" desc="$2"
+  if [[ -n "${!name:-}" ]]; then
+    echo -e "  ${GREEN}${name}${NC}  ($desc)"
+  else
+    echo -e "  ${RED}${name}${NC}  (not set — $desc)"
+    if $PROD; then
+      ERRORS=$((ERRORS + 1))
+    else
+      WARNINGS=$((WARNINGS + 1))
+    fi
+  fi
+}
+
+# check_not_localhost NAME DESCRIPTION
+# Warns/errors if a URL var still points to localhost (unsafe in production).
+check_not_localhost() {
+  local name="$1" desc="$2"
+  local val="${!name:-}"
+  if [[ -z "$val" ]]; then
+    warn "$name unset  ($desc)"
+    WARNINGS=$((WARNINGS + 1))
+  elif [[ "$val" == *"localhost"* || "$val" == *"127.0.0.1"* ]]; then
+    if $PROD; then
+      fail "$name=${val}  (localhost in production — set to your OTLP backend)"
+      ERRORS=$((ERRORS + 1))
+    else
+      info "$name=${val}  ($desc)"
+    fi
+  else
+    info "$name=${val}  ($desc)"
+  fi
+}
+
+# ── .env file ─────────────────────────────────────────────────────────────────
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+section "── Environment file"
+if [[ -f "$ROOT/.env" ]]; then
+  info ".env found at $ROOT/.env"
+  # shellcheck disable=SC1091
+  set -a; source "$ROOT/.env"; set +a
+else
+  warn ".env not found — copy .env.example and fill in credentials"
+  WARNINGS=$((WARNINGS + 1))
+fi
+
+# ── Server ────────────────────────────────────────────────────────────────────
+
+section "── Server"
+check_default   NODE_ENV          "development"              "runtime mode (development | production)"
+check_default   PORT              "8080"                     "HTTP server port"
+check_default   DB_PATH           "tmp/xstream.db"           "SQLite database path"
+check_default   SEGMENT_DIR       "tmp/segments"             "transcoded segment storage directory"
+check_default   SCAN_INTERVAL_MS  "30000"                    "library rescan interval (ms)"
+check_default   SEGMENT_CACHE_GB  "20"                       "max disk space for segment cache (GB)"
+
+# ── Metadata ──────────────────────────────────────────────────────────────────
+
+section "── Metadata"
+check_secret OMDB_API_KEY "OMDb API key — metadata matching disabled without it; set here or via Settings → Metadata"
+
+# ── Telemetry ─────────────────────────────────────────────────────────────────
+
+section "── Telemetry (server)"
+check_not_localhost OTEL_EXPORTER_OTLP_ENDPOINT  "OTLP ingest URL (default: http://localhost:5341/ingest/otlp)"
+check_secret        OTEL_EXPORTER_OTLP_HEADERS    "OTLP auth headers — required for Axiom / cloud backends"
+
+section "── Telemetry (client build)"
+check_default PUBLIC_OTEL_ENDPOINT  "/ingest/otlp"  "client OTLP endpoint (baked into bundle at build time)"
+check_secret  PUBLIC_OTEL_HEADERS                   "client OTLP auth headers — required for Axiom / cloud backends"
+
+# ── Seq (dev only) ────────────────────────────────────────────────────────────
+
+if ! $PROD; then
+  section "── Seq (dev)"
+  check_secret SEQ_ADMIN_PASSWORD "Seq container admin password — only needed when creating the container for the first time"
+  check_default SEQ_STORE  "~/.seq-store"  "Seq data directory (mounted into the Docker container)"
+fi
+
+# ── Summary ───────────────────────────────────────────────────────────────────
+
+echo ""
+if [[ $ERRORS -gt 0 ]]; then
+  echo -e "${RED}check-env: $ERRORS error(s), $WARNINGS warning(s) — fix errors before starting${NC}"
+  exit 1
+elif [[ $WARNINGS -gt 0 ]]; then
+  echo -e "${YELLOW}check-env: 0 errors, $WARNINGS warning(s) — some optional vars are unset${NC}"
+else
+  echo -e "${GREEN}check-env: all checks passed${NC}"
+fi

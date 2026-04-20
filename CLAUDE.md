@@ -336,6 +336,19 @@ describe("myParser", () => {
 
 Run with `bun test` from `server/`.
 
+### Add a new environment variable
+
+1. Add the variable to `.env.example` with a placeholder or default value and a one-line comment explaining it.
+2. Add a corresponding entry in `scripts/check-env.sh`:
+   - Use `check_secret` for API keys, passwords, and auth headers — the name is printed green/red; the value is never revealed.
+   - Use `check_default` for variables that have a safe built-in fallback.
+   - Use `check_not_localhost` for URL variables that must not point to localhost in production.
+   - Place the new check in the appropriate section (Server, Metadata, Telemetry, etc.); add a new `section` heading if the variable belongs to a new concern.
+3. If the variable is read in `server/src/config.ts`, add it to both `dev` and `prod` objects as appropriate.
+4. Run `bun check-env` to confirm the new variable shows up correctly.
+
+---
+
 **Hooks (see `client/src/hooks/`):**
 - `useChunkedPlayback(videoRef, videoId, resolution, onJobCreated?)` — primary playback hook; owns client-driven chunk scheduling, prefetch trigger at `chunkEnd - 60s`, seek restart at chunk boundaries, and background-buffer resolution switch; returns `{ status, error, startPlayback, seekTo }`
 - `useVideoPlayback(videoRef, videoId, onJobCreated?)` — thin wrapper around `useChunkedPlayback` that preserves the original `VideoPlayer` call-site signature; returns `{ status, error, startPlayback }`
