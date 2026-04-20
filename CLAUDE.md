@@ -385,7 +385,7 @@ Run with `bun test` from `server/`.
 ---
 
 **Hooks (see `client/src/hooks/`):**
-- `useChunkedPlayback(videoRef, videoId, resolution, onJobCreated?)` — primary playback hook; owns client-driven chunk scheduling, prefetch trigger at `chunkEnd - 60s`, seek restart at chunk boundaries, and background-buffer resolution switch; returns `{ status, error, startPlayback, seekTo }`
+- `useChunkedPlayback(videoRef, videoId, resolution, onJobCreated?)` — primary playback hook; owns client-driven chunk scheduling, prefetch trigger at `chunkEnd - 60s`, seek restart at chunk boundaries, background-buffer resolution switch, and the `chunk.stream` span per chunk (whose context is passed into `StreamingService.start` so the server's `stream.request` becomes its child); returns `{ status, error, startPlayback, seekTo }`
 - `useVideoPlayback(videoRef, videoId, onJobCreated?)` — thin wrapper around `useChunkedPlayback` that preserves the original `VideoPlayer` call-site signature; returns `{ status, error, startPlayback }`
 - `useVideoSync(videoRef)` — syncs `currentTime` and `isPlaying` from a `<video>` element using `requestAnimationFrame`; returns `{ currentTime, isPlaying }`
 - `useJobSubscription(jobId, onProgress)` — subscribes to `transcodeJobUpdated` for the given job ID and calls `onProgress` on each update; pass `null` to unsubscribe
@@ -889,6 +889,20 @@ After any significant session, run `/reflect` to capture non-obvious learnings i
 
 Full policy in `docs/observability.md`. Key rules agents must follow:
 
+**Spans at a glance.** When working in a file that emits telemetry, know which spans already exist before adding new ones:
+
+| Side | Span | Where it's opened |
+|---|---|---|
+| Client | `playback.session` | `useChunkedPlayback.startPlayback` |
+| Client | `chunk.stream` | `useChunkedPlayback.streamChunk` — one per chunk; its context is threaded into `StreamingService.start(parentContext)` so the `GET /stream/:jobId` fetch span (and the server's `stream.request`) nest under it |
+| Client | `graphql.request` | FetchInstrumentation (automatic) |
+| Server | `stream.request` | `routes/stream.ts` — child of client's `chunk.stream` |
+| Server | `job.resolve` | `chunker.startTranscodeJob` — covers cache-hit / inflight / restored-from-db / newly-started paths via one of four events (`job_cache_hit`, `job_inflight_resolved`, `job_restored_from_db`, `job_started`) |
+| Server | `transcode.job` | `chunker` when ffmpeg is actually spawned |
+| Server | `library.scan` | `libraryScanner.scanLibraries` |
+
+Add a new span only when none of these covers the work. Prefer `span.addEvent()` on an existing span for discrete transitions.
+
 **Message bodies must be self-describing.** A log record's body should read as a complete sentence without needing to expand attributes:
 ```ts
 // Bad
@@ -910,6 +924,8 @@ Standard kill reasons: `client_disconnected`, `stream_idle_timeout`, `orphan_no_
 **Don't cascade errors.** On a non-recoverable error in a processing loop, log once, set a `fatalError` flag, and break both the inner retry loop and the outer drain loop. Twenty identical errors mean the loop is not guarded.
 
 **What NOT to log:** per-segment appends (too noisy), re-scanned existing videos (only log newly discovered), successful no-ops, timing details that belong on span attributes.
+
+**No duplicate lifecycle logs when a span event already covers the transition.** If `chunker` fires a `job_started` event on `job.resolve`, do not also `log.info("Transcode started")`. If `BufferManager` logs the detailed back-pressure pause message, `StreamingService.pause()` must stay silent. Two records for the same event inflate Seq cost and split searches across near-duplicate strings. When in doubt: the owner closest to the state change keeps the log; everyone else gets a span event or nothing.
 
 **Client:** all async logs must carry the active session traceId — handled automatically by `getClientLogger`. All fetch calls in the playback path must be wrapped: `context.with(getSessionContext(), () => fetch(url, options))`.
 

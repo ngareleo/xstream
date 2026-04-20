@@ -63,10 +63,24 @@ Look for log entries with `service.name = xstream-server`. To filter:
 - Type `service.name = 'xstream-server'` and press Enter (or use the filter chips if available)
 - Take a screenshot of the filtered results
 
-## 5. Report result
+## 5. Check that the expected spans are present
 
-- **PASS**: At least one log entry from `xstream-server` is visible in the events list. Report how many entries are shown and the timestamp of the most recent one.
-- **FAIL**: No entries visible after filtering, or login failed. Include the relevant screenshots and describe what was shown.
+A pass isn't just "any entry is visible" — check that each of the spans the pipeline is supposed to open actually shows up after a playback session. Filter by `@SpanName` one at a time and confirm at least one hit per row:
+
+| Span | Emitted by | Expected per playback session |
+|---|---|---|
+| `playback.session` | client | exactly 1 |
+| `chunk.stream` | client | 1 per chunk streamed (≥ 1) |
+| `stream.request` | server | 1 per chunk request; must share `trace_id` with its `chunk.stream` |
+| `job.resolve` | server | 1 per chunk (every call to `startTranscodeJob`) |
+| `transcode.job` | server | 1 only on chunks that actually spawn ffmpeg (cache hits do not produce this) |
+
+If any row is empty, something in context propagation or instrumentation regressed. In particular: if `stream.request` exists but is *not* a child of any `chunk.stream` (trace view shows it as its own root), the traceparent threading in `StreamingService.start()` is broken — see `docs/observability.md` → "Threading trace context into streaming fetches".
+
+## 6. Report result
+
+- **PASS**: All rows in the table above produced at least one hit, and `stream.request` trace IDs match the enclosing `chunk.stream`. Report the most recent trace ID and one matching span from each row.
+- **FAIL**: Any row empty, or login failed, or `stream.request` is orphaned from `chunk.stream`. Include the relevant screenshots and describe which row(s) failed.
 
 ## Notes
 

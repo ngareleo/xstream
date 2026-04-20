@@ -31,20 +31,21 @@ W3C `traceparent` / `tracestate` headers are injected by the client's fetch inst
 ## What is instrumented
 
 ### Server
-| Span | Trigger | Key attributes |
+| Span | Trigger | Key attributes / events |
 |---|---|---|
-| `stream.request` | GET /stream/:jobId | `job_id`, `from_index`, `segments_sent` |
-| `transcode.job` | startTranscodeJob | `job_id`, `resolution`, `chunk_start_s`, `chunk_duration_s` |
+| `stream.request` | GET /stream/:jobId | `job_id`, `from_index`, `segments_sent`. Child of the client's `chunk.stream` span (see "Threading trace context into fetch" below). |
+| `job.resolve` | `startTranscodeJob()` entry — covers every code path that returns an `ActiveJob` | attrs: `job.id`, `job.video_id`, `job.resolution`, `job.chunk_start_s`. Events: `job_cache_hit` (already in `jobStore`), `job_inflight_resolved` (another call was mid-registration and we polled it out), `job_restored_from_db` (completed segments replayed from disk), `job_started` (new ffmpeg spawned). Exactly one event fires per span. |
+| `transcode.job` | ffmpeg process launch inside `startTranscodeJob` | `job_id`, `resolution`, `chunk_start_s`, `chunk_duration_s` |
 | `library.scan` | scanLibraries | `library_path`, `library_name`, `files_found` |
 
-Structured log events are emitted for each significant state transition (init ready, transcode complete, scan matched, etc.) with a `component` attribute for easy filtering.
+Structured log events are emitted for each significant state transition (init ready, transcode complete, scan matched, etc.) with a `component` attribute for easy filtering. When a span event already covers a state transition, do not emit a duplicate log record — prefer `span.addEvent()` over a parallel `log.info()`.
 
 ### Client
 | Span / log | Trigger | Key attributes |
 |---|---|---|
 | `playback.session` | startPlayback | `video_id`, `resolution` |
+| `chunk.stream` | each chunk streamed by `useChunkedPlayback` (opened around `StreamingService.start`) | `chunk.job_id`, `chunk.resolution`, `chunk.is_first`. FetchInstrumentation's HTTP span for `GET /stream/:jobId` is a child, and the server's `stream.request` is a child of that. |
 | `graphql.request` | every Relay fetch | `operation.name` (via fetch instrumentation) |
-| `stream.fetch` | StreamingService /stream/ fetch | `job_id` (via fetch instrumentation) |
 | log: `playback.start` | startPlayback called | `video_id`, `resolution`, `duration_s` |
 | log: `playback.seek` | seek triggered | `seek_target_s`, `snapped_to_s` |
 | log: `playback.stall` | buffering >2s | `stall_duration_ms` |
@@ -137,6 +138,35 @@ await context.with(getSessionContext(), () => fetch(url, options));
 ```
 
 Without this, `FetchInstrumentation` injects a new random traceId for each fetch, breaking the server → client link in Seq.
+
+---
+
+### Threading trace context into streaming fetches
+
+The chunked-playback loop opens a per-chunk span and threads its context all the way into the `fetch()` call, so the server's `stream.request` nests under the correct `chunk.stream` rather than appearing as an orphan root trace.
+
+```ts
+// In useChunkedPlayback.streamChunk():
+const chunkSpan = playbackTracer.startSpan(
+  "chunk.stream",
+  { attributes: { "chunk.job_id": rawJobId, "chunk.resolution": res, "chunk.is_first": isFirstChunk } },
+  getSessionContext()
+);
+const chunkCtx = trace.setSpan(getSessionContext(), chunkSpan);
+
+// StreamingService.start takes parentContext as its final argument:
+await svc.start(rawJobId, 0, onSegment, onError, onDone, chunkCtx);
+
+// Inside StreamingService.start:
+response = await context.with(parentContext, () =>
+  fetch(url, { signal: controller?.signal })
+);
+```
+
+Two easy-to-miss invariants:
+
+1. **`context.with(parentContext, fetch(...))` must wrap the `fetch()` call itself, not just the surrounding async function.** FetchInstrumentation reads the active context synchronously when the request is initiated; awaiting inside `context.with` is fine, but the `fetch()` call must be made inside it.
+2. **End the span on both success and error paths** — wrap the `onDone` and `onError` callbacks to call `chunkSpan.end()` (and `setStatus({ code: SpanStatusCode.ERROR })` on error). A leaked span silently poisons child context attribution for the rest of the session.
 
 ---
 
@@ -272,8 +302,16 @@ Axiom accepts OTLP/HTTP natively. Other OTLP-compatible backends (Grafana Cloud,
 
 ## Seq API key setup
 
-1. Run `bun seq:start` and open [http://localhost:5341](http://localhost:5341)
-2. Sign in with the admin password from `.env` (`SEQ_ADMIN_PASSWORD`)
+1. Run `bun run seq:start` — this auto-generates `.seq-credentials` on first run (gitignored, project root) and boots the container. Open [http://localhost:5341](http://localhost:5341).
+2. Sign in with the username + password from `.seq-credentials`:
+   ```sh
+   grep '^SEQ_ADMIN_USERNAME=' .seq-credentials | cut -d= -f2
+   grep '^SEQ_ADMIN_PASSWORD=' .seq-credentials | cut -d= -f2
+   ```
+   Seq forces a password change on the first login — pick a new password and immediately write it back to `.seq-credentials` so the `/otel-logs` skill (and future logins) can still find it:
+   ```sh
+   printf 'SEQ_ADMIN_USERNAME=admin\nSEQ_ADMIN_PASSWORD=<new>\n' > .seq-credentials
+   ```
 3. Navigate to **Settings → API Keys → Add API Key**
 4. Give it a name (e.g. `xstream-dev`), set permissions to **Ingest**
 5. Copy the key and add it to `.env`:
@@ -282,6 +320,8 @@ Axiom accepts OTLP/HTTP natively. Other OTLP-compatible backends (Grafana Cloud,
    PUBLIC_OTEL_HEADERS=X-Seq-ApiKey=<key>
    ```
 6. Restart the dev server (`bun run dev`) — telemetry will start flowing immediately
+
+To reset Seq entirely (forget the container-initial password), see CLAUDE.md → "Local Dev Setup → Seq credentials" — you must delete both the container and `~/.seq-store` before `SEQ_FIRSTRUN_ADMINPASSWORD` will be honoured again.
 
 ---
 
