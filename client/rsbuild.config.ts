@@ -40,6 +40,10 @@ export default defineConfig({
     port: 5173,
     proxy: {
       "/graphql": { target: "http://localhost:3001", ws: true },
+      // Forward client OTLP telemetry to local Seq — avoids CORS issues in dev.
+      // In production the client bundle is configured to POST directly to the
+      // cloud OTLP endpoint (e.g. Axiom) via PUBLIC_OTEL_ENDPOINT.
+      "/ingest/otlp": { target: "http://localhost:5341", changeOrigin: true },
       "/stream": {
         target: "http://localhost:3001",
         // Streaming responses are long-lived — disable proxy timeout so the

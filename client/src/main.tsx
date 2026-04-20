@@ -1,3 +1,8 @@
+// initTelemetry() must run before any fetch call so that FetchInstrumentation
+// patches window.fetch before Relay or StreamingService make their first request.
+import { initTelemetry } from "./telemetry.js";
+initTelemetry();
+
 import "./styles/global.css";
 
 import { mapEventMetadata, NovaEventingProvider } from "@nova/react";

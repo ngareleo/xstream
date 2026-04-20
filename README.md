@@ -13,6 +13,7 @@ High-resolution web streaming with a full resolution ladder (240p → 4K). The s
 
 - [Bun](https://bun.sh) v1.1+
 - `ffmpeg` accessible via `@ffmpeg-installer/ffmpeg` (installed automatically as a dependency — no system ffmpeg required)
+- [Docker](https://docs.docker.com/get-docker/) (required for Seq log management — optional for basic development)
 
 ---
 
@@ -118,6 +119,41 @@ See [`docs/architecture.md`](docs/architecture.md) for a full system overview.
 | [`docs/graphql-schema.md`](docs/graphql-schema.md) | Full GraphQL schema, Relay compliance, subscriptions |
 | [`docs/streaming-protocol.md`](docs/streaming-protocol.md) | Binary framing spec, MSE constraints, seeking |
 | [`docs/config.md`](docs/config.md) | mediaFiles.json format, AppConfig, resolution profiles |
+
+---
+
+## Observability
+
+tvke uses [OpenTelemetry](https://opentelemetry.io/) for structured logs and distributed traces. In development, telemetry is routed to a local [Seq](https://datalust.co/seq) instance. Switching to a cloud backend (e.g. Axiom) in production requires only env var changes — no code changes.
+
+### Setup
+
+1. Copy the example env file and fill in the credentials:
+
+```bash
+cp .env.example .env
+```
+
+2. Start Seq:
+
+```bash
+bun seq:start
+```
+
+3. Open [http://localhost:5341](http://localhost:5341), sign in, then create an API key under **Settings → API Keys**.
+
+4. Add the key to `.env`:
+
+```
+OTEL_EXPORTER_OTLP_HEADERS=X-Seq-ApiKey=<your-key>
+PUBLIC_OTEL_HEADERS=X-Seq-ApiKey=<your-key>
+```
+
+5. Restart the dev server — logs and traces will start appearing in Seq immediately.
+
+To stop Seq: `bun seq:stop`
+
+See [`docs/observability.md`](docs/observability.md) for the full telemetry architecture and instructions for switching to a production backend.
 
 ---
 

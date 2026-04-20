@@ -10,6 +10,7 @@ import { getAllLibraries, upsertLibrary } from "../db/queries/libraries.js";
 import { getUnmatchedVideoIds, upsertVideoMetadata } from "../db/queries/videoMetadata.js";
 import { replaceVideoStreams, upsertVideo } from "../db/queries/videos.js";
 import { getVideoById } from "../db/queries/videos.js";
+import { getOtelLogger, getTracer } from "../telemetry.js";
 import type {
   LibraryRow,
   MediaLibraryEntry,
@@ -20,6 +21,9 @@ import type {
 import { DEFAULT_VIDEO_EXTENSIONS } from "../types.js";
 import { isOmdbConfigured, searchOmdb } from "./omdbService.js";
 import { isScanRunning, markScanEnded, markScanProgress, markScanStarted } from "./scanStore.js";
+
+const log = getOtelLogger("scanner");
+const scannerTracer = getTracer("scanner");
 
 ffmpeg.setFfmpegPath(ffmpegInstaller.path);
 ffmpeg.setFfprobePath(ffprobeInstaller.path);
@@ -173,6 +177,7 @@ async function scanLibraryEntry(entry: MediaLibraryEntry): Promise<LibraryRow> {
   // Emit immediately so the client sees this library enter scanning state.
   markScanProgress(libraryId, 0, total);
   console.log(`[scanner] Found ${total} video(s) in "${entry.name}"`);
+  log.info("Library scan started", { library_name: entry.name, files_found: total });
 
   // Wrap each file task to emit a progress event after it completes.
   const taskFns = filePaths.map((filePath) => async () => {
@@ -264,6 +269,11 @@ async function autoMatchLibrary(libraryId: string, libraryName: string): Promise
       };
       upsertVideoMetadata(metadata);
       console.log(`[scanner] Matched: "${video.filename}" → "${result.title}" (${result.imdbId})`);
+      log.info("Video matched", {
+        filename: video.filename,
+        matched_title: result.title,
+        imdb_id: result.imdbId,
+      });
     }
 
     done++;
@@ -289,6 +299,8 @@ export async function scanLibraries(): Promise<LibraryRow[]> {
   // simultaneous library queries each triggering a background scan).
   markScanStarted();
 
+  const scanSpan = scannerTracer.startSpan("library.scan");
+
   try {
     const existingLibraries = getAllLibraries();
     const entries: MediaLibraryEntry[] = existingLibraries.map((lib) => ({
@@ -305,6 +317,7 @@ export async function scanLibraries(): Promise<LibraryRow[]> {
       })(),
     }));
 
+    scanSpan.setAttribute("library.count", entries.length);
     const results: LibraryRow[] = [];
 
     for (const entry of entries) {
@@ -312,16 +325,21 @@ export async function scanLibraries(): Promise<LibraryRow[]> {
         await access(entry.path);
       } catch {
         console.warn(`[scanner] Path not accessible, skipping: ${entry.path}`);
+        log.warn("Library path not accessible", { path: entry.path });
+        scanSpan.addEvent("library_skipped", { path: entry.path });
         continue;
       }
       const row = await scanLibraryEntry(entry);
       results.push(row);
+      scanSpan.addEvent("library_scanned", { library_name: entry.name });
       // Auto-match unmatched videos after each library is fully indexed
       await autoMatchLibrary(row.id, row.name);
     }
 
+    scanSpan.addEvent("scan_complete", { library_count: results.length });
     return results;
   } finally {
+    scanSpan.end();
     markScanEnded();
   }
 }

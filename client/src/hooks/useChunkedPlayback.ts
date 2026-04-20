@@ -5,8 +5,11 @@ import type { useChunkedPlaybackStartChunkMutation } from "~/relay/__generated__
 import { BufferManager } from "~/services/BufferManager.js";
 import { StreamingLogger } from "~/services/StreamingLogger.js";
 import { StreamingService } from "~/services/StreamingService.js";
+import { getClientLogger } from "~/telemetry.js";
 import type { Resolution } from "~/types.js";
 import { DISPLAY_TO_GQL, RESOLUTION_MIME_TYPE } from "~/types.js";
+
+const playbackLog = getClientLogger("playback");
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -149,6 +152,7 @@ export function useChunkedPlayback(
 
     onJobCreatedRef.current?.(null);
     StreamingLogger.push({ category: "PLAYBACK", message: "Teardown", isError: false });
+    playbackLog.info("Playback teardown");
   }, []);
 
   // ── Chunk streaming helper ─────────────────────────────────────────────────
@@ -217,6 +221,10 @@ export function useChunkedPlayback(
                       message: `video.play() — status: playing (buffered ${buffer.bufferedEnd.toFixed(1)}s >= ${startupTarget}s)`,
                       isError: false,
                     });
+                    playbackLog.info("Playback started", {
+                      buffered_s: parseFloat(buffer.bufferedEnd.toFixed(1)),
+                      startup_target_s: startupTarget,
+                    });
                   }
                 };
 
@@ -245,6 +253,7 @@ export function useChunkedPlayback(
           } catch (err) {
             const msg = `Buffer error: ${(err as Error).message}`;
             StreamingLogger.push({ category: "PLAYBACK", message: msg, isError: true });
+            playbackLog.error("Buffer append error", { message: (err as Error).message });
             onError(err as Error);
           }
         },
@@ -310,6 +319,7 @@ export function useChunkedPlayback(
           onError: (err) => {
             const msg = `Mutation error: ${err.message}`;
             StreamingLogger.push({ category: "PLAYBACK", message: msg, isError: true });
+            playbackLog.error("Chunk mutation error", { message: err.message });
             reject(new Error(msg));
           },
         });
@@ -441,14 +451,17 @@ export function useChunkedPlayback(
       // Only debounce-show the spinner for mid-playback stalls (not during the
       // initial startup loading phase which already has its own spinner path).
       if (!hasStartedPlaybackRef.current) return;
+      const stallStartedAt = Date.now();
       bufferingTimerRef.current = setTimeout(() => {
         bufferingTimerRef.current = null;
         setStatus("loading");
+        const stallDurationMs = Date.now() - stallStartedAt;
         StreamingLogger.push({
           category: "PLAYBACK",
           message: "Buffering stall >2s — showing spinner",
           isError: false,
         });
+        playbackLog.warn("Buffering stall", { stall_duration_ms: stallDurationMs });
       }, 2000);
     };
 
@@ -561,6 +574,10 @@ export function useChunkedPlayback(
         message: `Seek to ${seekTime.toFixed(1)}s → snapping to chunk boundary ${snapTime}s`,
         isError: false,
       });
+      playbackLog.info("Seek", {
+        seek_target_s: parseFloat(seekTime.toFixed(1)),
+        snapped_to_s: snapTime,
+      });
 
       // Cancel active stream and flush the buffer
       activeStreamRef.current?.cancel();
@@ -628,6 +645,10 @@ export function useChunkedPlayback(
         category: "PLAYBACK",
         message: `Resolution switch → ${newRes} — background buffer starting at ${chunkStart}s`,
         isError: false,
+      });
+      playbackLog.info("Resolution switch initiated", {
+        to: newRes,
+        chunk_start_s: chunkStart,
       });
 
       // Cancel any in-flight background buffer
@@ -761,6 +782,11 @@ export function useChunkedPlayback(
         category: "PLAYBACK",
         message: `startPlayback — resolution: ${res}, videoDuration: ${videoDurationS}s`,
         isError: false,
+      });
+      playbackLog.info("Playback initiated", {
+        video_id: videoId,
+        resolution: res,
+        duration_s: videoDurationS,
       });
 
       const buffer = new BufferManager(

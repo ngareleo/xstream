@@ -18,6 +18,18 @@
 
 - [ ] **CACHE-002** Expose cache stats in Settings: show total disk usage and quota with a "Clear cache" button. Uses `getCacheSizeBytes()` from `diskCache.ts`.
 
+## Observability (Release)
+
+These items require the OTel metrics SDK (`MeterProvider`) which is not yet wired up. Complete after the dev log/trace baseline is stable.
+
+- [ ] **OBS-001** Client buffer rate metrics: stall duration and buffer-underrun count per playback session. Instrument `useChunkedPlayback` buffering events with `Histogram` and `Counter` instruments from `@opentelemetry/api`.
+
+- [ ] **OBS-002** Error rate breakdown and classification: track error counts by component (`mse`, `network`, `graphql`, `transcode`) using OTel `Counter` with a `component` attribute. Distinguish transient (retried) vs. terminal errors.
+
+- [ ] **OBS-003** Usage metrics: concurrent stream count, resolution distribution (which resolutions are most used), and session duration. Export as OTel `UpDownCounter` and `Histogram`.
+
+- [ ] **OBS-004** OTel metrics SDK wiring: add `MeterProvider` with a `BatchMetricExporter` + `PeriodicExportingMetricReader` to both `server/src/telemetry.ts` and `client/src/telemetry.ts`. The `@opentelemetry/sdk-metrics` package is not yet installed.
+
 ## Settings / UI
 
 - [ ] **SETTINGS-001** User-configurable forward buffer: `BufferManager` now accepts `forwardTargetSeconds` but the Settings UI for it (key: `"forwardBufferTargetSeconds"`) is not yet wired up. Add a numeric input to the Settings page (new "Playback" tab), read via Relay, persist via `setSetting` mutation.

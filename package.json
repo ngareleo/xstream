@@ -15,6 +15,8 @@
     "stop": "bash scripts/stop.sh",
     "clean": "bash scripts/clean.sh",
     "clean:db": "bash scripts/clean.sh --db",
+    "seq:start": "bash scripts/seq-start.sh",
+    "seq:stop": "bash scripts/seq-stop.sh",
     "prepare": "husky"
   },
   "devDependencies": {
