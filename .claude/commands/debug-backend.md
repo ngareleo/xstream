@@ -61,7 +61,7 @@ The first 4 bytes are a big-endian uint32 (length of the following fMP4 init seg
 
 ```bash
 # Open the SQLite DB directly (dev path)
-sqlite3 server/tmp/tvke.db
+sqlite3 server/tmp/xstream.db
 
 # List all tables
 .tables

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tvke stop — kill the server, client dev server, and any running ffmpeg jobs.
+# xstream stop — kill the server, client dev server, and any running ffmpeg jobs.
 # Safe to run at any time; reports what it killed and exits 0 even if nothing
 # was running.
 

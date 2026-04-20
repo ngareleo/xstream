@@ -1,5 +1,5 @@
 /**
- * OpenTelemetry bootstrap for the tvke browser client.
+ * OpenTelemetry bootstrap for the xstream browser client.
  *
  * Call initTelemetry() as the very first statement in main.tsx, before
  * ReactDOM.createRoot(), so that fetch instrumentation patches window.fetch
@@ -63,7 +63,7 @@ export function initTelemetry(): void {
   initialized = true;
 
   const resource = resourceFromAttributes({
-    "service.name": "tvke-client",
+    "service.name": "xstream-client",
     "deployment.environment": import.meta.env.MODE ?? "development",
   });
 

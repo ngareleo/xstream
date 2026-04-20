@@ -1,4 +1,4 @@
-You are running an end-to-end test of the tvke video streaming app using the Playwright MCP browser tools.
+You are running an end-to-end test of the xstream video streaming app using the Playwright MCP browser tools.
 
 Follow these steps exactly:
 
@@ -17,7 +17,7 @@ lsof -i :3001 -i :5173 | grep LISTEN
   ```sh
   bun run dev
   ```
-  Run this command in the background from the project root (`/home/dag/Projects/tvke`). Wait 5 seconds, then re-check both ports are listening before continuing.
+  Run this command in the background from the project root (`/home/dag/Projects/xstream`). Wait 5 seconds, then re-check both ports are listening before continuing.
 - If **only one port is missing**, start only the missing process:
   - Client only: `cd client && bun run dev` (background)
   - Server only: `cd server && bun run dev` (background)

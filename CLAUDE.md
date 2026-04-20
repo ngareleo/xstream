@@ -1,8 +1,8 @@
-# tvke — Agent Context
+# xstream — Agent Context
 
 ## What This Is
 
-tvke is a high-resolution web streaming application. The server transcodes video files to fMP4 segments using ffmpeg and streams them over HTTP as raw binary chunks. The client receives those chunks and renders them using the browser's Media Source Extensions (MSE) API.
+xstream is a high-resolution web streaming application. The server transcodes video files to fMP4 segments using ffmpeg and streams them over HTTP as raw binary chunks. The client receives those chunks and renders them using the browser's Media Source Extensions (MSE) API.
 
 **Current phase:** 4K/1080p fixed-resolution streaming with a full resolution ladder (240p → 4K). Adaptive bitrate switching is deferred.
 
@@ -28,7 +28,7 @@ tvke is a high-resolution web streaming application. The server transcodes video
 ## Repo Layout
 
 ```
-tvke/
+xstream/
 ├── CLAUDE.md                      # this file
 ├── package.json                   # bun workspace root
 ├── tsconfig.base.json             # shared TS compiler options
@@ -170,7 +170,7 @@ tvke/
 
 7. **Revoke object URLs on teardown** — `BufferManager.teardown()` calls `URL.revokeObjectURL()`. Always call teardown when the player unmounts or a resolution switch occurs.
 
-8. **`content_fingerprint` is non-null** — the `videos` table was created with `content_fingerprint TEXT NOT NULL`. If you have an old `tmp/tvke.db` without this column, delete it and let the server recreate it on startup. There is no backward-compatible migration; this was an intentional breaking schema change.
+8. **`content_fingerprint` is non-null** — the `videos` table was created with `content_fingerprint TEXT NOT NULL`. If you have an old `tmp/xstream.db` without this column, delete it and let the server recreate it on startup. There is no backward-compatible migration; this was an intentional breaking schema change.
 
 9. **Relay global IDs must be URL-encoded in route links** — Relay global IDs are base64 and can contain `/`, `+`, `=`. Always use `encodeURIComponent(id)` when constructing `/player/:videoId` or any route that embeds a Relay ID. The page must call `decodeURIComponent` (or `resolveVideoId`) on the param before passing it to Relay.
 
@@ -189,7 +189,7 @@ tvke/
 `tmp/` layout:
 ```
 tmp/
-  tvke.db               # SQLite database
+  xstream.db               # SQLite database
   segments/
     <jobId>/            # one directory per transcode job
       init.mp4          # init segment (moov box)

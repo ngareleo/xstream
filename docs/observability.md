@@ -1,6 +1,6 @@
 # Observability
 
-tvke uses OpenTelemetry (OTel) for structured logs and distributed traces. The telemetry backend is configured entirely through environment variables — switching from local Seq to a cloud provider (Axiom, Grafana Cloud, etc.) requires no code changes.
+xstream uses OpenTelemetry (OTel) for structured logs and distributed traces. The telemetry backend is configured entirely through environment variables — switching from local Seq to a cloud provider (Axiom, Grafana Cloud, etc.) requires no code changes.
 
 ---
 
@@ -96,11 +96,11 @@ To route telemetry to Axiom in production, update the env vars (no code changes 
 ```bash
 # Server
 OTEL_EXPORTER_OTLP_ENDPOINT=https://api.axiom.co
-OTEL_EXPORTER_OTLP_HEADERS=Authorization=Bearer <axiom-token>,X-Axiom-Dataset=tvke-prod
+OTEL_EXPORTER_OTLP_HEADERS=Authorization=Bearer <axiom-token>,X-Axiom-Dataset=xstream-prod
 
 # Client (set before running bun run build)
 PUBLIC_OTEL_ENDPOINT=https://api.axiom.co
-PUBLIC_OTEL_HEADERS=Authorization=Bearer <axiom-token>,X-Axiom-Dataset=tvke-prod
+PUBLIC_OTEL_HEADERS=Authorization=Bearer <axiom-token>,X-Axiom-Dataset=xstream-prod
 ```
 
 Axiom accepts OTLP/HTTP natively. Other OTLP-compatible backends (Grafana Cloud, Honeycomb, Jaeger, etc.) follow the same pattern — just change the endpoint and headers.
@@ -112,7 +112,7 @@ Axiom accepts OTLP/HTTP natively. Other OTLP-compatible backends (Grafana Cloud,
 1. Run `bun seq:start` and open [http://localhost:5341](http://localhost:5341)
 2. Sign in with the admin password from `.env` (`SEQ_ADMIN_PASSWORD`)
 3. Navigate to **Settings → API Keys → Add API Key**
-4. Give it a name (e.g. `tvke-dev`), set permissions to **Ingest**
+4. Give it a name (e.g. `xstream-dev`), set permissions to **Ingest**
 5. Copy the key and add it to `.env`:
    ```
    OTEL_EXPORTER_OTLP_HEADERS=X-Seq-ApiKey=<key>

@@ -2,7 +2,7 @@
 
 ## Overview
 
-tvke is split into two workspaces: a Bun server and an Rsbuild/React client. The server handles media indexing, video transcoding, and streaming. The client renders a browsable library and a streaming video player.
+xstream is split into two workspaces: a Bun server and an Rsbuild/React client. The server handles media indexing, video transcoding, and streaming. The client renders a browsable library and a streaming video player.
 
 > **Note on the server implementation:** The Bun/JS server is a prototype for rapid architecture validation. A Rust rewrite is planned for production performance at 4K bitrates. The GraphQL schema and the `/stream/:jobId` binary protocol are the stable contracts — the client will require no changes across the rewrite provided these interfaces stay compatible. See `CLAUDE.md` for the exact compatibility requirements.
 
@@ -32,7 +32,7 @@ tvke is split into two workspaces: a Bun server and an Rsbuild/React client. The
 │         chunker.ts                        libraryScanner.ts    │ │
 │         ffmpeg → .m4s segments            ffprobe → DB         │ │
 │              │                                  │              │ │
-│         tmp/segments/<jobId>/            SQLite (tmp/tvke.db)  │ │
+│         tmp/segments/<jobId>/            SQLite (tmp/xstream.db)  │ │
 │                                                │              │ │
 │                                         db/queries/           │ │
 └───────────────────────────────────────────────────────────────┘

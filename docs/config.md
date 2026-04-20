@@ -59,7 +59,7 @@ Active when `NODE_ENV` is absent or `development`.
 |---|---|
 | `port` | `3001` |
 | `segmentDir` | `./tmp/segments` (relative to project root) |
-| `dbPath` | `./tmp/tvke.db` |
+| `dbPath` | `./tmp/xstream.db` |
 | `mediaConfigPath` | `./mediaFiles.json` |
 | `scanIntervalMs` | `30000` |
 
@@ -71,7 +71,7 @@ Active when `NODE_ENV=production`. Fields marked with an env var are required in
 |---|---|---|
 | `port` | `PORT` | `8080` |
 | `segmentDir` | `SEGMENT_DIR` | `./tmp/segments` |
-| `dbPath` | `DB_PATH` | `./tmp/tvke.db` |
+| `dbPath` | `DB_PATH` | `./tmp/xstream.db` |
 | `mediaConfigPath` | — | `./mediaFiles.json` |
 | `scanIntervalMs` | `SCAN_INTERVAL_MS` | `30000` |
 
@@ -83,9 +83,9 @@ In production, `segmentDir` and `dbPath` should be set to persistent storage loc
 
 ```
 tmp/
-├── tvke.db                    # SQLite database (WAL mode)
-├── tvke.db-shm                # WAL shared memory file
-├── tvke.db-wal                # WAL write-ahead log
+├── xstream.db                    # SQLite database (WAL mode)
+├── xstream.db-shm                # WAL shared memory file
+├── xstream.db-wal                # WAL write-ahead log
 └── segments/
     └── <jobId>/               # SHA-1 of (content_fingerprint + resolution + startS + endS)
         ├── init.mp4           # fMP4 init segment (moov box)

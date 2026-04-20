@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# tvke — setup script
+# xstream — setup script
 # Installs bun (if missing), dependencies, and prepares the project for development.
 
 GREEN='\033[0;32m'
@@ -9,9 +9,9 @@ YELLOW='\033[1;33m'
 RED='\033[0;31m'
 NC='\033[0m' # no colour
 
-info()    { echo -e "${GREEN}[tvke]${NC} $*"; }
-warning() { echo -e "${YELLOW}[tvke]${NC} $*"; }
-error()   { echo -e "${RED}[tvke]${NC} $*" >&2; exit 1; }
+info()    { echo -e "${GREEN}[xstream]${NC} $*"; }
+warning() { echo -e "${YELLOW}[xstream]${NC} $*"; }
+error()   { echo -e "${RED}[xstream]${NC} $*" >&2; exit 1; }
 
 # ── 0. Docker (optional — required for Seq) ───────────────────────────────────
 

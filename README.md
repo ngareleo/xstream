@@ -1,4 +1,4 @@
-# tvke
+# xstream
 
 High-resolution web streaming with a full resolution ladder (240p → 4K). The server transcodes video files on demand using ffmpeg and streams fMP4 segments over HTTP. The client renders them using the browser's Media Source Extensions (MSE) API.
 
@@ -96,13 +96,13 @@ The server scans your configured media libraries on startup. You should see your
 ## Project Structure
 
 ```
-tvke/
+xstream/
 ├── mediaFiles.json        # media library paths (edit locally)
 ├── server/                # Bun server (GraphQL + streaming)
 ├── client/                # Vite + React client
 ├── docs/                  # architecture documentation
 └── tmp/                   # generated at runtime (gitignored)
-    ├── tvke.db            # SQLite database
+    ├── xstream.db            # SQLite database
     └── segments/          # ffmpeg segment cache
 ```
 
@@ -124,7 +124,7 @@ See [`docs/architecture.md`](docs/architecture.md) for a full system overview.
 
 ## Observability
 
-tvke uses [OpenTelemetry](https://opentelemetry.io/) for structured logs and distributed traces. In development, telemetry is routed to a local [Seq](https://datalust.co/seq) instance. Switching to a cloud backend (e.g. Axiom) in production requires only env var changes — no code changes.
+xstream uses [OpenTelemetry](https://opentelemetry.io/) for structured logs and distributed traces. In development, telemetry is routed to a local [Seq](https://datalust.co/seq) instance. Switching to a cloud backend (e.g. Axiom) in production requires only env var changes — no code changes.
 
 ### Setup
 
@@ -162,8 +162,8 @@ See [`docs/observability.md`](docs/observability.md) for the full telemetry arch
 ```bash
 NODE_ENV=production \
   PORT=8080 \
-  SEGMENT_DIR=/var/tvke/segments \
-  DB_PATH=/var/tvke/tvke.db \
+  SEGMENT_DIR=/var/xstream/segments \
+  DB_PATH=/var/xstream/xstream.db \
   bun run start
 ```
 

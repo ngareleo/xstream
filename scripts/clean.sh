@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
-# tvke clean — stop all processes, then wipe encoded segment output.
+# xstream clean — stop all processes, then wipe encoded segment output.
 #
 # What gets removed:
 #   tmp/segments/*/     — ffmpeg output directories (can be GBs; safe to delete,
 #                         re-transcode on demand)
-#   /tmp/tvke-test-*/   — per-PID SQLite databases written by the test suite
+#   /tmp/xstream-test-*/   — per-PID SQLite databases written by the test suite
 #
 # What is NOT removed:
-#   tmp/tvke.db         — the media library database; survives so you don't
+#   tmp/xstream.db         — the media library database; survives so you don't
 #                         lose library/video metadata between runs
 #
-# Pass --db to also wipe tmp/tvke.db (forces a full rescan on next startup):
+# Pass --db to also wipe tmp/xstream.db (forces a full rescan on next startup):
 #   ./scripts/clean.sh --db
 
 set -euo pipefail
@@ -47,11 +47,11 @@ fi
 
 # ── 3. Remove test databases ──────────────────────────────────────────────────
 
-test_dirs=(/tmp/tvke-test-*)
-if compgen -G "/tmp/tvke-test-*" > /dev/null 2>&1; then
+test_dirs=(/tmp/xstream-test-*)
+if compgen -G "/tmp/xstream-test-*" > /dev/null 2>&1; then
   test_size=$(du -sh "${test_dirs[@]}" 2>/dev/null | awk '{sum += $1} END {print sum "K"}' || echo "?")
-  rm -rf /tmp/tvke-test-*
-  info "Cleared test databases (/tmp/tvke-test-*)"
+  rm -rf /tmp/xstream-test-*
+  info "Cleared test databases (/tmp/xstream-test-*)"
 else
   info "No test databases found"
 fi
@@ -59,7 +59,7 @@ fi
 # ── 4. Optionally wipe the main DB ───────────────────────────────────────────
 
 if $WIPE_DB; then
-  db="$ROOT/tmp/tvke.db"
+  db="$ROOT/tmp/xstream.db"
   for f in "$db" "${db}-shm" "${db}-wal"; do
     [ -f "$f" ] && rm -f "$f" && info "Removed $f"
   done

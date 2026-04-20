@@ -1,5 +1,5 @@
 /**
- * OpenTelemetry bootstrap for the tvke server.
+ * OpenTelemetry bootstrap for the xstream server.
  *
  * Must be the first side-effecting import in server/src/index.ts so that the
  * global TracerProvider and propagator are registered before any service code
@@ -11,7 +11,7 @@
  * two environment variables — no code changes required:
  *
  *   OTEL_EXPORTER_OTLP_ENDPOINT=https://api.axiom.co
- *   OTEL_EXPORTER_OTLP_HEADERS=Authorization=Bearer <token>,X-Axiom-Dataset=tvke-prod
+ *   OTEL_EXPORTER_OTLP_HEADERS=Authorization=Bearer <token>,X-Axiom-Dataset=xstream-prod
  */
 
 import { propagation, trace, type Tracer } from "@opentelemetry/api";
@@ -46,7 +46,7 @@ const endpoint = process.env.OTEL_EXPORTER_OTLP_ENDPOINT ?? "http://localhost:53
 const headers = parseHeadersEnv(process.env.OTEL_EXPORTER_OTLP_HEADERS);
 
 const resource = resourceFromAttributes({
-  "service.name": "tvke-server",
+  "service.name": "xstream-server",
   "deployment.environment": process.env.NODE_ENV ?? "development",
 });
 

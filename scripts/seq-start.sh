@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tvke seq-start — start (or create) the Seq log management container.
+# xstream seq-start — start (or create) the Seq log management container.
 # Safe to run when Seq is already running — exits immediately with a status message.
 
 set -euo pipefail

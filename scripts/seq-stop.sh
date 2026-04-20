@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tvke seq-stop — stop the Seq log management container.
+# xstream seq-stop — stop the Seq log management container.
 # Safe to run when Seq is not running — exits immediately with a status message.
 
 set -euo pipefail
