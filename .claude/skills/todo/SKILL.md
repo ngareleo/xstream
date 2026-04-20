@@ -1,3 +1,9 @@
+---
+name: todo
+description: Read and manage the project todo list at docs/todo.md. Use when checking what's pending, adding a new task, or marking one done.
+allowed-tools: Read Write
+---
+
 Read the file at `docs/todo.md` in the current project root.
 
 If arguments are provided, interpret them as one of the following commands:

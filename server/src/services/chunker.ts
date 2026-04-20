@@ -1,5 +1,6 @@
 import ffmpegInstaller from "@ffmpeg-installer/ffmpeg";
 import ffprobeInstaller from "@ffprobe-installer/ffprobe";
+import { type Context as OtelContext, SpanStatusCode } from "@opentelemetry/api";
 import { createHash } from "crypto";
 import ffmpeg, { type FfmpegCommand } from "fluent-ffmpeg";
 import { watch } from "fs";
@@ -10,11 +11,14 @@ import { config, RESOLUTION_PROFILES } from "../config.js";
 import { getJobById, insertJob, updateJobStatus } from "../db/queries/jobs.js";
 import { getSegmentsByJob, insertSegment } from "../db/queries/segments.js";
 import { getVideoById } from "../db/queries/videos.js";
+import { getOtelLogger, getTracer } from "../telemetry/index.js";
 import type { ActiveJob, Resolution } from "../types.js";
 import { FFmpegFile } from "./ffmpegFile.js";
 import { getJob, setJob } from "./jobStore.js";
 
 ffmpeg.setFfmpegPath(ffmpegInstaller.path);
+const log = getOtelLogger("chunker");
+const chunkerTracer = getTracer("chunker");
 ffmpeg.setFfprobePath(ffprobeInstaller.path);
 
 // Tracks all ffmpeg processes currently encoding so they can be killed on shutdown.
@@ -25,6 +29,10 @@ const activeCommands = new Map<string, FfmpegCommand>();
 // mark the job "complete" with a truncated segment set. This set lets the "end" handler
 // detect a kill and treat the exit as an error instead.
 const killedJobs = new Set<string>();
+
+// Reason for each deliberate kill, consumed by the .on("end") handler to annotate
+// the job span and log record with why ffmpeg was stopped.
+const killReasons = new Map<string, string>();
 
 // Job IDs currently being initialized — between the start of startTranscodeJob and
 // the setJob() call that makes them visible in jobStore. Guards against concurrent
@@ -61,7 +69,7 @@ export async function killAllActiveJobs(timeoutMs = 5000): Promise<void> {
       };
       command.once("end", cleanup);
       command.once("error", cleanup);
-      console.log(`[chunker] Killing job ${id.slice(0, 8)}`);
+      log.info("Killing ffmpeg — server_shutdown", { job_id: id, kill_reason: "server_shutdown" });
       killedJobs.add(id);
       try {
         command.kill("SIGTERM");
@@ -77,7 +85,7 @@ export async function killAllActiveJobs(timeoutMs = 5000): Promise<void> {
 
   // SIGKILL any processes that didn't exit within the timeout
   for (const [id, command] of activeCommands) {
-    console.warn(`[chunker] Force-killing job ${id.slice(0, 8)} (SIGTERM timeout)`);
+    log.warn("Force-killing job (SIGTERM timeout)", { job_id: id });
     try {
       command.kill("SIGKILL");
     } catch {
@@ -97,18 +105,20 @@ function jobId(contentKey: string, resolution: Resolution, start?: number, end?:
  * Kills the ffmpeg process for a specific job. Safe to call even if the job has
  * already finished — the command map won't contain it in that case.
  */
-export function killJob(id: string): void {
+export function killJob(id: string, reason = "client_request"): void {
   const command = activeCommands.get(id);
   if (!command) return;
-  console.log(`[chunker] Killing job ${id.slice(0, 8)} — no active connections`);
+  log.info(`Killing ffmpeg — ${reason}`, { job_id: id, kill_reason: reason });
   // Mark as killed BEFORE sending the signal. ffmpeg sometimes exits cleanly on
   // SIGTERM (firing .on("end") instead of .on("error")), which would mark the job
   // "complete" with a truncated segment set. The killedJobs set prevents that.
   killedJobs.add(id);
+  killReasons.set(id, reason);
   try {
     command.kill("SIGTERM");
   } catch {
     killedJobs.delete(id);
+    killReasons.delete(id);
   }
 }
 
@@ -116,16 +126,38 @@ export async function startTranscodeJob(
   videoId: string,
   resolution: Resolution,
   startTimeSeconds?: number,
-  endTimeSeconds?: number
+  endTimeSeconds?: number,
+  parentOtelCtx?: OtelContext
 ): Promise<ActiveJob> {
   const video = getVideoById(videoId);
   if (!video) throw new Error(`Video not found: ${videoId}`);
 
   const id = jobId(video.content_fingerprint, resolution, startTimeSeconds, endTimeSeconds);
 
+  const resolveSpan = chunkerTracer.startSpan(
+    "job.resolve",
+    {
+      attributes: {
+        "job.id": id,
+        "job.video_id": videoId,
+        "job.resolution": resolution,
+        "job.chunk_start_s": startTimeSeconds ?? 0,
+      },
+    },
+    parentOtelCtx
+  );
+
+  const endResolveSpan = (event: string, attrs?: Record<string, string | number>): void => {
+    resolveSpan.addEvent(event, attrs);
+    resolveSpan.end();
+  };
+
   // Return existing in-memory job if already running or complete
   const existing = getJob(id);
-  if (existing && existing.status !== "error") return existing;
+  if (existing && existing.status !== "error") {
+    endResolveSpan("job_cache_hit", { job_status: existing.status });
+    return existing;
+  }
 
   // If a concurrent call is already initializing this exact job (between this
   // function's entry and the setJob() call below), wait for it to register rather
@@ -134,10 +166,13 @@ export async function startTranscodeJob(
     for (let i = 0; i < INFLIGHT_DEDUP_MAX_RETRIES; i++) {
       await Bun.sleep(INFLIGHT_DEDUP_POLL_MS);
       const pending = getJob(id);
-      if (pending) return pending;
+      if (pending) {
+        endResolveSpan("job_inflight_resolved");
+        return pending;
+      }
     }
     // If still not registered after INFLIGHT_DEDUP_TIMEOUT_MS, fall through.
-    console.warn(`[chunker] Inflight dedup timeout for job ${id.slice(0, 8)} — proceeding`);
+    log.warn("Inflight dedup timeout — proceeding", { job_id: id });
   }
 
   // Guard against runaway resource use — cap concurrent ffmpeg processes.
@@ -145,6 +180,11 @@ export async function startTranscodeJob(
   // yet (that happens after ffprobe inside runFfmpeg), so activeCommands.size alone
   // would undercount concurrent work during the initialization window.
   if (activeCommands.size + inflightJobIds.size >= MAX_CONCURRENT_JOBS) {
+    resolveSpan.setStatus({
+      code: SpanStatusCode.ERROR,
+      message: `Too many concurrent streams (limit: ${MAX_CONCURRENT_JOBS})`,
+    });
+    resolveSpan.end();
     throw new Error(
       `Too many concurrent streams (limit: ${MAX_CONCURRENT_JOBS}). Close another player tab and try again.`
     );
@@ -186,17 +226,17 @@ export async function startTranscodeJob(
             connections: 0,
           };
           setJob(restored);
-          console.log(
-            `[chunker] Restored completed job ${id.slice(0, 8)} from DB (${dbSegments.length} segments)`
-          );
+          log.info("Restored completed job from DB", {
+            job_id: id,
+            segment_count: dbSegments.length,
+          });
+          endResolveSpan("job_restored_from_db", { segment_count: dbSegments.length });
           return restored;
         }
       } else {
         // Segment dir was wiped or truncated — force re-encode and wipe any
         // partial files so the stream handler doesn't serve stale data.
-        console.warn(
-          `[chunker] Completed job ${id.slice(0, 8)} missing init.mp4 on disk — treating as error`
-        );
+        log.warn("Completed job missing init.mp4 on disk — treating as error", { job_id: id });
         updateJobStatus(id, "error", { error: "Segment dir missing — will re-encode" });
         shouldWipeDir = true;
       }
@@ -208,7 +248,7 @@ export async function startTranscodeJob(
     // so the stream handler never serves truncated or partial content.
     if ((dbJob && dbJob.status === "error") || shouldWipeDir) {
       await rm(segmentDir, { recursive: true, force: true });
-      console.log(`[chunker] Cleared stale segment dir for job ${id.slice(0, 8)}`);
+      log.info("Cleared stale segment dir", { job_id: id });
     }
 
     await mkdir(segmentDir, { recursive: true });
@@ -235,15 +275,26 @@ export async function startTranscodeJob(
 
     insertJob(job);
     setJob(job);
+    endResolveSpan("job_started");
     // Job is now in jobStore — any concurrent duplicate can find it via getJob().
     // Keep id in inflightJobIds until runFfmpeg calls activeCommands.set() (after
     // ffprobe). Deleting it here would open a window where neither activeCommands
     // nor inflightJobIds counts this job, letting the MAX_CONCURRENT_JOBS cap be
     // bypassed by a concurrent call during the ffprobe window.
-    void runFfmpeg(job, video.path, resolution, segmentDir, startTimeSeconds, endTimeSeconds);
+    void runFfmpeg(
+      job,
+      video.path,
+      resolution,
+      segmentDir,
+      startTimeSeconds,
+      endTimeSeconds,
+      parentOtelCtx
+    );
 
     return job;
   } catch (err) {
+    resolveSpan.setStatus({ code: SpanStatusCode.ERROR, message: (err as Error).message });
+    resolveSpan.end();
     inflightJobIds.delete(id);
     throw err;
   }
@@ -255,10 +306,25 @@ async function runFfmpeg(
   resolution: Resolution,
   segmentDir: string,
   startTime?: number,
-  endTime?: number
+  endTime?: number,
+  parentOtelCtx?: OtelContext
 ): Promise<void> {
   job.status = "running";
   updateJobStatus(job.id, "running");
+
+  const jobSpan = chunkerTracer.startSpan(
+    "transcode.job",
+    {
+      attributes: {
+        "job.id": job.id,
+        "job.video_id": job.video_id,
+        "job.resolution": resolution,
+        "job.chunk_start_s": startTime ?? 0,
+        "job.chunk_duration_s": endTime !== undefined ? endTime - (startTime ?? 0) : -1,
+      },
+    },
+    parentOtelCtx
+  );
 
   const profile = RESOLUTION_PROFILES[resolution];
   const initPath = join(segmentDir, "init.mp4");
@@ -266,12 +332,35 @@ async function runFfmpeg(
 
   // Probe the file to derive correct transcode parameters
   const file = new FFmpegFile(inputPath);
+  const probeStart = Date.now();
   try {
     await file.probe();
-    console.log(`[chunker] Job ${job.id.slice(0, 8)} — source: ${file.summary()}`);
+    const probeDurationMs = Date.now() - probeStart;
+    log.info("ffprobe complete", {
+      job_id: job.id,
+      video_id: job.video_id,
+      resolution,
+      probe_duration_ms: probeDurationMs,
+    });
+    jobSpan.addEvent("probe_complete", {
+      probe_duration_ms: probeDurationMs,
+      summary: file.summary(),
+    });
   } catch (err) {
+    const probeDurationMs = Date.now() - probeStart;
     const msg = `ffprobe failed: ${(err as Error).message}`;
-    console.error(`[chunker] Job ${job.id.slice(0, 8)} — ${msg}`);
+    log.error("ffprobe failed", {
+      job_id: job.id,
+      video_id: job.video_id,
+      resolution,
+      probe_duration_ms: probeDurationMs,
+      message: (err as Error).message,
+    });
+    jobSpan.addEvent("probe_error", {
+      probe_duration_ms: probeDurationMs,
+      message: (err as Error).message,
+    });
+    jobSpan.end();
     job.status = "error";
     job.error = msg;
     updateJobStatus(job.id, "error", { error: msg });
@@ -301,19 +390,17 @@ async function runFfmpeg(
   const orphanTimer = setTimeout(() => {
     const currentJob = getJob(job.id);
     if (currentJob && currentJob.connections === 0 && currentJob.status === "running") {
-      console.log(
-        `[chunker] Job ${job.id.slice(0, 8)} — no connections after ${ORPHAN_TIMEOUT_MS / 1000}s, killing orphan`
-      );
-      killJob(job.id);
+      killJob(job.id, "orphan_no_connection");
     }
   }, ORPHAN_TIMEOUT_MS);
 
+  let encodeStart = 0;
   file
     .applyOutputOptions(command, profile, segmentPattern, segmentDir)
     .output(join(segmentDir, "playlist.m3u8"))
     .on("start", (cmd) => {
-      console.log(`[chunker] Job ${job.id.slice(0, 8)} started`);
-      console.log(`[chunker] cmd: ${cmd.slice(0, 120)}…`);
+      encodeStart = Date.now();
+      jobSpan.addEvent("transcode_started", { resolution, cmd: cmd.slice(0, 120) });
     })
     .on("error", (err) => {
       clearTimeout(orphanTimer);
@@ -322,7 +409,19 @@ async function runFfmpeg(
       // both .on("error") and .on("end") depending on the OS; clearing here ensures
       // the entry doesn't linger if the error path fires instead of the end path.
       killedJobs.delete(job.id);
-      console.error(`[chunker] Job ${job.id.slice(0, 8)} error:`, err.message);
+      const encodeDurationMs = encodeStart > 0 ? Date.now() - encodeStart : 0;
+      log.error("Transcode error", {
+        job_id: job.id,
+        video_id: job.video_id,
+        resolution,
+        encode_duration_ms: encodeDurationMs,
+        message: err.message,
+      });
+      jobSpan.addEvent("transcode_error", {
+        encode_duration_ms: encodeDurationMs,
+        message: err.message,
+      });
+      jobSpan.end();
       job.status = "error";
       job.error = err.message;
       updateJobStatus(job.id, "error", { error: err.message });
@@ -336,9 +435,18 @@ async function runFfmpeg(
         // ffmpeg exited cleanly after SIGTERM — treat as error, not completion,
         // so the next startTranscodeJob call will wipe the stale segment dir and
         // re-encode rather than serving a truncated stream.
+        const reason = killReasons.get(job.id) ?? "unknown";
         killedJobs.delete(job.id);
-        const msg = "ffmpeg process was killed";
-        console.log(`[chunker] Job ${job.id.slice(0, 8)} killed (end event) — marking error`);
+        killReasons.delete(job.id);
+        const msg = `ffmpeg killed — ${reason}`;
+        log.info(`Transcode killed: ${reason}`, {
+          job_id: job.id,
+          video_id: job.video_id,
+          resolution,
+          kill_reason: reason,
+        });
+        jobSpan.addEvent("transcode_killed", { kill_reason: reason });
+        jobSpan.end();
         job.status = "error";
         job.error = msg;
         updateJobStatus(job.id, "error", { error: msg });
@@ -346,11 +454,22 @@ async function runFfmpeg(
         return;
       }
 
-      console.log(
-        `[chunker] Job ${job.id.slice(0, 8)} complete. ${job.segments.filter(Boolean).length} segments`
-      );
+      const segmentCount = job.segments.filter(Boolean).length;
+      const encodeDurationMs = encodeStart > 0 ? Date.now() - encodeStart : 0;
+      log.info("Transcode complete", {
+        job_id: job.id,
+        video_id: job.video_id,
+        resolution,
+        segment_count: segmentCount,
+        encode_duration_ms: encodeDurationMs,
+      });
+      jobSpan.addEvent("transcode_complete", {
+        segment_count: segmentCount,
+        encode_duration_ms: encodeDurationMs,
+      });
+      jobSpan.end();
       job.status = "complete";
-      job.total_segments = job.segments.filter(Boolean).length;
+      job.total_segments = segmentCount;
       updateJobStatus(job.id, "complete", {
         total_segments: job.total_segments,
         completed_segments: job.total_segments,
@@ -396,14 +515,10 @@ function watchSegments(job: ActiveJob, segmentDir: string, initPath: string): vo
         }
         if (initSize > 0) {
           job.initSegmentPath = initPath;
-          console.log(
-            `[chunker] Init segment ready for job ${job.id.slice(0, 8)} (${initSize} bytes)`
-          );
+          log.info("Init segment ready", { job_id: job.id, size_bytes: initSize });
           notifySubscribers(job);
         } else {
-          console.warn(
-            `[chunker] Init segment for job ${job.id.slice(0, 8)} still empty after polling — skipping`
-          );
+          log.warn("Init segment still empty after polling — skipping", { job_id: job.id });
         }
       })();
       return;
@@ -440,7 +555,7 @@ function watchSegments(job: ActiveJob, segmentDir: string, initPath: string): vo
   });
 
   watcher.on("error", (err) => {
-    console.warn(`[chunker] Watcher error for job ${job.id.slice(0, 8)}:`, err.message);
+    log.warn("Watcher error", { job_id: job.id, message: err.message });
     watcher.close();
   });
 }

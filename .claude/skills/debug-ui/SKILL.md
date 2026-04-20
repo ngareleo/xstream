@@ -1,3 +1,9 @@
+---
+name: debug-ui
+description: Interact with the React client using Playwright — feature verification, visual testing, playback checks, debugging layout or interaction problems, and inspecting runtime errors.
+allowed-tools: Bash(bun *)
+---
+
 # Debug UI with Playwright
 
 Use Playwright to investigate visual bugs, interaction problems, and runtime errors in the client.

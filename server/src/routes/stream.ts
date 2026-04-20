@@ -1,3 +1,4 @@
+import { context, propagation } from "@opentelemetry/api";
 import { access, readdir, readFile } from "fs/promises";
 import { join } from "path";
 
@@ -5,6 +6,10 @@ import { getJobById } from "../db/queries/jobs.js";
 import { getSegmentsByJob } from "../db/queries/segments.js";
 import { killJob } from "../services/chunker.js";
 import { addConnection, getJob, removeConnection } from "../services/jobStore.js";
+import { getOtelLogger, getTracer } from "../telemetry/index.js";
+
+const log = getOtelLogger("stream");
+const streamTracer = getTracer("stream");
 
 function writeLengthPrefixed(controller: ReadableStreamDefaultController, data: Uint8Array): void {
   const header = new Uint8Array(4);
@@ -30,6 +35,19 @@ export async function handleStream(req: Request): Promise<Response> {
     return new Response("Missing jobId", { status: 400 });
   }
 
+  // Extract W3C traceparent from the client request so the server span becomes
+  // a child of the client-side playback trace — linking them under one traceId.
+  const carrier: Record<string, string> = {};
+  req.headers.forEach((value, key) => {
+    carrier[key] = value;
+  });
+  const incomingCtx = propagation.extract(context.active(), carrier);
+  const span = streamTracer.startSpan(
+    "stream.request",
+    { attributes: { "job.id": jobId, "stream.from_index": fromIndex } },
+    incomingCtx
+  );
+
   // Try in-memory store first, fall back to DB for completed jobs
   const memJob = getJob(jobId);
   if (!memJob) {
@@ -45,7 +63,9 @@ export async function handleStream(req: Request): Promise<Response> {
 
   const stream = new ReadableStream({
     async start(controller) {
-      console.log(`[stream] ${jobId.slice(0, 8)} — start (from=${fromIndex})`);
+      const streamStartAt = Date.now();
+      let totalBytesSent = 0;
+      span.addEvent("stream_started", { from_index: fromIndex });
       addConnection(jobId);
       let lastSentAt = Date.now();
 
@@ -86,9 +106,14 @@ export async function handleStream(req: Request): Promise<Response> {
       req.signal?.removeEventListener?.("abort", onAbort);
 
       if (clientGone) {
-        console.log(
-          `[stream] ${jobId.slice(0, 8)} — client disconnected during init wait (${attempts} iters)`
-        );
+        const initWaitMs = Date.now() - streamStartAt;
+        log.info("Client disconnected during init wait", {
+          job_id: jobId,
+          attempts,
+          init_wait_ms: initWaitMs,
+        });
+        span.addEvent("client_disconnected_early", { init_wait_ms: initWaitMs });
+        span.end();
         removeConnection(jobId);
         controller.close();
         return;
@@ -96,9 +121,12 @@ export async function handleStream(req: Request): Promise<Response> {
 
       // Acquire the job reference after waiting — it may now be in memory.
       const activeJob = getJob(jobId);
-      console.log(
-        `[stream] ${jobId.slice(0, 8)} — waited ${attempts} × 100ms, initSegmentPath=${activeJob?.initSegmentPath ?? "null"}`
-      );
+      const initWaitMs = Date.now() - streamStartAt;
+      span.addEvent("init_wait_complete", {
+        init_wait_ms: initWaitMs,
+        attempts,
+        has_init: activeJob?.initSegmentPath != null,
+      });
 
       if (!activeJob?.initSegmentPath) {
         // Last resort: check DB + filesystem
@@ -109,11 +137,15 @@ export async function handleStream(req: Request): Promise<Response> {
               .then(() => true)
               .catch(() => false)
           : false;
-        console.log(
-          `[stream] ${jobId.slice(0, 8)} — filesystem fallback: fsInitPath=${fsInitPath}, exists=${initExists}`
-        );
+        log.info("Filesystem init fallback", {
+          job_id: jobId,
+          fs_init_path: fsInitPath ?? "null",
+          exists: initExists,
+        });
         if (!initExists || !fsInitPath) {
-          console.error(`[stream] ${jobId.slice(0, 8)} — init segment never became ready`);
+          log.error("Init segment never became ready", { job_id: jobId });
+          span.addEvent("init_timeout");
+          span.end();
           removeConnection(jobId);
           controller.error(new Error("Init segment not ready"));
           return;
@@ -136,10 +168,12 @@ export async function handleStream(req: Request): Promise<Response> {
       // Send init segment first
       try {
         const initBytes = await readFile(initPath);
-        console.log(`[stream] ${jobId.slice(0, 8)} — sending init (${initBytes.byteLength} bytes)`);
+        totalBytesSent += initBytes.byteLength;
+        span.addEvent("init_sent", { bytes: initBytes.byteLength });
         writeLengthPrefixed(controller, new Uint8Array(initBytes));
         lastSentAt = Date.now();
       } catch (err) {
+        span.end();
         removeConnection(jobId);
         controller.error(err);
         return;
@@ -184,9 +218,7 @@ export async function handleStream(req: Request): Promise<Response> {
             }
           }
 
-          console.log(
-            `[stream] ${jobId.slice(0, 8)} — serving ${remaining.length} segments from DB/fs`
-          );
+          log.info("Serving segments from DB/fs", { job_id: jobId, count: remaining.length });
           for (const seg of remaining) {
             if (req.signal?.aborted) break;
             const segBytes = await readFile(seg.path);
@@ -214,18 +246,24 @@ export async function handleStream(req: Request): Promise<Response> {
         if (path) {
           try {
             const segBytes = await readFile(path);
+            totalBytesSent += segBytes.byteLength;
             writeLengthPrefixed(controller, new Uint8Array(segBytes));
             lastSentAt = Date.now();
             index++;
             sentCount++;
             if (sentCount % 20 === 0) {
-              console.log(`[stream] ${jobId.slice(0, 8)} — sent ${sentCount} segments`);
+              log.info("Segment progress", {
+                job_id: jobId,
+                segments_sent: sentCount,
+                total_bytes_sent: totalBytesSent,
+              });
             }
           } catch (err) {
-            console.warn(
-              `[stream] ${jobId.slice(0, 8)} — readFile failed for segment ${index}:`,
-              (err as Error).message
-            );
+            log.warn("Segment read failed", {
+              job_id: jobId,
+              segment_index: index,
+              message: (err as Error).message,
+            });
             try {
               await Bun.sleep(50);
             } catch {
@@ -233,9 +271,12 @@ export async function handleStream(req: Request): Promise<Response> {
             }
           }
         } else if (currentJob.status === "complete" || currentJob.status === "error") {
-          console.log(
-            `[stream] ${jobId.slice(0, 8)} — job ${currentJob.status} at segment ${index}/${currentJob.segments.filter(Boolean).length} → closing`
-          );
+          log.info("Job ended, closing stream", {
+            job_id: jobId,
+            job_status: currentJob.status,
+            segment_index: index,
+            total_segments: currentJob.segments.filter(Boolean).length,
+          });
           break;
         } else {
           // Segment not yet produced; wait for the encoder
@@ -248,11 +289,17 @@ export async function handleStream(req: Request): Promise<Response> {
           // 90-second idle timeout: if no segment has been sent for 90s and we're
           // still waiting, the job may be stalled or the client silently disconnected.
           if (Date.now() - lastSentAt > CONNECTION_TIMEOUT_MS) {
-            console.log(`[stream] ${jobId.slice(0, 8)} — 90s idle timeout, closing`);
+            log.warn(`Stream idle timeout after ${sentCount} segments — killing ffmpeg`, {
+              job_id: jobId,
+              segments_sent: sentCount,
+              idle_ms: CONNECTION_TIMEOUT_MS,
+            });
+            span.addEvent("idle_timeout", { segments_sent: sentCount });
+            span.end();
             removeConnection(jobId);
             const idleJob = getJob(jobId);
             if (idleJob && idleJob.connections === 0 && idleJob.status === "running") {
-              killJob(jobId);
+              killJob(jobId, "stream_idle_timeout");
             }
             controller.close();
             return;
@@ -261,9 +308,12 @@ export async function handleStream(req: Request): Promise<Response> {
 
         // Check if client disconnected
         if (req.signal?.aborted) {
-          console.log(
-            `[stream] ${jobId.slice(0, 8)} — client disconnected after ${sentCount} segments`
-          );
+          log.info(`Client disconnected after ${sentCount} segments — cleaning up`, {
+            job_id: jobId,
+            segments_sent: sentCount,
+          });
+          span.addEvent("client_disconnected", { segments_sent: sentCount });
+          span.end();
           removeConnection(jobId);
           const disconnectedJob = getJob(jobId);
           if (
@@ -271,7 +321,7 @@ export async function handleStream(req: Request): Promise<Response> {
             disconnectedJob.connections === 0 &&
             disconnectedJob.status === "running"
           ) {
-            killJob(jobId);
+            killJob(jobId, "client_disconnected");
           }
           controller.close();
           return;
@@ -280,7 +330,22 @@ export async function handleStream(req: Request): Promise<Response> {
 
       // Natural end of stream (job complete or served all DB segments)
       removeConnection(jobId);
-      console.log(`[stream] ${jobId.slice(0, 8)} — done, sent ${sentCount} media segments`);
+      const durationMs = Date.now() - streamStartAt;
+      const transferRateKbps = durationMs > 0 ? Math.round((totalBytesSent * 8) / durationMs) : 0;
+      log.info("Stream complete", {
+        job_id: jobId,
+        segments_sent: sentCount,
+        total_bytes_sent: totalBytesSent,
+        duration_ms: durationMs,
+        transfer_rate_kbps: transferRateKbps,
+      });
+      span.addEvent("stream_complete", {
+        segments_sent: sentCount,
+        total_bytes_sent: totalBytesSent,
+        duration_ms: durationMs,
+        transfer_rate_kbps: transferRateKbps,
+      });
+      span.end();
       controller.close();
     },
   });

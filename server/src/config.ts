@@ -16,14 +16,14 @@ const dev: AppConfig = {
   port: 3001,
   segmentDir: resolve(root, "tmp/segments"),
   // Allow DB_PATH override so integration tests can use a temp database
-  dbPath: process.env.DB_PATH ?? resolve(root, "tmp/tvke.db"),
+  dbPath: process.env.DB_PATH ?? resolve(root, "tmp/xstream.db"),
   scanIntervalMs: 30_000,
 };
 
 const prod: AppConfig = {
   port: Number(process.env.PORT ?? 8080),
   segmentDir: process.env.SEGMENT_DIR ?? resolve(root, "tmp/segments"),
-  dbPath: process.env.DB_PATH ?? resolve(root, "tmp/tvke.db"),
+  dbPath: process.env.DB_PATH ?? resolve(root, "tmp/xstream.db"),
   scanIntervalMs: (() => {
     const raw = Number(process.env.SCAN_INTERVAL_MS ?? 30_000);
     return Number.isFinite(raw) && raw > 0 ? raw : 30_000;

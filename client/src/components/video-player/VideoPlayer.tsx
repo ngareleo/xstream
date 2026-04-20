@@ -208,7 +208,15 @@ export const VideoPlayer: FC<Props> = ({ video }) => {
       {/* Pre-play overlay — shown in idle state */}
       {status === "idle" && !isEnded && (
         <div className={styles.idleOverlay} onClick={handlePlay}>
-          <button className={styles.playBtn} onClick={handlePlay} aria-label="Play" type="button">
+          <button
+            className={styles.playBtn}
+            onClick={(e) => {
+              e.stopPropagation();
+              handlePlay();
+            }}
+            aria-label="Play"
+            type="button"
+          >
             <IconPlay size={32} />
           </button>
         </div>

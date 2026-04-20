@@ -1,8 +1,8 @@
 # Database Schema
 
-tvke uses SQLite via `bun:sqlite` with raw SQL. All queries go through `server/src/db/queries/`. WAL mode and foreign key enforcement are enabled on every connection.
+xstream uses SQLite via `bun:sqlite` with raw SQL. All queries go through `server/src/db/queries/`. WAL mode and foreign key enforcement are enabled on every connection.
 
-The database file lives at `tmp/tvke.db` (dev) or `$DB_PATH` (prod).
+The database file lives at `tmp/xstream.db` (dev) or `$DB_PATH` (prod).
 
 ---
 
@@ -41,7 +41,7 @@ One row per video file. Populated by the library scanner via ffprobe. Upserted o
 
 **Index:** `videos_library_id` on `library_id` — used by the `videos(first, after)` connection resolver.
 
-> **Breaking migration note:** `content_fingerprint TEXT NOT NULL` is part of the original `CREATE TABLE` definition. If you have an existing `tmp/tvke.db` from before this column was added, delete it — the server will recreate the schema and re-scan all libraries on next startup.
+> **Breaking migration note:** `content_fingerprint TEXT NOT NULL` is part of the original `CREATE TABLE` definition. If you have an existing `tmp/xstream.db` from before this column was added, delete it — the server will recreate the schema and re-scan all libraries on next startup.
 
 ---
 

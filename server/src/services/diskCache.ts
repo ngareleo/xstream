@@ -4,6 +4,9 @@ import { join } from "path";
 import { config } from "../config.js";
 import { getLruJobs, markJobEvicted } from "../db/queries/jobs.js";
 import { deleteSegmentsByJob } from "../db/queries/segments.js";
+import { getOtelLogger } from "../telemetry/index.js";
+
+const log = getOtelLogger("diskCache");
 
 /** Default disk quota for the segment cache (20 GB). Override with SEGMENT_CACHE_GB env var. */
 const DEFAULT_CACHE_GB = 20;
@@ -32,9 +35,10 @@ export async function pruneLruJobs(): Promise<void> {
   let totalBytes = jobs.reduce((acc, j) => acc + (j.total_size_bytes ?? 0), 0);
   if (totalBytes <= limit) return;
 
-  console.log(
-    `[diskCache] Cache ${(totalBytes / 1e9).toFixed(2)} GB > limit ${(limit / 1e9).toFixed(2)} GB — evicting oldest jobs`
-  );
+  log.info("Cache over limit — evicting oldest jobs", {
+    cache_gb: parseFloat((totalBytes / 1e9).toFixed(2)),
+    limit_gb: parseFloat((limit / 1e9).toFixed(2)),
+  });
 
   for (const job of jobs) {
     if (totalBytes <= limit) break;
@@ -45,7 +49,7 @@ export async function pruneLruJobs(): Promise<void> {
       await rm(dir, { recursive: true, force: true });
       rmOk = true;
     } catch (err) {
-      console.warn(`[diskCache] Failed to remove ${dir}:`, (err as Error).message);
+      log.warn("Failed to remove segment dir", { dir, message: (err as Error).message });
     }
 
     if (rmOk) {
@@ -55,9 +59,10 @@ export async function pruneLruJobs(): Promise<void> {
       deleteSegmentsByJob(job.id);
       markJobEvicted(job.id);
       totalBytes -= job.total_size_bytes ?? 0;
-      console.log(
-        `[diskCache] Evicted job ${job.id.slice(0, 8)} (${((job.total_size_bytes ?? 0) / 1e6).toFixed(1)} MB freed)`
-      );
+      log.info("Evicted job", {
+        job_id: job.id,
+        freed_mb: parseFloat(((job.total_size_bytes ?? 0) / 1e6).toFixed(1)),
+      });
     }
   }
 }

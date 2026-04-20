@@ -127,6 +127,14 @@ type TranscodeJob implements Node {
   error: String
 }
 
+type PlaybackSession {
+  id: ID!
+  traceId: String!
+  videoTitle: String!
+  resolution: Resolution!
+  startedAt: String!
+}
+
 type DirEntry {
   name: String!
   path: String!
@@ -141,6 +149,7 @@ type Query {
   watchlist: [WatchlistItem!]!
   searchOmdb(query: String!, year: Int): [OmdbSearchResult!]!
   listDirectory(path: String!): [DirEntry!]!
+  playbackHistory: [PlaybackSession!]!
 }
 
 type Mutation {
@@ -171,6 +180,11 @@ type Mutation {
   removeFromWatchlist(id: ID!): Boolean!
   updateWatchProgress(videoId: ID!, progressSeconds: Float!): WatchlistItem!
   setSetting(key: String!, value: String!): Boolean!
+  recordPlaybackSession(
+    traceId: String!
+    videoId: ID!
+    resolution: Resolution!
+  ): PlaybackSession!
 }
 
 type LibraryScanUpdate {

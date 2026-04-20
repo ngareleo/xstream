@@ -9,7 +9,7 @@ import type { PosterCard_video$key } from "~/relay/__generated__/PosterCard_vide
 import { upgradePosterUrl } from "~/utils/formatters.js";
 
 import { createPosterCardFilmSelectedEvent } from "./PosterCard.events.js";
-import { playQuoteForId, strings } from "./PosterCard.strings.js";
+import { strings } from "./PosterCard.strings.js";
 import { usePosterCardStyles } from "./PosterCard.styles.js";
 
 const POSTER_FRAGMENT = graphql`
@@ -113,7 +113,7 @@ export const PosterCard: FC<Props> = ({ video, isSelected = false }) => {
             onClick={(e) => e.stopPropagation()}
           >
             <IconPlay size={9} />
-            {playQuoteForId(data.id)}
+            {strings.play}
           </Link>
         )}
 

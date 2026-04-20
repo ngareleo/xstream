@@ -22,5 +22,13 @@ export default tseslint.config(
     rules: {
       "@typescript-eslint/no-non-null-assertion": "off",
     },
+  },
+  {
+    // validateSchema.ts is a standalone CLI script invoked directly by bun.
+    // It has no OTel context and exits immediately, so console output is correct here.
+    files: ["src/graphql/validateSchema.ts"],
+    rules: {
+      "no-console": "off",
+    },
   }
 );

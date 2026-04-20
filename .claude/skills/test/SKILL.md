@@ -1,6 +1,12 @@
+---
+name: test
+description: Run, analyse, and fix tests across the xstream monorepo. Use when tests are failing, adding new tests, or verifying a fix.
+allowed-tools: Bash(bun *) Bash(cd *)
+---
+
 # Testing Agent
 
-Run, analyse, and fix tests across the tvke monorepo.
+Run, analyse, and fix tests across the xstream monorepo.
 
 ## Testing philosophy
 
@@ -30,7 +36,7 @@ cd client && bun run test:watch
 Follow `server/src/db/queries/jobs.test.ts`:
 
 ```typescript
-const TEST_DIR = join(tmpdir(), `tvke-<table>-test-${Date.now()}`);
+const TEST_DIR = join(tmpdir(), `xstream-<table>-test-${Date.now()}`);
 mkdirSync(TEST_DIR, { recursive: true });
 process.env.DB_PATH = join(TEST_DIR, "test.db");
 

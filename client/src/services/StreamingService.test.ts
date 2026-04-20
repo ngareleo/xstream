@@ -1,6 +1,9 @@
+import { context } from "@opentelemetry/api";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { StreamingService } from "./StreamingService.js";
+
+const testCtx = context.active();
 
 // Build a length-prefixed frame: [uint32 BE length][payload bytes]
 function makeFrame(payload: Uint8Array): Uint8Array {
@@ -53,7 +56,8 @@ describe("StreamingService frame parser", () => {
       (err) => {
         throw err;
       },
-      () => {}
+      () => {},
+      testCtx
     );
 
     expect(segments).toHaveLength(1);
@@ -79,7 +83,8 @@ describe("StreamingService frame parser", () => {
       (err) => {
         throw err;
       },
-      () => {}
+      () => {},
+      testCtx
     );
 
     expect(initFlags).toEqual([true, false]);
@@ -105,7 +110,8 @@ describe("StreamingService frame parser", () => {
       (err) => {
         throw err;
       },
-      () => {}
+      () => {},
+      testCtx
     );
 
     expect(segments).toHaveLength(1);
@@ -132,7 +138,8 @@ describe("StreamingService frame parser", () => {
       (err) => {
         throw err;
       },
-      () => {}
+      () => {},
+      testCtx
     );
 
     expect(payloads).toHaveLength(2);
@@ -155,7 +162,8 @@ describe("StreamingService frame parser", () => {
       },
       () => {
         done = true;
-      }
+      },
+      testCtx
     );
 
     expect(done).toBe(true);
@@ -171,7 +179,8 @@ describe("StreamingService frame parser", () => {
       5,
       async () => {},
       () => {},
-      () => {}
+      () => {},
+      testCtx
     );
 
     const calledUrl = fetchMock.mock.calls[0][0] as string;
@@ -197,7 +206,8 @@ describe("StreamingService frame parser", () => {
       0,
       async () => {},
       (e) => errors.push(e),
-      () => {}
+      () => {},
+      testCtx
     );
     // Give the fetch a tick to begin
     await new Promise((r) => setTimeout(r, 0));

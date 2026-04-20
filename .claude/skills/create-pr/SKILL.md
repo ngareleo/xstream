@@ -1,3 +1,10 @@
+---
+name: create-pr
+description: Create a pull request for the current branch against main
+disable-model-invocation: true
+allowed-tools: Bash(git *) Bash(gh *)
+---
+
 # Create Pull Request
 
 Create a pull request for the current branch against `main`.

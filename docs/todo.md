@@ -1,4 +1,4 @@
-# tvke — Future Optimizations
+# xstream — Future Optimizations
 
 ## Streaming / Playback
 
@@ -17,6 +17,18 @@
 - [ ] **CACHE-001** Disk LRU eviction: `diskCache.ts` has `pruneLruJobs()` and `server/src/db/queries/jobs.ts` has `getLruJobs()` / `markJobEvicted()` fully implemented. What remains: wire `pruneLruJobs()` into `server/src/index.ts` (on startup, after `jobRestore`) and into the `runFfmpeg` `.on("end")` callback in `chunker.ts` (after each job completes).
 
 - [ ] **CACHE-002** Expose cache stats in Settings: show total disk usage and quota with a "Clear cache" button. Uses `getCacheSizeBytes()` from `diskCache.ts`.
+
+## Observability (Release)
+
+These items require the OTel metrics SDK (`MeterProvider`) which is not yet wired up. Complete after the dev log/trace baseline is stable.
+
+- [ ] **OBS-001** Client buffer rate metrics: stall duration and buffer-underrun count per playback session. Instrument `useChunkedPlayback` buffering events with `Histogram` and `Counter` instruments from `@opentelemetry/api`.
+
+- [ ] **OBS-002** Error rate breakdown and classification: track error counts by component (`mse`, `network`, `graphql`, `transcode`) using OTel `Counter` with a `component` attribute. Distinguish transient (retried) vs. terminal errors.
+
+- [ ] **OBS-003** Usage metrics: concurrent stream count, resolution distribution (which resolutions are most used), and session duration. Export as OTel `UpDownCounter` and `Histogram`.
+
+- [ ] **OBS-004** OTel metrics SDK wiring: add `MeterProvider` with a `BatchMetricExporter` + `PeriodicExportingMetricReader` to both `server/src/telemetry.ts` and `client/src/telemetry.ts`. The `@opentelemetry/sdk-metrics` package is not yet installed.
 
 ## Settings / UI
 

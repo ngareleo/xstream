@@ -14,6 +14,6 @@ import { join } from "path";
 
 // Namespace by PID so concurrent `bun test` invocations on the same machine
 // (e.g. parallel CI jobs) each get their own isolated SQLite file.
-const SHARED_TEST_DIR = join(tmpdir(), `tvke-test-${process.pid}`);
+const SHARED_TEST_DIR = join(tmpdir(), `xstream-test-${process.pid}`);
 mkdirSync(SHARED_TEST_DIR, { recursive: true });
 process.env.DB_PATH = join(SHARED_TEST_DIR, "test.db");

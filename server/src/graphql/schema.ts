@@ -139,6 +139,16 @@ export const typeDefs = /* GraphQL */ `
     error: String
   }
 
+  # ── Playback history ──────────────────────────────────────────────────────────
+
+  type PlaybackSession {
+    id: ID!
+    traceId: String!
+    videoTitle: String!
+    resolution: Resolution!
+    startedAt: String!
+  }
+
   # ── Root ─────────────────────────────────────────────────────────────────────
 
   type DirEntry {
@@ -155,6 +165,7 @@ export const typeDefs = /* GraphQL */ `
     watchlist: [WatchlistItem!]!
     searchOmdb(query: String!, year: Int): [OmdbSearchResult!]!
     listDirectory(path: String!): [DirEntry!]!
+    playbackHistory: [PlaybackSession!]!
   }
 
   type Mutation {
@@ -191,6 +202,8 @@ export const typeDefs = /* GraphQL */ `
     updateWatchProgress(videoId: ID!, progressSeconds: Float!): WatchlistItem!
 
     setSetting(key: String!, value: String!): Boolean!
+
+    recordPlaybackSession(traceId: String!, videoId: ID!, resolution: Resolution!): PlaybackSession!
   }
 
   # ── Scan status ──────────────────────────────────────────────────────────────

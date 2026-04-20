@@ -1,0 +1,17 @@
+{
+  "hooks": {
+    "PreCompact": [
+      {
+        "matcher": "auto",
+        "hooks": [
+          {
+            "type": "agent",
+            "prompt": "You are running an automatic reflection pass for the xstream project. The conversation is about to be compacted. Read the reflect skill at .claude/skills/reflect/SKILL.md and follow its instructions exactly.",
+            "timeout": 120,
+            "statusMessage": "Reflecting on session learnings..."
+          }
+        ]
+      }
+    ]
+  }
+}

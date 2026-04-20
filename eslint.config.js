@@ -53,6 +53,9 @@ export const baseConfig = tseslint.config(
       // Organised imports: sorted, grouped (external → internal → relative)
       "simple-import-sort/imports": "error",
       "simple-import-sort/exports": "error",
+      // Forbid direct console calls — use getOtelLogger()/getClientLogger() instead
+      // so all log output is routed through the OTel pipeline (Seq + console mirror).
+      "no-console": "error",
     },
   },
 

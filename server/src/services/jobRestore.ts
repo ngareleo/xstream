@@ -7,6 +7,9 @@
  * startTranscodeJob() call wipes the stale segment dir and re-encodes cleanly.
  */
 import { getInterruptedJobs, updateJobStatus } from "../db/queries/jobs.js";
+import { getOtelLogger } from "../telemetry/index.js";
+
+const log = getOtelLogger("jobRestore");
 
 export async function restoreInterruptedJobs(): Promise<void> {
   const interrupted = getInterruptedJobs();
@@ -15,8 +18,8 @@ export async function restoreInterruptedJobs(): Promise<void> {
     updateJobStatus(job.id, "error", {
       error: "Server restarted during transcode — will re-encode on next request",
     });
-    console.log(
-      `[restore] Job ${job.id.slice(0, 8)} — marked error (interrupted); segment dir will be wiped on re-request`
-    );
+    log.info("Interrupted job marked as error — will re-encode on next request", {
+      job_id: job.id,
+    });
   }
 }

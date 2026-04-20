@@ -1,3 +1,7 @@
+// telemetry must be the first import — it registers the global OTel
+// TracerProvider and propagator before any service module runs.
+import "./telemetry/index.js";
+
 import { mkdir } from "fs/promises";
 import { handleProtocols, makeHandler as makeWsHandler } from "graphql-ws/lib/use/bun";
 
@@ -9,6 +13,9 @@ import { killAllActiveJobs } from "./services/chunker.js";
 import { restoreInterruptedJobs } from "./services/jobRestore.js";
 import { scanLibraries } from "./services/libraryScanner.js";
 import { isOmdbConfigured } from "./services/omdbService.js";
+import { getOtelLogger } from "./telemetry/index.js";
+
+const log = getOtelLogger("server");
 
 async function bootstrap(): Promise<void> {
   // Ensure tmp directories exist
@@ -16,15 +23,15 @@ async function bootstrap(): Promise<void> {
 
   // Initialize DB (migrations run inside getDb)
   getDb();
-  console.log("[server] Database ready");
+  log.info("Database ready");
 
   // Warn early if OMDb is not configured — matchVideo will fail without it.
   // Key can be set via OMDB_API_KEY env var OR saved through Settings → Metadata.
   if (!isOmdbConfigured()) {
-    console.warn(
-      "[server] OMDb API key not configured — metadata matching will be unavailable. " +
-        "Set OMDB_API_KEY env var or add the key in Settings → Metadata."
-    );
+    const omdbWarning =
+      "OMDb API key not configured — metadata matching will be unavailable. " +
+      "Set OMDB_API_KEY env var or add the key in Settings → Metadata.";
+    log.warn(omdbWarning);
   }
 
   // Restore any jobs that were running when server last died.
@@ -39,11 +46,11 @@ async function bootstrap(): Promise<void> {
   void (async () => {
     while (true) {
       try {
-        console.log("[server] Scanning media libraries...");
+        log.info("Library scan started");
         await scanLibraries();
-        console.log("[server] Library scan complete");
+        log.info("Library scan complete");
       } catch (err) {
-        console.error("[server] Scan error (will retry):", err);
+        log.error("Library scan error", { message: (err as Error).message });
       }
       await Bun.sleep(config.scanIntervalMs);
     }
@@ -88,15 +95,14 @@ async function bootstrap(): Promise<void> {
     websocket: makeWsHandler({ schema }),
   });
 
-  console.log(`[server] Listening on http://localhost:${config.port}`);
-  console.log(`[server] GraphQL at http://localhost:${config.port}/graphql`);
+  log.info("Server listening", { port: config.port });
 }
 
 async function shutdown(signal: string): Promise<void> {
-  console.log(`[server] ${signal} received — shutting down`);
+  log.info("Shutdown initiated", { signal });
   await killAllActiveJobs(5000);
   closeDb();
-  console.log("[server] Shutdown complete");
+  log.info("Shutdown complete");
   process.exit(0);
 }
 
@@ -108,6 +114,6 @@ process.on("SIGINT", () => {
 });
 
 bootstrap().catch((err) => {
-  console.error("[server] Fatal startup error:", err);
+  log.error("Fatal startup error", { message: (err as Error).message });
   process.exit(1);
 });

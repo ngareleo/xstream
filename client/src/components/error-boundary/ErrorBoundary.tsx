@@ -21,9 +21,12 @@ import { mergeClasses } from "@griffel/react";
 import { Component, type ErrorInfo, type FC, type ReactNode, useState } from "react";
 
 import { IconBug, IconChat, IconClose, IconRefresh, LogoShield } from "~/lib/icons.js";
+import { getClientLogger } from "~/telemetry.js";
 
 import { strings } from "./ErrorBoundary.strings.js";
 import { useErrorBoundaryStyles } from "./ErrorBoundary.styles.js";
+
+const log = getClientLogger("errorBoundary");
 
 // ── DevErrorScreen ────────────────────────────────────────────────────────────
 
@@ -205,7 +208,11 @@ export class ErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
     this.setState({ errorInfo });
-    console.error("[ErrorBoundary] Caught error:", error, errorInfo);
+    log.error("Unhandled render error", {
+      error_name: error.name,
+      message: error.message,
+      component_stack: errorInfo.componentStack?.trim() ?? "",
+    });
   }
 
   handleReset = (): void => {

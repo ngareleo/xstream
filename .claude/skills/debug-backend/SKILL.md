@@ -1,3 +1,9 @@
+---
+name: debug-backend
+description: Diagnose and fix issues in the Bun server — GraphQL API, streaming endpoint, chunker, DB. Use when server returns unexpected results, jobs get stuck, or streams fail.
+allowed-tools: Bash(bun *) Bash(curl *) Bash(sqlite3 *) Bash(ffprobe *) Bash(ls *)
+---
+
 # Debug Backend
 
 Diagnose and fix issues in the Bun server (GraphQL API, streaming endpoint, chunker, DB).
@@ -61,7 +67,7 @@ The first 4 bytes are a big-endian uint32 (length of the following fMP4 init seg
 
 ```bash
 # Open the SQLite DB directly (dev path)
-sqlite3 server/tmp/tvke.db
+sqlite3 server/tmp/xstream.db
 
 # List all tables
 .tables
@@ -78,11 +84,19 @@ SELECT id, title, filename, duration_seconds FROM videos LIMIT 20;
 
 ## Chunker / ffmpeg debugging
 
-Server logs ffmpeg command lines at INFO level. Look for:
-- `[chunker] Job XXXXXXXX started` — ffmpeg launched
+Most of the chunker's lifecycle is now captured as OpenTelemetry span events rather than free-form log lines. To trace a job end-to-end, prefer Seq over `tail -f` on stdout.
+
+In Seq, search for the `job.resolve` span for a given `job_id`. Its single event tells you which resolution path fired:
+- `job_cache_hit` — job was already running; call was a no-op
+- `job_inflight_resolved` — another call was mid-registration, we polled it out
+- `job_restored_from_db` — completed segments replayed from disk (no ffmpeg spawn)
+- `job_started` — new ffmpeg process launched; a child `transcode.job` span follows
+
+Still emitted as plain logs (useful for stdout tailing):
 - `[chunker] cmd: ffmpeg ...` — full command (truncated to 120 chars)
 - `[chunker] Init segment ready` — init.mp4 written
 - `[chunker] Job XXXXXXXX complete` — all segments done
+- `[chunker] Killing ffmpeg — <kill_reason>` — always includes `kill_reason` (e.g. `client_disconnected`, `server_shutdown`, `stream_idle_timeout`, `orphan_no_connection`)
 
 To see the full ffmpeg command, temporarily add a longer log in `services/chunker.ts`:
 ```typescript
