@@ -2,8 +2,6 @@ import { type FC, type ReactNode, useCallback, useEffect, useSyncExternalStore }
 import { graphql, useLazyLoadQuery, useMutation } from "react-relay";
 
 import {
-  FLAG_REGISTRY,
-  type FlagValue,
   getFlag,
   getFlagsSnapshot,
   hydrateFlags,
@@ -11,6 +9,7 @@ import {
   setFlagLocal,
   subscribeFlags,
 } from "~/config/featureFlags.js";
+import { FLAG_REGISTRY, type FlagValue } from "~/config/flagRegistry.js";
 import type { FeatureFlagsContextQuery } from "~/relay/__generated__/FeatureFlagsContextQuery.graphql.js";
 import type { FeatureFlagsContextSetMutation } from "~/relay/__generated__/FeatureFlagsContextSetMutation.graphql.js";
 

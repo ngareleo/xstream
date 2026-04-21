@@ -7,7 +7,7 @@ import {
   type FlagCategory,
   type FlagDescriptor,
   type FlagValue,
-} from "~/config/featureFlags.js";
+} from "~/config/flagRegistry.js";
 import { useFeatureFlag } from "~/contexts/FeatureFlagsContext.js";
 
 import { strings } from "./FlagsTab.strings.js";

@@ -1,80 +1,17 @@
 /**
- * Feature-flag registry + module-level cache.
+ * Feature-flag runtime: module-level cache + pub/sub.
  *
- * Flags persist in the server's `user_settings` key/value table. On app boot,
- * `FeatureFlagsProvider` hydrates this module from a single bulk `settings`
- * query. Once hydrated, `getFlag(key, default)` returns the current value
- * synchronously — which lets non-React code (e.g. `PlaybackController`) read
- * the same values as React components via `useFeatureFlag`.
- *
- * To add a new flag: append an entry to `FLAG_REGISTRY` below. The FlagsTab in
- * Settings renders from the registry automatically, and the server persists
- * values through the existing `setSetting` mutation. Flags are grouped by
- * `category` and displayed together in the UI.
+ * Flag *declarations* live in `flagRegistry.ts`. This file owns the cache,
+ * the parse/serialize helpers, and the subscription plumbing so the same
+ * values are readable from React (`useFeatureFlag`) and non-React code
+ * (`getFlag`, `getEffectiveBufferConfig`). On app boot,
+ * `FeatureFlagsProvider` hydrates this cache from a single bulk `settings`
+ * query. Once hydrated, `getFlag(key, default)` returns synchronously.
  */
 
 import { type BufferConfig, DEFAULT_BUFFER_CONFIG } from "~/services/BufferManager.js";
 
-export type FlagValueType = "boolean" | "number";
-export type FlagValue = boolean | number;
-export type FlagCategory = "playback" | "telemetry" | "ui" | "experimental";
-
-export interface FlagDescriptor {
-  /** Storage key used in `user_settings`. Must start with `flag.` for booleans
-   *  and `config.` for tunable numbers — purely a naming convention, no
-   *  enforcement — so the UI can visually group them. */
-  key: string;
-  name: string;
-  description: string;
-  valueType: FlagValueType;
-  defaultValue: FlagValue;
-  category: FlagCategory;
-  /** Optional constraints for numeric flags rendered in the FlagsTab. */
-  min?: number;
-  max?: number;
-  step?: number;
-}
-
-export const FLAG_KEYS = {
-  experimentalBuffer: "flag.experimentalBuffer",
-  bufferForwardTargetS: "config.bufferForwardTargetS",
-  bufferForwardResumeS: "config.bufferForwardResumeS",
-} as const;
-
-export const FLAG_REGISTRY: readonly FlagDescriptor[] = [
-  {
-    key: FLAG_KEYS.experimentalBuffer,
-    name: "Experimental buffer tuning",
-    description:
-      "When on, the next playback session uses the buffer values below instead of the defaults. Off falls back to DEFAULT_BUFFER_CONFIG.",
-    valueType: "boolean",
-    defaultValue: false,
-    category: "playback",
-  },
-  {
-    key: FLAG_KEYS.bufferForwardTargetS,
-    name: "Buffer forward target (s)",
-    description: "Pause the stream when bufferedAhead exceeds this many seconds.",
-    valueType: "number",
-    defaultValue: DEFAULT_BUFFER_CONFIG.forwardTargetS,
-    category: "playback",
-    min: 2,
-    max: 120,
-    step: 1,
-  },
-  {
-    key: FLAG_KEYS.bufferForwardResumeS,
-    name: "Buffer forward resume (s)",
-    description:
-      "Resume the stream when bufferedAhead drops below this. Gap to target is the hysteresis width — narrower gaps cause rapid pause/resume churn.",
-    valueType: "number",
-    defaultValue: DEFAULT_BUFFER_CONFIG.forwardResumeS,
-    category: "playback",
-    min: 0,
-    max: 60,
-    step: 1,
-  },
-];
+import { FLAG_KEYS, FLAG_REGISTRY, type FlagValue, type FlagValueType } from "./flagRegistry.js";
 
 const cache = new Map<string, FlagValue>();
 const subscribers = new Set<() => void>();
