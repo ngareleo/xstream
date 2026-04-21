@@ -163,11 +163,11 @@ The client pauses fetching when the forward buffer exceeds a configurable thresh
 ```
 after each appendBuffer:
   bufferedAhead = sourceBuffer.buffered.end(last) - video.currentTime
-  if bufferedAhead > forwardTarget   → StreamingService.pause()
-  if bufferedAhead < forwardTarget×0.75 → StreamingService.resume()
+  if bufferedAhead > forwardTarget  → StreamingService.pause()
+  if bufferedAhead < forwardResume  → StreamingService.resume()
 ```
 
-`forwardTarget` defaults to 20s and is passed as a constructor argument to `BufferManager`. The resume threshold is 75% of the target (15s at the default).
+`forwardTarget` defaults to 20s and `forwardResume` to 8s — both are constructor arguments to `BufferManager`. The 12-second hysteresis gap is deliberately wide so each pause/drain cycle lasts ~10s of real playback and cycles don't chain back-to-back at steady state. The `buffer.halt` telemetry span is additionally coalesced across any cycles that do chain (see `docs/observability.md`).
 
 Back buffer eviction keeps at most 5 seconds behind `currentTime`:
 

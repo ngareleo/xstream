@@ -7,7 +7,13 @@ import { getSessionContext } from "./playbackSession.js";
 const log = getClientLogger("bufferManager");
 const tracer = getClientTracer("bufferManager");
 
+// Back-pressure hysteresis: pause the stream when bufferedAhead exceeds
+// FORWARD_TARGET_S and resume only after it drains below FORWARD_RESUME_S.
+// A wide gap (12s) means each halt is long and halts are infrequent; a narrow
+// gap (<5s) produces rapid pause/resume churn during saturated playback. We
+// trade ~45 MB of extra buffer headroom (at 4K bitrates) for far fewer cycles.
 const DEFAULT_FORWARD_BUFFER_TARGET_S = 20;
+const DEFAULT_FORWARD_BUFFER_RESUME_S = 8;
 const BACK_BUFFER_KEEP_S = 5;
 
 // Back-pressure naturally oscillates: pause at forwardTarget, drain to
@@ -67,14 +73,15 @@ export class BufferManager {
     onPause: BufferPauseCallback,
     onResume: BufferResumeCallback,
     videoDurationS = 0,
-    forwardTargetSeconds = DEFAULT_FORWARD_BUFFER_TARGET_S
+    forwardTargetSeconds = DEFAULT_FORWARD_BUFFER_TARGET_S,
+    forwardResumeSeconds = DEFAULT_FORWARD_BUFFER_RESUME_S
   ) {
     this.videoEl = videoEl;
     this.onPause = onPause;
     this.onResume = onResume;
     this.videoDurationS = videoDurationS;
     this.forwardTarget = forwardTargetSeconds;
-    this.forwardResume = forwardTargetSeconds * 0.75;
+    this.forwardResume = forwardResumeSeconds;
   }
 
   /** Current buffer memory metrics. All byte values are estimates. */
