@@ -129,102 +129,80 @@ The content fingerprint is `"<sizeBytes>:<sha1hex>"` over the first 64 KB of the
 
 ## Data Flow: Playback
 
-The client drives transcoding in **300-second chunks** rather than encoding the full video upfront. Each chunk is a separate ffmpeg job covering a time window `[startS, endS)`.
+The client drives transcoding in **300-second chunks** rather than encoding the full video upfront. Each chunk is a separate ffmpeg job covering a time window `[startS, endS)`. Four distinct flows cover the pipeline end-to-end: initial playback, back-pressure, seek, and resolution switch. Each has its own sequence diagram below; the `.mmd` sources are authoritative and can be re-rendered in draw.io via the `open_drawio_mermaid` MCP tool.
 
-```
-User clicks Play (resolution selected)
-      │
-      ▼
-useChunkedPlayback.startPlayback(res)
-  → BufferManager.init(mimeType)        ← creates MediaSource, arms SourceBuffer
-  → startChunkSeries(res, 0, buffer)    ← fires chunk [0s, 300s)
-  → startPrefetchLoop(res, buffer)      ← RAF loop watching for prefetch trigger
-      │
-      ▼
-startChunkSeries → startTranscode mutation → POST /graphql
-  variables: { videoId, resolution, startTimeSeconds: 0, endTimeSeconds: 300 }
-      │
-      ▼
-Server: chunker.startTranscodeJob(videoId, res, start, end)
-  → jobId = SHA-1(fingerprint + res + start + end)  ← deterministic (cache-friendly)
-  → if tmp/segments/<jobId>/init.mp4 exists → restore from cache (no new ffmpeg)
-  → else: mkdir, insertJob, setJob(connections=0), ffmpeg, watchSegments()
-      │
-      ▼
-Server: stream.ts GET /stream/<jobId>
-  → addConnection(jobId)                ← increment connection counter
-  → wait up to 60s for initSegmentPath
-  → writeLengthPrefixed(init.mp4)
-  → loop: writeLengthPrefixed(segment_NNNN.m4s) as they appear
-  → on client disconnect: removeConnection; if connections=0 → killJob(ffmpeg)
-  → on 90s idle timeout: removeConnection; if connections=0 → killJob(ffmpeg)
-      │
-      ▼
-Client: StreamingService.start()
-  → fetch /stream/<jobId>
-  → ReadableStream reader.read() loop
-  → accumulate bytes, extract complete frames by length prefix
-  → onSegment(data, isInit) callback
-      │
-      ▼
-Client: BufferManager.appendSegment(data)
-  → SourceBuffer.appendBuffer(data) via serialised queue
-  → after each append: evictBackBuffer(), checkForwardBuffer(), afterAppendCb?.()
-      │
-      ▼
-First chunk, first media segment:
-  afterAppendCb = tryStart()
-  → if bufferedEnd >= STARTUP_BUFFER_S[res] → video.play(), status = "playing"
-  → RAF loop fires as fallback for slow live-transcode paths
-      │
-      ▼
-Browser MSE decoder → <video> element renders
+### Scenario 1: Initial playback (happy path)
 
-During playback (RAF prefetch loop):
-  → when video.currentTime > chunkEnd - 60s:
-       fire startTranscode for next chunk [300s, 600s) (prefetch)
-  → when chunk stream ends → chain to next chunk using prefetched jobId
-```
+![Initial playback sequence diagram](./diagrams/streaming-01-initial-playback.png)
 
-### Chunk Chaining
+> Source: [`streaming-01-initial-playback.mmd`](./diagrams/streaming-01-initial-playback.mmd)
 
-When the current chunk stream finishes, `startChunkSeries` chains to the next chunk. If prefetch fired in time, the next job's ID is already available (`nextJobIdRef`) — no mutation RTT before streaming begins. If prefetch hasn't fired yet, a new mutation is fired on demand.
+`useChunkedPlayback.startPlayback(res)` opens the `playback.session` span and drives the boot sequence:
 
-Continuation chunks skip re-appending the init segment; the SourceBuffer (in `mode="sequence"`) picks up the new media segments seamlessly.
+1. `BufferManager.init(mimeType)` creates a `MediaSource` and arms a `SourceBuffer`.
+2. The `startTranscode` GraphQL mutation hands the server a `(videoId, resolution, 0, 300)` window.
+3. `chunker.startTranscodeJob` computes a deterministic `jobId = SHA-1(fingerprint + res + start + end)`. If `tmp/segments/<jobId>/init.mp4` exists the job is restored from cache; otherwise a new ffmpeg process spawns and `fs.watch` starts tracking segment files.
+4. The client opens a `chunk.stream` span and calls `StreamingService.start(jobId, …, ctx)`. `ctx` is propagated as `traceparent`, so the server's `stream.request` span nests under the client's `chunk.stream`.
+5. `GET /stream/<jobId>` waits up to 60 s for `init.mp4`, writes it length-prefixed, then loops over newly-appearing `segment_NNNN.m4s` files.
+6. `StreamingService` accumulates bytes, extracts complete frames by the 4-byte length prefix, and calls `onSegment(data, isInit)` back into `BufferManager`.
+7. `BufferManager.appendSegment` serialises `SourceBuffer.appendBuffer` calls through a queue. After each append it runs `evictBackBuffer()`, `checkForwardBuffer()`, and the `afterAppendCb`.
+8. Once `bufferedEnd >= STARTUP_BUFFER_S[res]`, `video.play()` is called and `status` flips to `playing`.
 
-### Connection-Aware ffmpeg Lifecycle
+#### Chunk chaining
 
-`ActiveJob.connections` tracks how many `/stream/:jobId` HTTP connections are open for each job:
+When the current chunk stream finishes, `startChunkSeries` chains to the next one. A RAF prefetch loop fires the next chunk's `startTranscode` mutation when `currentTime > chunkEnd - 60s`, so the next `jobId` is usually already in hand (`nextJobIdRef`) — no mutation RTT before streaming resumes. Continuation chunks skip re-appending the init segment; the `SourceBuffer` (in `mode="sequence"`) picks up seamlessly.
+
+#### Connection-aware ffmpeg lifecycle
+
+`ActiveJob.connections` tracks open `/stream/:jobId` HTTP connections:
 - `addConnection(id)` increments on stream open.
-- `removeConnection(id)` decrements on disconnect, stream completion, or idle timeout.
-- When `connections` drops to `0` and the job is still `running`, `killJob(id)` sends `SIGTERM` to the ffmpeg process.
+- `removeConnection(id)` decrements on disconnect, stream completion, or the 90 s idle timeout.
+- When `connections` drops to `0` while the job is still `running`, `killJob(id)` sends `SIGTERM` to ffmpeg.
 
-This means ffmpeg is killed within seconds of the last tab closing — no zombie processes.
+ffmpeg dies within seconds of the last tab closing — no zombies. `chunker.startTranscodeJob` also enforces `MAX_CONCURRENT_JOBS = 3`; a fourth simultaneous transcode throws `"Too many concurrent streams"`, surfaced as a playback error.
 
-**Concurrent stream limit:** `chunker.startTranscodeJob` enforces `MAX_CONCURRENT_JOBS = 3`. A fourth simultaneous transcode throws `"Too many concurrent streams"`, surfaced as a playback error.
+### Scenario 2: Back-pressure (pause and resume)
 
-### Seek Behaviour
+![Back-pressure pause/resume sequence diagram](./diagrams/streaming-02-backpressure.png)
 
-On `"seeking"` event:
-1. Cancel the active `StreamingService`.
-2. `BufferManager.seek(snapTime)` — flushes the SourceBuffer and sets `video.currentTime`.
-3. Snap the seek position to the chunk boundary: `Math.floor(seekTime / 300) * 300`.
-4. `startChunkSeries(res, snapTime, buffer)` — starts a new chunk at the boundary.
+> Source: [`streaming-02-backpressure.mmd`](./diagrams/streaming-02-backpressure.mmd)
 
-Snapping to a boundary ensures the new job aligns with cached segment directories.
+Once the steady-state append loop is running, `BufferManager.checkForwardBuffer` runs after every append. If `bufferedAhead > FORWARD_TARGET_S (20 s)` it calls `StreamingService.pause()`, which suspends the fetch loop on a `resumeResolve` promise — no further `reader.read()` calls are issued, so TCP back-pressure propagates all the way to the server's write loop and ffmpeg throttles naturally.
 
-### Resolution Switch (Background Buffer)
+As the `<video>` element plays and `timeupdate` fires, `bufferedAhead` drains. When it falls below `RESUME_THRESHOLD_S (15 s)`, `BufferManager` calls `StreamingService.resume()`, which resolves the promise and reawakens `reader.read()`. The 20 s / 15 s split is a hysteresis band to avoid thrashing on the boundary.
 
-When the user selects a different resolution while playing:
-1. A second `BufferManager` (`bgBuffer`) is initialised with `initBackground()` — attached to a temporary offscreen video element so `sourceopen` fires without affecting the live `<video>`.
-2. A new chunk job starts at the current chunk boundary, streaming into `bgBuffer` silently.
-3. A RAF loop polls `bgBuffer.bufferedEnd`. When it reaches `STARTUP_BUFFER_S[newRes]`:
-   - The foreground stream is cancelled and its `BufferManager` torn down.
-   - `video.src` is swapped to the background buffer's object URL.
-   - `video.currentTime` is restored; `video.play()` is called.
+### Scenario 3: Seek
+
+![Seek sequence diagram](./diagrams/streaming-03-seek.png)
+
+> Source: [`streaming-03-seek.mmd`](./diagrams/streaming-03-seek.mmd)
+
+When the user drags the slider, `VideoPlayer` forwards a `SeekRequested` Nova event to `PlaybackController.seekTo(t)`, which sets `video.currentTime = t`. The DOM then fires the `seeking` event back into `PlaybackController.handleSeeking`.
+
+If `t` lies within the current `SourceBuffer`'s buffered range, playback resumes naturally — no network activity. Otherwise:
+
+1. `snapTime = Math.floor(t / 300) * 300` aligns the restart to a chunk boundary so the new job shares a cache directory with any existing `(videoId, res, snapTime)` job.
+2. `StreamingService.cancel()` aborts the current fetch.
+3. `BufferManager.seek(snapTime)` flushes the `SourceBuffer` (`remove(0, Infinity)`), resets `timestampOffset`, and sets `video.currentTime`.
+4. `startTranscode(videoId, res, snapTime, snapTime + 300)` re-enters the Scenario 1 flow from the GraphQL step onward.
+
+### Scenario 4: Resolution switch (background buffer)
+
+![Resolution switch sequence diagram](./diagrams/streaming-04-resolution-switch.png)
+
+> Source: [`streaming-04-resolution-switch.mmd`](./diagrams/streaming-04-resolution-switch.mmd)
+
+MSE's `SourceBuffer` can only be initialised with one MIME type / resolution profile for its lifetime. Switching resolution mid-playback therefore requires a fresh `MediaSource` — but tearing down the live one would blank the screen. Instead a second `BufferManager` is created offscreen:
+
+1. `PlaybackController.switchResolution(newRes)` snaps the current playhead to the nearest chunk boundary (`chunkStart`).
+2. `bgBuffer.initBackground()` creates a `MediaSource` attached to an offscreen `<video>`, returning a `bgObjectUrl`. `sourceopen` fires and the background `SourceBuffer` is armed without disturbing the visible `<video>`.
+3. A new transcode job starts at `(videoId, newRes, chunkStart, chunkStart + 300)` and streams silently into `bgBuffer`.
+4. A RAF loop polls `bgBuffer.bufferedEnd`. When it clears `STARTUP_BUFFER_S[newRes]`:
+   - The foreground stream is cancelled and its `BufferManager` torn down (releasing the foreground object URL).
+   - `video.src = bgObjectUrl`, `video.currentTime = playhead`, `video.play()`.
    - The background buffer is promoted to foreground.
 
-The viewer experiences a brief pause (typically < 1s for lower resolutions) while the background buffer fills.
+The user sees a brief pause (< 1 s for lower resolutions) while `bgBuffer` fills — no flash of blank video.
 
 ---
 

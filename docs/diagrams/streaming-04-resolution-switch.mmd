@@ -1,0 +1,39 @@
+%% xstream streaming - Scenario 4: Resolution Switch (background buffer)
+%% A second BufferManager is created offscreen, filled with the new resolution's chunks,
+%% and promoted to foreground once enough data has accumulated.
+sequenceDiagram
+    autonumber
+    participant U as User
+    participant VP as VideoPlayer
+    participant PC as PlaybackController
+    participant SS as StreamingService
+    participant BM as BufferManager
+    participant GQL as GraphQL
+    participant CH as chunker
+    participant ST as StreamRoute
+
+    U->>VP: select newRes
+    VP->>PC: switchResolution(newRes)
+    Note right of PC: snap playhead to chunkStart
+    PC->>BM: new bgBuffer (second MediaSource)
+    PC->>BM: bgBuffer.initBackground, offscreen video
+    BM-->>PC: bgObjectUrl
+    PC->>GQL: startTranscode(videoId, newRes, chunkStart, chunkStart+300)
+    GQL->>CH: startTranscodeJob
+    CH-->>GQL: bgJobId
+    GQL-->>PC: bgJobId
+    PC->>SS: start(bgJobId, 0, bgOnSegment, ctx)
+    SS->>ST: GET /stream/bgJobId
+
+    loop background fill via RAF poll
+        ST-->>SS: framed segment
+        SS->>BM: bgBuffer.appendSegment
+        PC->>BM: read bgBuffer.bufferedEnd
+    end
+
+    Note right of PC: bgBuffer.bufferedEnd reached startup target
+    PC->>SS: cancel foreground stream
+    PC->>BM: teardown foreground BufferManager
+    PC->>BM: video.src = bgObjectUrl
+    PC->>BM: video.currentTime = playhead, video.play
+    Note over BM: bg promoted to foreground

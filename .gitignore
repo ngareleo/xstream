@@ -23,6 +23,7 @@ client/.vite/
 # dev session screenshots
 *.png
 *.jpg
+!docs/diagrams/*.png
 
 # docs tooling state
 docs/.obsidian/

@@ -1,0 +1,47 @@
+%% xstream streaming - Scenario 1: Initial Playback (happy path)
+%% Covers click-play through first pixels. One of four scenario diagrams.
+%% Regenerate .drawio via: open_drawio_mermaid with the contents of this file.
+sequenceDiagram
+    autonumber
+    participant U as User
+    participant VP as VideoPlayer
+    participant PC as PlaybackController
+    participant SS as StreamingService
+    participant BM as BufferManager
+    participant GQL as GraphQL
+    participant CH as chunker
+    participant FF as ffmpeg
+    participant ST as StreamRoute
+
+    U->>VP: click play
+    VP->>PC: startPlayback(res)
+    Note right of PC: open span playback.session
+    PC->>BM: init(mimeType)
+    BM-->>PC: sourceopen, SourceBuffer ready
+    PC->>GQL: startTranscode(videoId, res, 0, 300)
+    GQL->>CH: startTranscodeJob
+    Note right of CH: jobId = SHA-1(fp + res + range)
+    CH->>FF: spawn ffmpeg
+    Note right of CH: open transcode.job span
+    CH-->>GQL: ActiveJob running
+    GQL-->>PC: rawJobId, globalJobId
+    PC->>SS: start(jobId, 0, onSegment, ctx)
+    Note right of SS: open chunk.stream span
+    SS->>ST: GET /stream/jobId + traceparent
+    Note right of ST: open stream.request span
+    FF->>CH: init.mp4 written
+    CH->>ST: notifySubscribers
+    ST-->>SS: framed init.mp4
+    SS->>BM: onSegment(init, first=true)
+    BM->>BM: appendBuffer(init)
+    FF->>CH: segment_0000.m4s written
+    CH->>ST: notifySubscribers
+    ST-->>SS: framed segment
+    SS->>BM: onSegment(data)
+    BM->>BM: appendSegment, drainQueue
+    BM-->>PC: afterAppendCb fires
+    Note right of PC: bufferedEnd reached startup target
+    PC->>BM: video.play
+    Note over BM: status playing, pixels on screen
+
+    Note over SS,ST: Binary framing per frame - 4-byte BE uint32 length plus N bytes fMP4. First frame always init.mp4 (moov). Rest are .m4s (moof plus mdat).

@@ -1,0 +1,29 @@
+%% xstream streaming - Scenario 3: Seek
+%% User drags the seek slider. If the target time is already buffered, play resumes.
+%% Otherwise the controller snaps to the 5-minute chunk boundary and restarts streaming.
+sequenceDiagram
+    autonumber
+    participant U as User
+    participant VP as VideoPlayer
+    participant PC as PlaybackController
+    participant SS as StreamingService
+    participant BM as BufferManager
+    participant V as video element
+    participant GQL as GraphQL
+
+    U->>VP: drag seek slider to t
+    VP->>PC: seekTo(t)
+    PC->>V: video.currentTime = t
+    V-->>PC: seeking DOM event
+    PC->>PC: handleSeeking
+
+    alt target already buffered
+        PC-->>V: resume naturally (no reload)
+    else needs new chunk
+        Note right of PC: snapTime = floor(t div 300) times 300
+        PC->>SS: cancel
+        PC->>BM: seek(snapTime)
+        Note right of BM: SourceBuffer.remove all, set timestampOffset, set currentTime
+        PC->>GQL: startTranscode(videoId, res, snapTime, snapTime+300)
+        Note right of PC: re-enters Scenario 1 flow from here
+    end

@@ -883,6 +883,12 @@ Never report a task complete without having opened the browser and taken at leas
 ### Reflect skill
 After any significant session, run `/reflect` to capture non-obvious learnings into skill files and CLAUDE.md. The PreCompact hook runs this automatically before context compaction. Only write actionable gotcha-prevention notes — not narrative summaries of what was done.
 
+### Update docs when the streaming pipeline changes — required
+
+The four sequence diagrams in `docs/diagrams/streaming-0{1..4}-*.mmd` and the `### Scenario N:` subsections under `## Data Flow: Playback` in `docs/architecture.md` describe the playback pipeline. When a code change alters a visible interaction in any of those diagrams — actor calls, ordering, span boundaries, back-pressure thresholds, seek/snap logic, or the resolution-switch handoff — run `/update-docs` to update the affected `.mmd`, regenerate its PNG, and refresh the prose. The `.mmd` file is authoritative; PNGs are regenerated from it.
+
+Trigger files: `PlaybackController.ts`, `StreamingService.ts`, `BufferManager.ts`, `useChunkedPlayback.ts`, `server/src/routes/stream.ts`, `server/src/services/chunker.ts`, and the `startTranscode` resolver. Pure internal refactors that don't alter the visible call sequence don't need a diagram update. Docs and code ship in the same commit — never in separate PRs.
+
 ---
 
 ## Observability and Logging

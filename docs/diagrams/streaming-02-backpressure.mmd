@@ -1,0 +1,29 @@
+%% xstream streaming - Scenario 2: Back-pressure (pause and resume)
+%% After steady-state appends, BufferManager pauses StreamingService when
+%% bufferedAhead > 20s and resumes when it drains below 15s.
+sequenceDiagram
+    autonumber
+    participant SS as StreamingService
+    participant BM as BufferManager
+    participant V as video element
+    participant ST as StreamRoute
+
+    loop steady-state appends
+        ST-->>SS: framed segment
+        SS->>BM: onSegment(data)
+        BM->>BM: appendBuffer, evictBackBuffer, checkForwardBuffer
+    end
+
+    Note over BM: bufferedAhead crosses 20s (FORWARD_TARGET_S)
+    BM->>SS: onPause
+    Note right of SS: suspend on resumeResolve promise
+    Note right of SS: no further reader.read() calls
+
+    V-->>BM: timeupdate ticks
+    BM->>BM: buffer drains via playback
+
+    Note over BM: bufferedAhead falls below 15s (RESUME_THRESHOLD_S)
+    BM->>SS: resume
+    Note right of SS: resumeResolve() fires, fetch loop continues
+    ST-->>SS: framed segment
+    SS->>BM: onSegment(data)
