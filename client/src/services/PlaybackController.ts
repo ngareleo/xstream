@@ -327,18 +327,26 @@ export class PlaybackController {
     // stream.request under this chunk.stream span.
     const chunkCtx = trace.setSpan(getSessionContext(), chunkSpan);
 
-    const wrappedOnDone = (): void => {
+    let totalMediaBytes = 0;
+    let segmentCount = 0;
+
+    const endChunkSpan = (): void => {
+      chunkSpan.setAttribute("chunk.bytes_streamed", totalMediaBytes);
+      chunkSpan.setAttribute("chunk.segments_received", segmentCount);
       chunkSpan.end();
+    };
+
+    const wrappedOnDone = (): void => {
+      endChunkSpan();
       onDone();
     };
     const wrappedOnError = (err: Error): void => {
       chunkSpan.setStatus({ code: SpanStatusCode.ERROR, message: err.message });
-      chunkSpan.end();
+      endChunkSpan();
       onError(err);
     };
 
     const svc = new StreamingService();
-    let totalMediaBytes = 0;
     const videoEl = this.deps.videoEl;
 
     void svc.start(
@@ -357,6 +365,7 @@ export class PlaybackController {
 
         if (!isInit) {
           totalMediaBytes += segData.byteLength;
+          segmentCount += 1;
         }
 
         try {
@@ -396,7 +405,8 @@ export class PlaybackController {
           });
           buffer.markStreamDone();
           this.events.onJobCreated(null);
-          chunkSpan.end();
+          chunkSpan.addEvent("chunk_no_real_content");
+          endChunkSpan();
           return;
         }
         wrappedOnDone();
@@ -408,29 +418,57 @@ export class PlaybackController {
 
   // ── Chunk scheduler ────────────────────────────────────────────────────────
 
-  /** Fires a startTranscode mutation for the given time window and returns the raw job ID. */
-  private requestChunk(res: Resolution, startS: number, endS: number): Promise<string> {
+  /** Fires a startTranscode mutation for the given time window and returns the raw job ID.
+   * `isPrefetch` distinguishes RAF-driven prefetch requests from on-demand chain calls
+   * on the `transcode.request` span so Seq queries like
+   * `SpanName = 'transcode.request' and chunk.is_prefetch = true` are one click away. */
+  private requestChunk(
+    res: Resolution,
+    startS: number,
+    endS: number,
+    isPrefetch: boolean
+  ): Promise<string> {
     const videoDurationS = this.deps.getVideoDurationS();
     const clampedEnd = Math.min(endS, videoDurationS);
-    playbackLog.info(`Requesting chunk [${startS}s, ${clampedEnd}s)`, {
-      start_s: startS,
-      end_s: clampedEnd,
-    });
-    return this.deps
-      .startTranscodeChunk({
-        resolution: res,
-        startTimeSeconds: startS,
-        endTimeSeconds: clampedEnd,
-      })
+    playbackLog.info(
+      `Requesting chunk [${startS}s, ${clampedEnd}s)${isPrefetch ? " (prefetch)" : ""}`,
+      { start_s: startS, end_s: clampedEnd, is_prefetch: isPrefetch }
+    );
+    const sessionCtx = getSessionContext();
+    const requestSpan = playbackTracer.startSpan(
+      "transcode.request",
+      {
+        attributes: {
+          "chunk.start_s": startS,
+          "chunk.end_s": clampedEnd,
+          "chunk.resolution": res,
+          "chunk.is_prefetch": isPrefetch,
+        },
+      },
+      sessionCtx
+    );
+    const requestCtx = trace.setSpan(sessionCtx, requestSpan);
+    return context
+      .with(requestCtx, () =>
+        this.deps.startTranscodeChunk({
+          resolution: res,
+          startTimeSeconds: startS,
+          endTimeSeconds: clampedEnd,
+        })
+      )
       .then(({ rawJobId, globalJobId }) => {
         this.events.onJobCreated(globalJobId);
+        requestSpan.setAttribute("chunk.job_id", rawJobId);
+        requestSpan.end();
         playbackLog.info(
           `Chunk job ${rawJobId.slice(0, 8)} created for [${startS}s, ${clampedEnd}s)`,
-          { job_id: rawJobId, start_s: startS, end_s: clampedEnd }
+          { job_id: rawJobId, start_s: startS, end_s: clampedEnd, is_prefetch: isPrefetch }
         );
         return rawJobId;
       })
       .catch((err: Error) => {
+        requestSpan.setStatus({ code: SpanStatusCode.ERROR, message: err.message });
+        requestSpan.end();
         playbackLog.error("Chunk mutation error", { message: err.message });
         throw err;
       });
@@ -452,7 +490,7 @@ export class PlaybackController {
     this.chunkEnd = chunkEnd;
     this.prefetchFired = false;
 
-    void this.requestChunk(res, startS, chunkEnd)
+    void this.requestChunk(res, startS, chunkEnd, false)
       .then((rawJobId) => {
         const isLast = chunkEnd >= videoDurationS;
 
@@ -528,7 +566,7 @@ export class PlaybackController {
               time_until_end_s: parseFloat(timeUntilEnd.toFixed(1)),
             }
           );
-          void this.requestChunk(res, nextStart, nextEnd)
+          void this.requestChunk(res, nextStart, nextEnd, true)
             .then((rawJobId) => {
               this.nextJobId = rawJobId;
             })
@@ -625,7 +663,8 @@ export class PlaybackController {
         void this.requestChunk(
           newRes,
           chunkStart,
-          Math.min(chunkStart + CHUNK_DURATION_S, videoDurationS)
+          Math.min(chunkStart + CHUNK_DURATION_S, videoDurationS),
+          false
         )
           .then((rawJobId) => {
             const bgSvc = this.streamChunk(

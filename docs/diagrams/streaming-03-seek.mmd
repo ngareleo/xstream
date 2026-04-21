@@ -24,6 +24,7 @@ sequenceDiagram
         PC->>SS: cancel
         PC->>BM: seek(snapTime)
         Note right of BM: SourceBuffer.remove all, set timestampOffset, set currentTime
+        Note right of PC: open transcode.request span (is_prefetch = false)
         PC->>GQL: startTranscode(videoId, res, snapTime, snapTime+300)
         Note right of PC: re-enters Scenario 1 flow from here
     end

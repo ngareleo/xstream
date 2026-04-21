@@ -1,6 +1,11 @@
-import { getClientLogger } from "~/telemetry.js";
+import { type Span } from "@opentelemetry/api";
+
+import { getClientLogger, getClientTracer } from "~/telemetry.js";
+
+import { getSessionContext } from "./playbackSession.js";
 
 const log = getClientLogger("bufferManager");
+const tracer = getClientTracer("bufferManager");
 
 const DEFAULT_FORWARD_BUFFER_TARGET_S = 20;
 const BACK_BUFFER_KEEP_S = 5;
@@ -29,6 +34,7 @@ export class BufferManager {
   private forwardTarget: number;
   private forwardResume: number;
   private streamPaused = false;
+  private haltSpan: Span | null = null;
   private afterAppendCb: (() => void) | null = null;
   private seekAbort = false;
   private videoDurationS: number;
@@ -339,6 +345,18 @@ export class BufferManager {
           buffer_mb: parseFloat(bufMb),
         }
       );
+      this.haltSpan = tracer.startSpan(
+        "buffer.halt",
+        {
+          attributes: {
+            "buffer.buffered_ahead_s_at_pause": parseFloat(bufferedAhead.toFixed(1)),
+            "buffer.target_s": this.forwardTarget,
+            "buffer.resume_threshold_s": this.forwardResume,
+            "buffer.bytes_at_pause": this.bytesInBuffer,
+          },
+        },
+        getSessionContext()
+      );
       this.onPause();
     } else if (bufferedAhead < this.forwardResume && this.streamPaused) {
       this.streamPaused = false;
@@ -352,6 +370,14 @@ export class BufferManager {
           buffer_mb: parseFloat(bufMb),
         }
       );
+      if (this.haltSpan) {
+        this.haltSpan.setAttribute(
+          "buffer.buffered_ahead_s_at_resume",
+          parseFloat(bufferedAhead.toFixed(1))
+        );
+        this.haltSpan.end();
+        this.haltSpan = null;
+      }
       this.onResume();
     }
   }
@@ -495,5 +521,10 @@ export class BufferManager {
     this.bytesInBuffer = 0;
     this.evictionCount = 0;
     this.segmentsAppended = 0;
+    if (this.haltSpan) {
+      this.haltSpan.addEvent("halt_ended_by_teardown");
+      this.haltSpan.end();
+      this.haltSpan = null;
+    }
   }
 }

@@ -15,6 +15,7 @@ sequenceDiagram
     end
 
     Note over BM: bufferedAhead crosses 20s (FORWARD_TARGET_S)
+    Note right of BM: open buffer.halt span, parent = playback.session
     BM->>SS: onPause
     Note right of SS: suspend on resumeResolve promise
     Note right of SS: no further reader.read() calls
@@ -23,6 +24,7 @@ sequenceDiagram
     BM->>BM: buffer drains via playback
 
     Note over BM: bufferedAhead falls below 15s (RESUME_THRESHOLD_S)
+    Note right of BM: close buffer.halt span, duration equals stall length
     BM->>SS: resume
     Note right of SS: resumeResolve() fires, fetch loop continues
     ST-->>SS: framed segment

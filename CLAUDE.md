@@ -899,8 +899,10 @@ Full policy in `docs/observability.md`. Key rules agents must follow:
 
 | Side | Span | Where it's opened |
 |---|---|---|
-| Client | `playback.session` | `useChunkedPlayback.startPlayback` |
-| Client | `chunk.stream` | `useChunkedPlayback.streamChunk` — one per chunk; its context is threaded into `StreamingService.start(parentContext)` so the `GET /stream/:jobId` fetch span (and the server's `stream.request`) nest under it |
+| Client | `playback.session` | `PlaybackController.startPlayback` |
+| Client | `chunk.stream` | `PlaybackController.streamChunk` — one per chunk; its context is threaded into `StreamingService.start(parentContext)` so the `GET /stream/:jobId` fetch span (and the server's `stream.request`) nest under it. Records `chunk.bytes_streamed` and `chunk.segments_received` at end |
+| Client | `transcode.request` | `PlaybackController.requestChunk` — one per `startTranscode` mutation (including prefetches). `chunk.is_prefetch` attribute distinguishes RAF-driven prefetches from on-demand chain calls. The `graphql.request` HTTP span nests under it |
+| Client | `buffer.halt` | `BufferManager.checkForwardBuffer` — one per back-pressure pause→resume cycle. Parented on `playback.session` (halts can outlast a single `chunk.stream`). Span duration is the stall length |
 | Client | `graphql.request` | FetchInstrumentation (automatic) |
 | Server | `stream.request` | `routes/stream.ts` — child of client's `chunk.stream` |
 | Server | `job.resolve` | `chunker.startTranscodeJob` — covers cache-hit / inflight / restored-from-db / newly-started paths via one of four events (`job_cache_hit`, `job_inflight_resolved`, `job_restored_from_db`, `job_started`) |

@@ -137,12 +137,12 @@ The client drives transcoding in **300-second chunks** rather than encoding the 
 
 > Source: [`streaming-01-initial-playback.mmd`](./diagrams/streaming-01-initial-playback.mmd)
 
-`useChunkedPlayback.startPlayback(res)` opens the `playback.session` span and drives the boot sequence:
+`PlaybackController.startPlayback(res)` opens the `playback.session` span and drives the boot sequence:
 
 1. `BufferManager.init(mimeType)` creates a `MediaSource` and arms a `SourceBuffer`.
-2. The `startTranscode` GraphQL mutation hands the server a `(videoId, resolution, 0, 300)` window.
-3. `chunker.startTranscodeJob` computes a deterministic `jobId = SHA-1(fingerprint + res + start + end)`. If `tmp/segments/<jobId>/init.mp4` exists the job is restored from cache; otherwise a new ffmpeg process spawns and `fs.watch` starts tracking segment files.
-4. The client opens a `chunk.stream` span and calls `StreamingService.start(jobId, …, ctx)`. `ctx` is propagated as `traceparent`, so the server's `stream.request` span nests under the client's `chunk.stream`.
+2. `PlaybackController.requestChunk` opens a `transcode.request` span (with `chunk.is_prefetch = false`) around the `startTranscode` GraphQL mutation for the `(videoId, resolution, 0, 300)` window. The auto-generated `graphql.request` HTTP span nests underneath via `context.with`. The span closes when the mutation resolves and records `chunk.job_id`.
+3. `chunker.startTranscodeJob` computes a deterministic `jobId = SHA-1(fingerprint + res + start + end)`. If `tmp/segments/<jobId>/init.mp4` exists the job is restored from cache; otherwise a new ffmpeg process spawns and `fs.watch` starts tracking segment files. The `transcode.job` span covers the full ffmpeg lifetime (probe + encode) and closes on `transcode_complete`, `transcode_error`, or `transcode_killed`.
+4. The client opens a `chunk.stream` span and calls `StreamingService.start(jobId, …, ctx)`. `ctx` is propagated as `traceparent`, so the server's `stream.request` span nests under the client's `chunk.stream`. On span end it records `chunk.bytes_streamed` and `chunk.segments_received` — giving per-chunk bandwidth in a single Seq query.
 5. `GET /stream/<jobId>` waits up to 60 s for `init.mp4`, writes it length-prefixed, then loops over newly-appearing `segment_NNNN.m4s` files.
 6. `StreamingService` accumulates bytes, extracts complete frames by the 4-byte length prefix, and calls `onSegment(data, isInit)` back into `BufferManager`.
 7. `BufferManager.appendSegment` serialises `SourceBuffer.appendBuffer` calls through a queue. After each append it runs `evictBackBuffer()`, `checkForwardBuffer()`, and the `afterAppendCb`.
@@ -150,7 +150,7 @@ The client drives transcoding in **300-second chunks** rather than encoding the 
 
 #### Chunk chaining
 
-When the current chunk stream finishes, `startChunkSeries` chains to the next one. A RAF prefetch loop fires the next chunk's `startTranscode` mutation when `currentTime > chunkEnd - 60s`, so the next `jobId` is usually already in hand (`nextJobIdRef`) — no mutation RTT before streaming resumes. Continuation chunks skip re-appending the init segment; the `SourceBuffer` (in `mode="sequence"`) picks up seamlessly.
+When the current chunk stream finishes, `startChunkSeries` chains to the next one. A RAF prefetch loop fires the next chunk's `startTranscode` mutation when `currentTime > chunkEnd - 60s`, so the next `jobId` is usually already in hand (`nextJobIdRef`) — no mutation RTT before streaming resumes. Prefetch requests open their own `transcode.request` span with `chunk.is_prefetch = true`, so Seq queries can separate prefetch RTT from on-demand RTT. Continuation chunks skip re-appending the init segment; the `SourceBuffer` (in `mode="sequence"`) picks up seamlessly.
 
 #### Connection-aware ffmpeg lifecycle
 
@@ -167,9 +167,9 @@ ffmpeg dies within seconds of the last tab closing — no zombies. `chunker.star
 
 > Source: [`streaming-02-backpressure.mmd`](./diagrams/streaming-02-backpressure.mmd)
 
-Once the steady-state append loop is running, `BufferManager.checkForwardBuffer` runs after every append. If `bufferedAhead > FORWARD_TARGET_S (20 s)` it calls `StreamingService.pause()`, which suspends the fetch loop on a `resumeResolve` promise — no further `reader.read()` calls are issued, so TCP back-pressure propagates all the way to the server's write loop and ffmpeg throttles naturally.
+Once the steady-state append loop is running, `BufferManager.checkForwardBuffer` runs after every append. If `bufferedAhead > FORWARD_TARGET_S (20 s)` it opens a `buffer.halt` span (parented on `playback.session` so it survives chunk boundaries) and calls `StreamingService.pause()`, which suspends the fetch loop on a `resumeResolve` promise — no further `reader.read()` calls are issued, so TCP back-pressure propagates all the way to the server's write loop and ffmpeg throttles naturally.
 
-As the `<video>` element plays and `timeupdate` fires, `bufferedAhead` drains. When it falls below `RESUME_THRESHOLD_S (15 s)`, `BufferManager` calls `StreamingService.resume()`, which resolves the promise and reawakens `reader.read()`. The 20 s / 15 s split is a hysteresis band to avoid thrashing on the boundary.
+As the `<video>` element plays and `timeupdate` fires, `bufferedAhead` drains. When it falls below `RESUME_THRESHOLD_S (15 s)`, the `buffer.halt` span is closed (its duration is the stall length) and `BufferManager` calls `StreamingService.resume()`, which resolves the promise and reawakens `reader.read()`. The 20 s / 15 s split is a hysteresis band to avoid thrashing on the boundary.
 
 ### Scenario 3: Seek
 
