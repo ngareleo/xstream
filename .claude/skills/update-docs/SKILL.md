@@ -29,7 +29,7 @@ Purely internal refactors (renames, extracting private helpers, tightening types
 | # | File | Covers |
 |---|---|---|
 | 1 | `docs/diagrams/streaming-01-initial-playback.mmd` | Click-play through first pixels; full actor chain including ffmpeg |
-| 2 | `docs/diagrams/streaming-02-backpressure.mmd` | Pause/resume hysteresis (20 s / 8 s); one `buffer.halt` span per cycle — `StreamingService` ↔ `BufferManager` ↔ `<video>` |
+| 2 | `docs/diagrams/streaming-02-backpressure.mmd` | Pause/resume hysteresis (60 s / 20 s); one `buffer.halt` span per cycle — `StreamingService` ↔ `BufferManager` ↔ `<video>` |
 | 3 | `docs/diagrams/streaming-03-seek.mmd` | Seek slider, buffered-vs-not branch, chunk-boundary snap |
 | 4 | `docs/diagrams/streaming-04-resolution-switch.mmd` | Offscreen `bgBuffer` fill + promotion to foreground |
 

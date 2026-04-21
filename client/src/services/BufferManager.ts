@@ -21,9 +21,12 @@ export interface BufferConfig {
   forwardTargetS: number;
   /** Resume the stream only after bufferedAhead drains below this value. The
    *  gap between target and resume is the hysteresis width: wider gaps produce
-   *  fewer, longer halts; narrow gaps (<5s) cause rapid pause/resume churn. We
-   *  trade ~45 MB of extra buffer headroom (at 4K bitrates) for far fewer
-   *  cycles. */
+   *  fewer, longer halts; narrow gaps (<5s) cause rapid pause/resume churn. At
+   *  the defaults (target 60s + backBufferKeepS 10s) peak resident buffer is
+   *  ~70s, which is ~133 MB at 4K (15.2 Mbps). Each pause→resume cycle lasts
+   *  approximately `forwardTargetS - forwardResumeS` seconds of playback,
+   *  because playback drains at 1× while the stream is halted.
+   *  See `docs/Streaming Protocol.md → Hysteresis: tuning the gap`. */
   forwardResumeS: number;
   /** Keep at most this many seconds of media behind the playhead in the
    *  SourceBuffer; everything older is evicted on each append to cap memory. */
@@ -34,9 +37,9 @@ export interface BufferConfig {
 }
 
 export const DEFAULT_BUFFER_CONFIG: BufferConfig = {
-  forwardTargetS: 20,
-  forwardResumeS: 8,
-  backBufferKeepS: 5,
+  forwardTargetS: 60,
+  forwardResumeS: 20,
+  backBufferKeepS: 10,
   healthLogIntervalSegments: 20,
 };
 

@@ -158,7 +158,7 @@ Detection is driven by `BufferManager.setAfterAppend(tryStart)` — a callback t
 
 ## Back-Pressure
 
-The client pauses fetching when the forward buffer exceeds a configurable threshold (default 20 seconds) to avoid unbounded memory growth:
+The client pauses fetching when the forward buffer exceeds a configurable threshold (default 60 seconds) to avoid unbounded memory growth:
 
 ```
 after each appendBuffer:
@@ -167,15 +167,110 @@ after each appendBuffer:
   if bufferedAhead < forwardResume  → StreamingService.resume()
 ```
 
-`forwardTargetS` defaults to 20s and `forwardResumeS` to 8s — both live on `BufferConfig`, passed to `BufferManager`'s constructor. The 12-second hysteresis gap is deliberately wide so each pause/drain cycle lasts ~10s of real playback and cycles don't chain back-to-back at steady state; one pause → resume cycle produces one `buffer.halt` telemetry span (see `docs/observability.md`).
+`forwardTargetS` defaults to 60s and `forwardResumeS` to 20s — both live on `BufferConfig`, passed to `BufferManager`'s constructor. The 40-second hysteresis gap is deliberately wide so each pause/drain cycle lasts ~40s of real playback and cycles don't chain back-to-back at steady state; one pause → resume cycle produces one `buffer.halt` telemetry span (see `docs/observability.md`).
 
-Back buffer eviction keeps at most 5 seconds behind `currentTime`:
+Back buffer eviction keeps at most 10 seconds behind `currentTime`:
 
 ```
 after each appendBuffer:
-  evictEnd = video.currentTime - 5s
+  evictEnd = video.currentTime - 10s
   if sourceBuffer.buffered.start(0) < evictEnd:
     sourceBuffer.remove(buffered.start(0), evictEnd)
 ```
 
-At 4K (15 Mbps), 25 seconds of buffer is approximately **46 MB** — acceptable for a desktop browser.
+At 4K (15 Mbps), 70 seconds of buffer is approximately **133 MB** — acceptable for a desktop browser.
+
+### Hysteresis: tuning the gap
+
+The three buffer knobs (`forwardTargetS`, `forwardResumeS`, `backBufferKeepS`) are overridable at runtime via the `flag.experimentalBuffer` feature flag + the `config.bufferForwardTargetS` / `config.bufferForwardResumeS` tunables. This section captures the tradeoffs so future tuning stays grounded.
+
+#### Mental model
+
+Two thresholds, one decoder-starvation line:
+
+```
+bufferedAhead (seconds in front of playhead)
+ ▲
+ │   pause  ───────────────────────  forwardTargetS  (default 60s)
+ │                                   ↑
+ │         hysteresis gap            │  gap = target - resume
+ │         (= halt duration)         │
+ │                                   ↓
+ │   resume ───────────────────────  forwardResumeS  (default 20s)
+ │
+ │   ───────────────────────────────  0  (decoder starves, video stalls)
+ ▼
+```
+
+The TCP back-pressure chain when the client calls `StreamingService.pause()`:
+
+```
+BufferManager.checkForwardBuffer  →  onPause()
+           ↓
+StreamingService holds a pending resumeResolve promise
+           ↓
+reader.read() suspends (no pull from the network)
+           ↓
+TCP receive window stops draining
+           ↓
+Server's controller.enqueue() eventually blocks in writable.write()
+           ↓
+ffmpeg stdout.pipe(serverWriter) blocks
+           ↓
+ffmpeg stops producing new segments
+```
+
+No ffmpeg kill, no reconnect. When playback drains the buffer below `forwardResumeS`, `StreamingService.resume()` resolves the promise and the chain unblocks in reverse.
+
+#### What the gap controls
+
+| Axis | Narrow gap (<5s, e.g. 20/16) | Wide gap (30–50s, default 60/20) |
+|---|---|---|
+| **Halt frequency** | Many, short cycles (~5s each) | Few, long cycles (~40s each) |
+| **Halt duration** | ≈ gap (a few seconds) | ≈ gap (tens of seconds) |
+| **Underrun margin** | 16s → safe; rarely starves | 20s → safe; resume floor ≥5s is plenty |
+| **Telemetry volume** | One `buffer.halt` span per short cycle — noisy | One span per ~40s of playback — calm |
+| **ffmpeg throttling** | Frequent flip between blocked/unblocked; ffmpeg stays warm | Long idle windows; must stay under `CONNECTION_TIMEOUT_MS` (180s) or the server kills the job |
+| **Network-blip resilience** | Smaller buffer ceiling, less cushion during jitter | Larger cushion absorbs transient stalls |
+
+Narrow gaps are pathological — they spam `buffer.halt` spans and make it hard to see real problems in Seq. Very wide gaps (>120s halts) risk tripping `CONNECTION_TIMEOUT_MS`. The default 40s gap sits comfortably between the two.
+
+#### Key numbers separate from the gap
+
+The three knobs each do a different job:
+
+- `forwardTargetS` — **memory ceiling.** Peak resident buffer is `forwardTargetS + backBufferKeepS` (bytes depend on bitrate — see table below). Raising it costs memory, lowering it risks underruns on bursty networks.
+- `forwardResumeS` — **underrun margin.** How much buffer exists when the stream un-pauses. Refill latency is ~0.1–2s at steady state (server already has segments ready) so a resume floor of **≥5s is safe**; below that, a single network hiccup during refill can drain to 0 and stall the video.
+- **Gap = target − resume** — **halt duration.** Each halt lasts ≈ gap seconds because playback drains the buffer at 1× while the stream is paused. Default 60 − 20 = 40s.
+
+#### Memory table (at default `forwardTargetS + backBufferKeepS = 70s`)
+
+Using `RESOLUTION_PROFILES` video + audio bitrates from `server/src/config.ts`:
+
+| Resolution | Bitrate (v + a) | Peak resident buffer (70s × bitrate / 8) |
+|---|---|---|
+| 240p | 300 + 96 kbps = 396 kbps | ~3.5 MB |
+| 360p | 800 + 128 kbps = 928 kbps | ~8.1 MB |
+| 480p | 1500 + 128 kbps = 1628 kbps | ~14.2 MB |
+| 720p | 2500 + 192 kbps = 2692 kbps | ~23.6 MB |
+| 1080p | 4000 + 192 kbps = 4192 kbps | ~36.7 MB |
+| 4K | 15000 + 192 kbps = 15192 kbps | ~133.0 MB |
+
+4K is the only resolution where the buffer is non-trivial. Desktop browsers handle it comfortably; mobile should use a lower `forwardTargetS` via the flag layer.
+
+#### Chunks vs segments vs buffer — three independent levers
+
+Easy to conflate, but each knob affects a different part of the pipeline:
+
+| Lever | Default | What it controls |
+|---|---|---|
+| `CHUNK_DURATION_S` (`server/src/services/chunker.ts`) | 300s | ffmpeg transcode unit — one ffmpeg process produces one chunk. Affects first-byte latency (smaller = faster start) and chunk-cutover cost (smaller = more frequent cutovers) |
+| Segment duration (ffmpeg `-seg_duration`) | 2s | Wire framing unit — each `.m4s` is 2 seconds of fMP4. Affects append cadence and `appendBuffer` throughput |
+| `forwardTargetS` (`client/src/services/BufferManager.ts`) | 60s | Client-side buffer ceiling — how much media is resident in the SourceBuffer. Independent of ffmpeg; the network can deliver hundreds of segments but the client only keeps `forwardTargetS` ahead of the playhead |
+
+If playback feels choppy at 4K, the right lever depends on the symptom:
+- Long time-to-first-frame → shrink `CHUNK_DURATION_S` (documented in `docs/todo.md` CHUNK-001)
+- Decoder underruns mid-stream → raise `forwardResumeS` (more cushion when stream resumes)
+- Out-of-memory on a low-spec client → lower `forwardTargetS`
+
+Don't reach for a bigger chunk size to "stream more over the wire" — the stream is already continuous; segments are emitted as ffmpeg produces them. A larger chunk just delays the first byte.

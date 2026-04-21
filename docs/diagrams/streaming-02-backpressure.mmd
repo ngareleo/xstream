@@ -1,6 +1,6 @@
 %% xstream streaming - Scenario 2: Back-pressure (pause and resume)
 %% After steady-state appends, BufferManager pauses StreamingService when
-%% bufferedAhead > 20s and resumes when it drains below 8s (12s hysteresis).
+%% bufferedAhead > 60s and resumes when it drains below 20s (40s hysteresis).
 %% One pause-resume cycle opens and closes one buffer.halt span.
 sequenceDiagram
     autonumber
@@ -15,7 +15,7 @@ sequenceDiagram
         BM->>BM: appendBuffer, evictBackBuffer, checkForwardBuffer
     end
 
-    Note over BM: bufferedAhead crosses 20s (forwardTargetS)
+    Note over BM: bufferedAhead crosses 60s (forwardTargetS)
     Note right of BM: open buffer.halt span, parent = playback.session
     BM->>SS: onPause
     Note right of SS: suspend on resumeResolve promise
@@ -24,7 +24,7 @@ sequenceDiagram
     V-->>BM: timeupdate ticks
     BM->>BM: buffer drains via playback
 
-    Note over BM: bufferedAhead falls below 8s (forwardResumeS)
+    Note over BM: bufferedAhead falls below 20s (forwardResumeS)
     Note right of BM: close buffer.halt span, duration equals stall length
     BM->>SS: resume
     Note right of SS: resumeResolve() fires, fetch loop continues
