@@ -10,6 +10,16 @@ const tracer = getClientTracer("bufferManager");
 const DEFAULT_FORWARD_BUFFER_TARGET_S = 20;
 const BACK_BUFFER_KEEP_S = 5;
 
+// Back-pressure naturally oscillates: pause at forwardTarget, drain to
+// forwardResume (~5s of playback), refill, pause again. At steady state that
+// emits a new ~5s span every ~10s of playback, which is unreadable in Seq.
+// Instead, keep one `buffer.halt` span open across rapid pause/resume cycles
+// — emit `pause`/`resume` events inside it — and only close the span once the
+// stream stays resumed continuously for HALT_COALESCE_WINDOW_MS. This window
+// represents the minimum quiet period that separates two "distinct" halt
+// regimes in the emitted trace.
+const HALT_COALESCE_WINDOW_MS = 30_000;
+
 // Emit a buffer-health log every N segments to track memory pressure without
 // flooding the log at high bitrates.
 const BUFFER_HEALTH_LOG_INTERVAL = 20;
@@ -35,6 +45,10 @@ export class BufferManager {
   private forwardResume: number;
   private streamPaused = false;
   private haltSpan: Span | null = null;
+  private haltCoalesceTimer: ReturnType<typeof setTimeout> | null = null;
+  private haltPauseCount = 0;
+  private haltTotalPausedMs = 0;
+  private haltPausedAt: number | null = null;
   private afterAppendCb: (() => void) | null = null;
   private seekAbort = false;
   private videoDurationS: number;
@@ -345,18 +359,37 @@ export class BufferManager {
           buffer_mb: parseFloat(bufMb),
         }
       );
-      this.haltSpan = tracer.startSpan(
-        "buffer.halt",
-        {
-          attributes: {
-            "buffer.buffered_ahead_s_at_pause": parseFloat(bufferedAhead.toFixed(1)),
-            "buffer.target_s": this.forwardTarget,
-            "buffer.resume_threshold_s": this.forwardResume,
-            "buffer.bytes_at_pause": this.bytesInBuffer,
+      this.haltPausedAt = performance.now();
+      if (this.haltSpan) {
+        // Within the coalesce window — extend the existing span. Cancel the
+        // pending close timer and record a pause event inside the span.
+        if (this.haltCoalesceTimer !== null) {
+          clearTimeout(this.haltCoalesceTimer);
+          this.haltCoalesceTimer = null;
+        }
+        this.haltSpan.addEvent("pause", {
+          "buffer.buffered_ahead_s": parseFloat(bufferedAhead.toFixed(1)),
+          "buffer.bytes": this.bytesInBuffer,
+        });
+        this.haltPauseCount++;
+      } else {
+        // Open a fresh coalesced span. The pause-attrs describe the first pause
+        // in this window; subsequent pauses are attached as events.
+        this.haltSpan = tracer.startSpan(
+          "buffer.halt",
+          {
+            attributes: {
+              "buffer.buffered_ahead_s_at_pause": parseFloat(bufferedAhead.toFixed(1)),
+              "buffer.target_s": this.forwardTarget,
+              "buffer.resume_threshold_s": this.forwardResume,
+              "buffer.bytes_at_pause": this.bytesInBuffer,
+            },
           },
-        },
-        getSessionContext()
-      );
+          getSessionContext()
+        );
+        this.haltPauseCount = 1;
+        this.haltTotalPausedMs = 0;
+      }
       this.onPause();
     } else if (bufferedAhead < this.forwardResume && this.streamPaused) {
       this.streamPaused = false;
@@ -371,15 +404,42 @@ export class BufferManager {
         }
       );
       if (this.haltSpan) {
-        this.haltSpan.setAttribute(
-          "buffer.buffered_ahead_s_at_resume",
-          parseFloat(bufferedAhead.toFixed(1))
-        );
-        this.haltSpan.end();
-        this.haltSpan = null;
+        if (this.haltPausedAt !== null) {
+          this.haltTotalPausedMs += performance.now() - this.haltPausedAt;
+          this.haltPausedAt = null;
+        }
+        this.haltSpan.addEvent("resume", {
+          "buffer.buffered_ahead_s": parseFloat(bufferedAhead.toFixed(1)),
+        });
+        // Arm the coalesce timer — if no new pause happens within the quiet
+        // window, the span closes. Any pause before then clears this timer.
+        this.haltCoalesceTimer = setTimeout(() => {
+          this.endHaltSpan("halt_window_quiet");
+        }, HALT_COALESCE_WINDOW_MS);
       }
       this.onResume();
     }
+  }
+
+  /** Closes the coalesced halt span (if open) with a named end event and the
+   * accumulated pause-count / paused-duration attributes. Idempotent. */
+  private endHaltSpan(reason: string): void {
+    if (this.haltCoalesceTimer !== null) {
+      clearTimeout(this.haltCoalesceTimer);
+      this.haltCoalesceTimer = null;
+    }
+    if (!this.haltSpan) return;
+    if (this.haltPausedAt !== null) {
+      this.haltTotalPausedMs += performance.now() - this.haltPausedAt;
+      this.haltPausedAt = null;
+    }
+    this.haltSpan.setAttribute("buffer.halt_count", this.haltPauseCount);
+    this.haltSpan.setAttribute("buffer.total_paused_ms", Math.round(this.haltTotalPausedMs));
+    this.haltSpan.addEvent(reason);
+    this.haltSpan.end();
+    this.haltSpan = null;
+    this.haltPauseCount = 0;
+    this.haltTotalPausedMs = 0;
   }
 
   /**
@@ -458,11 +518,7 @@ export class BufferManager {
     this.isAppending = false;
     this.streamDone = false;
     this.streamPaused = false;
-    if (this.haltSpan) {
-      this.haltSpan.addEvent("halt_ended_by_seek");
-      this.haltSpan.end();
-      this.haltSpan = null;
-    }
+    this.endHaltSpan("halt_ended_by_seek");
     this.bytesInBuffer = 0;
     sb.remove(0, Infinity);
     await this.waitForUpdateEnd();
@@ -526,10 +582,6 @@ export class BufferManager {
     this.bytesInBuffer = 0;
     this.evictionCount = 0;
     this.segmentsAppended = 0;
-    if (this.haltSpan) {
-      this.haltSpan.addEvent("halt_ended_by_teardown");
-      this.haltSpan.end();
-      this.haltSpan = null;
-    }
+    this.endHaltSpan("halt_ended_by_teardown");
   }
 }
