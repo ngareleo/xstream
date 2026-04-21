@@ -59,7 +59,12 @@ export async function handleStream(req: Request): Promise<Response> {
     // have restored it. If it reaches here, we'll still try to stream below.
   }
 
-  const CONNECTION_TIMEOUT_MS = 90_000;
+  // Upper bound on how long the stream can sit without writing a segment before
+  // we assume the connection is dead. Must be larger than the widest back-pressure
+  // halt the client can induce. With forwardTargetS=60 and forwardResumeS=0
+  // (the flag's min), halts can reach ~60s; 180s leaves ~120s of defensive margin
+  // for real network blips on top.
+  const CONNECTION_TIMEOUT_MS = 180_000;
 
   const stream = new ReadableStream({
     async start(controller) {

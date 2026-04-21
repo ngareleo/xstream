@@ -4,6 +4,7 @@ import { graphql, useLazyLoadQuery } from "react-relay";
 import { useSearchParams } from "react-router-dom";
 
 import { DangerTab } from "~/components/danger-tab/DangerTab.js";
+import { FlagsTab } from "~/components/flags-tab/FlagsTab.js";
 import { LibraryTab } from "~/components/library-tab/LibraryTab.js";
 import { MetadataTab } from "~/components/metadata-tab/MetadataTab.js";
 import { TraceHistoryTab } from "~/components/trace-history-tab/TraceHistoryTab.js";
@@ -18,12 +19,13 @@ const SETTINGS_QUERY = graphql`
   }
 `;
 
-const TABS = ["library", "metadata", "trace", "danger"] as const;
+const TABS = ["library", "metadata", "flags", "trace", "danger"] as const;
 type Tab = (typeof TABS)[number];
 
 const TAB_LABELS: Record<Tab, string> = {
   library: strings.tabLibrary,
   metadata: strings.tabMetadata,
+  flags: strings.tabFlags,
   trace: strings.tabTrace,
   danger: strings.tabDanger,
 };
@@ -67,6 +69,7 @@ export const SettingsPageContent: FC = () => {
       <div className={styles.body}>
         {activeTab === "library" && <LibraryTab />}
         {activeTab === "metadata" && <MetadataTab />}
+        {activeTab === "flags" && <FlagsTab />}
         {activeTab === "trace" && <TraceHistoryTab query={data} />}
         {activeTab === "danger" && <DangerTab />}
       </div>

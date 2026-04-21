@@ -1,5 +1,6 @@
 import { context, type Span, SpanStatusCode, trace } from "@opentelemetry/api";
 
+import { getEffectiveBufferConfig } from "~/config/featureFlags.js";
 import { getClientLogger, getClientTracer } from "~/telemetry.js";
 import { type Resolution, RESOLUTION_MIME_TYPE } from "~/types.js";
 
@@ -91,8 +92,10 @@ export class PlaybackController {
 
   private buffer: BufferManager | null = null;
   private activeStream: StreamingService | null = null;
+  private activeChunkTeardown: ((reason: string) => void) | null = null;
   private bgBuffer: BufferManager | null = null;
   private bgStream: StreamingService | null = null;
+  private bgChunkTeardown: ((reason: string) => void) | null = null;
 
   private chunkEnd = 0;
   private nextJobId: string | null = null;
@@ -135,7 +138,7 @@ export class PlaybackController {
       return;
     }
 
-    this.resetForNewSession();
+    this.resetForNewSession("new_session");
     this.setError(null);
     this.setStatus("loading");
     this.resolution = res;
@@ -176,7 +179,8 @@ export class PlaybackController {
       videoEl,
       () => this.activeStream?.pause(),
       () => this.activeStream?.resume(),
-      videoDurationS
+      videoDurationS,
+      getEffectiveBufferConfig()
     );
     this.buffer = buffer;
 
@@ -193,6 +197,8 @@ export class PlaybackController {
         .catch((err: Error) => {
           const msg = `MSE init failed: ${err.message}`;
           playbackLog.error("MSE init failed", { message: err.message });
+          sessionSpan.addEvent("mse_init_failed", { message: err.message });
+          sessionSpan.setStatus({ code: SpanStatusCode.ERROR, message: err.message });
           this.setError(msg);
           this.setStatus("idle");
         })
@@ -224,7 +230,7 @@ export class PlaybackController {
   }
 
   /** Resets all per-session state. Called from teardown() and startPlayback(). */
-  private resetForNewSession(): void {
+  private resetForNewSession(reason: "teardown" | "new_session" = "teardown"): void {
     if (this.startupRaf !== null) {
       cancelAnimationFrame(this.startupRaf);
       this.startupRaf = null;
@@ -241,11 +247,15 @@ export class PlaybackController {
       clearTimeout(this.bufferingTimer);
       this.bufferingTimer = null;
     }
+    this.activeChunkTeardown?.(reason);
+    this.activeChunkTeardown = null;
     this.activeStream?.cancel();
     this.buffer?.teardown();
     this.activeStream = null;
     this.buffer = null;
 
+    this.bgChunkTeardown?.(reason);
+    this.bgChunkTeardown = null;
     this.bgStream?.cancel();
     this.bgBuffer?.teardown(false);
     this.bgStream = null;
@@ -257,8 +267,11 @@ export class PlaybackController {
     this.hasStartedPlayback = false;
     this.seekTarget = null;
 
-    this.sessionSpan?.end();
-    this.sessionSpan = null;
+    if (this.sessionSpan) {
+      this.sessionSpan.addEvent("session_ended", { reason });
+      this.sessionSpan.end();
+      this.sessionSpan = null;
+    }
     clearSessionContext();
 
     this.events.onJobCreated(null);
@@ -310,7 +323,7 @@ export class PlaybackController {
     res: Resolution,
     onDone: () => void,
     onError: (err: Error) => void
-  ): StreamingService {
+  ): { svc: StreamingService; teardownSpan: (reason: string) => void } {
     const chunkSpan: Span = playbackTracer.startSpan(
       "chunk.stream",
       {
@@ -327,18 +340,41 @@ export class PlaybackController {
     // stream.request under this chunk.stream span.
     const chunkCtx = trace.setSpan(getSessionContext(), chunkSpan);
 
-    const wrappedOnDone = (): void => {
+    let totalMediaBytes = 0;
+    let segmentCount = 0;
+    let ended = false;
+
+    const endChunkSpan = (): void => {
+      if (ended) return;
+      ended = true;
+      chunkSpan.setAttribute("chunk.bytes_streamed", totalMediaBytes);
+      chunkSpan.setAttribute("chunk.segments_received", segmentCount);
       chunkSpan.end();
+    };
+
+    // Caller-owned teardown path: StreamingService.cancel() aborts the fetch
+    // without firing onDone/onError, so without this the span would leak
+    // whenever teardown/seek/resolution-switch cancels mid-chunk.
+    const teardownSpan = (reason: string): void => {
+      if (ended) return;
+      chunkSpan.addEvent(`chunk_cancelled_by_${reason}`);
+      endChunkSpan();
+    };
+
+    const wrappedOnDone = (): void => {
+      endChunkSpan();
       onDone();
     };
     const wrappedOnError = (err: Error): void => {
-      chunkSpan.setStatus({ code: SpanStatusCode.ERROR, message: err.message });
-      chunkSpan.end();
+      if (!ended) {
+        chunkSpan.addEvent("chunk_error", { message: err.message });
+        chunkSpan.setStatus({ code: SpanStatusCode.ERROR, message: err.message });
+      }
+      endChunkSpan();
       onError(err);
     };
 
     const svc = new StreamingService();
-    let totalMediaBytes = 0;
     const videoEl = this.deps.videoEl;
 
     void svc.start(
@@ -357,6 +393,7 @@ export class PlaybackController {
 
         if (!isInit) {
           totalMediaBytes += segData.byteLength;
+          segmentCount += 1;
         }
 
         try {
@@ -396,41 +433,70 @@ export class PlaybackController {
           });
           buffer.markStreamDone();
           this.events.onJobCreated(null);
-          chunkSpan.end();
+          chunkSpan.addEvent("chunk_no_real_content");
+          endChunkSpan();
           return;
         }
         wrappedOnDone();
       },
       chunkCtx
     );
-    return svc;
+    return { svc, teardownSpan };
   }
 
   // ── Chunk scheduler ────────────────────────────────────────────────────────
 
-  /** Fires a startTranscode mutation for the given time window and returns the raw job ID. */
-  private requestChunk(res: Resolution, startS: number, endS: number): Promise<string> {
+  /** Fires a startTranscode mutation for the given time window and returns the raw job ID.
+   * `isPrefetch` distinguishes RAF-driven prefetch requests from on-demand chain calls
+   * on the `transcode.request` span so Seq queries like
+   * `SpanName = 'transcode.request' and chunk.is_prefetch = true` are one click away. */
+  private requestChunk(
+    res: Resolution,
+    startS: number,
+    endS: number,
+    isPrefetch: boolean
+  ): Promise<string> {
     const videoDurationS = this.deps.getVideoDurationS();
     const clampedEnd = Math.min(endS, videoDurationS);
-    playbackLog.info(`Requesting chunk [${startS}s, ${clampedEnd}s)`, {
-      start_s: startS,
-      end_s: clampedEnd,
-    });
-    return this.deps
-      .startTranscodeChunk({
-        resolution: res,
-        startTimeSeconds: startS,
-        endTimeSeconds: clampedEnd,
-      })
+    playbackLog.info(
+      `Requesting chunk [${startS}s, ${clampedEnd}s)${isPrefetch ? " (prefetch)" : ""}`,
+      { start_s: startS, end_s: clampedEnd, is_prefetch: isPrefetch }
+    );
+    const sessionCtx = getSessionContext();
+    const requestSpan = playbackTracer.startSpan(
+      "transcode.request",
+      {
+        attributes: {
+          "chunk.start_s": startS,
+          "chunk.end_s": clampedEnd,
+          "chunk.resolution": res,
+          "chunk.is_prefetch": isPrefetch,
+        },
+      },
+      sessionCtx
+    );
+    const requestCtx = trace.setSpan(sessionCtx, requestSpan);
+    return context
+      .with(requestCtx, () =>
+        this.deps.startTranscodeChunk({
+          resolution: res,
+          startTimeSeconds: startS,
+          endTimeSeconds: clampedEnd,
+        })
+      )
       .then(({ rawJobId, globalJobId }) => {
         this.events.onJobCreated(globalJobId);
+        requestSpan.setAttribute("chunk.job_id", rawJobId);
+        requestSpan.end();
         playbackLog.info(
           `Chunk job ${rawJobId.slice(0, 8)} created for [${startS}s, ${clampedEnd}s)`,
-          { job_id: rawJobId, start_s: startS, end_s: clampedEnd }
+          { job_id: rawJobId, start_s: startS, end_s: clampedEnd, is_prefetch: isPrefetch }
         );
         return rawJobId;
       })
       .catch((err: Error) => {
+        requestSpan.setStatus({ code: SpanStatusCode.ERROR, message: err.message });
+        requestSpan.end();
         playbackLog.error("Chunk mutation error", { message: err.message });
         throw err;
       });
@@ -452,7 +518,7 @@ export class PlaybackController {
     this.chunkEnd = chunkEnd;
     this.prefetchFired = false;
 
-    void this.requestChunk(res, startS, chunkEnd)
+    void this.requestChunk(res, startS, chunkEnd, false)
       .then((rawJobId) => {
         const isLast = chunkEnd >= videoDurationS;
 
@@ -474,7 +540,7 @@ export class PlaybackController {
 
             if (savedNextJobId) {
               const nextIsLast = nextEnd >= videoDurationS;
-              const nextSvc = this.streamChunk(
+              const next = this.streamChunk(
                 savedNextJobId,
                 buffer,
                 false,
@@ -487,19 +553,23 @@ export class PlaybackController {
                   : (): void => this.startChunkSeries(res, nextEnd, buffer, false),
                 (err) => this.setError(err.message)
               );
-              this.activeStream = nextSvc;
+              this.activeStream = next.svc;
+              this.activeChunkTeardown = next.teardownSpan;
             } else {
               this.startChunkSeries(res, nextStart, buffer, false);
             }
           }
         };
 
-        const svc = this.streamChunk(rawJobId, buffer, isFirstChunk, res, onDone, (err) => {
+        const stream = this.streamChunk(rawJobId, buffer, isFirstChunk, res, onDone, (err) => {
           this.setError(err.message);
         });
-        this.activeStream = svc;
+        this.activeStream = stream.svc;
+        this.activeChunkTeardown = stream.teardownSpan;
       })
       .catch((err: Error) => {
+        this.sessionSpan?.addEvent("chunk_series_failed", { message: err.message });
+        this.sessionSpan?.setStatus({ code: SpanStatusCode.ERROR, message: err.message });
         this.setError(err.message);
         this.setStatus("idle");
       });
@@ -528,7 +598,7 @@ export class PlaybackController {
               time_until_end_s: parseFloat(timeUntilEnd.toFixed(1)),
             }
           );
-          void this.requestChunk(res, nextStart, nextEnd)
+          void this.requestChunk(res, nextStart, nextEnd, true)
             .then((rawJobId) => {
               this.nextJobId = rawJobId;
             })
@@ -561,6 +631,8 @@ export class PlaybackController {
     );
 
     // Cancel any in-flight background buffer
+    this.bgChunkTeardown?.("resolution_switch_restart");
+    this.bgChunkTeardown = null;
     this.bgStream?.cancel();
     this.bgBuffer?.teardown(false);
 
@@ -568,7 +640,8 @@ export class PlaybackController {
       videoEl,
       () => this.bgStream?.pause(),
       () => this.bgStream?.resume(),
-      videoDurationS
+      videoDurationS,
+      getEffectiveBufferConfig()
     );
     this.bgBuffer = bgBuffer;
 
@@ -586,6 +659,8 @@ export class PlaybackController {
           });
 
           // Tear down foreground (don't clear videoEl.src yet)
+          this.activeChunkTeardown?.("resolution_switch");
+          this.activeChunkTeardown = null;
           this.activeStream?.cancel();
           this.buffer?.teardown(false);
           this.activeStream = null;
@@ -604,7 +679,9 @@ export class PlaybackController {
           bgBuffer.promoteToForeground();
           this.bgBuffer = null;
           this.activeStream = this.bgStream;
+          this.activeChunkTeardown = this.bgChunkTeardown;
           this.bgStream = null;
+          this.bgChunkTeardown = null;
 
           this.resolution = newRes;
           // Resume chunk series from the swapped position
@@ -625,10 +702,11 @@ export class PlaybackController {
         void this.requestChunk(
           newRes,
           chunkStart,
-          Math.min(chunkStart + CHUNK_DURATION_S, videoDurationS)
+          Math.min(chunkStart + CHUNK_DURATION_S, videoDurationS),
+          false
         )
           .then((rawJobId) => {
-            const bgSvc = this.streamChunk(
+            const bg = this.streamChunk(
               rawJobId,
               bgBuffer,
               true, // background buffer is fresh — it needs the init segment
@@ -638,17 +716,23 @@ export class PlaybackController {
               },
               (err) => {
                 playbackLog.error("Background stream error", { message: err.message });
+                this.sessionSpan?.addEvent("background_stream_error", { message: err.message });
               }
             );
-            this.bgStream = bgSvc;
+            this.bgStream = bg.svc;
+            this.bgChunkTeardown = bg.teardownSpan;
             checkReady();
           })
           .catch((err: Error) => {
             playbackLog.error("Background chunk error", { message: err.message });
+            this.sessionSpan?.addEvent("background_chunk_request_failed", {
+              message: err.message,
+            });
           });
       })
       .catch((err: Error) => {
         playbackLog.error("Background MSE init failed", { message: err.message });
+        this.sessionSpan?.addEvent("background_mse_init_failed", { message: err.message });
       });
   }
 
@@ -718,6 +802,8 @@ export class PlaybackController {
     );
 
     // Cancel active stream and flush the buffer
+    this.activeChunkTeardown?.("seek");
+    this.activeChunkTeardown = null;
     this.activeStream?.cancel();
     this.activeStream = null;
     this.nextJobId = null;

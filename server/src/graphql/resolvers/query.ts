@@ -4,6 +4,7 @@ import { join } from "path";
 import { getJobById } from "../../db/queries/jobs.js";
 import { getAllLibraries, getLibraryById } from "../../db/queries/libraries.js";
 import { getPlaybackHistory } from "../../db/queries/playbackHistory.js";
+import { getSetting } from "../../db/queries/userSettings.js";
 import { getVideoById, getVideos } from "../../db/queries/videos.js";
 import { getWatchlist, getWatchlistItemById } from "../../db/queries/watchlist.js";
 import { searchOmdbList } from "../../services/omdbService.js";
@@ -128,6 +129,10 @@ export const queryResolvers = {
 
     playbackHistory(): GQLPlaybackSession[] {
       return getPlaybackHistory().map(presentPlaybackSession);
+    },
+
+    settings(_: unknown, { keys }: { keys: string[] }): { key: string; value: string | null }[] {
+      return keys.map((key) => ({ key, value: getSetting(key) }));
     },
   },
 

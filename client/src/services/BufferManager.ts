@@ -1,13 +1,47 @@
-import { getClientLogger } from "~/telemetry.js";
+import { type Span } from "@opentelemetry/api";
+
+import { getClientLogger, getClientTracer } from "~/telemetry.js";
+
+import { getSessionContext } from "./playbackSession.js";
 
 const log = getClientLogger("bufferManager");
+const tracer = getClientTracer("bufferManager");
 
-const DEFAULT_FORWARD_BUFFER_TARGET_S = 20;
-const BACK_BUFFER_KEEP_S = 5;
+/**
+ * Tunables governing the MSE buffer's back-pressure, eviction, and telemetry
+ * behaviour. One instance is constructed per playback session; the defaults in
+ * `DEFAULT_BUFFER_CONFIG` are what production uses. A future feature-flag layer
+ * may override these values per-session to let the developer experiment with
+ * different target/resume thresholds without a code change.
+ */
+export interface BufferConfig {
+  /** Pause the stream when bufferedAhead (seconds queued in front of the
+   *  playhead) exceeds this value. Larger = more memory pressure but fewer
+   *  stalls if the network is bursty. */
+  forwardTargetS: number;
+  /** Resume the stream only after bufferedAhead drains below this value. The
+   *  gap between target and resume is the hysteresis width: wider gaps produce
+   *  fewer, longer halts; narrow gaps (<5s) cause rapid pause/resume churn. At
+   *  the defaults (target 60s + backBufferKeepS 10s) peak resident buffer is
+   *  ~70s, which is ~133 MB at 4K (15.2 Mbps). Each pause→resume cycle lasts
+   *  approximately `forwardTargetS - forwardResumeS` seconds of playback,
+   *  because playback drains at 1× while the stream is halted.
+   *  See `docs/Streaming Protocol.md → Hysteresis: tuning the gap`. */
+  forwardResumeS: number;
+  /** Keep at most this many seconds of media behind the playhead in the
+   *  SourceBuffer; everything older is evicted on each append to cap memory. */
+  backBufferKeepS: number;
+  /** Emit a buffer-health log every N appended segments. Guards against log
+   *  flooding at high bitrates — one line per segment at 4K would drown Seq. */
+  healthLogIntervalSegments: number;
+}
 
-// Emit a buffer-health log every N segments to track memory pressure without
-// flooding the log at high bitrates.
-const BUFFER_HEALTH_LOG_INTERVAL = 20;
+export const DEFAULT_BUFFER_CONFIG: BufferConfig = {
+  forwardTargetS: 60,
+  forwardResumeS: 20,
+  backBufferKeepS: 10,
+  healthLogIntervalSegments: 20,
+};
 
 export type BufferPauseCallback = () => void;
 export type BufferResumeCallback = () => void;
@@ -26,9 +60,9 @@ export class BufferManager {
   private appendQueue: Array<{ data: ArrayBuffer; resolve: () => void }> = [];
   private isAppending = false;
   private streamDone = false;
-  private forwardTarget: number;
-  private forwardResume: number;
+  private config: BufferConfig;
   private streamPaused = false;
+  private haltSpan: Span | null = null;
   private afterAppendCb: (() => void) | null = null;
   private seekAbort = false;
   private videoDurationS: number;
@@ -47,14 +81,13 @@ export class BufferManager {
     onPause: BufferPauseCallback,
     onResume: BufferResumeCallback,
     videoDurationS = 0,
-    forwardTargetSeconds = DEFAULT_FORWARD_BUFFER_TARGET_S
+    config: BufferConfig = DEFAULT_BUFFER_CONFIG
   ) {
     this.videoEl = videoEl;
     this.onPause = onPause;
     this.onResume = onResume;
     this.videoDurationS = videoDurationS;
-    this.forwardTarget = forwardTargetSeconds;
-    this.forwardResume = forwardTargetSeconds * 0.75;
+    this.config = config;
   }
 
   /** Current buffer memory metrics. All byte values are estimates. */
@@ -177,7 +210,7 @@ export class BufferManager {
       // subsequent append also fails because the SourceBuffer stays full.
       //
       // Eviction strategy per attempt:
-      //   1 — normal back-buffer eviction (currentTime - BACK_BUFFER_KEEP_S)
+      //   1 — normal back-buffer eviction (currentTime - config.backBufferKeepS)
       //   2 — aggressive: remove everything behind currentTime (no keep window)
       //   3 — nuclear: remove all buffered content
       let appended = false;
@@ -241,7 +274,7 @@ export class BufferManager {
       await this.evictBackBuffer();
       this.checkForwardBuffer();
       this.afterAppendCb?.();
-      if (this.segmentsAppended % BUFFER_HEALTH_LOG_INTERVAL === 0) {
+      if (this.segmentsAppended % this.config.healthLogIntervalSegments === 0) {
         const stats = this.bufferStats;
         log.info(
           `Buffer health — ${stats.segmentsAppended} segments, ${(stats.bytesInBuffer / 1_048_576).toFixed(1)} MB in buffer (${stats.bufferedSeconds.toFixed(1)}s), ${(stats.totalBytesAppended / 1_048_576).toFixed(1)} MB total appended`,
@@ -298,7 +331,7 @@ export class BufferManager {
     const sb = this.sourceBuffer;
     if (!sb || sb.buffered.length === 0) return;
 
-    const evictEnd = this.timeRef.currentTime - BACK_BUFFER_KEEP_S;
+    const evictEnd = this.timeRef.currentTime - this.config.backBufferKeepS;
     const bufStart = sb.buffered.start(0);
 
     if (bufStart < evictEnd) {
@@ -327,33 +360,63 @@ export class BufferManager {
 
     const bufferedAhead = sb.buffered.end(sb.buffered.length - 1) - this.timeRef.currentTime;
 
-    if (bufferedAhead > this.forwardTarget && !this.streamPaused) {
+    if (bufferedAhead > this.config.forwardTargetS && !this.streamPaused) {
       this.streamPaused = true;
       const bufMb = (this.bytesInBuffer / 1_048_576).toFixed(1);
       log.info(
-        `Stream paused — ${bufferedAhead.toFixed(1)}s buffered ahead (target: ${this.forwardTarget}s), ${bufMb} MB in buffer`,
+        `Stream paused — ${bufferedAhead.toFixed(1)}s buffered ahead (target: ${this.config.forwardTargetS}s), ${bufMb} MB in buffer`,
         {
           buffered_ahead_s: parseFloat(bufferedAhead.toFixed(1)),
-          target_s: this.forwardTarget,
+          target_s: this.config.forwardTargetS,
           buffer_bytes: this.bytesInBuffer,
           buffer_mb: parseFloat(bufMb),
         }
       );
+      this.haltSpan = tracer.startSpan(
+        "buffer.halt",
+        {
+          attributes: {
+            "buffer.buffered_ahead_s_at_pause": parseFloat(bufferedAhead.toFixed(1)),
+            "buffer.target_s": this.config.forwardTargetS,
+            "buffer.resume_threshold_s": this.config.forwardResumeS,
+            "buffer.bytes_at_pause": this.bytesInBuffer,
+          },
+        },
+        getSessionContext()
+      );
       this.onPause();
-    } else if (bufferedAhead < this.forwardResume && this.streamPaused) {
+    } else if (bufferedAhead < this.config.forwardResumeS && this.streamPaused) {
       this.streamPaused = false;
       const bufMb = (this.bytesInBuffer / 1_048_576).toFixed(1);
       log.info(
-        `Stream resumed — ${bufferedAhead.toFixed(1)}s buffered ahead (resume threshold: ${this.forwardResume}s), ${bufMb} MB in buffer`,
+        `Stream resumed — ${bufferedAhead.toFixed(1)}s buffered ahead (resume threshold: ${this.config.forwardResumeS}s), ${bufMb} MB in buffer`,
         {
           buffered_ahead_s: parseFloat(bufferedAhead.toFixed(1)),
-          resume_threshold_s: this.forwardResume,
+          resume_threshold_s: this.config.forwardResumeS,
           buffer_bytes: this.bytesInBuffer,
           buffer_mb: parseFloat(bufMb),
         }
       );
+      if (this.haltSpan) {
+        this.haltSpan.setAttribute(
+          "buffer.buffered_ahead_s_at_resume",
+          parseFloat(bufferedAhead.toFixed(1))
+        );
+        this.haltSpan.end();
+        this.haltSpan = null;
+      }
       this.onResume();
     }
+  }
+
+  /** Closes the halt span early (if open) with a named end event. Used by
+   *  seek/teardown, which can interrupt a stall before the stream would have
+   *  naturally resumed. Idempotent. */
+  private endHaltSpan(reason: string): void {
+    if (!this.haltSpan) return;
+    this.haltSpan.addEvent(reason);
+    this.haltSpan.end();
+    this.haltSpan = null;
   }
 
   /**
@@ -432,6 +495,7 @@ export class BufferManager {
     this.isAppending = false;
     this.streamDone = false;
     this.streamPaused = false;
+    this.endHaltSpan("halt_ended_by_seek");
     this.bytesInBuffer = 0;
     sb.remove(0, Infinity);
     await this.waitForUpdateEnd();
@@ -495,5 +559,6 @@ export class BufferManager {
     this.bytesInBuffer = 0;
     this.evictionCount = 0;
     this.segmentsAppended = 0;
+    this.endHaltSpan("halt_ended_by_teardown");
   }
 }

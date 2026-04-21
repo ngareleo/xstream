@@ -35,7 +35,7 @@ W3C `traceparent` / `tracestate` headers are injected by the client's fetch inst
 |---|---|---|
 | `stream.request` | GET /stream/:jobId | `job_id`, `from_index`, `segments_sent`. Child of the client's `chunk.stream` span (see "Threading trace context into fetch" below). |
 | `job.resolve` | `startTranscodeJob()` entry — covers every code path that returns an `ActiveJob` | attrs: `job.id`, `job.video_id`, `job.resolution`, `job.chunk_start_s`. Events: `job_cache_hit` (already in `jobStore`), `job_inflight_resolved` (another call was mid-registration and we polled it out), `job_restored_from_db` (completed segments replayed from disk), `job_started` (new ffmpeg spawned). Exactly one event fires per span. |
-| `transcode.job` | ffmpeg process launch inside `startTranscodeJob` | `job_id`, `resolution`, `chunk_start_s`, `chunk_duration_s` |
+| `transcode.job` | ffmpeg process launch inside `startTranscodeJob` | `job.id`, `job.video_id`, `job.resolution`, `job.chunk_start_s`, `job.chunk_duration_s`. Events: `probe_complete`, `probe_error`, `transcode_started`, `transcode_error`, `transcode_killed`, `transcode_complete`. Span duration is the full ffmpeg lifetime (probe + encode). |
 | `library.scan` | scanLibraries | `library_path`, `library_name`, `files_found` |
 
 Structured log events are emitted for each significant state transition (init ready, transcode complete, scan matched, etc.) with a `component` attribute for easy filtering. When a span event already covers a state transition, do not emit a duplicate log record — prefer `span.addEvent()` over a parallel `log.info()`.
@@ -43,8 +43,10 @@ Structured log events are emitted for each significant state transition (init re
 ### Client
 | Span / log | Trigger | Key attributes |
 |---|---|---|
-| `playback.session` | startPlayback | `video_id`, `resolution` |
-| `chunk.stream` | each chunk streamed by `useChunkedPlayback` (opened around `StreamingService.start`) | `chunk.job_id`, `chunk.resolution`, `chunk.is_first`. FetchInstrumentation's HTTP span for `GET /stream/:jobId` is a child, and the server's `stream.request` is a child of that. |
+| `playback.session` | startPlayback | `video.id`, `playback.resolution`. Events: `mse_init_failed`, `chunk_series_failed`, `background_mse_init_failed`, `background_chunk_request_failed`, `background_stream_error` (all with `message`), and `session_ended` (with `reason` = `teardown` \| `new_session`) recorded before span ends. Status set to ERROR on fatal foreground failures. |
+| `chunk.stream` | each chunk streamed by `PlaybackController.streamChunk` (opened around `StreamingService.start`) | At start: `chunk.job_id`, `chunk.resolution`, `chunk.is_first`. At end: `chunk.bytes_streamed`, `chunk.segments_received`. Events: `chunk_no_real_content`, `chunk_error` (with `message`), and `chunk_cancelled_by_<reason>` where reason ∈ `teardown` \| `new_session` \| `seek` \| `resolution_switch` \| `resolution_switch_restart`. FetchInstrumentation's HTTP span for `GET /stream/:jobId` is a child, and the server's `stream.request` is a child of that. |
+| `transcode.request` | `PlaybackController.requestChunk` — each `startTranscode` mutation including prefetches | `chunk.start_s`, `chunk.end_s`, `chunk.resolution`, `chunk.is_prefetch`, `chunk.job_id` (set on success). Parent is `playback.session`. The auto-generated `graphql.request` HTTP span nests underneath via `context.with`. Status set to ERROR on mutation failure. Filter `chunk.is_prefetch = true` to isolate prefetch RTT. |
+| `buffer.halt` | `BufferManager.checkForwardBuffer` — one span per pause → resume cycle. Back-pressure pauses at `forwardTargetS` (default 60s) and resumes at `forwardResumeS` (default 20s); the 40s hysteresis gap makes each halt ~40s long so cycles don't chain at steady state. See [`Streaming Protocol → Hysteresis: tuning the gap`](./Streaming%20Protocol.md#hysteresis-tuning-the-gap). | At pause: `buffer.buffered_ahead_s_at_pause`, `buffer.target_s`, `buffer.resume_threshold_s`, `buffer.bytes_at_pause`. At natural close (resume): `buffer.buffered_ahead_s_at_resume`. On early close: one event of `halt_ended_by_seek` \| `halt_ended_by_teardown` (span ends at the moment of interruption, not when playback would have resumed). Parent is `playback.session`. Span duration = stall length. |
 | `graphql.request` | every Relay fetch | `operation.name` (via fetch instrumentation) |
 | log: `playback.start` | startPlayback called | `video_id`, `resolution`, `duration_s` |
 | log: `playback.seek` | seek triggered | `seek_target_s`, `snapped_to_s` |
@@ -66,7 +68,7 @@ A log record's body should read as a complete sentence that tells the story with
 log.info("Stream paused", { buffered_ahead_s: 23.4 });
 
 // Good — readable in the Seq event list without drilling in
-log.info("Stream paused — 23.4s buffered ahead (target: 20s)", { buffered_ahead_s: 23.4, target_s: 20 });
+log.info("Stream paused — 62.4s buffered ahead (target: 60s)", { buffered_ahead_s: 62.4, target_s: 60 });
 ```
 
 Attributes exist for filtering and correlation, not as a substitute for a clear message.

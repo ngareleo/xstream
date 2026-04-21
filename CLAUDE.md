@@ -371,6 +371,16 @@ describe("myParser", () => {
 
 Run with `bun test` from `server/`.
 
+### Add a new feature flag
+
+Feature flags are split across two files: `client/src/config/flagRegistry.ts` holds the declarations only (`FLAG_KEYS`, `FLAG_REGISTRY`, `FlagDescriptor`), and `client/src/config/featureFlags.ts` holds the runtime (cache, hydration, pub/sub, `getEffectiveBufferConfig`). They persist per-user in the server's `user_settings` key/value table, hydrate once on app boot via the `settings(keys)` GraphQL query, and are readable from both React (`useFeatureFlag`) and non-React code (`getFlag`, `getEffectiveBufferConfig`).
+
+1. Append an entry to `FLAG_REGISTRY` in `flagRegistry.ts` with a `key`, human `name`, `description`, `valueType` (`"boolean"` or `"number"`), `defaultValue`, and `category` (`"playback" | "telemetry" | "ui" | "experimental"`). Storage-key convention: `flag.<camelCase>` for booleans, `config.<camelCase>` for tunable numbers. The FlagsTab in Settings renders from the registry automatically.
+2. **Update `docs/feature-flags.md` in the same commit** — add a row to the table for the flag's category (or add the category if it was previously empty). Policy: the catalog must stay in lock-step with `FLAG_REGISTRY` so future contributors can audit what flags exist without reading TypeScript. A flag change with no doc update is a review-blocker.
+3. Read the flag in a React component via `const { value, setValue } = useFeatureFlag(FLAG_KEYS.myFlag, defaultValue)`. The setter calls the existing `setSetting` mutation and updates the module cache optimistically.
+4. Read the flag in non-React code via `getFlag(FLAG_KEYS.myFlag, defaultValue)` — synchronous, returns the hydrated value or the fallback. `PlaybackController` follows this pattern: it calls `getEffectiveBufferConfig()` at `new BufferManager(...)` construction time so toggling a flag takes effect on the *next* playback session, not mid-stream.
+5. Do not introduce a new React context for the flag — the module-level cache + `useSyncExternalStore` is the only subscription mechanism. Additional providers fragment the cache and break the non-React read path.
+
 ### Add a new environment variable
 
 1. Add the variable to `.env.example` with a placeholder or default value and a one-line comment explaining it.
@@ -899,8 +909,10 @@ Full policy in `docs/observability.md`. Key rules agents must follow:
 
 | Side | Span | Where it's opened |
 |---|---|---|
-| Client | `playback.session` | `useChunkedPlayback.startPlayback` |
-| Client | `chunk.stream` | `useChunkedPlayback.streamChunk` — one per chunk; its context is threaded into `StreamingService.start(parentContext)` so the `GET /stream/:jobId` fetch span (and the server's `stream.request`) nest under it |
+| Client | `playback.session` | `PlaybackController.startPlayback` |
+| Client | `chunk.stream` | `PlaybackController.streamChunk` — one per chunk; its context is threaded into `StreamingService.start(parentContext)` so the `GET /stream/:jobId` fetch span (and the server's `stream.request`) nest under it. Records `chunk.bytes_streamed` and `chunk.segments_received` at end |
+| Client | `transcode.request` | `PlaybackController.requestChunk` — one per `startTranscode` mutation (including prefetches). `chunk.is_prefetch` attribute distinguishes RAF-driven prefetches from on-demand chain calls. The `graphql.request` HTTP span nests under it |
+| Client | `buffer.halt` | `BufferManager.checkForwardBuffer` — one per back-pressure pause→resume cycle. Parented on `playback.session` (halts can outlast a single `chunk.stream`). Span duration is the stall length |
 | Client | `graphql.request` | FetchInstrumentation (automatic) |
 | Server | `stream.request` | `routes/stream.ts` — child of client's `chunk.stream` |
 | Server | `job.resolve` | `chunker.startTranscodeJob` — covers cache-hit / inflight / restored-from-db / newly-started paths via one of four events (`job_cache_hit`, `job_inflight_resolved`, `job_restored_from_db`, `job_started`) |

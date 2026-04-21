@@ -18,6 +18,7 @@ sequenceDiagram
     Note right of PC: open span playback.session
     PC->>BM: init(mimeType)
     BM-->>PC: sourceopen, SourceBuffer ready
+    Note right of PC: open transcode.request span (is_prefetch = false)
     PC->>GQL: startTranscode(videoId, res, 0, 300)
     GQL->>CH: startTranscodeJob
     Note right of CH: jobId = SHA-1(fp + res + range)
@@ -25,6 +26,7 @@ sequenceDiagram
     Note right of CH: open transcode.job span
     CH-->>GQL: ActiveJob running
     GQL-->>PC: rawJobId, globalJobId
+    Note right of PC: close transcode.request span
     PC->>SS: start(jobId, 0, onSegment, ctx)
     Note right of SS: open chunk.stream span
     SS->>ST: GET /stream/jobId + traceparent

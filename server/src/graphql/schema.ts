@@ -156,6 +156,11 @@ export const typeDefs = /* GraphQL */ `
     path: String!
   }
 
+  type SettingEntry {
+    key: String!
+    value: String
+  }
+
   type Query {
     node(id: ID!): Node
     libraries: [Library!]!
@@ -166,6 +171,7 @@ export const typeDefs = /* GraphQL */ `
     searchOmdb(query: String!, year: Int): [OmdbSearchResult!]!
     listDirectory(path: String!): [DirEntry!]!
     playbackHistory: [PlaybackSession!]!
+    settings(keys: [String!]!): [SettingEntry!]!
   }
 
   type Mutation {

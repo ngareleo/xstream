@@ -35,3 +35,5 @@ These items require the OTel metrics SDK (`MeterProvider`) which is not yet wire
 - [ ] **SETTINGS-001** User-configurable forward buffer: `BufferManager` now accepts `forwardTargetSeconds` but the Settings UI for it (key: `"forwardBufferTargetSeconds"`) is not yet wired up. Add a numeric input to the Settings page (new "Playback" tab), read via Relay, persist via `setSetting` mutation.
 
 - [ ] **PLAYBACK-001** Concurrent stream limit UI: currently throws `"Too many concurrent streams"` as an error overlay. Consider a friendlier modal that explains the limit (3 tabs) and links to the Settings page.
+
+- [ ] **FLAGS-001** Centralised release-time feature-flag controls: today flags persist per-user in `user_settings` only, so an operator cannot soft-launch a flag to everyone with a single toggle. Add a server-side `feature_flags` table with a precedence model (global override > user setting > `FLAG_REGISTRY.defaultValue`) and an admin UI to flip the global override. `getFlag` / `getEffectiveBufferConfig` should read the resolved value without caller changes. See `docs/feature-flags.md` for the current architecture.

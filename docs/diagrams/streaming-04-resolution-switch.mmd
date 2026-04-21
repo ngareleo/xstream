@@ -18,10 +18,12 @@ sequenceDiagram
     PC->>BM: new bgBuffer (second MediaSource)
     PC->>BM: bgBuffer.initBackground, offscreen video
     BM-->>PC: bgObjectUrl
+    Note right of PC: open transcode.request span (is_prefetch = false)
     PC->>GQL: startTranscode(videoId, newRes, chunkStart, chunkStart+300)
     GQL->>CH: startTranscodeJob
     CH-->>GQL: bgJobId
     GQL-->>PC: bgJobId
+    Note right of PC: close transcode.request span
     PC->>SS: start(bgJobId, 0, bgOnSegment, ctx)
     SS->>ST: GET /stream/bgJobId
 

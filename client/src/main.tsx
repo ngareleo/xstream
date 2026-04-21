@@ -7,12 +7,13 @@ import "./styles/global.css";
 
 import { mapEventMetadata, NovaEventingProvider } from "@nova/react";
 import type { EventWrapper } from "@nova/types";
-import React, { type FC, type ReactNode, useMemo } from "react";
+import React, { type FC, type ReactNode, Suspense, useMemo } from "react";
 import ReactDOM from "react-dom/client";
 import { RelayEnvironmentProvider } from "react-relay";
 import { RouterProvider } from "react-router-dom";
 
 import { ErrorBoundary } from "./components/error-boundary/ErrorBoundary.js";
+import { FeatureFlagsProvider } from "./contexts/FeatureFlagsContext.js";
 import { environment } from "./relay/environment.js";
 import { router } from "./router.js";
 
@@ -42,9 +43,13 @@ ReactDOM.createRoot(rootEl).render(
   <React.StrictMode>
     <ErrorBoundary>
       <RelayEnvironmentProvider environment={environment}>
-        <AppEventing>
-          <RouterProvider router={router} />
-        </AppEventing>
+        <Suspense fallback={null}>
+          <FeatureFlagsProvider>
+            <AppEventing>
+              <RouterProvider router={router} />
+            </AppEventing>
+          </FeatureFlagsProvider>
+        </Suspense>
       </RelayEnvironmentProvider>
     </ErrorBoundary>
   </React.StrictMode>
