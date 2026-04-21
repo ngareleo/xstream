@@ -7,28 +7,38 @@ import { getSessionContext } from "./playbackSession.js";
 const log = getClientLogger("bufferManager");
 const tracer = getClientTracer("bufferManager");
 
-// Back-pressure hysteresis: pause the stream when bufferedAhead exceeds
-// FORWARD_TARGET_S and resume only after it drains below FORWARD_RESUME_S.
-// A wide gap (12s) means each halt is long and halts are infrequent; a narrow
-// gap (<5s) produces rapid pause/resume churn during saturated playback. We
-// trade ~45 MB of extra buffer headroom (at 4K bitrates) for far fewer cycles.
-const DEFAULT_FORWARD_BUFFER_TARGET_S = 20;
-const DEFAULT_FORWARD_BUFFER_RESUME_S = 8;
-const BACK_BUFFER_KEEP_S = 5;
+/**
+ * Tunables governing the MSE buffer's back-pressure, eviction, and telemetry
+ * behaviour. One instance is constructed per playback session; the defaults in
+ * `DEFAULT_BUFFER_CONFIG` are what production uses. A future feature-flag layer
+ * may override these values per-session to let the developer experiment with
+ * different target/resume thresholds without a code change.
+ */
+export interface BufferConfig {
+  /** Pause the stream when bufferedAhead (seconds queued in front of the
+   *  playhead) exceeds this value. Larger = more memory pressure but fewer
+   *  stalls if the network is bursty. */
+  forwardTargetS: number;
+  /** Resume the stream only after bufferedAhead drains below this value. The
+   *  gap between target and resume is the hysteresis width: wider gaps produce
+   *  fewer, longer halts; narrow gaps (<5s) cause rapid pause/resume churn. We
+   *  trade ~45 MB of extra buffer headroom (at 4K bitrates) for far fewer
+   *  cycles. */
+  forwardResumeS: number;
+  /** Keep at most this many seconds of media behind the playhead in the
+   *  SourceBuffer; everything older is evicted on each append to cap memory. */
+  backBufferKeepS: number;
+  /** Emit a buffer-health log every N appended segments. Guards against log
+   *  flooding at high bitrates — one line per segment at 4K would drown Seq. */
+  healthLogIntervalSegments: number;
+}
 
-// Back-pressure naturally oscillates: pause at forwardTarget, drain to
-// forwardResume (~5s of playback), refill, pause again. At steady state that
-// emits a new ~5s span every ~10s of playback, which is unreadable in Seq.
-// Instead, keep one `buffer.halt` span open across rapid pause/resume cycles
-// — emit `pause`/`resume` events inside it — and only close the span once the
-// stream stays resumed continuously for HALT_COALESCE_WINDOW_MS. This window
-// represents the minimum quiet period that separates two "distinct" halt
-// regimes in the emitted trace.
-const HALT_COALESCE_WINDOW_MS = 30_000;
-
-// Emit a buffer-health log every N segments to track memory pressure without
-// flooding the log at high bitrates.
-const BUFFER_HEALTH_LOG_INTERVAL = 20;
+export const DEFAULT_BUFFER_CONFIG: BufferConfig = {
+  forwardTargetS: 20,
+  forwardResumeS: 8,
+  backBufferKeepS: 5,
+  healthLogIntervalSegments: 20,
+};
 
 export type BufferPauseCallback = () => void;
 export type BufferResumeCallback = () => void;
@@ -47,14 +57,9 @@ export class BufferManager {
   private appendQueue: Array<{ data: ArrayBuffer; resolve: () => void }> = [];
   private isAppending = false;
   private streamDone = false;
-  private forwardTarget: number;
-  private forwardResume: number;
+  private config: BufferConfig;
   private streamPaused = false;
   private haltSpan: Span | null = null;
-  private haltCoalesceTimer: ReturnType<typeof setTimeout> | null = null;
-  private haltPauseCount = 0;
-  private haltTotalPausedMs = 0;
-  private haltPausedAt: number | null = null;
   private afterAppendCb: (() => void) | null = null;
   private seekAbort = false;
   private videoDurationS: number;
@@ -73,15 +78,13 @@ export class BufferManager {
     onPause: BufferPauseCallback,
     onResume: BufferResumeCallback,
     videoDurationS = 0,
-    forwardTargetSeconds = DEFAULT_FORWARD_BUFFER_TARGET_S,
-    forwardResumeSeconds = DEFAULT_FORWARD_BUFFER_RESUME_S
+    config: BufferConfig = DEFAULT_BUFFER_CONFIG
   ) {
     this.videoEl = videoEl;
     this.onPause = onPause;
     this.onResume = onResume;
     this.videoDurationS = videoDurationS;
-    this.forwardTarget = forwardTargetSeconds;
-    this.forwardResume = forwardResumeSeconds;
+    this.config = config;
   }
 
   /** Current buffer memory metrics. All byte values are estimates. */
@@ -204,7 +207,7 @@ export class BufferManager {
       // subsequent append also fails because the SourceBuffer stays full.
       //
       // Eviction strategy per attempt:
-      //   1 — normal back-buffer eviction (currentTime - BACK_BUFFER_KEEP_S)
+      //   1 — normal back-buffer eviction (currentTime - config.backBufferKeepS)
       //   2 — aggressive: remove everything behind currentTime (no keep window)
       //   3 — nuclear: remove all buffered content
       let appended = false;
@@ -268,7 +271,7 @@ export class BufferManager {
       await this.evictBackBuffer();
       this.checkForwardBuffer();
       this.afterAppendCb?.();
-      if (this.segmentsAppended % BUFFER_HEALTH_LOG_INTERVAL === 0) {
+      if (this.segmentsAppended % this.config.healthLogIntervalSegments === 0) {
         const stats = this.bufferStats;
         log.info(
           `Buffer health — ${stats.segmentsAppended} segments, ${(stats.bytesInBuffer / 1_048_576).toFixed(1)} MB in buffer (${stats.bufferedSeconds.toFixed(1)}s), ${(stats.totalBytesAppended / 1_048_576).toFixed(1)} MB total appended`,
@@ -325,7 +328,7 @@ export class BufferManager {
     const sb = this.sourceBuffer;
     if (!sb || sb.buffered.length === 0) return;
 
-    const evictEnd = this.timeRef.currentTime - BACK_BUFFER_KEEP_S;
+    const evictEnd = this.timeRef.currentTime - this.config.backBufferKeepS;
     const bufStart = sb.buffered.start(0);
 
     if (bufStart < evictEnd) {
@@ -354,99 +357,63 @@ export class BufferManager {
 
     const bufferedAhead = sb.buffered.end(sb.buffered.length - 1) - this.timeRef.currentTime;
 
-    if (bufferedAhead > this.forwardTarget && !this.streamPaused) {
+    if (bufferedAhead > this.config.forwardTargetS && !this.streamPaused) {
       this.streamPaused = true;
       const bufMb = (this.bytesInBuffer / 1_048_576).toFixed(1);
       log.info(
-        `Stream paused — ${bufferedAhead.toFixed(1)}s buffered ahead (target: ${this.forwardTarget}s), ${bufMb} MB in buffer`,
+        `Stream paused — ${bufferedAhead.toFixed(1)}s buffered ahead (target: ${this.config.forwardTargetS}s), ${bufMb} MB in buffer`,
         {
           buffered_ahead_s: parseFloat(bufferedAhead.toFixed(1)),
-          target_s: this.forwardTarget,
+          target_s: this.config.forwardTargetS,
           buffer_bytes: this.bytesInBuffer,
           buffer_mb: parseFloat(bufMb),
         }
       );
-      this.haltPausedAt = performance.now();
-      if (this.haltSpan) {
-        // Within the coalesce window — extend the existing span. Cancel the
-        // pending close timer and record a pause event inside the span.
-        if (this.haltCoalesceTimer !== null) {
-          clearTimeout(this.haltCoalesceTimer);
-          this.haltCoalesceTimer = null;
-        }
-        this.haltSpan.addEvent("pause", {
-          "buffer.buffered_ahead_s": parseFloat(bufferedAhead.toFixed(1)),
-          "buffer.bytes": this.bytesInBuffer,
-        });
-        this.haltPauseCount++;
-      } else {
-        // Open a fresh coalesced span. The pause-attrs describe the first pause
-        // in this window; subsequent pauses are attached as events.
-        this.haltSpan = tracer.startSpan(
-          "buffer.halt",
-          {
-            attributes: {
-              "buffer.buffered_ahead_s_at_pause": parseFloat(bufferedAhead.toFixed(1)),
-              "buffer.target_s": this.forwardTarget,
-              "buffer.resume_threshold_s": this.forwardResume,
-              "buffer.bytes_at_pause": this.bytesInBuffer,
-            },
+      this.haltSpan = tracer.startSpan(
+        "buffer.halt",
+        {
+          attributes: {
+            "buffer.buffered_ahead_s_at_pause": parseFloat(bufferedAhead.toFixed(1)),
+            "buffer.target_s": this.config.forwardTargetS,
+            "buffer.resume_threshold_s": this.config.forwardResumeS,
+            "buffer.bytes_at_pause": this.bytesInBuffer,
           },
-          getSessionContext()
-        );
-        this.haltPauseCount = 1;
-        this.haltTotalPausedMs = 0;
-      }
+        },
+        getSessionContext()
+      );
       this.onPause();
-    } else if (bufferedAhead < this.forwardResume && this.streamPaused) {
+    } else if (bufferedAhead < this.config.forwardResumeS && this.streamPaused) {
       this.streamPaused = false;
       const bufMb = (this.bytesInBuffer / 1_048_576).toFixed(1);
       log.info(
-        `Stream resumed — ${bufferedAhead.toFixed(1)}s buffered ahead (resume threshold: ${this.forwardResume}s), ${bufMb} MB in buffer`,
+        `Stream resumed — ${bufferedAhead.toFixed(1)}s buffered ahead (resume threshold: ${this.config.forwardResumeS}s), ${bufMb} MB in buffer`,
         {
           buffered_ahead_s: parseFloat(bufferedAhead.toFixed(1)),
-          resume_threshold_s: this.forwardResume,
+          resume_threshold_s: this.config.forwardResumeS,
           buffer_bytes: this.bytesInBuffer,
           buffer_mb: parseFloat(bufMb),
         }
       );
       if (this.haltSpan) {
-        if (this.haltPausedAt !== null) {
-          this.haltTotalPausedMs += performance.now() - this.haltPausedAt;
-          this.haltPausedAt = null;
-        }
-        this.haltSpan.addEvent("resume", {
-          "buffer.buffered_ahead_s": parseFloat(bufferedAhead.toFixed(1)),
-        });
-        // Arm the coalesce timer — if no new pause happens within the quiet
-        // window, the span closes. Any pause before then clears this timer.
-        this.haltCoalesceTimer = setTimeout(() => {
-          this.endHaltSpan("halt_window_quiet");
-        }, HALT_COALESCE_WINDOW_MS);
+        this.haltSpan.setAttribute(
+          "buffer.buffered_ahead_s_at_resume",
+          parseFloat(bufferedAhead.toFixed(1))
+        );
+        this.haltSpan.end();
+        this.haltSpan = null;
       }
       this.onResume();
     }
   }
 
-  /** Closes the coalesced halt span (if open) with a named end event and the
-   * accumulated pause-count / paused-duration attributes. Idempotent. */
+  /** Closes the halt span early (if open) with a named end event. Used by
+   *  seek/teardown, which can interrupt a stall before the stream would have
+   *  naturally resumed. Idempotent. */
   private endHaltSpan(reason: string): void {
-    if (this.haltCoalesceTimer !== null) {
-      clearTimeout(this.haltCoalesceTimer);
-      this.haltCoalesceTimer = null;
-    }
     if (!this.haltSpan) return;
-    if (this.haltPausedAt !== null) {
-      this.haltTotalPausedMs += performance.now() - this.haltPausedAt;
-      this.haltPausedAt = null;
-    }
-    this.haltSpan.setAttribute("buffer.halt_count", this.haltPauseCount);
-    this.haltSpan.setAttribute("buffer.total_paused_ms", Math.round(this.haltTotalPausedMs));
     this.haltSpan.addEvent(reason);
     this.haltSpan.end();
     this.haltSpan = null;
-    this.haltPauseCount = 0;
-    this.haltTotalPausedMs = 0;
   }
 
   /**
