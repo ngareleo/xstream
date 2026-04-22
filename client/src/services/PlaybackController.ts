@@ -13,6 +13,7 @@ import {
   STARTUP_BUFFER_S,
 } from "./playbackConfig.js";
 import { clearSessionContext, getSessionContext, setSessionContext } from "./playbackSession.js";
+import { PlaybackTicker } from "./PlaybackTicker.js";
 import { StallTracker } from "./StallTracker.js";
 
 export { type PlaybackStatus };
@@ -103,9 +104,10 @@ export class PlaybackController {
   // unclamped target instead of whatever the browser clamped currentTime to.
   private pendingSeekTarget: number | null = null;
 
-  private startupRaf: number | null = null;
-  private prefetchRaf: number | null = null;
-  private bgReadyRaf: number | null = null;
+  private readonly ticker: PlaybackTicker;
+  private cancelPrefetchHandler: (() => void) | null = null;
+  private cancelStartupHandler: (() => void) | null = null;
+  private cancelBgReadyHandler: (() => void) | null = null;
 
   private readonly stallTracker: StallTracker;
 
@@ -114,12 +116,14 @@ export class PlaybackController {
   constructor(deps: PlaybackControllerDeps, events: PlaybackControllerEvents) {
     this.deps = deps;
     this.events = events;
+    this.ticker = new PlaybackTicker();
     this.stallTracker = new StallTracker({
       videoEl: deps.videoEl,
       getBufferedAheadSeconds: () =>
         this.buffer?.getBufferedAheadSeconds(deps.videoEl.currentTime) ?? null,
       hasStartedPlayback: () => this.hasStartedPlayback,
       onSpinnerShow: () => this.setStatus("loading"),
+      ticker: this.ticker,
     });
     this.attachVideoListeners();
   }
@@ -236,18 +240,10 @@ export class PlaybackController {
 
   /** Resets all per-session state. Called from teardown() and startPlayback(). */
   private resetForNewSession(reason: "teardown" | "new_session" = "teardown"): void {
-    if (this.startupRaf !== null) {
-      cancelAnimationFrame(this.startupRaf);
-      this.startupRaf = null;
-    }
-    if (this.prefetchRaf !== null) {
-      cancelAnimationFrame(this.prefetchRaf);
-      this.prefetchRaf = null;
-    }
-    if (this.bgReadyRaf !== null) {
-      cancelAnimationFrame(this.bgReadyRaf);
-      this.bgReadyRaf = null;
-    }
+    this.ticker.shutdown();
+    this.cancelStartupHandler = null;
+    this.cancelPrefetchHandler = null;
+    this.cancelBgReadyHandler = null;
     this.stallTracker.end(reason === "new_session" ? "new_session" : "teardown");
     this.pipeline?.cancel(reason);
     this.pipeline = null;
@@ -285,10 +281,7 @@ export class PlaybackController {
    */
   private waitForStartupBuffer(buffer: BufferManager, target: number, onPlay: () => void): void {
     const tryPlay = (): void => {
-      if (this.hasStartedPlayback) {
-        buffer.setAfterAppend(null);
-        return;
-      }
+      if (this.hasStartedPlayback) return;
       if (buffer.bufferedEnd >= target) {
         this.hasStartedPlayback = true;
         buffer.setAfterAppend(null);
@@ -296,14 +289,13 @@ export class PlaybackController {
       }
     };
     buffer.setAfterAppend(tryPlay);
-    const checkReady = (): void => {
-      if (this.hasStartedPlayback) return;
+    // Cancel any pre-existing startup handler — possible during a seek-resume
+    // that fires before the previous one resolved.
+    this.cancelStartupHandler?.();
+    this.cancelStartupHandler = this.ticker.register(() => {
       tryPlay();
-      if (!this.hasStartedPlayback) {
-        this.startupRaf = requestAnimationFrame(checkReady);
-      }
-    };
-    this.startupRaf = requestAnimationFrame(checkReady);
+      return !this.hasStartedPlayback;
+    });
   }
 
   /** Handles chunk N's stream completion. Called by ChunkPipeline via the
@@ -471,10 +463,12 @@ export class PlaybackController {
 
   private startPrefetchLoop(res: Resolution): void {
     const videoEl = this.deps.videoEl;
-    const tick = (): void => {
-      if (!this.buffer || !this.pipeline) return;
+    // Cancel any pre-existing prefetch handler — happens during resolution
+    // swap when a new prefetch loop starts for the new resolution.
+    this.cancelPrefetchHandler?.();
+    this.cancelPrefetchHandler = this.ticker.register(() => {
+      if (!this.buffer || !this.pipeline) return false; // Session torn down — deregister.
       const videoDurationS = this.deps.getVideoDurationS();
-
       const chunkEnd = this.chunkEnd;
       // Gate: only fire when we don't already have a lookahead open AND haven't
       // already fired one whose request is still in flight (prefetchFired covers
@@ -515,10 +509,8 @@ export class PlaybackController {
             });
         }
       }
-
-      this.prefetchRaf = requestAnimationFrame(tick);
-    };
-    this.prefetchRaf = requestAnimationFrame(tick);
+      return true; // keep ticking
+    });
   }
 
   // ── Resolution switch (background buffer) ──────────────────────────────────
@@ -578,11 +570,12 @@ export class PlaybackController {
           this.buffer?.teardown(false);
 
           // Cancel the prefetch loop for the old foreground chunk (a new one
-          // starts via startPrefetchLoop below) and the bg readiness RAF (swap
-          // has succeeded).
-          if (this.prefetchRaf !== null) cancelAnimationFrame(this.prefetchRaf);
-          if (this.bgReadyRaf !== null) cancelAnimationFrame(this.bgReadyRaf);
-          this.bgReadyRaf = null;
+          // starts via startPrefetchLoop below) and the bg readiness handler
+          // (swap has succeeded).
+          this.cancelPrefetchHandler?.();
+          this.cancelPrefetchHandler = null;
+          this.cancelBgReadyHandler?.();
+          this.cancelBgReadyHandler = null;
           videoEl.src = objectUrl;
           videoEl.currentTime = swapTime;
           videoEl.play().catch(() => {});
@@ -606,11 +599,17 @@ export class PlaybackController {
         };
 
         const checkReady = (): void => {
-          if (bgBuffer.bufferedEnd >= startupTarget) {
-            onReady();
-          } else {
-            this.bgReadyRaf = requestAnimationFrame(checkReady);
-          }
+          // Cancel any pre-existing handler from a prior swap that didn't
+          // finish (rare — two swaps fired before the first crossed the
+          // threshold). Then register a per-frame readiness check.
+          this.cancelBgReadyHandler?.();
+          this.cancelBgReadyHandler = this.ticker.register(() => {
+            if (bgBuffer.bufferedEnd >= startupTarget) {
+              onReady();
+              return false;
+            }
+            return true;
+          });
         };
 
         void this.requestChunk(

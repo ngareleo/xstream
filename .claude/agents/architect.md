@@ -65,6 +65,14 @@ Both slots' segments funnel into the same `BufferManager.appendSegment` queue, w
 
 File pointers: `ChunkPipeline.ts` (slot management), `PlaybackController.ts` (orchestration), `chunker.ts:403` (`ORPHAN_TIMEOUT_MS = 30_000` — runaway safety).
 
+## Playback ticker (single RAF)
+
+`client/src/services/PlaybackTicker.ts` is the one RAF tick that drives every per-frame poll the playback subsystem needs — startup-buffer check, prefetch trigger, background-buffer ready check during a resolution swap, and `StallTracker`'s spinner debounce. Replaces what was four scattered RAF loops + a `setTimeout`.
+
+Handlers register with `ticker.register(handler)` and return `true` to stay or `false` to self-deregister. Auto-starts on first registration, auto-stops when last handler leaves. `shutdown()` clears all handlers — called by `PlaybackController.resetForNewSession`.
+
+Owned by `PlaybackController`; passed into `StallTracker` via deps so the 2 s spinner debounce uses the same tick instead of `setTimeout`.
+
 ## Backpressure
 
 Two distinct mechanisms — don't confuse them.
