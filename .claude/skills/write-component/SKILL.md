@@ -70,6 +70,16 @@ If the component raises events (user interactions that propagate up to an ancest
 
 Do not use callback props (`onPlay`, `onChange`) for events that should propagate — use `bubble()`.
 
+## Common pitfalls — see `docs/client/02-Debugging-Playbooks.md`
+
+- Effect cleanup with nested timeouts
+- Relay "preloaded query was disposed" warning
+- React state persisting across router navigation
+- Griffel shorthand/longhand mismatch inside pseudo-selectors
+- `useCallback` used before declared
+
+If you hit one of these symptoms while writing a component, read the matching playbook before workarounding.
+
 ## Checklist before finishing
 
 - [ ] Component file contains only: component function, graphql tags, prop interface
