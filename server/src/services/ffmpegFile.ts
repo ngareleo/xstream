@@ -10,12 +10,12 @@
 import ffmpeg from "fluent-ffmpeg";
 
 import type { ResolutionProfile } from "../types.js";
-import { resolveFfmpegPaths } from "./ffmpegPath.js";
 import type { HwAccelConfig } from "./hwAccel.js";
 
-const paths = resolveFfmpegPaths();
-ffmpeg.setFfmpegPath(paths.ffmpeg);
-ffmpeg.setFfprobePath(paths.ffprobe);
+// fluent-ffmpeg's binary paths are wired once at startup by the resolver call
+// in `index.ts` (see server/src/services/ffmpegPath.ts::resolveFfmpegPaths).
+// Do NOT call setFfmpegPath/setFfprobePath here — fluent-ffmpeg's cache is
+// module-global, so a stale per-module write would clobber the startup setting.
 
 // ── Internal probe types ─────────────────────────────────────────────────────
 

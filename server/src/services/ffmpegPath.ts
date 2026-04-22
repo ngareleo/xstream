@@ -21,6 +21,8 @@ import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 
+import ffmpeg from "fluent-ffmpeg";
+
 const ROOT = resolve(import.meta.dir, "../../..");
 const MANIFEST_PATH = join(ROOT, "scripts", "ffmpeg-manifest.json");
 const VENDOR_ROOT = join(ROOT, "vendor", "ffmpeg");
@@ -104,6 +106,7 @@ export function resolveFfmpegPaths(): FfmpegPaths {
   if (envFfmpeg && envFfprobe && existsSync(envFfmpeg) && existsSync(envFfprobe)) {
     const version = runVersion(envFfmpeg) ?? "(unknown)";
     cached = { ffmpeg: envFfmpeg, ffprobe: envFfprobe, versionString: version };
+    applyToFluentFfmpeg(cached);
     return cached;
   }
 
@@ -135,5 +138,15 @@ export function resolveFfmpegPaths(): FfmpegPaths {
   }
 
   cached = { ffmpeg: ffmpegPath, ffprobe: ffprobePath, versionString: actualVersion };
+  applyToFluentFfmpeg(cached);
   return cached;
+}
+
+// fluent-ffmpeg caches its binary paths at module scope; the last caller wins
+// regardless of load order. We wire it here — exactly once, inside the memoised
+// resolver — so service modules never need their own setFfmpegPath call (which
+// would clobber this and is a common source of VAAPI probe failures).
+function applyToFluentFfmpeg(paths: FfmpegPaths): void {
+  ffmpeg.setFfmpegPath(paths.ffmpeg);
+  ffmpeg.setFfprobePath(paths.ffprobe);
 }

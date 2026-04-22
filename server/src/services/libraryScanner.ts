@@ -17,16 +17,16 @@ import type {
   VideoStreamRow,
 } from "../types.js";
 import { DEFAULT_VIDEO_EXTENSIONS } from "../types.js";
-import { resolveFfmpegPaths } from "./ffmpegPath.js";
 import { isOmdbConfigured, searchOmdb } from "./omdbService.js";
 import { isScanRunning, markScanEnded, markScanProgress, markScanStarted } from "./scanStore.js";
 
 const log = getOtelLogger("scanner");
 const scannerTracer = getTracer("scanner");
 
-const paths = resolveFfmpegPaths();
-ffmpeg.setFfmpegPath(paths.ffmpeg);
-ffmpeg.setFfprobePath(paths.ffprobe);
+// fluent-ffmpeg's binary paths are wired once at startup by the resolver call
+// in `index.ts` (see server/src/services/ffmpegPath.ts::resolveFfmpegPaths).
+// Do NOT call setFfmpegPath/setFfprobePath here — fluent-ffmpeg's cache is
+// module-global, so a stale per-module write would clobber the startup setting.
 
 // Maximum number of files probed/fingerprinted simultaneously.
 // Keeps file-descriptor and CPU usage bounded on large libraries.
