@@ -86,7 +86,7 @@ SELECT id, title, filename, duration_seconds FROM videos LIMIT 20;
 
 ## Chunker / ffmpeg debugging
 
-Most of the chunker's lifecycle is now captured as OpenTelemetry span events rather than free-form log lines. To trace a job end-to-end, prefer Seq over `tail -f` on stdout.
+Most of the chunker's lifecycle is now captured as OpenTelemetry span events rather than free-form log lines. To trace a job end-to-end, prefer Seq over `tail -f` on stdout — invoke the `seq` skill (HTTP API) rather than driving the Seq UI in a browser.
 
 In Seq, search for the `job.resolve` span for a given `job_id`. Its single event tells you which resolution path fired:
 - `job_cache_hit` — job was already running; call was a no-op

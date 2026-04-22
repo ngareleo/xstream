@@ -79,7 +79,8 @@ Most domain knowledge lives in skills, subagents, or `docs/`. The main agent sho
 |---|---|
 | Architecture, streaming pipeline, backpressure, tech-choice trade-offs, Rust/Tauri plan | `architect` subagent |
 | Local dev setup, ffmpeg pinning, env vars, CI/CD, zombie ffmpeg, VAAPI driver gaps, OMDb auto-match | `devops` subagent |
-| Any browser interaction (UI verification, Seq inspection, playback checks) | `browser` skill |
+| Any browser interaction (UI verification, playback checks) | `browser` skill |
+| Reading Seq logs / inspecting traces (HTTP API) | `seq` skill |
 | Writing a React component | `write-component` skill |
 | Porting a design-lab page to production | `implement-design` skill |
 | Feature-flag add/read/remove | `feature-flags` skill |
@@ -166,7 +167,7 @@ Full policy: `docs/02-Observability.md`. Rules agents must respect:
 The full registry is surfaced by the Skill tool at session start. Brief map of what each does:
 
 - **Subagents** (`.claude/agents/`): `architect` (design / tech choices), `devops` (dev flow / release / backend ops)
-- **Skills** (`.claude/skills/`): `browser`, `write-component`, `implement-design`, `feature-flags`, `test`, `debug-backend`, `debug-ui`, `e2e-test`, `update-docs`, `otel-logs`, `setup-local`, `create-pr`, `resolve-comments`, `reflect`, `todo`
+- **Skills** (`.claude/skills/`): `browser`, `seq`, `write-component`, `implement-design`, `feature-flags`, `test`, `debug-backend`, `debug-ui`, `e2e-test`, `update-docs`, `otel-logs`, `setup-local`, `create-pr`, `resolve-comments`, `reflect`, `todo`
 
 When the user asks about "ultrareview" or how to run it, explain that `/ultrareview` launches a multi-agent cloud review. It is user-triggered and billed; don't attempt to launch it yourself.
 

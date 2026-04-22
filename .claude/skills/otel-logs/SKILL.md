@@ -1,71 +1,58 @@
 ---
 name: otel-logs
-description: Verify OTel logs from the xstream server are arriving in Seq at localhost:5341
+description: Verify OTel logs and traces from the xstream server are arriving in Seq at localhost:5341. Use after a playback session to confirm the instrumentation pipeline is healthy.
 disable-model-invocation: true
-allowed-tools: Bash(grep *) Bash(cat *) Bash(lsof *)
+allowed-tools: Bash(curl *), Bash(grep *), Bash(cut *), Bash(jq *), Bash(date *)
 ---
 
 You are verifying that OpenTelemetry logs and traces from the xstream server are arriving in the local Seq instance.
 
-## Screenshots
+This is a **verification** skill — pass/fail check on the instrumentation pipeline. For ad-hoc trace inspection ("what happened in this trace?", "show me all `playback.stalled` spans"), use the `seq` skill directly.
 
-All screenshots must be saved to `.claude/screenshots/` relative to the project root.
-**Never** save screenshots to the project root or any other directory.
+All Seq access goes through the HTTP API. Do **not** drive Seq in a browser for this check; the `seq` skill owns the API mechanics (auth, filter syntax, common queries) — read it for the patterns.
 
-Use descriptive filenames prefixed with the step number, e.g. `.claude/screenshots/otel-01-seq-login.png`.
-
-## 1. Read Seq credentials
-
-Parse `.seq-credentials` from the project root:
+## 1. Verify Seq is reachable
 
 ```sh
-grep '^SEQ_ADMIN_USERNAME=' .seq-credentials | cut -d= -f2
-grep '^SEQ_ADMIN_PASSWORD=' .seq-credentials | cut -d= -f2
+curl -s -o /dev/null -w "HTTP %{http_code}\n" http://localhost:5341/
 ```
 
-If the file does not exist, stop and report:
-> `.seq-credentials` not found. Run `bun run seq:start` to generate it.
-
-## 2. Check Seq is reachable
-
-```sh
-lsof -i :5341 | grep LISTEN
-```
-
-If nothing is listening on port 5341, stop and report:
+If not `HTTP 200`, stop and report:
 > Seq is not running. Run `bun run seq:start`.
 
-## 3. Log in to Seq
+If `.seq-credentials` is missing, stop and report:
+> `.seq-credentials` not found. Run `bun run seq:start` to generate it.
 
-Navigate to `http://localhost:5341`. Take a screenshot.
+## 2. Authenticate
 
-If the page shows a login form:
-- Fill **Username** with the value from `SEQ_ADMIN_USERNAME`
-- Fill **Password** with the value from `SEQ_ADMIN_PASSWORD`
-- Click **Log in**
+```sh
+USER=$(grep '^SEQ_ADMIN_USERNAME=' .seq-credentials | cut -d= -f2)
+PASS=$(grep '^SEQ_ADMIN_PASSWORD=' .seq-credentials | cut -d= -f2)
+curl -s -c /tmp/seq-cookie.txt -X POST "http://localhost:5341/api/users/login" \
+  -H "Content-Type: application/json" \
+  -d "{\"Username\":\"$USER\",\"Password\":\"$PASS\"}" > /dev/null
+```
 
-If the page already shows the events dashboard (already logged in), skip the login step.
+If login fails (401), the password may need a reset — see the `devops` agent for the procedure.
 
-If Seq shows a **"password change required"** prompt after submitting credentials:
-- Generate a new password: `openssl rand -base64 24 | tr -d '/+=' | head -c 32`
-- Fill in **New password** and **Repeat new password** with the generated value
-- Click **Log in**
-- Update `.seq-credentials` with the new password: `printf 'SEQ_ADMIN_USERNAME=admin\nSEQ_ADMIN_PASSWORD=<new>\n' > .seq-credentials`
+## 3. Pull the most recent trace
 
-If login fails (wrong credentials, error message), stop and report the failure with a screenshot.
+The verification target is the most recent playback. Find its trace id:
 
-## 4. Check for xstream-server events
+```sh
+FROM=$(date -u -d '1 hour ago' +%Y-%m-%dT%H:%M:%SZ)
+curl -s -b /tmp/seq-cookie.txt -G "http://localhost:5341/api/events" \
+  --data-urlencode "filter=@MessageTemplate = 'playback.session'" \
+  --data-urlencode "count=1" \
+  --data-urlencode "fromDateUtc=$FROM" \
+  | jq -r '.[0].TraceId'
+```
 
-After logging in, you will be on the Events page. Take a screenshot of the current event list.
+If empty, no playback has happened in the last hour — trigger one (start a video at `http://localhost:5173`, wait ~10 s for the OTel batch flush, then retry).
 
-Look for log entries with `service.name = xstream-server`. To filter:
-- Click the search/filter bar at the top of the events page
-- Type `service.name = 'xstream-server'` and press Enter (or use the filter chips if available)
-- Take a screenshot of the filtered results
+## 4. Check that the expected spans are present
 
-## 5. Check that the expected spans are present
-
-A pass isn't just "any entry is visible" — check that each of the spans the pipeline is supposed to open actually shows up after a playback session. Filter by `@SpanName` one at a time and confirm at least one hit per row:
+A pass isn't just "any entry is visible" — check that each expected span shows up for the trace. For each row, query and confirm at least one hit:
 
 | Span | Emitted by | Expected per playback session |
 |---|---|---|
@@ -77,34 +64,30 @@ A pass isn't just "any entry is visible" — check that each of the spans the pi
 | `buffer.backpressure` | client | 0+ per session; conditional on the forward buffer filling to `forwardTargetS`. Zero is legitimate on short sessions or slow networks. |
 | `playback.stalled` | client | 0+ per session; conditional on the `waiting` event actually firing (buffer went empty mid-playback). Zero is legitimate on a healthy fast-network session. A user reporting "lots of buffering" should produce one or more of these with `stall.duration_ms` attributes. |
 
-If any row is empty, something in context propagation or instrumentation regressed. In particular: if `stream.request` exists but is *not* a child of any `chunk.stream` (trace view shows it as its own root), the traceparent threading in `StreamingService.start()` is broken — see `docs/02-Observability.md` → "Threading trace context into streaming fetches".
+Query template (substitute `TRACE_ID` and `SPAN_NAME`):
 
-## 6. Report result
+```sh
+curl -s -b /tmp/seq-cookie.txt -G "http://localhost:5341/api/events" \
+  --data-urlencode "filter=@TraceId = 'TRACE_ID' and @MessageTemplate = 'SPAN_NAME'" \
+  --data-urlencode "count=50" \
+  --data-urlencode "fromDateUtc=$(date -u -d '1 day ago' +%Y-%m-%dT%H:%M:%SZ)" \
+  | jq 'length'
+```
 
-- **PASS**: All rows in the table above produced at least one hit, and `stream.request` trace IDs match the enclosing `chunk.stream`. Report the most recent trace ID and one matching span from each row.
-- **FAIL**: Any row empty, or login failed, or `stream.request` is orphaned from `chunk.stream`. Include the relevant screenshots and describe which row(s) failed.
+Note: span name is filtered via `@MessageTemplate` (not `@SpanName` — Seq stores OTel span names in the message template field). See the `seq` skill for the full filter-syntax reference.
+
+If any row reports 0, something in context propagation or instrumentation regressed. In particular: if `stream.request` exists but is *not* a child of any `chunk.stream` (compare `ParentId` to a known `chunk.stream` span's `SpanId`), the traceparent threading in `StreamingService.start()` is broken — see `docs/02-Observability.md` → "Threading trace context into streaming fetches".
+
+## 5. Report result
+
+- **PASS**: All rows in the table above produced at least one hit, and `stream.request` trace IDs match the enclosing `chunk.stream`. Report the trace ID and one matching span from each row.
+- **FAIL**: Any row empty, or `stream.request` is orphaned from `chunk.stream`. Include the failing row(s) and the actual query results.
 
 ## Notes
 
-- Seq may show a short delay (up to 10 seconds) between log emission and UI visibility due to the OTel `BatchLogRecordProcessor` flush interval.
-- If no events appear, trigger some server activity first: navigate to the player page and start playback, then wait ~10 seconds and check again.
-- The `service.name` attribute is set to `xstream-server` in `server/src/telemetry.ts`.
-
-## Programmatic access (API)
-
-For automated trace analysis (e.g. the user pastes a Seq URL and asks "what happened in this trace?"), bypass the UI:
-
-- **Auth by session cookie, not basic auth.** `curl -u user:pass` returns 401 "Please log in." Log in first via `POST /api/users/login` with a JSON body and capture the `Seq-Session` cookie:
-  ```sh
-  USER=$(grep '^SEQ_ADMIN_USERNAME=' .seq-credentials | cut -d= -f2)
-  PASS=$(grep '^SEQ_ADMIN_PASSWORD=' .seq-credentials | cut -d= -f2)
-  curl -s -c /tmp/seq-cookie.txt -X POST "http://localhost:5341/api/users/login" \
-    -H "Content-Type: application/json" \
-    -d "{\"Username\":\"$USER\",\"Password\":\"$PASS\"}" > /dev/null
-  ```
-  All subsequent requests use `-b /tmp/seq-cookie.txt`.
-- **Filter syntax requires `@` prefix on pseudo-properties.** `@TraceId = 'xxx'`, `@SpanName = 'chunk.stream'`, `@Level = 'Warning'`. A bare `TraceId = 'xxx'` returns 0 hits without an error.
-- **Request CLEF for machine-readable events**: add `&clef=true` to the events URL. Fields: `@tr` trace id, `@sp` span id, `@st` span start, `@sk` span kind, `@mt` message template, `@ra` resource attributes.
+- Seq may show a short delay (up to 10 s) between log emission and visibility due to the OTel `BatchLogRecordProcessor` flush interval.
+- If no events appear, trigger some server activity first: navigate to the player page and start playback, then wait ~10 s and check again.
+- The `service.name` attribute is `xstream-server` (server) / `xstream-client` (browser) — set in `server/src/telemetry.ts` and `client/src/telemetry.ts` respectively.
 
 ## Interpreting "missing" spans
 

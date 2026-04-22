@@ -1,12 +1,14 @@
 ---
 name: browser
-description: Drive a browser with Playwright MCP — navigate, click, fill, snapshot, inspect console, verify UI, interact with Seq. Use whenever a task needs a real browser (verifying UI changes, debugging playback, inspecting Seq traces, checking OMDb responses). The "Known Quirks" section is self-maintained — when a new page-specific gotcha is discovered this session, append it before finishing.
+description: Drive a browser with Playwright MCP — navigate, click, fill, snapshot, inspect console, verify UI. Use whenever a task needs a real browser (verifying UI changes, debugging playback, checking OMDb responses). For reading Seq logs/traces use the `seq` skill (HTTP API) instead — only fall back to driving Seq in a browser if the user explicitly asks to see the live UI. The "Known Quirks" section is self-maintained — when a new page-specific gotcha is discovered this session, append it before finishing.
 allowed-tools: mcp__playwright__browser_navigate, mcp__playwright__browser_snapshot, mcp__playwright__browser_click, mcp__playwright__browser_fill_form, mcp__playwright__browser_type, mcp__playwright__browser_press_key, mcp__playwright__browser_take_screenshot, mcp__playwright__browser_evaluate, mcp__playwright__browser_console_messages, mcp__playwright__browser_network_requests, mcp__playwright__browser_wait_for, mcp__playwright__browser_resize, mcp__playwright__browser_close, mcp__playwright__browser_hover, mcp__playwright__browser_tabs, mcp__playwright__browser_select_option, mcp__playwright__browser_handle_dialog, Bash(lsof *), Read, Edit
 ---
 
 # Browser
 
-Every browser interaction goes through this skill. If the task asks you to verify UI, debug playback, inspect a Seq trace, or hit any page in a real browser — invoke this skill first and stay inside it for the whole session.
+Every browser interaction goes through this skill. If the task asks you to verify UI, debug playback, or hit any page in a real browser — invoke this skill first and stay inside it for the whole session.
+
+**Reading Seq logs/traces does NOT belong here.** Use the `seq` skill — its HTTP API is faster, cheaper, and returns parsable JSON. Only drive Seq in a browser if the user explicitly asks to see the live UI.
 
 ## Self-update rule (read first, obey always)
 
@@ -77,32 +79,6 @@ return {
 
 Back-buffer window should stay within ~5s behind `currentTime`; outside that, `BufferManager` eviction is broken.
 
-### `http://localhost:5341` — Seq (OTel backend)
-
-Credentials in `.seq-credentials` (shell-sourceable, gitignored). Parse without echoing:
-```sh
-grep '^SEQ_ADMIN_USERNAME=' .seq-credentials | cut -d= -f2
-grep '^SEQ_ADMIN_PASSWORD=' .seq-credentials | cut -d= -f2
-```
-
-If `.seq-credentials` is missing, `bun run seq:start` generates it.
-
-**First login after a fresh container forces a password change** — Seq rejects reusing the initial password. Update `.seq-credentials` immediately after the new one is set:
-```sh
-printf 'SEQ_ADMIN_USERNAME=admin\nSEQ_ADMIN_PASSWORD=<new>\n' > .seq-credentials
-```
-
-**Filtering by trace id.** In the Seq query bar: `TraceId = '<id>'`. Easiest way to grab an id: `browser_evaluate` against the client page to read the active session traceparent.
-
-**Finding spans.** The most useful span names (see `docs/02-Observability.md`):
-- `playback.session` — whole playback lifecycle
-- `chunk.stream` — one per chunk delivered
-- `transcode.job` — ffmpeg process lifetime; carries `hwaccel`, fps, kbps in events
-- `job.resolve` — cache-hit vs restored-from-db vs fresh-spawn (one event per span)
-- `stream.request` — server-side `/stream/:jobId` handler
-
-**Use `/otel-logs` skill for quick verification.** It logs in, asserts recent `transcode.job` spans exist, returns a summary — no need to hand-drive Seq for "did telemetry arrive".
-
 ### `https://www.omdbapi.com` — external metadata
 
 For verifying an OMDb lookup result, hit the URL directly (no browser needed, `WebFetch` works). Use the browser only when the user wants to see the live web UI. Anchor URL: `https://www.omdbapi.com/?t=<title>&y=<year>&apikey=<key>`.
@@ -118,7 +94,7 @@ When a subscription isn't delivering events:
    // Relay exposes __relayEnvironment in dev
    window.__relayEnvironment?.getStore()?.getSource()?.toJSON();
    ```
-4. If `connection_ack` never arrives, the upgrade is failing silently; look at server logs via Seq for `graphql-ws` errors.
+4. If `connection_ack` never arrives, the upgrade is failing silently; query the `seq` skill for `graphql-ws` errors on the server side.
 
 ## Known Quirks
 
@@ -126,5 +102,4 @@ When a subscription isn't delivering events:
 
 - **Client — stream-log overlay resets on navigation.** Documented under `localhost:5173` above. Re-enable in the DEV pill after each route change during playback tests.
 - **Client — router reuse state bleed.** `/player/:a → /player/:b` does not remount. If state from `:a` appears during `:b`, the test is correct; the code needs a `useEffect` reset or `key={id}`.
-- **Seq — password change is mandatory after first login.** Never re-use the random initial password; Seq actively rejects it. Update `.seq-credentials` immediately.
 - **Playwright MCP — snapshot is cheap, screenshot is not.** Use `browser_snapshot` to find refs; use `browser_take_screenshot` only when you need to show the user the pixels.
