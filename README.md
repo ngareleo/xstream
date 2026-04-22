@@ -5,7 +5,7 @@ High-resolution web streaming with a full resolution ladder (240p → 4K). The s
 ## Stack
 
 - **Server:** Bun, graphql-yoga, SQLite (`bun:sqlite`), fluent-ffmpeg
-- **Client:** React, Relay, Chakra UI, Vite, React Router
+- **Client:** React, Relay, Griffel (atomic CSS-in-JS), Rsbuild, React Router
 
 ---
 
