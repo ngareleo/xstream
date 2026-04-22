@@ -12,6 +12,27 @@
           }
         ]
       }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "printf '%s' '{\"hookSpecificOutput\":{\"hookEventName\":\"UserPromptSubmit\",\"additionalContext\":\"Policy: before starting implementation, design, or non-trivial research work, consult the `architect` subagent for architectural context. Skip only for tiny isolated tasks (typo fixes, renames, single-line bug fixes) or questions the architect has already answered earlier in this conversation.\"}}'"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "p=$(jq -r '.tool_input.file_path // .tool_input.notebook_path // empty'); echo \"$p\" | grep -qE '(^|/)(client|server)/src/' && printf '%s' '{\"hookSpecificOutput\":{\"hookEventName\":\"PostToolUse\",\"additionalContext\":\"Policy: you just modified client or server source. If the change shifts architecture (new pattern, new service, new contract, removed module, changed invariant), update .claude/agents/architect.md in the same turn so the architect subagent stays current. Pure refactors, renames, or bug fixes with no architectural impact do not need an update.\"}}' || true"
+          }
+        ]
+      }
     ]
   }
 }

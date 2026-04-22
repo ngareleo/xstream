@@ -14,6 +14,14 @@ Run, analyse, and fix tests across the xstream monorepo.
 - **Unit tests for pure logic** — relay encoding/decoding (`relay.test.ts`), format helpers, pure functions.
 - **Component tests via Storybook** — visual state coverage lives in `*.stories.tsx` files. Play functions test interactive behaviour.
 - **No mocking of the database** — the project was burned before by mock/prod divergence.
+- **Real-world inputs for parsers.** Any function that parses human-generated strings (filenames, URLs) uses real examples, not invented ones. Document known limitations as expectations rather than hiding them:
+  ```ts
+  it("documents known limitations as expectations", () => {
+    // "2049" is part of the title but looks like a year — document, don't hide
+    expect(parseTitleFromFilename("Blade-Runner-2049-2017.mkv"))
+      .toEqual({ title: "Blade-Runner", year: 2049 });
+  });
+  ```
 
 ## Running tests
 

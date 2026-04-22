@@ -5,7 +5,7 @@ High-resolution web streaming with a full resolution ladder (240p → 4K). The s
 ## Stack
 
 - **Server:** Bun, graphql-yoga, SQLite (`bun:sqlite`), fluent-ffmpeg
-- **Client:** React, Relay, Chakra UI, Vite, React Router
+- **Client:** React, Relay, Griffel (atomic CSS-in-JS), Rsbuild, React Router
 
 ---
 
@@ -106,19 +106,23 @@ xstream/
     └── segments/          # ffmpeg segment cache
 ```
 
-See [`docs/architecture.md`](docs/architecture.md) for a full system overview.
+See [`docs/00-Architecture.md`](docs/00-Architecture.md) for a full system overview.
 
 ---
 
 ## Documentation
 
+Docs are namespaced by domain under `docs/` with a `NN-Topic-Name.md` convention (`NN` is a two-digit ordering prefix inside its directory).
+
 | Doc | Contents |
 |---|---|
-| [`docs/architecture.md`](docs/architecture.md) | System overview, component map, data flow |
-| [`docs/db-schema.md`](docs/db-schema.md) | SQLite schema with field descriptions |
-| [`docs/graphql-schema.md`](docs/graphql-schema.md) | Full GraphQL schema, Relay compliance, subscriptions |
-| [`docs/streaming-protocol.md`](docs/streaming-protocol.md) | Binary framing spec, MSE constraints, seeking |
-| [`docs/config.md`](docs/config.md) | mediaFiles.json format, AppConfig, resolution profiles |
+| [`docs/00-Architecture.md`](docs/00-Architecture.md) | System overview, component map, data flow |
+| [`docs/01-Streaming-Protocol.md`](docs/01-Streaming-Protocol.md) | Binary framing spec, MSE constraints, seeking |
+| [`docs/02-Observability.md`](docs/02-Observability.md) | OTel span tree, log policy, Seq/Axiom setup |
+| [`docs/client/`](docs/client/) | Relay, feature flags, debugging playbooks |
+| [`docs/server/`](docs/server/) | Config, GraphQL schema, DB schema |
+| [`docs/design/`](docs/design/) | UI design spec |
+| [`docs/product/`](docs/product/) | Product spec |
 
 ---
 
@@ -158,7 +162,7 @@ rm .seq-credentials
 bun run seq:start          # generates a new password and fresh container
 ```
 
-See [`docs/observability.md`](docs/observability.md) for the full telemetry architecture and instructions for switching to a production backend (Axiom, Grafana Cloud, etc.).
+See [`docs/02-Observability.md`](docs/02-Observability.md) for the full telemetry architecture and instructions for switching to a production backend (Axiom, Grafana Cloud, etc.).
 
 ---
 

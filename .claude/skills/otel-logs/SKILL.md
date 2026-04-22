@@ -77,7 +77,7 @@ A pass isn't just "any entry is visible" — check that each of the spans the pi
 | `buffer.backpressure` | client | 0+ per session; conditional on the forward buffer filling to `forwardTargetS`. Zero is legitimate on short sessions or slow networks. |
 | `playback.stalled` | client | 0+ per session; conditional on the `waiting` event actually firing (buffer went empty mid-playback). Zero is legitimate on a healthy fast-network session. A user reporting "lots of buffering" should produce one or more of these with `stall.duration_ms` attributes. |
 
-If any row is empty, something in context propagation or instrumentation regressed. In particular: if `stream.request` exists but is *not* a child of any `chunk.stream` (trace view shows it as its own root), the traceparent threading in `StreamingService.start()` is broken — see `docs/observability.md` → "Threading trace context into streaming fetches".
+If any row is empty, something in context propagation or instrumentation regressed. In particular: if `stream.request` exists but is *not* a child of any `chunk.stream` (trace view shows it as its own root), the traceparent threading in `StreamingService.start()` is broken — see `docs/02-Observability.md` → "Threading trace context into streaming fetches".
 
 ## 6. Report result
 

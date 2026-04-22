@@ -8,6 +8,8 @@ allowed-tools: Bash(bun *) Bash(curl *) Bash(sqlite3 *) Bash(ffprobe *) Bash(ls 
 
 Diagnose and fix issues in the Bun server (GraphQL API, streaming endpoint, chunker, DB).
 
+For ffmpeg/VAAPI/OMDb/dev-server-port triage, delegate to the `devops` subagent — it owns those playbooks and scans `.github/workflows/`, `scripts/`, and `.env.example` before answering.
+
 ## Start the server in dev mode
 
 ```bash
