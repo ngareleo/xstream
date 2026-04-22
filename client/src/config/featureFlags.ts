@@ -9,7 +9,7 @@
  * query. Once hydrated, `getFlag(key, default)` returns synchronously.
  */
 
-import { type BufferConfig, DEFAULT_BUFFER_CONFIG } from "~/services/BufferManager.js";
+import { type BufferConfig, DEFAULT_BUFFER_CONFIG } from "~/services/bufferConfig.js";
 
 import { FLAG_KEYS, FLAG_REGISTRY, type FlagValue, type FlagValueType } from "./flagRegistry.js";
 

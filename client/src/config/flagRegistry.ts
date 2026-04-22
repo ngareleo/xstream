@@ -13,7 +13,7 @@
  * grouped by `category` and displayed together in the UI.
  */
 
-import { DEFAULT_BUFFER_CONFIG } from "~/services/BufferManager.js";
+import { DEFAULT_BUFFER_CONFIG } from "~/services/bufferConfig.js";
 
 export type FlagValueType = "boolean" | "number";
 export type FlagValue = boolean | number;

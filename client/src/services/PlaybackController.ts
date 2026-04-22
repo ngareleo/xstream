@@ -5,33 +5,21 @@ import { getClientLogger, getClientTracer } from "~/telemetry.js";
 import { type Resolution, RESOLUTION_MIME_TYPE } from "~/types.js";
 
 import { BufferManager } from "./BufferManager.js";
+import {
+  CHUNK_DURATION_S,
+  MIN_REAL_CHUNK_BYTES,
+  type PlaybackStatus,
+  PREFETCH_THRESHOLD_S,
+  STARTUP_BUFFER_S,
+} from "./playbackConfig.js";
 import { clearSessionContext, getSessionContext, setSessionContext } from "./playbackSession.js";
+import { StallTracker } from "./StallTracker.js";
 import { StreamingService } from "./StreamingService.js";
+
+export { type PlaybackStatus };
 
 const playbackLog = getClientLogger("playback");
 const playbackTracer = getClientTracer("playback");
-
-const CHUNK_DURATION_S = 300;
-const PREFETCH_THRESHOLD_S = 60;
-
-/** Minimum buffered seconds before video.play() is called on initial load. */
-const STARTUP_BUFFER_S: Record<Resolution, number> = {
-  "240p": 2,
-  "360p": 2,
-  "480p": 3,
-  "720p": 4,
-  "1080p": 6,
-  "4k": 10,
-};
-
-/** Show the mid-playback buffering spinner only after this much continuous stall. */
-const BUFFERING_SPINNER_DELAY_MS = 2000;
-
-/** Media bytes under this threshold mean the chunk had no real frames (ffmpeg emits
- * a ~24B placeholder when the seek position is past encoded content). */
-const MIN_REAL_CHUNK_BYTES = 1024;
-
-export type PlaybackStatus = "idle" | "loading" | "playing";
 
 export interface StartTranscodeChunkArgs {
   resolution: Resolution;
@@ -116,19 +104,21 @@ export class PlaybackController {
   private startupRaf: number | null = null;
   private prefetchRaf: number | null = null;
   private bgReadyRaf: number | null = null;
-  private bufferingTimer: ReturnType<typeof setTimeout> | null = null;
 
-  // Tracks the open playback-stall span from a `waiting` event. Opens in
-  // handleWaiting, ends in handlePlaying, and is force-ended on teardown/seek
-  // so it doesn't leak across sessions.
-  private stallSpan: Span | null = null;
-  private stallStartedAt: number | null = null;
+  private readonly stallTracker: StallTracker;
 
   private detachListeners: Array<() => void> = [];
 
   constructor(deps: PlaybackControllerDeps, events: PlaybackControllerEvents) {
     this.deps = deps;
     this.events = events;
+    this.stallTracker = new StallTracker({
+      videoEl: deps.videoEl,
+      getBufferedAheadSeconds: () =>
+        this.buffer?.getBufferedAheadSeconds(deps.videoEl.currentTime) ?? null,
+      hasStartedPlayback: () => this.hasStartedPlayback,
+      onSpinnerShow: () => this.setStatus("loading"),
+    });
     this.attachVideoListeners();
   }
 
@@ -249,11 +239,7 @@ export class PlaybackController {
       cancelAnimationFrame(this.bgReadyRaf);
       this.bgReadyRaf = null;
     }
-    if (this.bufferingTimer !== null) {
-      clearTimeout(this.bufferingTimer);
-      this.bufferingTimer = null;
-    }
-    this.endStallSpan(reason === "new_session" ? "new_session" : "teardown");
+    this.stallTracker.end(reason === "new_session" ? "new_session" : "teardown");
     this.activeChunkTeardown?.(reason);
     this.activeChunkTeardown = null;
     this.activeStream?.cancel();
@@ -780,8 +766,9 @@ export class PlaybackController {
     this.pendingSeekTarget = null;
     // A seek flushes and reloads the buffer; any currently-open stall span
     // would not naturally resolve via a `playing` event tied to the old buffer
-    // range, so close it here with a distinct reason.
-    this.endStallSpan("seek");
+    // range, so close it here with a distinct reason. Also clears the pending
+    // buffering-debounce timer so we don't double-fire the spinner.
+    this.stallTracker.end("seek");
     const snapTime = Math.floor(seekTime / CHUNK_DURATION_S) * CHUNK_DURATION_S;
 
     // Guard against re-entrancy: BufferManager.seek() sets videoEl.currentTime
@@ -797,11 +784,6 @@ export class PlaybackController {
     this.seekTarget = snapTime;
 
     // Show spinner immediately — seek requires flushing and reloading the buffer.
-    // Clear any pending buffering-debounce timer so we don't double-fire.
-    if (this.bufferingTimer !== null) {
-      clearTimeout(this.bufferingTimer);
-      this.bufferingTimer = null;
-    }
     this.setStatus("loading");
 
     playbackLog.info(
@@ -845,85 +827,27 @@ export class PlaybackController {
     });
   };
 
-  private handleWaiting = (): void => {
-    // Only debounce-show the spinner for mid-playback stalls (not during the
-    // initial startup loading phase which already has its own spinner path).
-    if (!this.hasStartedPlayback) return;
-    const stallStartedAt = Date.now();
-
-    // Open a playback.stalled span so the duration of the user-visible freeze
-    // is queryable in Seq alongside session/chunk spans. Parented on the
-    // playback.session via getSessionContext(). Skipped if a stall span is
-    // somehow already open (defensive — handlePlaying should have closed it).
-    if (!this.stallSpan) {
-      const bufferedAhead =
-        this.buffer?.getBufferedAheadSeconds(this.deps.videoEl.currentTime) ?? null;
-      this.stallStartedAt = stallStartedAt;
-      this.stallSpan = playbackTracer.startSpan(
-        "playback.stalled",
-        {
-          attributes: {
-            "video.current_time_s": parseFloat(this.deps.videoEl.currentTime.toFixed(2)),
-            "buffer.buffered_ahead_s":
-              bufferedAhead === null ? -1 : parseFloat(bufferedAhead.toFixed(2)),
-            "buffer.empty": bufferedAhead === null,
-          },
-        },
-        getSessionContext()
-      );
-    }
-
-    this.bufferingTimer = setTimeout(() => {
-      this.bufferingTimer = null;
-      this.setStatus("loading");
-      const stallDurationMs = Date.now() - stallStartedAt;
-      playbackLog.warn(`Buffering stall >2s — showing spinner (stalled for ${stallDurationMs}ms)`, {
-        stall_duration_ms: stallDurationMs,
-      });
-    }, BUFFERING_SPINNER_DELAY_MS);
-  };
-
-  private handleStalled = (): void => {
-    playbackLog.warn("Stalled — network slow");
-  };
-
   private handlePlaying = (): void => {
     // Seek has resolved — clear the dedup guard so future seeks can proceed.
     this.seekTarget = null;
-    // Clear the buffering debounce timer if the stall resolved within the window.
-    if (this.bufferingTimer !== null) {
-      clearTimeout(this.bufferingTimer);
-      this.bufferingTimer = null;
-    }
-    this.endStallSpan("resumed");
-    // Restore "playing" if the debounce already fired and showed the spinner.
+    // StallTracker closes its span + clears its debounce timer.
+    this.stallTracker.onPlaying();
+    // Restore "playing" if the spinner was showing because of a mid-playback stall.
     if (this.status === "loading" && this.hasStartedPlayback) {
       this.setStatus("playing");
     }
   };
 
-  /** Closes the playback.stalled span with a reason event. Idempotent — safe
-   *  to call on paths (teardown, seek) that may or may not have an open span. */
-  private endStallSpan(reason: string): void {
-    if (!this.stallSpan) return;
-    const durationMs = this.stallStartedAt !== null ? Date.now() - this.stallStartedAt : 0;
-    this.stallSpan.setAttribute("stall.duration_ms", durationMs);
-    this.stallSpan.addEvent(reason);
-    this.stallSpan.end();
-    this.stallSpan = null;
-    this.stallStartedAt = null;
-  }
-
   private attachVideoListeners(): void {
     const el = this.deps.videoEl;
     el.addEventListener("seeking", this.handleSeeking);
-    el.addEventListener("waiting", this.handleWaiting);
-    el.addEventListener("stalled", this.handleStalled);
+    el.addEventListener("waiting", this.stallTracker.onWaiting);
+    el.addEventListener("stalled", this.stallTracker.onStalled);
     el.addEventListener("playing", this.handlePlaying);
     this.detachListeners.push(
       () => el.removeEventListener("seeking", this.handleSeeking),
-      () => el.removeEventListener("waiting", this.handleWaiting),
-      () => el.removeEventListener("stalled", this.handleStalled),
+      () => el.removeEventListener("waiting", this.stallTracker.onWaiting),
+      () => el.removeEventListener("stalled", this.stallTracker.onStalled),
       () => el.removeEventListener("playing", this.handlePlaying)
     );
   }
