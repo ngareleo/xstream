@@ -98,6 +98,19 @@ Most domain knowledge lives in skills, subagents, or `docs/`. The main agent sho
 | Streaming protocol binary framing | `docs/01-Streaming-Protocol.md` |
 | Observability (span tree, log policy) | `docs/02-Observability.md` |
 
+## File Naming Convention
+
+| What | Pattern | Examples |
+|---|---|---|
+| React component (`.tsx` exporting a component) | `PascalCase.tsx` | `VideoCard.tsx`, `ControlBar.tsx`, `DashboardPage.tsx` |
+| React component folder | `kebab-case/` | `video-card/`, `control-bar/`, `dashboard-page/` |
+| Component-satellite files (live in the same folder) | mirror the component's PascalCase prefix | `VideoCard.styles.ts`, `VideoCard.strings.ts`, `VideoCard.events.ts`, `VideoCard.stories.tsx` |
+| Anything else (hook, util, service, config, test, server file) | `camelCase.ts` | `useChunkedPlayback.ts`, `formatters.ts`, `chunkPipeline.ts`, `playbackController.ts`, `chunker.ts`, `streamingService.test.ts` |
+
+**Files exporting a class are still camelCase** — `chunkPipeline.ts` exports `class ChunkPipeline`. The class name stays PascalCase; the filename does not mirror it. The PascalCase-mirrors-filename rule applies only to React components and their satellites.
+
+**Relay-compiler enforces** that operation/fragment names start with the containing filename — renaming a `.tsx` file requires `bun relay` in `client/` to regenerate `__generated__/` artifacts. The `update-docs` skill owns docs filenames (`NN-PascalCase.md` under `docs/`); diagram files under `docs/diagrams/` are explicitly stable and exempt from this convention.
+
 ## Code Quality Tooling
 
 - **Linting:** ESLint v10 + `typescript-eslint` + `eslint-plugin-react-hooks` (client). Each workspace: `bun run lint` → `tsc --noEmit && eslint src`.

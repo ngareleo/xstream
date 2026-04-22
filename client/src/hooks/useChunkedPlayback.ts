@@ -8,7 +8,7 @@ import {
   type PlaybackStatus,
   type RecordSessionFn,
   type StartTranscodeChunkFn,
-} from "~/services/PlaybackController.js";
+} from "~/services/playbackController.js";
 import { DISPLAY_TO_GQL, type Resolution } from "~/types.js";
 
 export type { PlaybackStatus };

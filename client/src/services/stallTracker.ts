@@ -4,7 +4,7 @@ import { getClientLogger, getClientTracer } from "~/telemetry.js";
 
 import { BUFFERING_SPINNER_DELAY_MS } from "./playbackConfig.js";
 import { getSessionContext } from "./playbackSession.js";
-import type { PlaybackTicker } from "./PlaybackTicker.js";
+import type { PlaybackTicker } from "./playbackTicker.js";
 
 const log = getClientLogger("playback");
 const tracer = getClientTracer("playback");

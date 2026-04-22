@@ -22,7 +22,7 @@ On every invocation, read these before formulating the answer. Never answer from
 - `docs/server/02-DB-Schema.md` — persistence layer
 - `CLAUDE.md` — invariants you must never violate in your answers
 
-If the question concerns a specific file (e.g. `BufferManager.ts`), read that file too before answering — the docs may be stale, the code is authoritative.
+If the question concerns a specific file (e.g. `bufferManager.ts`), read that file too before answering — the docs may be stale, the code is authoritative.
 
 ## Stack at a glance
 
@@ -52,7 +52,7 @@ Full diagrams: `docs/diagrams/streaming-01…04-*.mmd` (diagram filenames predat
 
 ## Chunk pipeline (foreground + lookahead slots)
 
-`client/src/services/ChunkPipeline.ts` owns two `StreamingService` slots that share one `BufferManager`:
+`client/src/services/chunkPipeline.ts` owns two `StreamingService` slots that share one `BufferManager`:
 
 - **Foreground** — currently delivering segments to the playhead.
 - **Lookahead** — chunk N+1, opened at prefetch time (not after foreground completes).
@@ -63,11 +63,11 @@ Both slots' segments funnel into the same `BufferManager.appendSegment` queue, w
 
 `PlaybackController` retains chunk-scheduling responsibility (when to request, when to call `pipeline.openLookahead`, when to call `pipeline.promoteLookahead`). The pipeline is purely a dual-slot stream-lifecycle manager.
 
-File pointers: `ChunkPipeline.ts` (slot management), `PlaybackController.ts` (orchestration), `chunker.ts:403` (`ORPHAN_TIMEOUT_MS = 30_000` — runaway safety).
+File pointers: `chunkPipeline.ts` (slot management), `playbackController.ts` (orchestration), `chunker.ts:403` (`ORPHAN_TIMEOUT_MS = 30_000` — runaway safety).
 
 ## Playback ticker (single RAF)
 
-`client/src/services/PlaybackTicker.ts` is the one RAF tick that drives every per-frame poll the playback subsystem needs — startup-buffer check, prefetch trigger, background-buffer ready check during a resolution swap, and `StallTracker`'s spinner debounce. Replaces what was four scattered RAF loops + a `setTimeout`.
+`client/src/services/playbackTicker.ts` is the one RAF tick that drives every per-frame poll the playback subsystem needs — startup-buffer check, prefetch trigger, background-buffer ready check during a resolution swap, and `StallTracker`'s spinner debounce. Replaces what was four scattered RAF loops + a `setTimeout`.
 
 Handlers register with `ticker.register(handler)` and return `true` to stay or `false` to self-deregister. Auto-starts on first registration, auto-stops when last handler leaves. `shutdown()` clears all handlers — called by `PlaybackController.resetForNewSession`.
 
@@ -75,7 +75,7 @@ Owned by `PlaybackController`; passed into `StallTracker` via deps so the 2 s sp
 
 ## Playback timeline (observability)
 
-`client/src/services/PlaybackTimeline.ts` is a pure observability data structure that holds wall-clock predictions for upcoming pipeline events (next seam crossing, next prefetch fire, lookahead first-byte arrival). The rest of the system never reads from it for coordination decisions — it exists so that future trace inspection can see expected vs. actual at a glance, and so the controller can fire a `playback.timeline_drift` event when a prediction diverges from reality by more than 5 s.
+`client/src/services/playbackTimeline.ts` is a pure observability data structure that holds wall-clock predictions for upcoming pipeline events (next seam crossing, next prefetch fire, lookahead first-byte arrival). The rest of the system never reads from it for coordination decisions — it exists so that future trace inspection can see expected vs. actual at a glance, and so the controller can fire a `playback.timeline_drift` event when a prediction diverges from reality by more than 5 s.
 
 Predictions are based on a rolling window of recent observations (last 5 first-byte latencies). The first chunk handover in a session has no prediction; subsequent ones compare actual against the rolling avg and emit drift events for regressions.
 
@@ -91,7 +91,7 @@ Two distinct mechanisms — don't confuse them.
 
 **User-visible freeze (`<video>` waiting).** Instrumented as span `playback.stalled` — starts on the `waiting` event, ends on `playing`/seek/teardown. This is what matters to UX; `buffer.backpressure` is healthy, `playback.stalled` is not.
 
-File pointers: `BufferManager.ts:checkForwardBuffer`, `StreamingService.ts:pause/resume`, `ChunkPipeline.ts:pauseForeground/resumeForeground`, `PlaybackController.ts:handleWaiting`.
+File pointers: `bufferManager.ts:checkForwardBuffer`, `streamingService.ts:pause/resume`, `chunkPipeline.ts:pauseAll/resumeAll`, `playbackController.ts:handleWaiting`.
 
 ## GraphQL + Relay contract
 

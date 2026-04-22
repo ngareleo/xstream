@@ -77,8 +77,8 @@ xstream is split into two workspaces: a Bun server and an Rsbuild/React client. 
 | Control bar | `src/components/control-bar/ControlBar.tsx` | Seek slider, play/pause, resolution selector; raises events via `useNovaEventing().bubble()` |
 | Control bar events | `src/components/control-bar/ControlBar.events.ts` | Event type constants, factory functions, and type guards for ControlBar events |
 | Chunked playback hook | `src/hooks/useChunkedPlayback.ts` | Client-driven chunk scheduling, prefetch, seek restart, resolution switch via background buffer |
-| Streaming service | `src/services/StreamingService.ts` | Fetch loop, length-prefix frame parser, pause/resume/cancel |
-| Buffer manager | `src/services/BufferManager.ts` | MSE SourceBuffer wrapper, sliding window eviction, back-pressure, `setAfterAppend` notification |
+| Streaming service | `src/services/streamingService.ts` | Fetch loop, length-prefix frame parser, pause/resume/cancel |
+| Buffer manager | `src/services/bufferManager.ts` | MSE SourceBuffer wrapper, sliding window eviction, back-pressure, `setAfterAppend` notification |
 
 ---
 

@@ -85,7 +85,7 @@ The `?from=N` query parameter skips directly to segment index N. The init segmen
 
 ## Client Parsing Logic
 
-`client/src/services/StreamingService.ts`:
+`client/src/services/streamingService.ts`:
 
 ```
 fetch('/stream/<jobId>')
@@ -266,7 +266,7 @@ Easy to conflate, but each knob affects a different part of the pipeline:
 |---|---|---|
 | `CHUNK_DURATION_S` (`server/src/services/chunker.ts`) | 300s | ffmpeg transcode unit — one ffmpeg process produces one chunk. Affects first-byte latency (smaller = faster start) and chunk-cutover cost (smaller = more frequent cutovers) |
 | Segment duration (ffmpeg `-seg_duration`) | 2s | Wire framing unit — each `.m4s` is 2 seconds of fMP4. Affects append cadence and `appendBuffer` throughput |
-| `forwardTargetS` (`client/src/services/BufferManager.ts`) | 60s | Client-side buffer ceiling — how much media is resident in the SourceBuffer. Independent of ffmpeg; the network can deliver hundreds of segments but the client only keeps `forwardTargetS` ahead of the playhead |
+| `forwardTargetS` (`client/src/services/bufferManager.ts`) | 60s | Client-side buffer ceiling — how much media is resident in the SourceBuffer. Independent of ffmpeg; the network can deliver hundreds of segments but the client only keeps `forwardTargetS` ahead of the playhead |
 
 If playback feels choppy at 4K, the right lever depends on the symptom:
 - Long time-to-first-frame → shrink `CHUNK_DURATION_S` (documented in `docs/todo.md` CHUNK-001)

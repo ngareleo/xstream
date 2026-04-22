@@ -4,8 +4,8 @@ import { getEffectiveBufferConfig } from "~/config/featureFlags.js";
 import { getClientLogger, getClientTracer } from "~/telemetry.js";
 import { type Resolution, RESOLUTION_MIME_TYPE } from "~/types.js";
 
-import { BufferManager } from "./BufferManager.js";
-import { ChunkPipeline, type StreamOutcome } from "./ChunkPipeline.js";
+import { BufferManager } from "./bufferManager.js";
+import { ChunkPipeline, type StreamOutcome } from "./chunkPipeline.js";
 import {
   CHUNK_DURATION_S,
   type PlaybackStatus,
@@ -13,9 +13,9 @@ import {
   STARTUP_BUFFER_S,
 } from "./playbackConfig.js";
 import { clearSessionContext, getSessionContext, setSessionContext } from "./playbackSession.js";
-import { PlaybackTicker } from "./PlaybackTicker.js";
-import { PlaybackTimeline } from "./PlaybackTimeline.js";
-import { StallTracker } from "./StallTracker.js";
+import { PlaybackTicker } from "./playbackTicker.js";
+import { PlaybackTimeline } from "./playbackTimeline.js";
+import { StallTracker } from "./stallTracker.js";
 
 export { type PlaybackStatus };
 

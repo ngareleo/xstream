@@ -19,10 +19,10 @@ import { type Span, SpanStatusCode, trace, type Tracer } from "@opentelemetry/ap
 import type { ClientLog } from "~/telemetry.js";
 import type { Resolution } from "~/types.js";
 
-import type { BufferManager } from "./BufferManager.js";
+import type { BufferManager } from "./bufferManager.js";
 import { CHUNK_DURATION_S, MIN_REAL_CHUNK_BYTES } from "./playbackConfig.js";
 import { getSessionContext } from "./playbackSession.js";
-import { StreamingService } from "./StreamingService.js";
+import { StreamingService } from "./streamingService.js";
 
 /** Outcome of a foreground stream completion, passed to the caller's onStreamEnded. */
 export type StreamOutcome =

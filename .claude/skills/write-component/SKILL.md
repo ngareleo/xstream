@@ -10,6 +10,15 @@ Use this skill when creating or modifying a React component in `client/src/`.
 
 ## Rules — enforce all of these
 
+### File naming
+
+- Component file: `PascalCase.tsx` (e.g. `VideoCard.tsx`)
+- Component folder: `kebab-case/` (e.g. `video-card/`)
+- Satellite files in the same folder mirror the component's PascalCase prefix: `VideoCard.styles.ts`, `VideoCard.strings.ts`, `VideoCard.events.ts`, `VideoCard.stories.tsx`
+- Hooks, utils, services, configs, tests are camelCase: `useChunkedPlayback.ts`, `formatters.ts`, `chunkPipeline.ts`
+
+Full convention: `CLAUDE.md` → "File Naming Convention".
+
 ### File structure
 A component file contains **only**:
 1. The component function
