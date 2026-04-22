@@ -5,16 +5,15 @@ import { getClientLogger, getClientTracer } from "~/telemetry.js";
 import { type Resolution, RESOLUTION_MIME_TYPE } from "~/types.js";
 
 import { BufferManager } from "./BufferManager.js";
+import { ChunkPipeline, type StreamOutcome } from "./ChunkPipeline.js";
 import {
   CHUNK_DURATION_S,
-  MIN_REAL_CHUNK_BYTES,
   type PlaybackStatus,
   PREFETCH_THRESHOLD_S,
   STARTUP_BUFFER_S,
 } from "./playbackConfig.js";
 import { clearSessionContext, getSessionContext, setSessionContext } from "./playbackSession.js";
 import { StallTracker } from "./StallTracker.js";
-import { StreamingService } from "./StreamingService.js";
 
 export { type PlaybackStatus };
 
@@ -79,14 +78,17 @@ export class PlaybackController {
   private sessionSpan: Span | null = null;
 
   private buffer: BufferManager | null = null;
-  private activeStream: StreamingService | null = null;
-  private activeChunkTeardown: ((reason: string) => void) | null = null;
+  private pipeline: ChunkPipeline | null = null;
   private bgBuffer: BufferManager | null = null;
-  private bgStream: StreamingService | null = null;
-  private bgChunkTeardown: ((reason: string) => void) | null = null;
+  private bgPipeline: ChunkPipeline | null = null;
+  // Forwarder for the background pipeline's foreground onStreamEnded — starts
+  // as a no-op while the bg buffer is being filled in the background, then is
+  // re-pointed to the real handleChunkEnded after the swap. The closure is
+  // captured by the slot's opts at openSlot time, so reassigning this variable
+  // (not the opts object) is what threads the new behaviour through.
+  private bgOnStreamEnded: (outcome: StreamOutcome) => void = () => {};
 
   private chunkEnd = 0;
-  private nextJobId: string | null = null;
   private prefetchFired = false;
 
   private hasStartedPlayback = false;
@@ -171,14 +173,21 @@ export class PlaybackController {
     const sessionCtx = trace.setSpan(context.active(), sessionSpan);
     setSessionContext(sessionCtx);
 
+    // Closure-capture the pipeline OBJECT (not `this.pipeline`) so the buffer's
+    // pause/resume keep working even if `this.pipeline` is reassigned during a
+    // resolution swap. Forward-declared because the pipeline needs the buffer.
+    // eslint-disable-next-line prefer-const -- captured by buffer's pause/resume closures, assigned after buffer construction
+    let pipeline: ChunkPipeline;
     const buffer = new BufferManager(
       videoEl,
-      () => this.activeStream?.pause(),
-      () => this.activeStream?.resume(),
+      () => pipeline.pauseAll(),
+      () => pipeline.resumeAll(),
       videoDurationS,
       getEffectiveBufferConfig()
     );
+    pipeline = new ChunkPipeline(buffer, playbackTracer, playbackLog, videoEl);
     this.buffer = buffer;
+    this.pipeline = pipeline;
 
     void context.with(sessionCtx, () =>
       buffer
@@ -240,22 +249,18 @@ export class PlaybackController {
       this.bgReadyRaf = null;
     }
     this.stallTracker.end(reason === "new_session" ? "new_session" : "teardown");
-    this.activeChunkTeardown?.(reason);
-    this.activeChunkTeardown = null;
-    this.activeStream?.cancel();
+    this.pipeline?.cancel(reason);
+    this.pipeline = null;
     this.buffer?.teardown();
-    this.activeStream = null;
     this.buffer = null;
 
-    this.bgChunkTeardown?.(reason);
-    this.bgChunkTeardown = null;
-    this.bgStream?.cancel();
+    this.bgPipeline?.cancel(reason);
+    this.bgPipeline = null;
     this.bgBuffer?.teardown(false);
-    this.bgStream = null;
     this.bgBuffer = null;
+    this.bgOnStreamEnded = (): void => {};
 
     this.chunkEnd = 0;
-    this.nextJobId = null;
     this.prefetchFired = false;
     this.hasStartedPlayback = false;
     this.seekTarget = null;
@@ -301,176 +306,67 @@ export class PlaybackController {
     this.startupRaf = requestAnimationFrame(checkReady);
   }
 
-  // ── Chunk streaming primitive ──────────────────────────────────────────────
-
-  /**
-   * Streams a chunk (identified by its raw job ID) into the given BufferManager.
-   * Opens a `chunk.stream` span whose context is threaded into the fetch so the
-   * server's `stream.request` nests under it. Does NOT call markStreamDone() —
-   * the caller decides when the final chunk ends.
-   */
-  private streamChunk(
-    rawJobId: string,
-    buffer: BufferManager,
-    isFirstChunk: boolean,
+  /** Handles chunk N's stream completion. Called by ChunkPipeline via the
+   *  onStreamEnded callback wired in startChunkSeries / startPrefetchLoop.
+   *  Decides whether to promote a lookahead, request a fresh next chunk, or
+   *  finalise the session. */
+  private handleChunkEnded(
     res: Resolution,
     chunkStartS: number,
-    onDone: () => void,
-    onError: (err: Error) => void
-  ): { svc: StreamingService; teardownSpan: (reason: string) => void } {
-    const chunkSpan: Span = playbackTracer.startSpan(
-      "chunk.stream",
-      {
-        attributes: {
-          "chunk.job_id": rawJobId,
-          "chunk.resolution": res,
-          "chunk.is_first": isFirstChunk,
-          "chunk.start_s": chunkStartS,
-        },
-      },
-      getSessionContext()
-    );
-    // Build a context with chunkSpan as the active span so that
-    // FetchInstrumentation propagates traceparent linking server's
-    // stream.request under this chunk.stream span.
-    const chunkCtx = trace.setSpan(getSessionContext(), chunkSpan);
+    buffer: BufferManager,
+    outcome: StreamOutcome
+  ): void {
+    const videoDurationS = this.deps.getVideoDurationS();
+    const chunkEnd = Math.min(chunkStartS + CHUNK_DURATION_S, videoDurationS);
+    const isLast = chunkEnd >= videoDurationS;
 
-    let totalMediaBytes = 0;
-    let segmentCount = 0;
-    let ended = false;
-    let firstMediaSegmentSeen = false;
+    if (outcome === "no_real_content") {
+      // Pipeline already called buffer.markStreamDone() — nothing more to play.
+      this.events.onJobCreated(null);
+      return;
+    }
 
-    const endChunkSpan = (): void => {
-      if (ended) return;
-      ended = true;
-      chunkSpan.setAttribute("chunk.bytes_streamed", totalMediaBytes);
-      chunkSpan.setAttribute("chunk.segments_received", segmentCount);
-      chunkSpan.end();
-    };
+    if (isLast) {
+      buffer.markStreamDone();
+      this.events.onJobCreated(null);
+      playbackLog.info("Final chunk done");
+      return;
+    }
 
-    // Caller-owned teardown path: StreamingService.cancel() aborts the fetch
-    // without firing onDone/onError, so without this the span would leak
-    // whenever teardown/seek/resolution-switch cancels mid-chunk.
-    const teardownSpan = (reason: string): void => {
-      if (ended) return;
-      chunkSpan.addEvent(`chunk_cancelled_by_${reason}`);
-      endChunkSpan();
-    };
+    const nextStart = chunkEnd;
+    const nextEnd = Math.min(nextStart + CHUNK_DURATION_S, videoDurationS);
+    this.chunkEnd = nextEnd;
+    this.prefetchFired = false;
 
-    const wrappedOnDone = (): void => {
-      endChunkSpan();
-      onDone();
-    };
-    const wrappedOnError = (err: Error): void => {
-      if (!ended) {
-        chunkSpan.addEvent("chunk_error", { message: err.message });
-        chunkSpan.setStatus({ code: SpanStatusCode.ERROR, message: err.message });
-      }
-      endChunkSpan();
-      onError(err);
-    };
+    if (this.pipeline?.hasLookahead()) {
+      // Lookahead's stream + onStreamEnded are already wired (set at openLookahead
+      // time). Promotion just transfers control — its onStreamEnded will fire
+      // again when this chunk completes, calling handleChunkEnded recursively.
+      this.pipeline.promoteLookahead();
+    } else {
+      // Prefetch never fired (e.g. very short chunk, slow server) — request fresh.
+      this.startChunkSeries(res, nextStart, buffer, false);
+    }
+  }
 
-    const svc = new StreamingService();
+  /** Arms the startup-buffer check that calls video.play() once the first
+   *  chunk has buffered enough content. Called from ChunkPipeline via the
+   *  onFirstChunkInit hook (fires when chunk 0's init.mp4 is appended). */
+  private armStartupBufferCheck(buffer: BufferManager, res: Resolution): void {
+    if (this.hasStartedPlayback) return;
+    const startupTarget = STARTUP_BUFFER_S[res];
     const videoEl = this.deps.videoEl;
-
-    void svc.start(
-      rawJobId,
-      0,
-      async (segData, isInit) => {
-        // Continuation chunks (chunk 2, 3, …) must NOT re-append the init
-        // segment. The SourceBuffer was initialised by chunk 0's init and
-        // the codec doesn't change between chunks. Re-appending an init —
-        // especially one produced with a different -ss start time, which
-        // causes ffmpeg to emit a different moov box — stalls the decoder
-        // and causes visible buffering / MSE errors.
-        if (isInit && !isFirstChunk) {
-          return;
+    this.waitForStartupBuffer(buffer, startupTarget, () => {
+      videoEl.play().catch(() => {});
+      this.setStatus("playing");
+      playbackLog.info(
+        `video.play() — buffered ${buffer.bufferedEnd.toFixed(1)}s >= ${startupTarget}s threshold`,
+        {
+          buffered_s: parseFloat(buffer.bufferedEnd.toFixed(1)),
+          startup_target_s: startupTarget,
         }
-
-        if (!isInit) {
-          totalMediaBytes += segData.byteLength;
-          segmentCount += 1;
-        }
-
-        // Measures arrival-to-append latency for the first media segment of
-        // a continuation chunk — the chunk-handover seam where stalls live.
-        // Chunk 0 is excluded because its first-segment timing is dominated
-        // by the MSE init handshake, not the handover.
-        let firstAppendSpan: Span | null = null;
-        if (!isInit && !isFirstChunk && !firstMediaSegmentSeen) {
-          firstMediaSegmentSeen = true;
-          const arrivalCurrentTime = videoEl.currentTime;
-          const arrivalBufferedAhead = buffer.getBufferedAheadSeconds(arrivalCurrentTime) ?? 0;
-          firstAppendSpan = playbackTracer.startSpan(
-            "chunk.first_segment_append",
-            {
-              attributes: {
-                "chunk.job_id": rawJobId,
-                "chunk.number": Math.floor(chunkStartS / CHUNK_DURATION_S),
-                "chunk.start_s": chunkStartS,
-                "chunk.segment_bytes": segData.byteLength,
-                "playback.current_time_s_at_arrival": parseFloat(arrivalCurrentTime.toFixed(2)),
-                "playback.buffered_ahead_s_at_arrival": parseFloat(arrivalBufferedAhead.toFixed(2)),
-              },
-            },
-            chunkCtx
-          );
-        }
-
-        try {
-          await buffer.appendSegment(segData);
-          firstAppendSpan?.end();
-          // On the init segment of the very first chunk: arm the startup-buffer
-          // check that calls video.play() once enough content is buffered.
-          if (isFirstChunk && isInit && !this.hasStartedPlayback) {
-            const startupTarget = STARTUP_BUFFER_S[res];
-            this.waitForStartupBuffer(buffer, startupTarget, () => {
-              videoEl.play().catch(() => {});
-              this.setStatus("playing");
-              playbackLog.info(
-                `video.play() — buffered ${buffer.bufferedEnd.toFixed(1)}s >= ${startupTarget}s threshold`,
-                {
-                  buffered_s: parseFloat(buffer.bufferedEnd.toFixed(1)),
-                  startup_target_s: startupTarget,
-                }
-              );
-            });
-          }
-        } catch (err) {
-          if (firstAppendSpan) {
-            firstAppendSpan.setStatus({
-              code: SpanStatusCode.ERROR,
-              message: (err as Error).message,
-            });
-            firstAppendSpan.end();
-          }
-          playbackLog.error("Buffer append error", { message: (err as Error).message });
-          wrappedOnError(err as Error);
-        }
-      },
-      wrappedOnError,
-      () => {
-        // Chunks with < MIN_REAL_CHUNK_BYTES of media are placeholder output
-        // from ffmpeg when the seek position is past encoded content — real
-        // video segments are always much larger (several KB even at the lowest
-        // bitrate). Stop chaining and signal end-of-stream.
-        const hasRealContent = totalMediaBytes >= MIN_REAL_CHUNK_BYTES;
-        if (!hasRealContent) {
-          playbackLog.info("Chunk had no real content — marking stream done", {
-            job_id: rawJobId,
-            total_media_bytes: totalMediaBytes,
-          });
-          buffer.markStreamDone();
-          this.events.onJobCreated(null);
-          chunkSpan.addEvent("chunk_no_real_content");
-          endChunkSpan();
-          return;
-        }
-        wrappedOnDone();
-      },
-      chunkCtx
-    );
-    return { svc, teardownSpan };
+      );
+    });
   }
 
   // ── Chunk scheduler ────────────────────────────────────────────────────────
@@ -532,9 +428,10 @@ export class PlaybackController {
   }
 
   /**
-   * Starts streaming a series of chunks starting at `startS`. Each chunk streams
-   * until done, then the next one begins automatically. The final chunk calls
-   * `buffer.markStreamDone()`.
+   * Requests a chunk and opens its foreground stream via ChunkPipeline.
+   * Continuation between chunks is driven by `handleChunkEnded` — either by
+   * promoting an open lookahead or recursively calling startChunkSeries when
+   * no prefetch had fired in time.
    */
   private startChunkSeries(
     res: Resolution,
@@ -549,61 +446,18 @@ export class PlaybackController {
 
     void this.requestChunk(res, startS, chunkEnd, false)
       .then((rawJobId) => {
-        const isLast = chunkEnd >= videoDurationS;
-
-        const onDone = (): void => {
-          const savedNextJobId = this.nextJobId;
-          this.nextJobId = null;
-          this.prefetchFired = false;
-
-          if (isLast) {
-            buffer.markStreamDone();
-            this.events.onJobCreated(null);
-            playbackLog.info("Final chunk done");
-          } else {
-            // Continue to the next chunk — use prefetched job ID if available,
-            // otherwise request it now (prefetch may not have fired yet).
-            const nextStart = chunkEnd;
-            const nextEnd = Math.min(nextStart + CHUNK_DURATION_S, videoDurationS);
-            this.chunkEnd = nextEnd;
-
-            if (savedNextJobId) {
-              const nextIsLast = nextEnd >= videoDurationS;
-              const next = this.streamChunk(
-                savedNextJobId,
-                buffer,
-                false,
-                res,
-                nextStart,
-                nextIsLast
-                  ? (): void => {
-                      buffer.markStreamDone();
-                      this.events.onJobCreated(null);
-                    }
-                  : (): void => this.startChunkSeries(res, nextEnd, buffer, false),
-                (err) => this.setError(err.message)
-              );
-              this.activeStream = next.svc;
-              this.activeChunkTeardown = next.teardownSpan;
-            } else {
-              this.startChunkSeries(res, nextStart, buffer, false);
-            }
-          }
-        };
-
-        const stream = this.streamChunk(
-          rawJobId,
-          buffer,
+        if (!this.pipeline) return; // Tore down between request and response.
+        this.pipeline.startForeground({
+          jobId: rawJobId,
+          chunkStartS: startS,
           isFirstChunk,
-          res,
-          startS,
-          onDone,
-          (err) => {
-            this.setError(err.message);
-          }
-        );
-        this.activeStream = stream.svc;
-        this.activeChunkTeardown = stream.teardownSpan;
+          resolution: res,
+          onStreamEnded: (outcome) => this.handleChunkEnded(res, startS, buffer, outcome),
+          onError: (err) => this.setError(err.message),
+          onFirstChunkInit: isFirstChunk
+            ? (): void => this.armStartupBufferCheck(buffer, res)
+            : undefined,
+        });
       })
       .catch((err: Error) => {
         this.sessionSpan?.addEvent("chunk_series_failed", { message: err.message });
@@ -618,16 +472,21 @@ export class PlaybackController {
   private startPrefetchLoop(res: Resolution): void {
     const videoEl = this.deps.videoEl;
     const tick = (): void => {
-      if (!this.buffer) return;
+      if (!this.buffer || !this.pipeline) return;
       const videoDurationS = this.deps.getVideoDurationS();
 
       const chunkEnd = this.chunkEnd;
-      if (!this.prefetchFired && chunkEnd > 0 && chunkEnd < videoDurationS) {
+      // Gate: only fire when we don't already have a lookahead open AND haven't
+      // already fired one whose request is still in flight (prefetchFired covers
+      // the gap between requestChunk start and openLookahead).
+      const hasLookahead = this.pipeline.hasLookahead();
+      if (!hasLookahead && !this.prefetchFired && chunkEnd > 0 && chunkEnd < videoDurationS) {
         const timeUntilEnd = chunkEnd - videoEl.currentTime;
         if (timeUntilEnd <= PREFETCH_THRESHOLD_S) {
           this.prefetchFired = true;
           const nextStart = chunkEnd;
           const nextEnd = Math.min(nextStart + CHUNK_DURATION_S, videoDurationS);
+          const buffer = this.buffer;
           playbackLog.info(
             `Prefetching next chunk [${nextStart}s, ${nextEnd}s) — ${timeUntilEnd.toFixed(1)}s before current chunk end`,
             {
@@ -638,10 +497,21 @@ export class PlaybackController {
           );
           void this.requestChunk(res, nextStart, nextEnd, true)
             .then((rawJobId) => {
-              this.nextJobId = rawJobId;
+              if (!this.pipeline) return; // Tore down between request and response.
+              // Open the /stream/<jobId> fetch immediately — the server's
+              // orphan timer sees connections > 0 and the prefetched job
+              // survives even if the foreground is still streaming.
+              this.pipeline.openLookahead({
+                jobId: rawJobId,
+                chunkStartS: nextStart,
+                isFirstChunk: false,
+                resolution: res,
+                onStreamEnded: (outcome) => this.handleChunkEnded(res, nextStart, buffer, outcome),
+                onError: (err) => this.setError(err.message),
+              });
             })
             .catch(() => {
-              this.prefetchFired = false; // allow retry
+              this.prefetchFired = false; // allow retry on next tick
             });
         }
       }
@@ -668,20 +538,27 @@ export class PlaybackController {
       }
     );
 
-    // Cancel any in-flight background buffer
-    this.bgChunkTeardown?.("resolution_switch_restart");
-    this.bgChunkTeardown = null;
-    this.bgStream?.cancel();
+    // Cancel any in-flight background pipeline + buffer
+    this.bgPipeline?.cancel("resolution_switch_restart");
+    this.bgPipeline = null;
     this.bgBuffer?.teardown(false);
+    this.bgOnStreamEnded = (): void => {};
 
+    // Closure-capture the pipeline OBJECT (not `this.bgPipeline`) so the buffer's
+    // pause/resume keep working through the swap — after swap `this.bgPipeline`
+    // is set to null but the same pipeline object lives on as `this.pipeline`.
+    // eslint-disable-next-line prefer-const -- captured by buffer's pause/resume closures, assigned after buffer construction
+    let bgPipeline: ChunkPipeline;
     const bgBuffer = new BufferManager(
       videoEl,
-      () => this.bgStream?.pause(),
-      () => this.bgStream?.resume(),
+      () => bgPipeline.pauseAll(),
+      () => bgPipeline.resumeAll(),
       videoDurationS,
       getEffectiveBufferConfig()
     );
+    bgPipeline = new ChunkPipeline(bgBuffer, playbackTracer, playbackLog, videoEl);
     this.bgBuffer = bgBuffer;
+    this.bgPipeline = bgPipeline;
 
     void bgBuffer
       .initBackground(mimeType)
@@ -696,16 +573,13 @@ export class PlaybackController {
             swap_time_s: parseFloat(swapTime.toFixed(1)),
           });
 
-          // Tear down foreground (don't clear videoEl.src yet)
-          this.activeChunkTeardown?.("resolution_switch");
-          this.activeChunkTeardown = null;
-          this.activeStream?.cancel();
+          // Tear down old foreground (cancels its foreground + lookahead).
+          this.pipeline?.cancel("resolution_switch");
           this.buffer?.teardown(false);
-          this.activeStream = null;
 
-          // Promote background — cancel the prefetch loop for the old foreground
-          // chunk (a new one starts via startPrefetchLoop below) and the bg
-          // readiness check (swap has succeeded).
+          // Cancel the prefetch loop for the old foreground chunk (a new one
+          // starts via startPrefetchLoop below) and the bg readiness RAF (swap
+          // has succeeded).
           if (this.prefetchRaf !== null) cancelAnimationFrame(this.prefetchRaf);
           if (this.bgReadyRaf !== null) cancelAnimationFrame(this.bgReadyRaf);
           this.bgReadyRaf = null;
@@ -716,10 +590,12 @@ export class PlaybackController {
           this.buffer = bgBuffer;
           bgBuffer.promoteToForeground();
           this.bgBuffer = null;
-          this.activeStream = this.bgStream;
-          this.activeChunkTeardown = this.bgChunkTeardown;
-          this.bgStream = null;
-          this.bgChunkTeardown = null;
+          this.pipeline = bgPipeline;
+          this.bgPipeline = null;
+          // Re-point the bg slot's onStreamEnded forwarder so the now-foreground
+          // chunk's natural completion drives chunk continuation.
+          this.bgOnStreamEnded = (outcome): void =>
+            this.handleChunkEnded(newRes, chunkStart, bgBuffer, outcome);
 
           this.resolution = newRes;
           // Resume chunk series from the swapped position
@@ -744,22 +620,20 @@ export class PlaybackController {
           false
         )
           .then((rawJobId) => {
-            const bg = this.streamChunk(
-              rawJobId,
-              bgBuffer,
-              true, // background buffer is fresh — it needs the init segment
-              newRes,
-              chunkStart,
-              () => {
-                /* chunk done — swap may already have happened */
-              },
-              (err) => {
+            if (!this.bgPipeline) return; // Tore down between request and response.
+            this.bgPipeline.startForeground({
+              jobId: rawJobId,
+              chunkStartS: chunkStart,
+              isFirstChunk: true, // background buffer is fresh — needs the init segment
+              resolution: newRes,
+              // Forwarder — initially a no-op while bg is filling; re-pointed
+              // post-swap to handleChunkEnded so chunk continuation works.
+              onStreamEnded: (outcome) => this.bgOnStreamEnded(outcome),
+              onError: (err) => {
                 playbackLog.error("Background stream error", { message: err.message });
                 this.sessionSpan?.addEvent("background_stream_error", { message: err.message });
-              }
-            );
-            this.bgStream = bg.svc;
-            this.bgChunkTeardown = bg.teardownSpan;
+              },
+            });
             checkReady();
           })
           .catch((err: Error) => {
@@ -840,12 +714,8 @@ export class PlaybackController {
       }
     );
 
-    // Cancel active stream and flush the buffer
-    this.activeChunkTeardown?.("seek");
-    this.activeChunkTeardown = null;
-    this.activeStream?.cancel();
-    this.activeStream = null;
-    this.nextJobId = null;
+    // Cancel both pipeline slots (foreground + lookahead) and flush the buffer.
+    this.pipeline?.cancel("seek");
     this.prefetchFired = false;
 
     const buf = this.buffer;

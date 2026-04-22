@@ -46,19 +46,36 @@ Flow on first play:
 2. Client opens `GET /stream/:jobId` — a length-prefixed binary stream.
 3. Server sends `init.mp4` first (4-byte big-endian uint32 length, then bytes), then each `.m4s` media segment as ffmpeg writes them. `fs.watch` drives delivery.
 4. Client's `BufferManager` appends each segment into a `SourceBuffer`; `MediaSource.endOfStream()` is called when the job finishes.
-5. When playback nears `chunkEnd - 60s`, `PlaybackController.requestChunk` fires another `startTranscode` for the next chunk. Chunks stitch seamlessly.
+5. When playback nears `chunkEnd - 90s` (`PREFETCH_THRESHOLD_S`), `PlaybackController.requestChunk` fires another `startTranscode` for the next chunk **and immediately opens `/stream/:nextJobId`** via the lookahead slot of `ChunkPipeline`. Chunks stitch seamlessly.
 
 Full diagrams: `docs/diagrams/streaming-01…04-*.mmd` (diagram filenames predate the `NN-PascalCase` convention and are kept stable so they can be referenced by the `update-docs` skill). Four scenarios: fresh play, seek, resolution switch, buffer pause.
+
+## Chunk pipeline (foreground + lookahead slots)
+
+`client/src/services/ChunkPipeline.ts` owns two `StreamingService` slots that share one `BufferManager`:
+
+- **Foreground** — currently delivering segments to the playhead.
+- **Lookahead** — chunk N+1, opened at prefetch time (not after foreground completes).
+
+Both slots' segments funnel into the same `BufferManager.appendSegment` queue, which is a single-drain promise chain that already serialises concurrent producers — no new lock or queue is required.
+
+**Why the lookahead opens at prefetch time** — the server's `chunker.ts:orphanTimer` (30 s) kills jobs whose `connections === 0` after that window, as a runaway-job safety. Before the pipeline, the client only opened chunk N+1's fetch *after* chunk N's stream completed; under backpressure that took >30 s and the orphan timer reliably killed the prefetched job before the client connected. Opening the fetch on prefetch fire makes `connections` jump to 1 immediately. **The 30 s orphan timeout is intentional safety — never bump it; if it trips on a legit case, fix the structural reason the legit case looks like an abandonment.**
+
+`PlaybackController` retains chunk-scheduling responsibility (when to request, when to call `pipeline.openLookahead`, when to call `pipeline.promoteLookahead`). The pipeline is purely a dual-slot stream-lifecycle manager.
+
+File pointers: `ChunkPipeline.ts` (slot management), `PlaybackController.ts` (orchestration), `chunker.ts:403` (`ORPHAN_TIMEOUT_MS = 30_000` — runaway safety).
 
 ## Backpressure
 
 Two distinct mechanisms — don't confuse them.
 
-**Network backpressure (stream pause/resume).** `BufferManager.checkForwardBuffer` runs on every `appendSegment`. If the forward buffer exceeds `forwardTargetS` (default 20s), it calls `StreamingService.pause()` — the fetch loop awaits a `resumeResolve` promise. When buffered drops back below target, `StreamingService.resume()` is called. Instrumented as span `buffer.backpressure` (parented on `playback.session`). This is deliberate — we *have* enough data and don't want to bloat memory.
+**Network backpressure (stream pause/resume).** `BufferManager.checkForwardBuffer` runs on every `appendSegment`. If the forward buffer exceeds `forwardTargetS` (default 60s; resume threshold 20s), it calls `ChunkPipeline.pauseAll()` — both foreground and lookahead readers pause via their `StreamingService.pause()`. Both keep their TCP connections open (so `connections > 0` for the orphan timer) but stop draining bytes; ffmpeg back-pressures naturally onto disk. Instrumented as span `buffer.backpressure` (parented on `playback.session`). This is deliberate — we *have* enough data and don't want to bloat memory or grow the BufferManager append queue unbounded.
+
+**Deferred lookahead completion.** If a lookahead slot's stream completes naturally before the foreground does, the `ChunkPipeline` captures the outcome in `pendingOutcome` rather than firing the caller's `onStreamEnded` immediately. Calling `markStreamDone()` (a side effect of the `no_real_content` outcome, which calls `MediaSource.endOfStream()`) while the foreground is still appending would break MSE — once `endOfStream` fires you can't append more. The pending outcome is consumed by `promoteLookahead`.
 
 **User-visible freeze (`<video>` waiting).** Instrumented as span `playback.stalled` — starts on the `waiting` event, ends on `playing`/seek/teardown. This is what matters to UX; `buffer.backpressure` is healthy, `playback.stalled` is not.
 
-File pointers: `BufferManager.ts:checkForwardBuffer`, `StreamingService.ts:pause/resume`, `PlaybackController.ts:handleWaiting`.
+File pointers: `BufferManager.ts:checkForwardBuffer`, `StreamingService.ts:pause/resume`, `ChunkPipeline.ts:pauseForeground/resumeForeground`, `PlaybackController.ts:handleWaiting`.
 
 ## GraphQL + Relay contract
 
@@ -104,7 +121,8 @@ Spans at a glance (full details: `docs/02-Observability.md`):
 | Side | Span | Opened in |
 |---|---|---|
 | Client | `playback.session` | `PlaybackController.startPlayback` |
-| Client | `chunk.stream` | `PlaybackController.streamChunk` — context threaded into `StreamingService.start` so server `stream.request` nests under it |
+| Client | `chunk.stream` | `ChunkPipeline.openSlot` — one per slot (foreground or lookahead); context threaded into `StreamingService.start` so server `stream.request` nests under it |
+| Client | `chunk.first_segment_append` | `ChunkPipeline.openSlot` — one per continuation chunk; arrival-to-MSE-append latency for the first media segment, with `playback.buffered_ahead_s_at_arrival` |
 | Client | `transcode.request` | `PlaybackController.requestChunk` — one per `startTranscode`, `chunk.is_prefetch` on RAF-driven ones |
 | Client | `buffer.backpressure` | `BufferManager.checkForwardBuffer` — healthy pauses |
 | Client | `playback.stalled` | `PlaybackController.handleWaiting` — user-visible freezes |
