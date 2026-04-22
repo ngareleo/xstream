@@ -118,6 +118,12 @@ export class PlaybackController {
   private bgReadyRaf: number | null = null;
   private bufferingTimer: ReturnType<typeof setTimeout> | null = null;
 
+  // Tracks the open playback-stall span from a `waiting` event. Opens in
+  // handleWaiting, ends in handlePlaying, and is force-ended on teardown/seek
+  // so it doesn't leak across sessions.
+  private stallSpan: Span | null = null;
+  private stallStartedAt: number | null = null;
+
   private detachListeners: Array<() => void> = [];
 
   constructor(deps: PlaybackControllerDeps, events: PlaybackControllerEvents) {
@@ -247,6 +253,7 @@ export class PlaybackController {
       clearTimeout(this.bufferingTimer);
       this.bufferingTimer = null;
     }
+    this.endStallSpan(reason === "new_session" ? "new_session" : "teardown");
     this.activeChunkTeardown?.(reason);
     this.activeChunkTeardown = null;
     this.activeStream?.cancel();
@@ -771,6 +778,10 @@ export class PlaybackController {
 
     this.isHandlingSeek = true;
     this.pendingSeekTarget = null;
+    // A seek flushes and reloads the buffer; any currently-open stall span
+    // would not naturally resolve via a `playing` event tied to the old buffer
+    // range, so close it here with a distinct reason.
+    this.endStallSpan("seek");
     const snapTime = Math.floor(seekTime / CHUNK_DURATION_S) * CHUNK_DURATION_S;
 
     // Guard against re-entrancy: BufferManager.seek() sets videoEl.currentTime
@@ -839,6 +850,29 @@ export class PlaybackController {
     // initial startup loading phase which already has its own spinner path).
     if (!this.hasStartedPlayback) return;
     const stallStartedAt = Date.now();
+
+    // Open a playback.stalled span so the duration of the user-visible freeze
+    // is queryable in Seq alongside session/chunk spans. Parented on the
+    // playback.session via getSessionContext(). Skipped if a stall span is
+    // somehow already open (defensive — handlePlaying should have closed it).
+    if (!this.stallSpan) {
+      const bufferedAhead =
+        this.buffer?.getBufferedAheadSeconds(this.deps.videoEl.currentTime) ?? null;
+      this.stallStartedAt = stallStartedAt;
+      this.stallSpan = playbackTracer.startSpan(
+        "playback.stalled",
+        {
+          attributes: {
+            "video.current_time_s": parseFloat(this.deps.videoEl.currentTime.toFixed(2)),
+            "buffer.buffered_ahead_s":
+              bufferedAhead === null ? -1 : parseFloat(bufferedAhead.toFixed(2)),
+            "buffer.empty": bufferedAhead === null,
+          },
+        },
+        getSessionContext()
+      );
+    }
+
     this.bufferingTimer = setTimeout(() => {
       this.bufferingTimer = null;
       this.setStatus("loading");
@@ -861,11 +895,24 @@ export class PlaybackController {
       clearTimeout(this.bufferingTimer);
       this.bufferingTimer = null;
     }
+    this.endStallSpan("resumed");
     // Restore "playing" if the debounce already fired and showed the spinner.
     if (this.status === "loading" && this.hasStartedPlayback) {
       this.setStatus("playing");
     }
   };
+
+  /** Closes the playback.stalled span with a reason event. Idempotent — safe
+   *  to call on paths (teardown, seek) that may or may not have an open span. */
+  private endStallSpan(reason: string): void {
+    if (!this.stallSpan) return;
+    const durationMs = this.stallStartedAt !== null ? Date.now() - this.stallStartedAt : 0;
+    this.stallSpan.setAttribute("stall.duration_ms", durationMs);
+    this.stallSpan.addEvent(reason);
+    this.stallSpan.end();
+    this.stallSpan = null;
+    this.stallStartedAt = null;
+  }
 
   private attachVideoListeners(): void {
     const el = this.deps.videoEl;

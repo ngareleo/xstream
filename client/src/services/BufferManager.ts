@@ -62,7 +62,7 @@ export class BufferManager {
   private streamDone = false;
   private config: BufferConfig;
   private streamPaused = false;
-  private haltSpan: Span | null = null;
+  private backpressureSpan: Span | null = null;
   private afterAppendCb: (() => void) | null = null;
   private seekAbort = false;
   private videoDurationS: number;
@@ -117,6 +117,16 @@ export class BufferManager {
     const sb = this.sourceBuffer;
     if (!sb || sb.buffered.length === 0) return 0;
     return sb.buffered.end(sb.buffered.length - 1);
+  }
+
+  /** Seconds of media buffered ahead of the given currentTime, or null if the
+   *  buffer is empty. Used as a telemetry attribute on playback-stall spans so
+   *  we can tell at-a-glance whether a `waiting` event fired with 0s ahead (true
+   *  underrun) vs a fraction of a second (decoder hiccup). */
+  getBufferedAheadSeconds(currentTime: number): number | null {
+    const sb = this.sourceBuffer;
+    if (!sb || sb.buffered.length === 0) return null;
+    return sb.buffered.end(sb.buffered.length - 1) - currentTime;
   }
 
   init(mimeType: string): Promise<void> {
@@ -364,7 +374,7 @@ export class BufferManager {
       this.streamPaused = true;
       const bufMb = (this.bytesInBuffer / 1_048_576).toFixed(1);
       log.info(
-        `Stream paused — ${bufferedAhead.toFixed(1)}s buffered ahead (target: ${this.config.forwardTargetS}s), ${bufMb} MB in buffer`,
+        `Stream paused (backpressure) — ${bufferedAhead.toFixed(1)}s buffered ahead (target: ${this.config.forwardTargetS}s), ${bufMb} MB in buffer`,
         {
           buffered_ahead_s: parseFloat(bufferedAhead.toFixed(1)),
           target_s: this.config.forwardTargetS,
@@ -372,8 +382,8 @@ export class BufferManager {
           buffer_mb: parseFloat(bufMb),
         }
       );
-      this.haltSpan = tracer.startSpan(
-        "buffer.halt",
+      this.backpressureSpan = tracer.startSpan(
+        "buffer.backpressure",
         {
           attributes: {
             "buffer.buffered_ahead_s_at_pause": parseFloat(bufferedAhead.toFixed(1)),
@@ -389,7 +399,7 @@ export class BufferManager {
       this.streamPaused = false;
       const bufMb = (this.bytesInBuffer / 1_048_576).toFixed(1);
       log.info(
-        `Stream resumed — ${bufferedAhead.toFixed(1)}s buffered ahead (resume threshold: ${this.config.forwardResumeS}s), ${bufMb} MB in buffer`,
+        `Stream resumed (backpressure) — ${bufferedAhead.toFixed(1)}s buffered ahead (resume threshold: ${this.config.forwardResumeS}s), ${bufMb} MB in buffer`,
         {
           buffered_ahead_s: parseFloat(bufferedAhead.toFixed(1)),
           resume_threshold_s: this.config.forwardResumeS,
@@ -397,26 +407,26 @@ export class BufferManager {
           buffer_mb: parseFloat(bufMb),
         }
       );
-      if (this.haltSpan) {
-        this.haltSpan.setAttribute(
+      if (this.backpressureSpan) {
+        this.backpressureSpan.setAttribute(
           "buffer.buffered_ahead_s_at_resume",
           parseFloat(bufferedAhead.toFixed(1))
         );
-        this.haltSpan.end();
-        this.haltSpan = null;
+        this.backpressureSpan.end();
+        this.backpressureSpan = null;
       }
       this.onResume();
     }
   }
 
-  /** Closes the halt span early (if open) with a named end event. Used by
-   *  seek/teardown, which can interrupt a stall before the stream would have
-   *  naturally resumed. Idempotent. */
-  private endHaltSpan(reason: string): void {
-    if (!this.haltSpan) return;
-    this.haltSpan.addEvent(reason);
-    this.haltSpan.end();
-    this.haltSpan = null;
+  /** Closes the backpressure span early (if open) with a named end event.
+   *  Used by seek/teardown, which can interrupt a backpressure pause before
+   *  the stream would have naturally resumed. Idempotent. */
+  private endBackpressureSpan(reason: string): void {
+    if (!this.backpressureSpan) return;
+    this.backpressureSpan.addEvent(reason);
+    this.backpressureSpan.end();
+    this.backpressureSpan = null;
   }
 
   /**
@@ -495,7 +505,7 @@ export class BufferManager {
     this.isAppending = false;
     this.streamDone = false;
     this.streamPaused = false;
-    this.endHaltSpan("halt_ended_by_seek");
+    this.endBackpressureSpan("backpressure_ended_by_seek");
     this.bytesInBuffer = 0;
     sb.remove(0, Infinity);
     await this.waitForUpdateEnd();
@@ -559,6 +569,6 @@ export class BufferManager {
     this.bytesInBuffer = 0;
     this.evictionCount = 0;
     this.segmentsAppended = 0;
-    this.endHaltSpan("halt_ended_by_teardown");
+    this.endBackpressureSpan("backpressure_ended_by_teardown");
   }
 }

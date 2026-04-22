@@ -912,11 +912,12 @@ Full policy in `docs/observability.md`. Key rules agents must follow:
 | Client | `playback.session` | `PlaybackController.startPlayback` |
 | Client | `chunk.stream` | `PlaybackController.streamChunk` — one per chunk; its context is threaded into `StreamingService.start(parentContext)` so the `GET /stream/:jobId` fetch span (and the server's `stream.request`) nest under it. Records `chunk.bytes_streamed` and `chunk.segments_received` at end |
 | Client | `transcode.request` | `PlaybackController.requestChunk` — one per `startTranscode` mutation (including prefetches). `chunk.is_prefetch` attribute distinguishes RAF-driven prefetches from on-demand chain calls. The `graphql.request` HTTP span nests under it |
-| Client | `buffer.halt` | `BufferManager.checkForwardBuffer` — one per back-pressure pause→resume cycle. Parented on `playback.session` (halts can outlast a single `chunk.stream`). Span duration is the stall length |
+| Client | `buffer.backpressure` | `BufferManager.checkForwardBuffer` — one per back-pressure pause→resume cycle. Parented on `playback.session`. Fires when the forward buffer exceeds `forwardTargetS` (we deliberately pause the network because we have *too much* buffered). **Not** a user-visible freeze — for that see `playback.stalled` |
+| Client | `playback.stalled` | `PlaybackController.handleWaiting` — the `<video>` `waiting` event. One span per stall; ends on `playing`/seek/teardown. Parented on `playback.session`. Span duration = user-visible freeze |
 | Client | `graphql.request` | FetchInstrumentation (automatic) |
 | Server | `stream.request` | `routes/stream.ts` — child of client's `chunk.stream` |
 | Server | `job.resolve` | `chunker.startTranscodeJob` — covers cache-hit / inflight / restored-from-db / newly-started paths via one of four events (`job_cache_hit`, `job_inflight_resolved`, `job_restored_from_db`, `job_started`) |
-| Server | `transcode.job` | `chunker` when ffmpeg is actually spawned |
+| Server | `transcode.job` | `chunker` when ffmpeg is actually spawned — child of `job.resolve`. Emits periodic `transcode_progress` events (~every 10s) with fps/kbps/timemark for diagnosing encode-rate drops |
 | Server | `library.scan` | `libraryScanner.scanLibraries` |
 
 Add a new span only when none of these covers the work. Prefer `span.addEvent()` on an existing span for discrete transitions.

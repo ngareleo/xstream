@@ -1,6 +1,6 @@
 import ffmpegInstaller from "@ffmpeg-installer/ffmpeg";
 import ffprobeInstaller from "@ffprobe-installer/ffprobe";
-import { type Context as OtelContext, SpanStatusCode } from "@opentelemetry/api";
+import { type Context as OtelContext, context, SpanStatusCode, trace } from "@opentelemetry/api";
 import { createHash } from "crypto";
 import ffmpeg, { type FfmpegCommand } from "fluent-ffmpeg";
 import { watch } from "fs";
@@ -275,6 +275,10 @@ export async function startTranscodeJob(
 
     insertJob(job);
     setJob(job);
+    // Derive the ffmpeg span's parent context from resolveSpan BEFORE ending it so
+    // transcode.job nests under job.resolve in the trace tree instead of the raw
+    // HTTP POST mutation span (which is ~34 ms while ffmpeg runs for minutes).
+    const jobCtx = trace.setSpan(parentOtelCtx ?? context.active(), resolveSpan);
     endResolveSpan("job_started");
     // Job is now in jobStore — any concurrent duplicate can find it via getJob().
     // Keep id in inflightJobIds until runFfmpeg calls activeCommands.set() (after
@@ -288,7 +292,7 @@ export async function startTranscodeJob(
       segmentDir,
       startTimeSeconds,
       endTimeSeconds,
-      parentOtelCtx
+      jobCtx
     );
 
     return job;
@@ -394,6 +398,12 @@ async function runFfmpeg(
     }
   }, ORPHAN_TIMEOUT_MS);
 
+  // Throttle fluent-ffmpeg's per-second progress callback to one event every 10 s
+  // so a full 300 s chunk emits ~30 transcode_progress events — enough to spot
+  // encode-rate drops without dominating Seq ingest.
+  const PROGRESS_INTERVAL_MS = 10_000;
+  let lastProgressAt = 0;
+
   let encodeStart = 0;
   file
     .applyOutputOptions(command, profile, segmentPattern, segmentDir)
@@ -402,6 +412,27 @@ async function runFfmpeg(
       encodeStart = Date.now();
       jobSpan.addEvent("transcode_started", { resolution, cmd: cmd.slice(0, 120) });
     })
+    .on(
+      "progress",
+      (p: {
+        frames?: number;
+        currentFps?: number;
+        currentKbps?: number;
+        timemark?: string;
+        percent?: number;
+      }) => {
+        const now = Date.now();
+        if (now - lastProgressAt < PROGRESS_INTERVAL_MS) return;
+        lastProgressAt = now;
+        jobSpan.addEvent("transcode_progress", {
+          frames: p.frames ?? 0,
+          fps: p.currentFps ?? 0,
+          kbps: p.currentKbps ?? 0,
+          timemark: p.timemark ?? "",
+          percent: p.percent ?? 0,
+        });
+      }
+    )
     .on("error", (err) => {
       clearTimeout(orphanTimer);
       activeCommands.delete(job.id);
