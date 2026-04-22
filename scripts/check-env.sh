@@ -130,6 +130,26 @@ check_default   SEGMENT_DIR       "tmp/segments"             "transcoded segment
 check_default   SCAN_INTERVAL_MS  "30000"                    "library rescan interval (ms)"
 check_default   SEGMENT_CACHE_GB  "20"                       "max disk space for segment cache (GB)"
 
+# ── FFmpeg / hardware acceleration ────────────────────────────────────────────
+
+section "── FFmpeg / hardware acceleration"
+check_default   HW_ACCEL          "auto"                     "hardware encode mode (auto | off). auto probes + exits on failure; off forces software"
+
+check_ffmpeg_path() {
+  local name="$1" desc="$2"
+  local val="${!name:-}"
+  if [[ -z "$val" ]]; then
+    info "${BOLD}${CYAN}${name}${NC} (unset — resolver falls back to vendor/ffmpeg/ then PATH)  ($desc)"
+  elif [[ ! -x "$val" ]]; then
+    fail "${BOLD}${CYAN}${name}${NC}=${val}  (file missing or not executable)"
+    ERRORS=$((ERRORS + 1))
+  else
+    info "${BOLD}${CYAN}${name}${NC}=${val}  ($desc)"
+  fi
+}
+check_ffmpeg_path FFMPEG_PATH  "override path to the ffmpeg binary (dev override of the vendor/ lookup)"
+check_ffmpeg_path FFPROBE_PATH "override path to the ffprobe binary (dev override of the vendor/ lookup)"
+
 # ── Metadata ──────────────────────────────────────────────────────────────────
 
 section "── Metadata"

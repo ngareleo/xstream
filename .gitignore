@@ -1,6 +1,8 @@
 node_modules/
 tmp/
 dist/
+# bundled ffmpeg binaries per platform — populated by `bun run setup-ffmpeg`
+vendor/
 .env
 .seq-credentials
 *.db

@@ -14,6 +14,7 @@
     "format:check": "prettier --check \"**/*.{ts,tsx,json}\" --ignore-path .prettierignore",
     "stop": "bash scripts/stop.sh",
     "check-env": "bash scripts/check-env.sh",
+    "setup-ffmpeg": "bun scripts/setup-ffmpeg.ts",
     "clean": "bash scripts/clean.sh",
     "clean:db": "bash scripts/clean.sh --db",
     "seq:start": "bash scripts/seq-start.sh",

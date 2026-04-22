@@ -5,16 +5,17 @@
  * Usage:
  *   const f = new FFmpegFile("/path/to/video.mkv");
  *   await f.probe();
- *   const cmd = f.applyTo(ffmpeg("/path/to/video.mkv"), profile);
+ *   const cmd = f.applyTo(ffmpeg("/path/to/video.mkv"), hwAccelConfig, profile);
  */
-import ffmpegInstaller from "@ffmpeg-installer/ffmpeg";
-import ffprobeInstaller from "@ffprobe-installer/ffprobe";
 import ffmpeg from "fluent-ffmpeg";
 
 import type { ResolutionProfile } from "../types.js";
+import { resolveFfmpegPaths } from "./ffmpegPath.js";
+import type { HwAccelConfig } from "./hwAccel.js";
 
-ffmpeg.setFfmpegPath(ffmpegInstaller.path);
-ffmpeg.setFfprobePath(ffprobeInstaller.path);
+const paths = resolveFfmpegPaths();
+ffmpeg.setFfmpegPath(paths.ffmpeg);
+ffmpeg.setFfprobePath(paths.ffprobe);
 
 // ── Internal probe types ─────────────────────────────────────────────────────
 
@@ -233,29 +234,113 @@ export class FFmpegFile {
   }
 
   /**
+   * VAAPI-specific video options: pre-input device init, HW filter chain,
+   * HW encoder. Designed to keep frames on the GPU end-to-end (decode →
+   * scale → encode), which is where the real throughput win comes from —
+   * software filters in the middle would trigger implicit hwdownload/upload
+   * on every frame and erase the speedup.
+   */
+  private vaapiVideoOptions(
+    profile: ResolutionProfile,
+    device: string
+  ): { input: string[]; output: string[] } {
+    // fluent-ffmpeg's inputOptions tokenises each array element on the FIRST
+    // space, which mishandles values containing '=' or ':' — so pass each flag
+    // and its value as separate array elements.
+    const input = [
+      "-init_hw_device",
+      `vaapi=va:${device}`,
+      "-hwaccel",
+      "vaapi",
+      "-hwaccel_output_format",
+      "vaapi",
+    ];
+
+    // Filter chain stays on the GPU. For 10-bit/HDR sources we still emit
+    // 8-bit H.264 today (matches the software path); the scale_vaapi filter
+    // handles the bit-depth conversion inline via `format=nv12`.
+    const scale =
+      `scale_vaapi=w=${profile.width}:h=${profile.height}:` +
+      `force_original_aspect_ratio=decrease:format=nv12`;
+    // scale_vaapi can't produce padded output directly, so compose with
+    // pad_vaapi to letterbox to the exact profile resolution.
+    const pad = `pad_vaapi=w=${profile.width}:h=${profile.height}:x=(ow-iw)/2:y=(oh-ih)/2`;
+
+    const maxBitrate = `${Math.round(parseInt(profile.videoBitrate) * 1.2)}k`;
+    const bufSize = `${Math.round(parseInt(profile.videoBitrate) * 2)}k`;
+
+    const output = [
+      `-vf ${scale},${pad}`,
+      `-profile:v high`,
+      `-level:v ${profile.h264Level}`,
+      `-b:v ${profile.videoBitrate}`,
+      `-maxrate ${maxBitrate}`,
+      `-bufsize ${bufSize}`,
+      // Matches software path — 48-frame GOP aligns with 24 fps @ 2s segments.
+      `-g 48`,
+      `-keyint_min 48`,
+    ];
+
+    return { input, output };
+  }
+
+  /**
    * Convenience: apply all output options to a fluent-ffmpeg command and
-   * return it ready to `.output(...).run()`.
+   * return it ready to `.output(...).run()`. Branches on the hardware-accel
+   * config — software path is libx264 + sw filters, vaapi path keeps frames
+   * on the GPU throughout.
    *
    * The caller is responsible for setting `.seekInput()` / `.duration()` and
    * `.output()` before calling `.run()`.
    */
   applyOutputOptions(
     command: ffmpeg.FfmpegCommand,
+    hwAccel: HwAccelConfig,
     profile: ResolutionProfile,
     segmentPattern: string,
     segmentDir: string
   ): ffmpeg.FfmpegCommand {
-    return command
-      .outputOptions(this.streamMappingOptions())
-      .videoCodec("libx264")
-      .outputOptions([
-        ...this.videoCodecOptions(profile),
-        ...this.pixelFormatOptions(),
-        ...this.scaleFilterOptions(profile),
-      ])
-      .audioCodec("aac")
-      .outputOptions(this.audioCodecOptions(profile))
-      .outputOptions(this.hlsMuxerOptions(profile, segmentPattern, segmentDir));
+    const mapping = this.streamMappingOptions();
+    const audio = this.audioCodecOptions(profile);
+    const hls = this.hlsMuxerOptions(profile, segmentPattern, segmentDir);
+
+    switch (hwAccel.kind) {
+      case "software":
+        return command
+          .outputOptions(mapping)
+          .videoCodec("libx264")
+          .outputOptions([
+            ...this.videoCodecOptions(profile),
+            ...this.pixelFormatOptions(),
+            ...this.scaleFilterOptions(profile),
+          ])
+          .audioCodec("aac")
+          .outputOptions(audio)
+          .outputOptions(hls);
+
+      case "vaapi": {
+        const { input, output } = this.vaapiVideoOptions(profile, hwAccel.device);
+        return command
+          .inputOptions(input)
+          .outputOptions(mapping)
+          .videoCodec("h264_vaapi")
+          .outputOptions(output)
+          .audioCodec("aac")
+          .outputOptions(audio)
+          .outputOptions(hls);
+      }
+
+      case "videotoolbox":
+      case "qsv":
+      case "nvenc":
+      case "amf":
+        // detectHwAccel() never returns these today — guarded here so the
+        // Rust/Tauri port has an obvious TODO when adding the platform.
+        throw new Error(
+          `HW accel '${hwAccel.kind}' not yet implemented. Add the branch in ` +
+            `server/src/services/ffmpegFile.ts::applyOutputOptions, or set HW_ACCEL=off.`
+        );
+    }
   }
 
   /** Human-readable summary of what was detected (useful for server logs). */

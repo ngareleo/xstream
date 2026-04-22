@@ -1,5 +1,3 @@
-import ffmpegInstaller from "@ffmpeg-installer/ffmpeg";
-import ffprobeInstaller from "@ffprobe-installer/ffprobe";
 import { createHash } from "crypto";
 import ffmpeg from "fluent-ffmpeg";
 import { createReadStream } from "fs";
@@ -19,14 +17,16 @@ import type {
   VideoStreamRow,
 } from "../types.js";
 import { DEFAULT_VIDEO_EXTENSIONS } from "../types.js";
+import { resolveFfmpegPaths } from "./ffmpegPath.js";
 import { isOmdbConfigured, searchOmdb } from "./omdbService.js";
 import { isScanRunning, markScanEnded, markScanProgress, markScanStarted } from "./scanStore.js";
 
 const log = getOtelLogger("scanner");
 const scannerTracer = getTracer("scanner");
 
-ffmpeg.setFfmpegPath(ffmpegInstaller.path);
-ffmpeg.setFfprobePath(ffprobeInstaller.path);
+const paths = resolveFfmpegPaths();
+ffmpeg.setFfmpegPath(paths.ffmpeg);
+ffmpeg.setFfprobePath(paths.ffprobe);
 
 // Maximum number of files probed/fingerprinted simultaneously.
 // Keeps file-descriptor and CPU usage bounded on large libraries.

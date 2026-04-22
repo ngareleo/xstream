@@ -8,9 +8,17 @@ export interface AppConfig {
   dbPath: string;
   /** Milliseconds between automatic library rescans. */
   scanIntervalMs: number;
+  /** "auto" probes HW acceleration at startup and exits on failure; "off"
+   *  forces software encode (benchmarking / hardware-less environments).
+   *  Set via HW_ACCEL env var. */
+  hardwareAcceleration: "auto" | "off";
 }
 
 const root = resolve(import.meta.dir, "../..");
+
+function readHwAccel(): "auto" | "off" {
+  return process.env.HW_ACCEL === "off" ? "off" : "auto";
+}
 
 const dev: AppConfig = {
   port: 3001,
@@ -18,6 +26,7 @@ const dev: AppConfig = {
   // Allow DB_PATH override so integration tests can use a temp database
   dbPath: process.env.DB_PATH ?? resolve(root, "tmp/xstream.db"),
   scanIntervalMs: 30_000,
+  hardwareAcceleration: readHwAccel(),
 };
 
 const prod: AppConfig = {
@@ -28,6 +37,7 @@ const prod: AppConfig = {
     const raw = Number(process.env.SCAN_INTERVAL_MS ?? 30_000);
     return Number.isFinite(raw) && raw > 0 ? raw : 30_000;
   })(),
+  hardwareAcceleration: readHwAccel(),
 };
 
 export const config: AppConfig = process.env.NODE_ENV === "production" ? prod : dev;

@@ -16,7 +16,7 @@ xstream is a high-resolution web streaming application. The server transcodes vi
 | HTTP + WebSocket server | `Bun.serve()` + `graphql-yoga` + `graphql-ws` |
 | Database | SQLite via `bun:sqlite` — **raw SQL only, no ORM** |
 | GraphQL server | `graphql-yoga` + `@graphql-tools/schema` |
-| Video processing | `fluent-ffmpeg` + `@ffmpeg-installer/ffmpeg` |
+| Video processing | `fluent-ffmpeg` + bundled jellyfin-ffmpeg in `vendor/ffmpeg/<platform>/` (downloaded via `bun run setup-ffmpeg`). HW-accelerated via VAAPI on Linux; macOS/Windows paths stubbed in `HwAccelConfig`. |
 | Client bundler | Rsbuild |
 | UI framework | React 18 + React Router v6 |
 | UI styling | `@griffel/react` (atomic CSS-in-JS) |
@@ -252,6 +252,16 @@ Run `/otel-logs` after any playback session to log into Seq and confirm server t
 
 ### Change resolution profiles
 Edit `RESOLUTION_PROFILES` in `server/src/config.ts` and the `Resolution` enum in `server/src/types.ts`. Also update the `GQL_TO_RESOLUTION` / `RESOLUTION_TO_GQL` maps in `server/src/graphql/mappers.ts` and the schema enum in `schema.ts`.
+
+### Add a hardware-accel path for a new platform/encoder
+
+The server decides at startup which ffmpeg encoder backend to use via the `HwAccelConfig` tagged union in `server/src/services/hwAccel.ts`. Today only the `vaapi` variant is fully implemented; adding macOS (VideoToolbox) or Windows (QSV/NVENC/AMF) involves two edits and one test:
+
+1. **Implement the probe** — add a branch in `detectHwAccel` that runs a short ffmpeg command testing the target encoder (matching the existing VAAPI probe pattern). On success return the matching `HwAccelConfig` variant; on failure call `fatal(...)` with a clear remediation message.
+2. **Implement the ffmpeg flags** — add a `case "<kind>":` to the `switch` in `FFmpegFile.applyOutputOptions` (`server/src/services/ffmpegFile.ts`). Model it on the `vaapi` case: pre-input `.inputOptions([...])` for device/hwaccel init, the HW-aware filter chain (`scale_qsv`, `scale_vt`, etc.), then `.videoCodec("h264_<kind>")` and the encoder's quality/bitrate args.
+3. **Verify** — run `bun run dev`, observe the startup log selects the new backend, and that `transcode.job` spans in Seq carry `hwaccel: "<kind>"`. A VAAPI session emits `transcode_progress` events at ≥60 fps for 4K H.264; the new backend should hit comparable numbers.
+
+Adding a kind does **not** require touching the chunker, the per-job software fallback, or the telemetry code — those are driven by the config union and work for every variant automatically. The `software` variant stays as the deliberate benchmarking / HW-failure-retry path; never route auto-detect failures there.
 
 ### Add a new client component with data
 1. Create `client/src/components/<kebab-case-name>/ComponentName.tsx` — the directory name is the kebab-case of the component name (e.g. `VideoCard` → `video-card/`)
@@ -832,12 +842,15 @@ Persist `streamingLogsOpen` to `localStorage` inside `DevToolsContext`. On mount
 
 The Bun/JS server is a **prototype** used to validate the architecture quickly. Once the design is proven, the server will be rewritten in Rust for performance gains (critical at 4K bitrates). The React/Relay client is intended to remain **completely untouched** across this rewrite.
 
+**Packaging target:** the Rust server + React client ship together as a **Tauri desktop app** for Windows, macOS, and Linux. This means every runtime dependency must be *bundleable with the binary* — no `apt install`, `brew install`, or system-package requirements. Infra decisions today should honour this constraint so the port is a straight translation, not a redesign.
+
 GraphQL and the binary stream endpoint are the stable contracts between server and client. When porting to Rust:
 
 - The **GraphQL schema SDL** must be identical — same types, field names, enum values, and nullability
 - **Global ID encoding** must match: `base64("TypeName:localId")` — Relay's cache depends on this
 - **`/stream/:jobId` binary framing** must match: 4-byte big-endian uint32 length prefix + raw fMP4 bytes, init segment always first — documented in `docs/Streaming Protocol.md`
 - **WebSocket subscriptions** must use the `graphql-ws` subprotocol (not the legacy `subscriptions-transport-ws`)
+- **ffmpeg stays as a bundled subprocess** — `vendor/ffmpeg/<platform>/ffmpeg` (jellyfin-ffmpeg portable builds) is resolved at startup in `server/src/services/ffmpegPath.ts`. The Rust port does the same per-platform resolution + Tauri resource bundling; the HW-accel tagged union in `hwAccel.ts` ports directly. Linking libav* in-process is not worth the complexity at chunk cadence.
 
 Do not couple the client to anything server-implementation-specific. All client↔server communication must go through the GraphQL endpoint or the `/stream/` binary endpoint.
 
