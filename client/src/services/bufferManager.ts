@@ -127,7 +127,17 @@ export class BufferManager {
             // Drive back-pressure checks as the video plays forward, so a paused
             // stream gets resumed even when no new segments are being appended.
             this.videoEl.addEventListener("timeupdate", this.handleTimeUpdate);
-            log.info(`MSE ready — sourceBuffer added (${mimeType})`, { mime_type: mimeType });
+            // Log the actual SourceBuffer mode the UA accepted, not the value we
+            // tried to set — Chromium silently keeps "sequence" if it didn't
+            // honour the assignment (rare but possible on some codec configs).
+            // A trace where this says "sequence" while source has "segments"
+            // means a stale client bundle (HMR miss / cached SW / unrefreshed
+            // tab) — see trace 963696a2… for the symptom (chunk 2 stacked on
+            // chunk 1, playhead skipped to chunk 3).
+            log.info(`MSE ready — sourceBuffer added (${mimeType})`, {
+              mime_type: mimeType,
+              source_buffer_mode: this.sourceBuffer.mode,
+            });
             resolve();
           } catch (err) {
             log.error("addSourceBuffer failed", { message: (err as Error).message });
@@ -460,6 +470,7 @@ export class BufferManager {
             }
             log.info(`Background MSE ready — sourceBuffer added (${mimeType})`, {
               mime_type: mimeType,
+              source_buffer_mode: this.sourceBuffer.mode,
             });
             resolve(this.objectUrl as string);
           } catch (err) {
