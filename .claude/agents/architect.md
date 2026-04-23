@@ -153,6 +153,21 @@ Driver requirement: jellyfin-ffmpeg + a VAAPI driver with `tonemap_vaapi` suppor
 
 When touching the VAAPI branch of `applyOutputOptions`, test with an HDR 4K source (e.g. Furiosa 2160p, Mad Max Fury Road 4K) — SDR-only smoke tests miss this.
 
+## Tests must leave the host as they found it
+
+Tests can write freely to their per-PID temp dir during execution, but **nothing they write may persist past worker exit, and they may never write into `tmp/xstream.db` or `tmp/segments/`** (the dev runtime paths).
+
+Wiring:
+- `server/src/test/setup.ts` (Bun test preload) sets `process.env.DB_PATH` and `process.env.SEGMENT_DIR` to `/tmp/xstream-test-<pid>/...` so all DB + segment writes route there.
+- The same preload, **before** creating the current PID's dir, scans `/tmp` for any `xstream-test-<pid>` whose PID is no longer alive (`process.kill(pid, 0)` throws ESRCH) and rm-rfs them. This is the cleanup hook — bun:test workers exit via a path that bypasses both `process.on("exit")` and `"beforeExit"`, so cleanup runs at the *next* preload, not at this exit. Net effect: no permanent residue, and SIGKILL is no worse than a clean exit.
+
+Constraints for new tests:
+- Read `process.env.DB_PATH` / `process.env.SEGMENT_DIR` if you need the path; never hardcode.
+- If your test spawns a real subprocess (ffmpeg, etc.), make sure it writes under `SEGMENT_DIR` — the chunker already does this via `config.segmentDir` (which honours the env var in both dev and prod branches as of `feat/chunk-handover-span`).
+- If your test creates rows in tables outside `videos`/`libraries`/`transcode_jobs` (the per-PID DB covers all of these), the same per-PID isolation still applies — those rows live in the test DB and die with it.
+
+Existing residue in `tmp/xstream.db` (ghost rows like `gql-lib1`, `libtest`, `lib1..4`) predates the per-PID isolation and was wiped manually as part of this policy's rollout — see commit history.
+
 ## Encoder edge-case test policy
 
 **Every encoder edge case we discover gets a fixture and assertion in `server/src/services/__tests__/chunker.encode.test.ts`.** This session's pattern of "discover failure in trace → fix → ship → forget → regress" stops here. The test costs nothing on hosts without `XSTREAM_TEST_MEDIA_DIR` set (it self-skips), so the bar for adding cases is low.
