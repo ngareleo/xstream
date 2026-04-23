@@ -167,7 +167,7 @@ after each appendBuffer:
   if bufferedAhead < forwardResume  → StreamingService.resume()
 ```
 
-`forwardTargetS` defaults to 60s and `forwardResumeS` to 20s — both live on `BufferConfig`, passed to `BufferManager`'s constructor. The 40-second hysteresis gap is deliberately wide so each pause/drain cycle lasts ~40s of real playback and cycles don't chain back-to-back at steady state; one pause → resume cycle produces one `buffer.halt` telemetry span (see `docs/02-Observability.md`).
+`forwardTargetS` defaults to 60s and `forwardResumeS` to 20s — both live on `BufferConfig`, passed to `BufferManager`'s constructor. The 40-second hysteresis gap is deliberately wide so each pause/drain cycle lasts ~40s of real playback and cycles don't chain back-to-back at steady state; one pause → resume cycle produces one `buffer.halt` telemetry span (see `../Observability/`).
 
 Back buffer eviction keeps at most 10 seconds behind `currentTime`:
 

@@ -106,23 +106,22 @@ xstream/
     └── segments/          # ffmpeg segment cache
 ```
 
-See [`docs/00-Architecture.md`](docs/00-Architecture.md) for a full system overview.
+See [`docs/architecture/00-System-Overview.md`](docs/architecture/00-System-Overview.md) for a full system overview.
 
 ---
 
 ## Documentation
 
-Docs are namespaced by domain under `docs/` with a `NN-Topic-Name.md` convention (`NN` is a two-digit ordering prefix inside its directory).
+Docs are organised as a nested knowledge base under `docs/` — super-domains (`architecture`, `client`, `server`, `design`, `product`, `code-style`) each contain concept folders with `NN-Topic-Name.md` files and a `README.md` per folder acting as a TOC. Start at [`docs/README.md`](docs/README.md).
 
-| Doc | Contents |
+| Area | Contents |
 |---|---|
-| [`docs/00-Architecture.md`](docs/00-Architecture.md) | System overview, component map, data flow |
-| [`docs/01-Streaming-Protocol.md`](docs/01-Streaming-Protocol.md) | Binary framing spec, MSE constraints, seeking |
-| [`docs/02-Observability.md`](docs/02-Observability.md) | OTel span tree, log policy, Seq/Axiom setup |
-| [`docs/client/`](docs/client/) | Relay, feature flags, debugging playbooks |
-| [`docs/server/`](docs/server/) | Config, GraphQL schema, DB schema |
-| [`docs/design/`](docs/design/) | UI design spec |
-| [`docs/product/`](docs/product/) | Product spec |
+| [`docs/architecture/`](docs/architecture/README.md) | Streaming protocol, playback scenarios, Relay contract, observability, startup, deployment |
+| [`docs/client/`](docs/client/README.md) | Client-only topics: feature flags, debugging playbooks |
+| [`docs/server/`](docs/server/README.md) | Server-only topics: config, GraphQL schema, DB schema, hardware acceleration |
+| [`docs/code-style/`](docs/code-style/README.md) | Invariants, naming, conventions, anti-patterns |
+| [`docs/design/`](docs/design/README.md) | UI design spec |
+| [`docs/product/`](docs/product/README.md) | Product spec, customers, roadmap |
 
 ---
 
@@ -162,7 +161,7 @@ rm .seq-credentials
 bun run seq:start          # generates a new password and fresh container
 ```
 
-See [`docs/02-Observability.md`](docs/02-Observability.md) for the full telemetry architecture and instructions for switching to a production backend (Axiom, Grafana Cloud, etc.).
+See [`docs/architecture/Observability/`](docs/architecture/Observability/README.md) for the full telemetry architecture and instructions for switching to a production backend (Axiom, Grafana Cloud, etc.).
 
 ---
 

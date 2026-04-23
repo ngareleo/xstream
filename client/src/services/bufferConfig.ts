@@ -17,7 +17,7 @@ export interface BufferConfig {
    *  ~70s, which is ~133 MB at 4K (15.2 Mbps). Each pause→resume cycle lasts
    *  approximately `forwardTargetS - forwardResumeS` seconds of playback,
    *  because playback drains at 1× while the stream is halted.
-   *  See `docs/01-Streaming-Protocol.md → Hysteresis: tuning the gap`. */
+   *  See `docs/architecture/Streaming/00-Protocol.md → Hysteresis: tuning the gap`. */
   forwardResumeS: number;
   /** Keep at most this many seconds of media behind the playhead in the
    *  SourceBuffer; everything older is evicted on each append to cap memory. */
