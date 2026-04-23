@@ -241,7 +241,23 @@ export class BufferManager {
           if ((err as DOMException).name === "QuotaExceededError" && attempt < 3) {
             continue; // retry after eviction
           }
-          log.error("appendBuffer error", { message: (err as Error).message });
+          // Capture state-at-error so the next failure trace tells us which
+          // InvalidStateError variant fired (closed MediaSource, removed
+          // SourceBuffer, in-flight `updating` race, …) without a code
+          // change. See trace ac249ef0… — 90 identical errors over 36 s with
+          // only `message` made the root cause indistinguishable.
+          const domErr = err as DOMException;
+          log.error("appendBuffer error", {
+            message: domErr.message,
+            error_name: domErr.name,
+            error_code: domErr.code,
+            media_source_ready_state: this.mediaSource?.readyState ?? "null",
+            source_buffer_updating: sb.updating,
+            source_buffer_present: this.sourceBuffer !== null,
+            data_bytes: data.byteLength,
+            segments_appended: this.segmentsAppended,
+            attempt,
+          });
           fatalError = true;
           break;
         }
