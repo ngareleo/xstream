@@ -56,25 +56,46 @@ export interface ChunkOpts {
   onFirstMediaSegmentArrived?: (atMs: DOMHighResTimeStamp) => void;
 }
 
+interface QueuedSegment {
+  data: ArrayBuffer;
+  isInit: boolean;
+}
+
 interface Slot {
   jobId: string;
   chunkStartS: number;
   isFirstChunk: boolean;
   svc: StreamingService;
   span: Span;
+  chunkCtx: ReturnType<typeof trace.setSpan>;
   opts: ChunkOpts;
   totalMediaBytes: number;
   segmentCount: number;
   ended: boolean;
   firstMediaSegmentSeen: boolean;
   /** True while the slot is the lookahead. Cleared on promotion. While true,
-   *  natural stream completion is captured in `pendingOutcome` rather than
-   *  fired to the caller — we must not call markStreamDone or chain to the
-   *  next chunk while the foreground is still actively appending. */
+   *  segments are queued in `queuedSegments` rather than appended directly,
+   *  and natural stream completion is captured in `pendingOutcome` instead
+   *  of dispatched. The reason: each chunk's init segment carries its own
+   *  `elst` (edit list), and appending the lookahead's init while the
+   *  foreground is still streaming would re-parent the foreground's
+   *  in-flight segments against the wrong edit list — they'd land in the
+   *  SourceBuffer but Chrome would silently fragment them (decode only the
+   *  keyframes). See trace a96bded1… for the failure shape. */
   isLookahead: boolean;
-  /** Set when `svc` completed naturally while the slot was still a lookahead.
-   *  Consumed by `promoteLookahead` to fire the deferred callback. */
-  pendingOutcome: StreamOutcome | null;
+  /** Lookahead-mode buffer. Network segments accumulate here; on promotion
+   *  the drain runs in arrival order (init first, then media), preserving
+   *  the chunk's MSE coded-frame-group boundaries. */
+  queuedSegments: QueuedSegment[];
+  /** Set by `cancel(reason)`. Distinguishes hard teardown ("don't drain")
+   *  from natural span end ("drain has completed and dispatch is fine"). */
+  cancelled: boolean;
+  /** True when `svc` completed naturally while the slot was still a
+   *  lookahead. The actual outcome ("completed" vs "no_real_content") can't
+   *  be decided yet because `totalMediaBytes` is only incremented during
+   *  drain (the queueing path doesn't process bytes); decision is deferred
+   *  to drainAndDispatch which reads the post-drain counter. */
+  pendingCompletion: boolean;
   endSpan: () => void;
   cancel: (reason: string) => void;
 }
@@ -113,8 +134,11 @@ export class ChunkPipeline {
 
   /** Promotes the lookahead slot to foreground (called by PlaybackController
    *  when the foreground stream's onStreamEnded fires). Returns the new
-   *  foreground's chunkStartS so the controller can update its chunkEnd. */
-  promoteLookahead(): { chunkStartS: number } {
+   *  foreground's chunkStartS so the controller can update its chunkEnd
+   *  synchronously, and a `drain` promise for callers that need to wait
+   *  until the queued segments are appended + any deferred outcome is
+   *  dispatched. Production callers can ignore `drain`; tests await it. */
+  promoteLookahead(): { chunkStartS: number; drain: Promise<void> } {
     if (!this.lookahead) {
       throw new Error("ChunkPipeline.promoteLookahead: no lookahead to promote");
     }
@@ -122,13 +146,38 @@ export class ChunkPipeline {
     this.foreground = slot;
     this.lookahead = null;
     slot.isLookahead = false;
-    // If the lookahead's stream already completed before promotion, fire its
-    // deferred onStreamEnded now so the caller can chain to the next chunk.
-    if (slot.pendingOutcome !== null) {
-      this.dispatchOutcome(slot, slot.pendingOutcome);
-      slot.pendingOutcome = null;
+    // Drain the queued init+segments and, only once the SourceBuffer reflects
+    // them, dispatch any deferred outcome. Chaining to the next chunk before
+    // the drain finishes would race the buffer-state check that
+    // PlaybackController.handleChunkEnded does.
+    const drain = this.drainAndDispatch(slot);
+    return { chunkStartS: slot.chunkStartS, drain };
+  }
+
+  /** Drains a slot's queued lookahead segments through the same per-segment
+   *  pipeline that the live network path uses, then dispatches any
+   *  outcome captured while the slot was still a lookahead. Stops if the
+   *  slot is cancelled mid-drain. */
+  private async drainAndDispatch(slot: Slot): Promise<void> {
+    const queue = slot.queuedSegments;
+    slot.queuedSegments = [];
+    for (const seg of queue) {
+      // `cancelled` (not `ended`) is the right signal: `ended` flips on
+      // natural span end too, which is exactly when drain SHOULD run.
+      if (slot.cancelled) return;
+      await this.processSegment(slot, seg.data, seg.isInit);
     }
-    return { chunkStartS: slot.chunkStartS };
+    if (slot.pendingCompletion) {
+      slot.pendingCompletion = false;
+      // Decide the outcome NOW with the post-drain byte counter — deferring
+      // to here is what lets the lookahead-queueing path produce the same
+      // outcome as the live foreground path would for the same content.
+      const hasRealContent = slot.totalMediaBytes >= MIN_REAL_CHUNK_BYTES;
+      if (!hasRealContent) {
+        slot.span.addEvent("chunk_no_real_content");
+      }
+      this.dispatchOutcome(slot, hasRealContent ? "completed" : "no_real_content");
+    }
   }
 
   /** Cancels both slots. Used on teardown, seek, resolution-switch. */
@@ -197,13 +246,16 @@ export class ChunkPipeline {
       isFirstChunk: opts.isFirstChunk,
       svc: new StreamingService(),
       span,
+      chunkCtx,
       opts,
       totalMediaBytes: 0,
       segmentCount: 0,
       ended: false,
       firstMediaSegmentSeen: false,
       isLookahead,
-      pendingOutcome: null,
+      queuedSegments: [],
+      cancelled: false,
+      pendingCompletion: false,
       endSpan: (): void => {
         if (slot.ended) return;
         slot.ended = true;
@@ -213,7 +265,12 @@ export class ChunkPipeline {
       },
       cancel: (reason: string): void => {
         if (slot.ended) return;
+        slot.cancelled = true;
         span.addEvent(`chunk_cancelled_by_${reason}`);
+        // Drop any queued lookahead segments — caller is tearing down or
+        // replacing this slot, so appending them would just race the new
+        // slot's appends.
+        slot.queuedSegments = [];
         slot.endSpan();
         slot.svc.cancel();
       },
@@ -223,76 +280,14 @@ export class ChunkPipeline {
       opts.jobId,
       0,
       async (segData, isInit) => {
-        // Continuation chunks MUST re-append their init segment. Each chunk's
-        // ffmpeg encode emits its own `elst` (edit list) carrying the
-        // chunk's source-time lead-in offset; without re-appending the init,
-        // chunk N>0's media segments are parsed against chunk 0's edit list
-        // and Chrome silently drops them — they land in the SourceBuffer
-        // (bytes counter rises) but never extend the buffered range past
-        // chunk 0's PTS. Trace 8281b0fb… confirmed this empirically: chunks
-        // 2-3 streamed in cleanly with TFDT 300+/600+ but `sb.buffered`
-        // stayed capped at 300.04, so the playhead skipped past them.
-        // SPS/PPS are identical across our chunk encodes (only `elst`
-        // differs), so re-init causes at most a one-frame decoder hiccup,
-        // not a stall.
-
-        if (!isInit) {
-          slot.totalMediaBytes += segData.byteLength;
-          slot.segmentCount += 1;
+        // Lookahead slots queue segments instead of appending — see
+        // `Slot.isLookahead` doc for the elst/init-clash rationale. The
+        // queue is drained on promotion via `drainAndDispatch`.
+        if (slot.isLookahead) {
+          slot.queuedSegments.push({ data: segData, isInit });
+          return;
         }
-
-        // Measures arrival-to-append latency for the first media segment of a
-        // continuation chunk — the chunk-handover seam where stalls live.
-        // Chunk 0 is excluded because its first-segment timing is dominated
-        // by the MSE init handshake, not the handover.
-        let firstAppendSpan: Span | null = null;
-        if (!isInit && !opts.isFirstChunk && !slot.firstMediaSegmentSeen) {
-          slot.firstMediaSegmentSeen = true;
-          const arrivalAtMs = performance.now();
-          opts.onFirstMediaSegmentArrived?.(arrivalAtMs);
-          const arrivalCurrentTime = this.videoEl.currentTime;
-          const arrivalBufferedAhead = this.buffer.getBufferedAheadSeconds(arrivalCurrentTime) ?? 0;
-          firstAppendSpan = this.tracer.startSpan(
-            "chunk.first_segment_append",
-            {
-              attributes: {
-                "chunk.job_id": opts.jobId,
-                "chunk.number": Math.floor(opts.chunkStartS / CHUNK_DURATION_S),
-                "chunk.start_s": opts.chunkStartS,
-                "chunk.segment_bytes": segData.byteLength,
-                "playback.current_time_s_at_arrival": parseFloat(arrivalCurrentTime.toFixed(2)),
-                "playback.buffered_ahead_s_at_arrival": parseFloat(arrivalBufferedAhead.toFixed(2)),
-              },
-            },
-            chunkCtx
-          );
-        }
-
-        try {
-          await this.buffer.appendSegment(segData);
-          firstAppendSpan?.end();
-          if (isInit && opts.isFirstChunk) {
-            opts.onFirstChunkInit?.();
-          }
-        } catch (err) {
-          if (firstAppendSpan) {
-            firstAppendSpan.setStatus({
-              code: SpanStatusCode.ERROR,
-              message: (err as Error).message,
-            });
-            firstAppendSpan.end();
-          }
-          this.log.error("Buffer append error", { message: (err as Error).message });
-          if (!slot.ended) {
-            span.addEvent("chunk_error", { message: (err as Error).message });
-            span.setStatus({
-              code: SpanStatusCode.ERROR,
-              message: (err as Error).message,
-            });
-          }
-          slot.endSpan();
-          opts.onError(err as Error);
-        }
+        await this.processSegment(slot, segData, isInit);
       },
       (err) => {
         if (!slot.ended) {
@@ -303,21 +298,22 @@ export class ChunkPipeline {
         opts.onError(err);
       },
       () => {
-        // Chunks with < MIN_REAL_CHUNK_BYTES of media are placeholder output
-        // from ffmpeg when the seek position is past encoded content.
+        slot.endSpan();
+        // If still a lookahead, defer EVERYTHING until promotion-drain:
+        // the outcome decision (which depends on totalMediaBytes — only
+        // updated by processSegment, which the queueing path skips), the
+        // markStreamDone call (must not fire while foreground is still
+        // appending), and onStreamEnded (must not chain to next chunk
+        // until current chunk's data is in the SourceBuffer).
+        if (slot.isLookahead) {
+          slot.pendingCompletion = true;
+          return;
+        }
+        // Foreground path: byte counter is accurate, decide outcome inline.
         const hasRealContent = slot.totalMediaBytes >= MIN_REAL_CHUNK_BYTES;
         const outcome: StreamOutcome = hasRealContent ? "completed" : "no_real_content";
         if (!hasRealContent) {
           span.addEvent("chunk_no_real_content");
-        }
-        slot.endSpan();
-        // If still a lookahead, defer the outcome until promotion. The
-        // pipeline's invariant is that markStreamDone (the side-effect of
-        // no_real_content) must NOT fire while the foreground is still
-        // appending — would call MediaSource.endOfStream() and break MSE.
-        if (slot.isLookahead) {
-          slot.pendingOutcome = outcome;
-          return;
         }
         this.dispatchOutcome(slot, outcome);
       },
@@ -325,5 +321,72 @@ export class ChunkPipeline {
     );
 
     return slot;
+  }
+
+  /** Single per-segment append path — used both by the live network handler
+   *  (foreground slot) and by the queue drain (post-promotion). Owns the
+   *  byte/segment counters, the chunk.first_segment_append span, and the
+   *  error path. */
+  private async processSegment(slot: Slot, segData: ArrayBuffer, isInit: boolean): Promise<void> {
+    if (!isInit) {
+      slot.totalMediaBytes += segData.byteLength;
+      slot.segmentCount += 1;
+    }
+
+    // Measures arrival-to-append latency for the first media segment of a
+    // continuation chunk — the chunk-handover seam where stalls live.
+    // Chunk 0 is excluded because its first-segment timing is dominated by
+    // the MSE init handshake, not the handover. For drained lookahead
+    // segments, "arrival" is the moment the drain reaches the segment, not
+    // the moment the network delivered it — that captures the visible
+    // append latency a user would experience.
+    let firstAppendSpan: Span | null = null;
+    if (!isInit && !slot.opts.isFirstChunk && !slot.firstMediaSegmentSeen) {
+      slot.firstMediaSegmentSeen = true;
+      const arrivalAtMs = performance.now();
+      slot.opts.onFirstMediaSegmentArrived?.(arrivalAtMs);
+      const arrivalCurrentTime = this.videoEl.currentTime;
+      const arrivalBufferedAhead = this.buffer.getBufferedAheadSeconds(arrivalCurrentTime) ?? 0;
+      firstAppendSpan = this.tracer.startSpan(
+        "chunk.first_segment_append",
+        {
+          attributes: {
+            "chunk.job_id": slot.opts.jobId,
+            "chunk.number": Math.floor(slot.opts.chunkStartS / CHUNK_DURATION_S),
+            "chunk.start_s": slot.opts.chunkStartS,
+            "chunk.segment_bytes": segData.byteLength,
+            "playback.current_time_s_at_arrival": parseFloat(arrivalCurrentTime.toFixed(2)),
+            "playback.buffered_ahead_s_at_arrival": parseFloat(arrivalBufferedAhead.toFixed(2)),
+          },
+        },
+        slot.chunkCtx
+      );
+    }
+
+    try {
+      await this.buffer.appendSegment(segData);
+      firstAppendSpan?.end();
+      if (isInit && slot.opts.isFirstChunk) {
+        slot.opts.onFirstChunkInit?.();
+      }
+    } catch (err) {
+      if (firstAppendSpan) {
+        firstAppendSpan.setStatus({
+          code: SpanStatusCode.ERROR,
+          message: (err as Error).message,
+        });
+        firstAppendSpan.end();
+      }
+      this.log.error("Buffer append error", { message: (err as Error).message });
+      if (!slot.ended) {
+        slot.span.addEvent("chunk_error", { message: (err as Error).message });
+        slot.span.setStatus({
+          code: SpanStatusCode.ERROR,
+          message: (err as Error).message,
+        });
+      }
+      slot.endSpan();
+      slot.opts.onError(err as Error);
+    }
   }
 }

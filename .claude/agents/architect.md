@@ -69,6 +69,20 @@ File pointers: `chunkPipeline.ts` (slot management), `playbackController.ts` (or
 
 **Per-chunk init segments are required** — `ChunkPipeline.openSlot` appends every chunk's init.mp4 to the SourceBuffer, including continuations (chunks N>0). Each chunk's ffmpeg encode emits its own `elst` (edit list) box carrying that chunk's source-time lead-in offset; without re-appending the init, chunk N's media segments are parsed against chunk 0's edit list and Chrome silently drops them — they land in the SourceBuffer (bytes counter rises) but never extend `sb.buffered` past chunk 0's PTS. Trace `8281b0fb…` confirmed this empirically (chunks 2-3 streamed cleanly with TFDT 300+/600+ but `sb.buffered` stayed capped at 300.04, playhead skipped past them). SPS/PPS are identical across our chunk encodes (only `elst` differs), so re-init causes at most a one-frame decoder hiccup, not a stall — the earlier "no continuation init" defensive filter was wrong.
 
+**Lookahead buffers segments locally; appends only on promotion.** Naively appending the lookahead's init while the foreground is still streaming re-parents the foreground's in-flight segments against the wrong chunk's edit list — the SourceBuffer accepts the bytes but Chrome can only decode the keyframes (one per ~2s segment) and emits a cascade of micro-fragments instead of a contiguous range. Trace `a96bded1…` showed the failure shape (chunk 1's range stops at PTS 232 when chunk 2's init lands; chunk 2's range fragments after PTS 362 when chunk 3's init lands).
+
+The pipeline:
+- While `slot.isLookahead`, the network's `onSegment` callback pushes `{data, isInit}` into `slot.queuedSegments` and returns immediately. Nothing reaches the SourceBuffer.
+- The lookahead's stream completion is captured in `slot.pendingOutcome` (same as before), but **not** dispatched yet.
+- On `promoteLookahead`, the slot becomes foreground synchronously (so `PlaybackController` sees the new `chunkStartS` immediately) and `drainAndDispatch` runs in the background: drain `queuedSegments` through the same `processSegment` path the live network uses, then dispatch the deferred outcome.
+- If the slot is cancelled mid-drain (`slot.cancelled === true` — separate from the natural `slot.ended` set by span end), the drain stops and the queue is dropped.
+
+What this preserves: lookahead's network connection still opens at prefetch time (orphan-timer satisfied), bytes still download ahead of when they're needed (drain is fast — bytes are already in JS memory), and chunk N's init only replaces chunk N-1's init at the chunk-boundary moment when no other chunk is mid-append.
+
+What this costs: lookahead holds ~60–90 s of media in JS memory (~100–300 MB at 4K) until promotion. Bounded; freed on promotion or cancel.
+
+`firstAppendSpan` ("chunk.first_segment_append") for promoted lookahead chunks fires at drain time, not network-arrival time — its latency reflects the visible append delay, which is what the user actually experiences.
+
 ## Playback ticker (single RAF)
 
 `client/src/services/playbackTicker.ts` is the one RAF tick that drives every per-frame poll the playback subsystem needs — startup-buffer check, prefetch trigger, background-buffer ready check during a resolution swap, and `StallTracker`'s spinner debounce. Replaces what was four scattered RAF loops + a `setTimeout`.

@@ -299,25 +299,39 @@ describe("ChunkPipeline", () => {
     expect(() => pipeline.promoteLookahead()).toThrow();
   });
 
-  it("promoteLookahead clears the lookahead slot and returns its chunkStartS", () => {
+  it("promoteLookahead clears the lookahead slot and returns its chunkStartS", async () => {
     const buffer = makeFakeBuffer();
     const pipeline = makePipeline(buffer);
     pipeline.startForeground(baseOpts({ isFirstChunk: true }));
     pipeline.openLookahead(baseOpts({ jobId: "la", chunkStartS: 300 }));
 
     const result = pipeline.promoteLookahead();
-    expect(result).toEqual({ chunkStartS: 300 });
+    expect(result.chunkStartS).toBe(300);
+    expect(result.drain).toBeInstanceOf(Promise);
     expect(pipeline.hasLookahead()).toBe(false);
+    await result.drain; // empty drain on no queued segments
   });
 
-  it("init segment is SKIPPED for non-first chunks (no appendSegment call)", async () => {
+  it("init segment is QUEUED for lookahead, then appended on promotion-drain", async () => {
+    // Each chunk's init carries its own elst; the lookahead defers it (and
+    // every segment) until promotion so the foreground's in-flight segments
+    // never get re-parented against the wrong edit list. See the
+    // architect.md "Lookahead buffers segments locally" section.
     const buffer = makeFakeBuffer();
     const pipeline = makePipeline(buffer);
+    pipeline.startForeground(baseOpts({ isFirstChunk: true }));
     pipeline.openLookahead(baseOpts({ jobId: "la", chunkStartS: 300, isFirstChunk: false }));
 
-    const slot = createdServices[0];
-    await slot.deliverInit();
-    expect(buffer.appendCalls).toEqual([]); // init suppressed
+    const lookaheadSlot = createdServices[1];
+    const fgAppendsBefore = buffer.appendCalls.length;
+    await lookaheadSlot.deliverInit();
+    // Pre-promotion: no new appends from the lookahead's init
+    expect(buffer.appendCalls.length).toBe(fgAppendsBefore);
+
+    // Promotion drains the queued init into the SourceBuffer.
+    const { drain } = pipeline.promoteLookahead();
+    await drain;
+    expect(buffer.appendCalls.length).toBe(fgAppendsBefore + 1);
   });
 
   it("init segment is APPENDED for the first chunk", async () => {
@@ -343,10 +357,15 @@ describe("ChunkPipeline", () => {
     expect(onFirstChunkInit).toHaveBeenCalledTimes(1);
   });
 
-  it("onFirstMediaSegmentArrived fires on the first media segment of a continuation chunk", async () => {
+  it("onFirstMediaSegmentArrived fires on the first media segment of a continuation chunk (after promotion-drain)", async () => {
+    // Lookahead defers ALL appends + side-effects until promotion. The
+    // first-media callback fires when the first media segment is actually
+    // appended to the SourceBuffer, which now means during the drain.
     const buffer = makeFakeBuffer();
     const pipeline = makePipeline(buffer);
     const onFirstMediaSegmentArrived = vi.fn();
+    // Need a foreground slot so openLookahead doesn't replace it as foreground.
+    pipeline.startForeground(baseOpts({ isFirstChunk: true }));
     pipeline.openLookahead(
       baseOpts({
         jobId: "la",
@@ -356,14 +375,18 @@ describe("ChunkPipeline", () => {
       })
     );
 
-    const slot = createdServices[0];
-    await slot.deliverInit(); // suppressed
+    const lookaheadSlot = createdServices[1];
+    await lookaheadSlot.deliverInit(); // queued, no append yet
+    await lookaheadSlot.deliverMedia(); // queued
+    await lookaheadSlot.deliverMedia(); // queued
+
+    // Still nothing should have fired — we're a lookahead.
     expect(onFirstMediaSegmentArrived).not.toHaveBeenCalled();
 
-    await slot.deliverMedia(); // first media → fires
-    expect(onFirstMediaSegmentArrived).toHaveBeenCalledTimes(1);
+    const { drain } = pipeline.promoteLookahead();
+    await drain;
 
-    await slot.deliverMedia(); // second media → does NOT fire again
+    // After drain: first media seg fires the callback exactly once.
     expect(onFirstMediaSegmentArrived).toHaveBeenCalledTimes(1);
   });
 
@@ -420,12 +443,15 @@ describe("ChunkPipeline", () => {
     // Deferred — should NOT fire yet
     expect(lookaheadOnStreamEnded).not.toHaveBeenCalled();
 
-    // Now promote — deferred outcome fires
-    pipeline.promoteLookahead();
+    // Now promote — drain runs first, THEN the deferred outcome fires
+    // (chaining to the next chunk before the SourceBuffer reflects the
+    // queued segments would race PlaybackController.handleChunkEnded).
+    const { drain } = pipeline.promoteLookahead();
+    await drain;
     expect(lookaheadOnStreamEnded).toHaveBeenCalledWith("completed");
   });
 
-  it("LOOKAHEAD no_real_content does NOT call markStreamDone until promotion", () => {
+  it("LOOKAHEAD no_real_content does NOT call markStreamDone until promotion", async () => {
     const buffer = makeFakeBuffer();
     const pipeline = makePipeline(buffer);
     pipeline.startForeground(baseOpts({ isFirstChunk: true }));
@@ -445,8 +471,10 @@ describe("ChunkPipeline", () => {
     expect(buffer.markStreamDoneCalls).toBe(0);
     expect(lookaheadOnStreamEnded).not.toHaveBeenCalled();
 
-    // Promotion fires both
-    pipeline.promoteLookahead();
+    // Promotion drains (no segments to drain here) then fires the deferred
+    // outcome — markStreamDone + onStreamEnded both fire after `drain`.
+    const { drain } = pipeline.promoteLookahead();
+    await drain;
     expect(buffer.markStreamDoneCalls).toBe(1);
     expect(lookaheadOnStreamEnded).toHaveBeenCalledWith("no_real_content");
   });
