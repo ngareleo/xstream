@@ -305,16 +305,15 @@ export class FFmpegFile {
 
     const output = [
       `-vf ${filterChain}`,
-      // Force bt709 output color metadata. Without this, an HDR source's
-      // BT.2020 color matrix/primaries flow through into the H.264 VUI even
-      // though we're emitting 8-bit SDR. The browser then applies a
-      // BT.2020→display transform to YUV pixels that were laid down assuming
-      // bt709, and `pad_vaapi`'s `color=black` letterbox renders as chroma
-      // green. We're already transcoding to 8-bit H.264 SDR, so tagging the
-      // output as bt709 is honest.
-      `-colorspace bt709`,
-      `-color_primaries bt709`,
-      `-color_trc bt709`,
+      // NOTE: do NOT set `-colorspace bt709 -color_primaries bt709 -color_trc bt709`
+      // here. On HDR sources (with `tonemap_vaapi` upstream) those output flags
+      // make ffmpeg detect a mismatch between the surface's inherited input
+      // metadata and the tagged output, then insert an auto-scaler — libva
+      // returns -38 ("Function not implemented") and the encoder fails to
+      // open. The H.264 VUI is now correctly tagged via:
+      //   - scale_vaapi's `out_color_*` params for HDR sources (tags the
+      //     surface itself; encoder reads that into the VUI)
+      //   - input metadata pass-through for SDR sources (already bt709)
       `-profile:v high`,
       `-level:v ${profile.h264Level}`,
       `-b:v ${profile.videoBitrate}`,
