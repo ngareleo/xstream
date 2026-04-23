@@ -50,13 +50,13 @@ Start with `browser_snapshot` to find refs — don't guess selectors.
 
 ### `http://localhost:5173` — xstream client
 
-**Router state is not reset between routes with the same pattern.** Navigating `/player/:idA → /player/:idB` reuses the component — `useState` values persist. If an "ended" overlay shows on the new video or a detail pane shows previous-item data, that's the `docs/client/02-Debugging-Playbooks.md` "React state persisting" playbook (not a bug of your test).
+**Router state is not reset between routes with the same pattern.** Navigating `/player/:idA → /player/:idB` reuses the component — `useState` values persist. If an "ended" overlay shows on the new video or a detail pane shows previous-item data, that's the `docs/client/Debugging-Playbooks/00-Common-Issues.md` "React state persisting" playbook (not a bug of your test).
 
 **DEV panel resets on navigation.** The stream-log overlay toggle in `DevToolsContext` is ephemeral UI state — it resets to off on every route change that remounts the context subtree. After navigating to `/player/:id`, re-open the DEV pill (bottom-right) and re-enable **"Stream Logs ON"** before starting playback. Without this, you'll capture a playback run with no stream events visible.
 
 **Relay IDs are base64 and may contain `/`, `+`, `=`.** When constructing `/player/:videoId` URLs by hand, `encodeURIComponent(id)` first. A raw paste of an unencoded ID will break React Router's `:param` matching.
 
-**Verifying WebSocket subscriptions.** Open DevTools → Network → WS → `/graphql` → Messages. `{"type":"connection_ack"}` should appear within 1s. Status 200 (instead of 101) means the upgrade handler is broken — see `docs/client/02-Debugging-Playbooks.md` "GraphQL subscriptions not receiving events".
+**Verifying WebSocket subscriptions.** Open DevTools → Network → WS → `/graphql` → Messages. `{"type":"connection_ack"}` should appear within 1s. Status 200 (instead of 101) means the upgrade handler is broken — see `docs/client/Debugging-Playbooks/00-Common-Issues.md` "GraphQL subscriptions not receiving events".
 
 **Inspecting MSE / video state from Playwright:**
 ```js
@@ -94,7 +94,7 @@ printf 'SEQ_ADMIN_USERNAME=admin\nSEQ_ADMIN_PASSWORD=<new>\n' > .seq-credentials
 
 **Filtering by trace id.** In the Seq query bar: `TraceId = '<id>'`. Easiest way to grab an id: `browser_evaluate` against the client page to read the active session traceparent.
 
-**Finding spans.** The most useful span names (see `docs/02-Observability.md`):
+**Finding spans.** The most useful span names (see `docs/architecture/Observability/`):
 - `playback.session` — whole playback lifecycle
 - `chunk.stream` — one per chunk delivered
 - `transcode.job` — ffmpeg process lifetime; carries `hwaccel`, fps, kbps in events
@@ -112,7 +112,7 @@ For verifying an OMDb lookup result, hit the URL directly (no browser needed, `W
 When a subscription isn't delivering events:
 
 1. `browser_snapshot` the client page while the subscription should be active.
-2. `browser_network_requests` and filter for `/graphql` with status 101 — that's the WebSocket upgrade. If status is 200, the Rsbuild proxy or `Bun.serve` upgrade handler is broken (see `docs/client/02-Debugging-Playbooks.md`).
+2. `browser_network_requests` and filter for `/graphql` with status 101 — that's the WebSocket upgrade. If status is 200, the Rsbuild proxy or `Bun.serve` upgrade handler is broken (see `docs/client/Debugging-Playbooks/00-Common-Issues.md`).
 3. `browser_evaluate` the page for active subscriptions:
    ```js
    // Relay exposes __relayEnvironment in dev

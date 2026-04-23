@@ -27,7 +27,7 @@ Flags persist per-user in the server's `user_settings` key/value table, hydrate 
    ```
    The FlagsTab in Settings renders from the registry automatically.
 
-2. **Update `docs/client/01-Feature-Flags.md` in the same commit.** Add a row to the table for the flag's category (or add the category if it was previously empty). Policy: the catalog must stay in lock-step with `FLAG_REGISTRY` so future contributors can audit what exists without reading TypeScript. A flag change with no doc update is a review-blocker.
+2. **Update `docs/client/Feature-Flags/00-Registry.md` in the same commit.** Add a row to the table for the flag's category (or add the category if it was previously empty). Policy: the catalog must stay in lock-step with `FLAG_REGISTRY` so future contributors can audit what exists without reading TypeScript. A flag change with no doc update is a review-blocker.
 
 3. **Read it in React:**
    ```ts
@@ -46,7 +46,7 @@ Flags persist per-user in the server's `user_settings` key/value table, hydrate 
 ## Checklist before finishing
 
 - [ ] `FLAG_REGISTRY` entry added with valid `key`, `name`, `description`, `valueType`, `defaultValue`, `category`
-- [ ] `docs/client/01-Feature-Flags.md` table has a matching row
+- [ ] `docs/client/Feature-Flags/00-Registry.md` table has a matching row
 - [ ] Key follows `flag.<camelCase>` or `config.<camelCase>` convention
 - [ ] React consumers use `useFeatureFlag`; non-React use `getFlag`/`getEffectiveBufferConfig`
 - [ ] No new React context added
@@ -57,5 +57,5 @@ Flags persist per-user in the server's `user_settings` key/value table, hydrate 
 
 1. Delete the entry from `FLAG_REGISTRY`.
 2. Delete consumers (`useFeatureFlag` / `getFlag` calls) — the default can be inlined where the value is now hardcoded.
-3. Remove the row from `docs/client/01-Feature-Flags.md`.
+3. Remove the row from `docs/client/Feature-Flags/00-Registry.md`.
 4. The orphan `user_settings` row in the DB is harmless; no migration needed.

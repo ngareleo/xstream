@@ -29,3 +29,6 @@ client/.vite/
 
 # docs tooling state
 docs/.obsidian/
+
+# architect subagent's per-machine retrieval cache
+.claude/agents/architect-cache/

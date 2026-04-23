@@ -70,7 +70,7 @@ If the component raises events (user interactions that propagate up to an ancest
 
 Do not use callback props (`onPlay`, `onChange`) for events that should propagate — use `bubble()`.
 
-## Common pitfalls — see `docs/client/02-Debugging-Playbooks.md`
+## Common pitfalls — see `docs/client/Debugging-Playbooks/00-Common-Issues.md`
 
 - Effect cleanup with nested timeouts
 - Relay "preloaded query was disposed" warning

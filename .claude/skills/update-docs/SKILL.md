@@ -1,57 +1,49 @@
 ---
 name: update-docs
-description: Update documentation when code changes — rewrite the relevant .mmd, regenerate its PNG screenshot, and refresh prose in docs/. Enforces the xstream docs naming + namespacing convention (NN-PascalCase under docs/{client,server,design,product}/).
-allowed-tools: Read Write Edit Glob Grep Bash(python3 *) Bash(ls *) Bash(cp *) Bash(mv *) Bash(mkdir *) Bash(google-chrome *) Bash(file *) Bash(wc *) mcp__drawio__open_drawio_mermaid
+description: Update documentation when code changes — rewrite the relevant .mmd, regenerate its PNG screenshot, and refresh prose in docs/. Enforces the xstream docs naming + namespacing convention (nested super-domain → concept folder → NN-PascalCase, with README per folder).
+allowed-tools: Read Write Edit Glob Grep Bash(python3 *) Bash(ls *) Bash(cp *) Bash(mv *) Bash(mkdir *) Bash(rmdir *) Bash(google-chrome *) Bash(file *) Bash(wc *) mcp__drawio__open_drawio_mermaid
 ---
 
 # Update Documentation
 
-**Policy:** any change to the streaming pipeline MUST be reflected in the corresponding diagram, its screenshot, and the prose in `docs/00-Architecture.md`. Code and docs ship together — never in separate PRs.
+**Policy:** any change to the streaming pipeline MUST be reflected in the corresponding diagram, its screenshot, and the prose under `docs/architecture/Streaming/`. Code and docs ship together — never in separate PRs.
+
+The knowledge base is owned by the **architect** subagent (`.claude/agents/architect.md`). This skill covers diagram updates + docs tree hygiene; the architect curates content placement.
 
 ## Docs naming convention — enforce when adding or moving a doc
 
-All markdown docs under `docs/` follow a single convention. Enforce it when you create or rename a doc.
+All markdown docs under `docs/` follow a nested convention.
 
-**Filename: `NN-Topic-Name-In-PascalCase.md`**
-- `NN` is a two-digit ordering prefix scoped to its directory (`00`, `01`, `02`, …).
-- Topic in `Pascal-Case-With-Dashes-Between-Words`. Hyphens separate words; no spaces, no underscores.
-- Name should be self-describing — someone reading only the filename knows the topic.
+**Path shape:** `docs/<super-domain>/<Concept-Folder>/(<client|server>/)?NN-Topic-Name.md`
 
-**Directory structure:**
-```
-docs/
-├── 00-Architecture.md            # cross-cutting overview
-├── 01-Streaming-Protocol.md      # cross-cutting protocol
-├── 02-Observability.md           # cross-cutting ops
-├── todo.md                       # operational — exempt from NN-convention (owned by `todo` skill)
-├── diagrams/                     # mermaid sources + PNGs — diagram filenames are STABLE, not NN-Prefix
-├── client/
-│   ├── 00-Relay.md
-│   ├── 01-Feature-Flags.md
-│   └── 02-Debugging-Playbooks.md
-├── server/
-│   ├── 00-Config.md
-│   ├── 01-GraphQL-Schema.md
-│   └── 02-DB-Schema.md
-├── design/
-│   └── 00-UI-Design-Spec.md
-└── product/
-    └── 00-Product-Spec.md
-```
+- **Super-domains** (fixed set): `architecture`, `client`, `server`, `design`, `product`, `code-style`.
+- **Concept folder**: `Pascal-Case-With-Dashes` (e.g. `Streaming`, `Hardware-Acceleration`, `Feature-Flags`).
+- **Optional `client/` or `server/` sub-folder** inside a concept, only inside `architecture/`, and only when one side of the wire has material distinct from the shared content at the concept root.
+- **Topic file**: `NN-Topic-Name-In-PascalCase.md`. `NN` is a two-digit prefix scoped to the containing folder (`00`, `01`, `02`, …). Name self-describing — someone reading only the filename knows the topic.
+- **`README.md`** in every concept folder (and every `client/`/`server/` sub-folder). The README is the folder's table of contents — a Markdown table with one row per sibling listing file name + one-line hook. Max ~30 lines.
 
 **Placement rule:**
-- Cross-cutting (touches both client and server, or spans domains) → `docs/NN-*.md` at root.
-- Domain-specific → `docs/<domain>/NN-*.md`. Domains: `client`, `server`, `design`, `product`. Add a new domain directory only when you have ≥2 docs to put in it.
+
+- Cross-cutting (client + server both touch it) → `architecture/<Concept>/`. Shared content at the concept root; side-specific nuance under `client/` or `server/` sub-folders.
+- Client-only or server-only → `client/<Concept>/` or `server/<Concept>/` respectively.
+- Invariants, conventions, naming, anti-patterns → `code-style/<Concept>/`.
+- Product / customers / roadmap → `product/<Concept>/`.
+- Design system → `design/<Concept>/`.
 
 **Exemptions:**
-- `docs/todo.md` stays at root (operational file, owned by the `todo` skill; renaming it breaks that skill's path assumption).
-- `docs/diagrams/streaming-0{1..4}-*.{mmd,png}` filenames are kept stable. They are referenced by this skill and predate the convention; renaming them churns every agent that references them.
 
-**When you add a new doc:**
-1. Pick the domain (or root if cross-cutting).
-2. Determine the `NN` — next unused two-digit prefix in that directory.
-3. Write the file at `docs/<domain>/NN-Topic-Name.md`.
-4. If the topic is referenced from CLAUDE.md, skills, agents, or source comments, update those references in the same commit.
+- `docs/README.md` and every folder's `README.md` are exempt from the `NN-` prefix — they're indexes, not topics.
+- `docs/todo.md` stays at the docs root (owned by the `todo` skill).
+- `docs/diagrams/streaming-0{1..4}-*.{mmd,png}` filenames are stable — referenced by this skill and by `docs/architecture/Streaming/01-Playback-Scenarios.md`.
+
+**When you add a new topic file:**
+
+1. Pick the super-domain, then the concept folder (create a new concept folder if needed with its own `README.md`).
+2. Determine `NN` — next unused two-digit prefix in that folder.
+3. Write the file at `docs/<super-domain>/<Concept>/NN-Topic-Name.md`.
+4. **Update the folder's `README.md`** to add a row for the new topic in the same change.
+5. If the topic is important enough to route callers directly from the architect's index table, notify the architect (or add the row yourself to `.claude/agents/architect.md`).
+6. If the topic is referenced from CLAUDE.md, skills, agents, or source comments, update those references in the same commit.
 
 **When you rename or move a doc:** use `git mv` so history is preserved, and grep the whole repo for the old path before committing — `grep -rn "<old-path>" .` should return zero hits.
 
@@ -80,7 +72,7 @@ Purely internal refactors (renames, extracting private helpers, tightening types
 | 3 | `docs/diagrams/streaming-03-seek.mmd` | Seek slider, buffered-vs-not branch, chunk-boundary snap |
 | 4 | `docs/diagrams/streaming-04-resolution-switch.mmd` | Offscreen `bgBuffer` fill + promotion to foreground |
 
-Each diagram has a matching `.png` in the same directory (committed — `!docs/diagrams/*.png` is whitelisted in `.gitignore`) and a `### Scenario N:` subsection in `docs/00-Architecture.md`.
+Each diagram has a matching `.png` in the same directory (committed — `!docs/diagrams/*.png` is whitelisted in `.gitignore`) and a `## Scenario N:` subsection in `docs/architecture/Streaming/01-Playback-Scenarios.md`.
 
 **`.mmd` is authoritative.** The `.png` is always regenerated from it. Never hand-edit a `.png` or treat it as a source.
 
@@ -158,16 +150,16 @@ Then move it into the docs tree:
 cp .claude/screenshots/streaming-0N-name.png docs/diagrams/streaming-0N-name.png
 ```
 
-### 4. Update `docs/00-Architecture.md`
+### 4. Update `docs/architecture/Streaming/01-Playback-Scenarios.md`
 
-Each diagram has its own `### Scenario N:` subsection under `## Data Flow: Playback`. When the diagram changes, the prose under it must stay consistent. Required structure:
+Each diagram has its own `## Scenario N:` subsection. When the diagram changes, the prose under it must stay consistent. Required structure:
 
 ```markdown
-### Scenario N: <short name>
+## Scenario N: <short name>
 
-![<alt text>](./diagrams/streaming-0N-name.png)
+![<alt text>](../../diagrams/streaming-0N-name.png)
 
-> Source: [`streaming-0N-name.mmd`](./diagrams/streaming-0N-name.mmd)
+> Source: [`streaming-0N-name.mmd`](../../diagrams/streaming-0N-name.mmd)
 
 <prose overview — numbered steps for linear flows, paragraphs for loops>
 ```
@@ -191,7 +183,7 @@ All eight files must exist. PNG sizes below ~30 KB almost always indicate a blan
 Grep the wiki for the filenames to confirm both the image and the source link resolve:
 
 ```sh
-grep -c 'streaming-0[1-4]' docs/00-Architecture.md   # expect >= 8 (image + source link per scenario)
+grep -c 'streaming-0[1-4]' docs/architecture/Streaming/01-Playback-Scenarios.md   # expect >= 8 (image + source link per scenario)
 ```
 
 ### 6. Commit all artifacts together

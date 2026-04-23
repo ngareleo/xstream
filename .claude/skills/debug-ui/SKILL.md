@@ -22,7 +22,7 @@ This skill adds the **diagnosis strategy** on top of that: what to look for, whi
 4. **Inspect client-side state** via `browser_evaluate`:
    - MSE / video state: `document.querySelector("video")` → `readyState`, `buffered`, `error`
    - Relay store: `window.__relayEnvironment?.getStore()?.getSource()?.toJSON()`
-5. **Match to a known playbook.** See `docs/client/02-Debugging-Playbooks.md` — most client bugs map to one of: subscription not firing, scan not refreshing, Relay query disposal, React state persisting across routes, Griffel type error, hook ordering, stream-log overlay reset.
+5. **Match to a known playbook.** See `docs/client/Debugging-Playbooks/00-Common-Issues.md` — most client bugs map to one of: subscription not firing, scan not refreshing, Relay query disposal, React state persisting across routes, Griffel type error, hook ordering, stream-log overlay reset.
 6. **Fix in code.** If the fix is a component pattern, delegate to the `write-component` skill.
 
 ## Storybook-based debugging
