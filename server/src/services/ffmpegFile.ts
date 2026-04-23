@@ -342,11 +342,25 @@ export class FFmpegFile {
     profile: ResolutionProfile,
     segmentPattern: string,
     segmentDir: string,
-    opts: { vaapiSwPad?: boolean } = {}
+    opts: { vaapiSwPad?: boolean; chunkStartSeconds?: number } = {}
   ): ffmpeg.FfmpegCommand {
     const mapping = this.streamMappingOptions();
     const audio = this.audioCodecOptions(profile);
     const hls = this.hlsMuxerOptions(profile, segmentPattern, segmentDir);
+
+    // Shift the OUTPUT timestamps to the chunk's true source-time position so
+    // segments from different chunks don't collide in the client-side
+    // SourceBuffer. Without this, every chunk's segments start at PTS 0
+    // (because we use `-ss <start>` to seek the input — ffmpeg restarts
+    // output PTS from zero) and ChunkPipeline's parallel foreground+lookahead
+    // streams interleave at the buffer's timeline end (sequence-mode auto-
+    // advance), ballooning bytes-in-buffer and tripping QuotaExceededError.
+    // With the offset set, chunk N's segments live at PTS [start, end) and
+    // the client (in `segments` mode) places them at the correct buffer-time.
+    const tsOffset =
+      opts.chunkStartSeconds && opts.chunkStartSeconds > 0
+        ? [`-output_ts_offset ${opts.chunkStartSeconds}`]
+        : [];
 
     switch (hwAccel.kind) {
       case "software":
@@ -360,6 +374,7 @@ export class FFmpegFile {
           ])
           .audioCodec("aac")
           .outputOptions(audio)
+          .outputOptions(tsOffset)
           .outputOptions(hls);
 
       case "vaapi": {
@@ -376,6 +391,7 @@ export class FFmpegFile {
           .outputOptions(output)
           .audioCodec("aac")
           .outputOptions(audio)
+          .outputOptions(tsOffset)
           .outputOptions(hls);
       }
 

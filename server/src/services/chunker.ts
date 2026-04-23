@@ -472,6 +472,7 @@ async function runFfmpeg(
   file
     .applyOutputOptions(command, jobHwAccel, profile, segmentPattern, segmentDir, {
       vaapiSwPad: effUseSwVaapiPad,
+      chunkStartSeconds: startTime ?? 0,
     })
     .output(join(segmentDir, "playlist.m3u8"))
     .on("start", (cmd) => {

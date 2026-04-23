@@ -65,6 +65,8 @@ Both slots' segments funnel into the same `BufferManager.appendSegment` queue, w
 
 File pointers: `chunkPipeline.ts` (slot management), `playbackController.ts` (orchestration), `chunker.ts:403` (`ORPHAN_TIMEOUT_MS = 30_000` — runaway safety).
 
+**Chunk PTS contract** — every chunk's segments are emitted with `-output_ts_offset {chunkStartSeconds}` so chunk N's segments live at PTS `[chunkStart, chunkEnd)` in the source-time timeline, NOT at PTS 0 (which is what ffmpeg's `-ss <start>` seek defaults to). Paired with the client's `sourceBuffer.mode = "segments"` (NOT `"sequence"`), this means each chunk's segments land at the correct buffer-time regardless of append order. Without the offset + segments-mode combo, parallel foreground+lookahead appends interleave at the buffer's timeline end (sequence-mode auto-advances `timestampOffset` per append) and the buffer balloons unbounded — observed as 426 MB / 128 s buffered ahead → `QuotaExceededError` × 3 → user-visible stall.
+
 ## Playback ticker (single RAF)
 
 `client/src/services/playbackTicker.ts` is the one RAF tick that drives every per-frame poll the playback subsystem needs — startup-buffer check, prefetch trigger, background-buffer ready check during a resolution swap, and `StallTracker`'s spinner debounce. Replaces what was four scattered RAF loops + a `setTimeout`.

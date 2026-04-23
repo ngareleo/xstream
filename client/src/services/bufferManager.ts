@@ -108,7 +108,14 @@ export class BufferManager {
         () => {
           try {
             this.sourceBuffer = ms.addSourceBuffer(mimeType);
-            this.sourceBuffer.mode = "sequence";
+            // segments mode honors each segment's own PTS instead of the UA
+            // auto-advancing timestampOffset per append. The chunker emits
+            // chunk N's segments with `-output_ts_offset {chunkStart}` so they
+            // already carry source-time PTS — appending out of order (e.g.
+            // ChunkPipeline's foreground + lookahead slots interleaving) lands
+            // each segment at its true buffer-time. In sequence mode the same
+            // interleave ballooned the buffer to hundreds of MB.
+            this.sourceBuffer.mode = "segments";
             // Pre-set duration to the full video length so the browser allows
             // seeking anywhere in the video immediately, even before that range
             // is buffered. Without this, videoEl.currentTime is clamped to
@@ -419,7 +426,7 @@ export class BufferManager {
         () => {
           try {
             this.sourceBuffer = ms.addSourceBuffer(mimeType);
-            this.sourceBuffer.mode = "sequence";
+            this.sourceBuffer.mode = "segments";
             if (this.videoDurationS > 0) {
               ms.duration = this.videoDurationS;
             }
@@ -476,19 +483,12 @@ export class BufferManager {
     this.bytesInBuffer = 0;
     sb.remove(0, Infinity);
     await this.waitForUpdateEnd();
-    // In sequence mode the UA auto-manages timestampOffset, advancing it to
-    // maintain continuity across appends. After flushing, the offset still
-    // reflects the end of the previous chunk, so new segments (whose ffmpeg
-    // timestamps restart near 0 due to -ss input seek) would be placed at the
-    // wrong position in the buffer's timeline. Reset it to the seek position so
-    // segments from the incoming chunk land where videoEl.currentTime expects.
-    if (sb.mode === "sequence") {
-      sb.timestampOffset = timeSeconds;
-    }
+    // In segments mode each segment carries source-time PTS (set by the
+    // chunker via -output_ts_offset), so no timestampOffset gymnastics are
+    // needed after flush — incoming segments land where their PTS says.
     this.videoEl.currentTime = timeSeconds;
-    log.info(`Buffer flushed — seek to ${timeSeconds.toFixed(2)}s (timestampOffset reset)`, {
+    log.info(`Buffer flushed — seek to ${timeSeconds.toFixed(2)}s`, {
       seek_target_s: parseFloat(timeSeconds.toFixed(2)),
-      timestamp_offset_s: parseFloat(timeSeconds.toFixed(2)),
     });
   }
 
