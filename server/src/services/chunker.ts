@@ -267,6 +267,10 @@ export async function startTranscodeJob(
             job_id: id,
             segment_count: dbSegments.length,
           });
+          // Restore is a non-runFfmpeg exit path: runFfmpeg's `inflightJobIds.delete`
+          // (paired with `activeCommands.set`) never fires for restored jobs, so this
+          // path must release the slot itself or the cap leaks one slot per restore.
+          inflightJobIds.delete(id);
           endResolveSpan("job_restored_from_db", { segment_count: dbSegments.length });
           return restored;
         }
@@ -426,6 +430,9 @@ async function runFfmpeg(
       message: (err as Error).message,
     });
     jobSpan.end();
+    // Probe failed before activeCommands.set could take ownership — release the
+    // inflight slot here so the cap doesn't leak when ffprobe rejects the file.
+    inflightJobIds.delete(job.id);
     job.status = "error";
     job.error = msg;
     updateJobStatus(job.id, "error", { error: msg });
