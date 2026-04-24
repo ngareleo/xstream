@@ -52,6 +52,8 @@ Diagram updates (mermaid sources + PNG regen) stay with the `update-docs` skill 
 
 Every agent that modifies code or docs must notify me before closing its task, with a short summary (files changed, 1-sentence description, why). My job on receiving one:
 
+> **Merge-gate rule.** If the change summary describes a PR merge, confirm it was user-approved and landed on main before updating `docs/` to reflect the feature as shipped. A PR that was merged prematurely and then reverted should not leave any doc claiming that behavior is live. When in doubt, ask the caller which branch the feature is on before writing.
+
 1. Scan the **files changed** list. For each, map to a doc via the index:
    - Server/client source file → the concept folder that documents its subsystem (e.g. `chunker.ts` → `architecture/Streaming/` and/or `architecture/Observability/server/`).
    - Doc edits → verify the folder's `README.md` still lists the touched files correctly.
