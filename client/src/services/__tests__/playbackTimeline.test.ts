@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { PlaybackTimeline, type PlaybackTimelineDrift } from "./playbackTimeline.js";
+import { PlaybackTimeline, type PlaybackTimelineDrift } from "~/services/playbackTimeline.js";
 
 /** Reads the contract `DRIFT_THRESHOLD_MS = 5000` from the module. */
 const DRIFT_THRESHOLD_MS = 5000;

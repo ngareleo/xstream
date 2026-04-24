@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { type PlaybackTicker, type TickHandler } from "./playbackTicker.js";
-import { StallTracker } from "./stallTracker.js";
+import { type PlaybackTicker, type TickHandler } from "~/services/playbackTicker.js";
+import { StallTracker } from "~/services/stallTracker.js";
 
 const BUFFERING_SPINNER_DELAY_MS = 2_000;
 

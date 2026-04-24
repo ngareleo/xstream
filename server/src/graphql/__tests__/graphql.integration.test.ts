@@ -8,16 +8,16 @@
  * Use unique IDs (gql-lib1, gql-vid1, …) to avoid collisions with other test
  * files that share this database.
  *
- * Run with: bun test src/graphql/graphql.integration.test.ts
+ * Run with: bun test src/graphql/__tests__/graphql.integration.test.ts
  */
 import { beforeAll, describe, expect, test } from "bun:test";
 
 // These imports must come AFTER DB_PATH is set (handled by the preload)
-const { yoga } = await import("../routes/graphql.js");
-const { getDb } = await import("../db/index.js");
-const { upsertLibrary } = await import("../db/queries/libraries.js");
-const { upsertVideo } = await import("../db/queries/videos.js");
-const { toGlobalId } = await import("./relay.js");
+const { yoga } = await import("../../routes/graphql.js");
+const { getDb } = await import("../../db/index.js");
+const { upsertLibrary } = await import("../../db/queries/libraries.js");
+const { upsertVideo } = await import("../../db/queries/videos.js");
+const { toGlobalId } = await import("../relay.js");
 
 function gql(query: string, variables?: Record<string, unknown>): ReturnType<typeof yoga.fetch> {
   return yoga.fetch(
