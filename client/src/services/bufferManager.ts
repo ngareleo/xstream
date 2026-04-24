@@ -12,6 +12,14 @@ const tracer = getClientTracer("bufferManager");
 
 export type BufferPauseCallback = () => void;
 export type BufferResumeCallback = () => void;
+/** Fired when an `appendBuffer` rejects with `InvalidStateError` AND the
+ * SourceBuffer is no longer present in `mediaSource.sourceBuffers` — the
+ * Chrome-detached-SB-under-MSE-budget pattern documented in the
+ * `appendBuffer error` branch. PlaybackController uses this signal to tear
+ * down + recreate the MediaSource and resume from `currentTime` rather than
+ * surfacing a fatal error to the user. Optional: callers that don't supply
+ * one fall back to the legacy fatal-error behaviour. */
+export type BufferMseDetachedCallback = () => void;
 
 export class BufferManager {
   private mediaSource: MediaSource | null = null;
@@ -24,11 +32,15 @@ export class BufferManager {
   private offscreenVideoEl: HTMLVideoElement | null = null;
   private onPause: BufferPauseCallback;
   private onResume: BufferResumeCallback;
+  private onMseDetached: BufferMseDetachedCallback | null = null;
   private appendQueue: Array<{ data: ArrayBuffer; resolve: () => void }> = [];
   private isAppending = false;
   private streamDone = false;
   private config: BufferConfig;
   private streamPaused = false;
+  /** Resolved when streamPaused flips false. Recreated on every pause so each
+   * `waitIfPaused` caller gets a fresh promise. Null when not paused. */
+  private resumeSignal: { promise: Promise<void>; resolve: () => void } | null = null;
   private backpressureSpan: Span | null = null;
   private afterAppendCb: (() => void) | null = null;
   private seekAbort = false;
@@ -48,13 +60,15 @@ export class BufferManager {
     onPause: BufferPauseCallback,
     onResume: BufferResumeCallback,
     videoDurationS = 0,
-    config: BufferConfig = DEFAULT_BUFFER_CONFIG
+    config: BufferConfig = DEFAULT_BUFFER_CONFIG,
+    onMseDetached: BufferMseDetachedCallback | null = null
   ) {
     this.videoEl = videoEl;
     this.onPause = onPause;
     this.onResume = onResume;
     this.videoDurationS = videoDurationS;
     this.config = config;
+    this.onMseDetached = onMseDetached;
   }
 
   /** Current buffer memory metrics. All byte values are estimates. */
@@ -280,6 +294,17 @@ export class BufferManager {
             total_bytes_appended: this.totalBytesAppended,
             attempt,
           });
+          // SB-detached-by-Chrome pattern (trace 65ef5d6c…): InvalidStateError +
+          // SB no longer in mediaSource.sourceBuffers. Fire the recovery hook
+          // before draining so PlaybackController can rebuild the MediaSource
+          // and resume from currentTime instead of surfacing a hard failure.
+          if (domErr.name === "InvalidStateError" && !sbInMsList && this.onMseDetached) {
+            log.warn("SourceBuffer detached from MediaSource — invoking recovery hook", {
+              segments_appended: this.segmentsAppended,
+              total_bytes_appended: this.totalBytesAppended,
+            });
+            this.onMseDetached();
+          }
           fatalError = true;
           break;
         }
@@ -393,6 +418,19 @@ export class BufferManager {
     this.checkForwardBuffer();
   };
 
+  /**
+   * Returns a promise that resolves the next time backpressure releases, or
+   * resolves immediately if no backpressure is currently engaged. Used by
+   * `ChunkPipeline.drainAndDispatch` to throttle the lookahead-queue drain
+   * the same way the live `streamingService` reader loop does — without this,
+   * a queued lookahead floods MSE at chunk handover, which is the
+   * trace `e699c0ae…` failure mode (1.3 GB cumulative in 2 s + spinner stall).
+   */
+  waitIfPaused(): Promise<void> {
+    if (!this.streamPaused || !this.resumeSignal) return Promise.resolve();
+    return this.resumeSignal.promise;
+  }
+
   private checkForwardBuffer(): void {
     const sb = this.sourceBuffer;
     if (!sb || sb.buffered.length === 0) return;
@@ -401,6 +439,11 @@ export class BufferManager {
 
     if (bufferedAhead > this.config.forwardTargetS && !this.streamPaused) {
       this.streamPaused = true;
+      let resolve!: () => void;
+      const promise = new Promise<void>((r) => {
+        resolve = r;
+      });
+      this.resumeSignal = { promise, resolve };
       const bufMb = (this.bytesInBuffer / 1_048_576).toFixed(1);
       log.info(
         `Stream paused (backpressure) — ${bufferedAhead.toFixed(1)}s buffered ahead (target: ${this.config.forwardTargetS}s), ${bufMb} MB in buffer`,
@@ -426,6 +469,8 @@ export class BufferManager {
       this.onPause();
     } else if (bufferedAhead < this.config.forwardResumeS && this.streamPaused) {
       this.streamPaused = false;
+      this.resumeSignal?.resolve();
+      this.resumeSignal = null;
       const bufMb = (this.bytesInBuffer / 1_048_576).toFixed(1);
       log.info(
         `Stream resumed (backpressure) — ${bufferedAhead.toFixed(1)}s buffered ahead (resume threshold: ${this.config.forwardResumeS}s), ${bufMb} MB in buffer`,
@@ -535,6 +580,8 @@ export class BufferManager {
     this.isAppending = false;
     this.streamDone = false;
     this.streamPaused = false;
+    this.resumeSignal?.resolve();
+    this.resumeSignal = null;
     this.endBackpressureSpan("backpressure_ended_by_seek");
     this.bytesInBuffer = 0;
     sb.remove(0, Infinity);
@@ -578,6 +625,8 @@ export class BufferManager {
     this.isAppending = false;
     this.streamDone = false;
     this.streamPaused = false;
+    this.resumeSignal?.resolve();
+    this.resumeSignal = null;
     this.seekAbort = false;
     const stats = this.bufferStats;
     log.info(

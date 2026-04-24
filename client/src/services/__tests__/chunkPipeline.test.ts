@@ -125,16 +125,27 @@ interface FakeBuffer {
   appendCalls: Array<{ bytes: number; resolve: () => void; reject: (err: Error) => void }>;
   markStreamDoneCalls: number;
   bufferedAheadSeconds: number;
+  /** Set true to make `waitIfPaused` block until `releasePause()` is called. */
+  paused: boolean;
+  releasePause(): void;
   appendSegment(data: ArrayBuffer): Promise<void>;
   markStreamDone(): void;
   getBufferedAheadSeconds(_currentTime: number): number;
+  waitIfPaused(): Promise<void>;
 }
 
 function makeFakeBuffer(): FakeBuffer {
+  let resumeResolve: (() => void) | null = null;
   const buf: FakeBuffer = {
     appendCalls: [],
     markStreamDoneCalls: 0,
     bufferedAheadSeconds: 20,
+    paused: false,
+    releasePause(): void {
+      buf.paused = false;
+      resumeResolve?.();
+      resumeResolve = null;
+    },
     appendSegment(data: ArrayBuffer): Promise<void> {
       return new Promise<void>((resolve, reject) => {
         buf.appendCalls.push({ bytes: data.byteLength, resolve, reject });
@@ -149,6 +160,12 @@ function makeFakeBuffer(): FakeBuffer {
     },
     getBufferedAheadSeconds(_currentTime: number): number {
       return buf.bufferedAheadSeconds;
+    },
+    waitIfPaused(): Promise<void> {
+      if (!buf.paused) return Promise.resolve();
+      return new Promise<void>((r) => {
+        resumeResolve = r;
+      });
     },
   };
   return buf;
@@ -501,5 +518,49 @@ describe("ChunkPipeline", () => {
     pipeline.cancel("teardown");
 
     expect(onStreamEnded).not.toHaveBeenCalled();
+  });
+
+  it("drainAndDispatch halts between segments when BufferManager reports paused", async () => {
+    // Trace e699c0ae… failure mode: at chunk handover, drainAndDispatch
+    // previously appended ALL queued lookahead segments in a tight loop —
+    // bypassing backpressure and flooding MSE by 200-400 MB. With
+    // waitIfPaused() between iterations, only 1 segment appends before the
+    // pause blocks the drain; resume releases and the rest flow through.
+    const buffer = makeFakeBuffer();
+    const pipeline = makePipeline(buffer);
+
+    pipeline.startForeground(baseOpts({ jobId: "fg", chunkStartS: 0, isFirstChunk: true }));
+    pipeline.openLookahead(baseOpts({ jobId: "la", chunkStartS: 300, isFirstChunk: false }));
+
+    const la = createdServices[1];
+    // Queue an init + 4 media segments on the lookahead.
+    await la.deliverInit(new Uint8Array([1, 2, 3, 4]));
+    for (let i = 0; i < 4; i++) {
+      await la.deliverMedia(new Uint8Array(32));
+    }
+    la.finish();
+
+    // Lookahead's appends should be QUEUED (not called yet) — foreground is
+    // still active, queueing path applies. The fakeBuffer captures appendSegment
+    // calls, so this lets us count actual drain-time appends precisely.
+    const beforePromote = buffer.appendCalls.length;
+
+    // Flip the buffer to paused BEFORE promotion so the very first
+    // waitIfPaused() call inside drainAndDispatch blocks the loop.
+    buffer.paused = true;
+    const { drain } = pipeline.promoteLookahead();
+
+    // Let any microtasks settle — waitIfPaused blocks the first iteration
+    // immediately, so at most 0 or 1 segments may process depending on where
+    // the await lands in the scheduler. Either way, NOT all 5 should land.
+    await new Promise((r) => setTimeout(r, 10));
+    const duringPause = buffer.appendCalls.length - beforePromote;
+    expect(duringPause).toBeLessThan(5);
+
+    // Resume — drain resumes and appends the remaining queued segments.
+    buffer.releasePause();
+    await drain;
+    const totalDrained = buffer.appendCalls.length - beforePromote;
+    expect(totalDrained).toBe(5); // init + 4 media segments
   });
 });

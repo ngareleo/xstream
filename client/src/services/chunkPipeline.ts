@@ -157,13 +157,21 @@ export class ChunkPipeline {
   /** Drains a slot's queued lookahead segments through the same per-segment
    *  pipeline that the live network path uses, then dispatches any
    *  outcome captured while the slot was still a lookahead. Stops if the
-   *  slot is cancelled mid-drain. */
+   *  slot is cancelled mid-drain.
+   *
+   *  Awaits `buffer.waitIfPaused()` between iterations so the drain respects
+   *  backpressure the same way the live `streamingService` reader loop does.
+   *  Without this gate the drain dumps every queued lookahead segment in a
+   *  tight loop at promotion — at 4k that's 200–400 MB into MSE in 1–2 s,
+   *  which is the chunk-handover bloat from trace `e699c0ae…`. */
   private async drainAndDispatch(slot: Slot): Promise<void> {
     const queue = slot.queuedSegments;
     slot.queuedSegments = [];
     for (const seg of queue) {
       // `cancelled` (not `ended`) is the right signal: `ended` flips on
       // natural span end too, which is exactly when drain SHOULD run.
+      if (slot.cancelled) return;
+      await this.buffer.waitIfPaused();
       if (slot.cancelled) return;
       await this.processSegment(slot, seg.data, seg.isInit);
     }

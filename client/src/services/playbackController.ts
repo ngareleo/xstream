@@ -127,6 +127,15 @@ export class PlaybackController {
 
   private detachListeners: Array<() => void> = [];
 
+  /** Per-session budget for MediaSource recreates (MSE_DETACHED recovery).
+   * Each recreate decrements this. Zero = surface MSE_DETACHED to the user as
+   * a fatal error rather than loop-recreating forever. Reset on teardown /
+   * new session. Kept small (3) because a recreate costs ~200-500ms and more
+   * than 3 in one session means the cumulative-byte rate is still too high
+   * despite pull-pacing — at that point fail fast, don't mask the regression. */
+  private mseRecreatesRemaining = 3;
+  private recreateInProgress = false;
+
   constructor(deps: PlaybackControllerDeps, events: PlaybackControllerEvents) {
     this.deps = deps;
     this.events = events;
@@ -222,7 +231,8 @@ export class PlaybackController {
       () => pipeline.pauseAll(),
       () => pipeline.resumeAll(),
       videoDurationS,
-      getEffectiveBufferConfig()
+      getEffectiveBufferConfig(),
+      () => this.handleMseDetached(res)
     );
     pipeline = new ChunkPipeline(buffer, playbackTracer, playbackLog, videoEl);
     this.buffer = buffer;
@@ -295,6 +305,8 @@ export class PlaybackController {
     this.prefetchFired = false;
     this.hasStartedPlayback = false;
     this.seekTarget = null;
+    this.mseRecreatesRemaining = 3;
+    this.recreateInProgress = false;
 
     if (this.sessionSpan) {
       this.sessionSpan.addEvent("session_ended", { reason });
@@ -603,6 +615,113 @@ export class PlaybackController {
         this.sessionSpan?.setStatus({ code: SpanStatusCode.ERROR, message: err.message });
         this.setError(err.message);
         this.setStatus("idle");
+      });
+  }
+
+  // ── MSE recovery (SourceBuffer detached by Chrome) ─────────────────────────
+
+  /**
+   * Fired by BufferManager when `appendBuffer` rejects with InvalidStateError
+   * AND the SB is no longer in `mediaSource.sourceBuffers` — Chrome's
+   * cumulative-budget watchdog detached us. Recovery:
+   *   1. Snapshot currentTime and floor-align to the previous chunk boundary
+   *      so the resume request re-asks for a chunk we know the server will
+   *      serve (not a mid-chunk byte offset).
+   *   2. Tear down the current pipeline + buffer. Recreating in place would
+   *      leave the same BufferManager instance with a dead SB reference.
+   *   3. Build a fresh BufferManager + ChunkPipeline at the same resolution
+   *      and wire a new `handleMseDetached(res)` callback (decrements the
+   *      per-session budget).
+   *   4. Restart `init()` and then startChunkSeries at the floor-aligned
+   *      timestamp. The video element's currentTime is preserved by
+   *      re-assigning after the new MediaSource is attached — the same seek
+   *      machinery handles the jump.
+   *
+   * Budget-exhausted path surfaces MSE_DETACHED as a fatal user-facing error
+   * instead of looping recreates — if 3 recreates in one session weren't
+   * enough, we're not going to fix it with a 4th.
+   */
+  private handleMseDetached(res: Resolution): void {
+    if (this.recreateInProgress) return; // already rebuilding; ignore duplicate signals
+    this.recreateInProgress = true;
+
+    const videoEl = this.deps.videoEl;
+    const savedTime = videoEl.currentTime;
+    const chunkStart = Math.floor(savedTime / CHUNK_DURATION_S) * CHUNK_DURATION_S;
+    const attempt = 4 - this.mseRecreatesRemaining; // 1-based for span/log readability
+
+    playbackLog.warn(
+      `MSE SourceBuffer detached — rebuilding MediaSource (attempt ${attempt}/3, resume at ${chunkStart}s)`,
+      {
+        mse_recreate_attempt: attempt,
+        current_time_s: parseFloat(savedTime.toFixed(2)),
+        resume_chunk_start_s: chunkStart,
+      }
+    );
+    this.sessionSpan?.addEvent("playback.mse_recovery", {
+      attempt,
+      attempt_max: 3,
+      current_time_s: parseFloat(savedTime.toFixed(2)),
+      resume_chunk_start_s: chunkStart,
+    });
+
+    if (this.mseRecreatesRemaining <= 0) {
+      playbackLog.error("MSE recreate budget exhausted — surfacing MSE_DETACHED", {});
+      this.sessionSpan?.addEvent("playback.mse_recovery_exhausted", {});
+      this.sessionSpan?.setStatus({ code: SpanStatusCode.ERROR, message: "MSE_DETACHED" });
+      this.setError("Playback stopped: browser memory buffer exhausted (MSE_DETACHED)");
+      this.setStatus("idle");
+      this.recreateInProgress = false;
+      return;
+    }
+    this.mseRecreatesRemaining -= 1;
+
+    // Tear down the dead pipeline + buffer. BufferManager.teardown clears the
+    // MediaSource and revokes the ObjectURL; ChunkPipeline.cancel stops the
+    // foreground + lookahead readers.
+    this.pipeline?.cancel("mse_recreate");
+    this.pipeline = null;
+    this.buffer?.teardown();
+    this.buffer = null;
+    this.chunkEnd = 0;
+    this.prefetchFired = false;
+
+    // Rebuild — same shape as startPlayback's init block but anchored at
+    // `chunkStart` rather than 0. Kept inline (not extracted to a helper)
+    // because the forward-declaration dance with pipeline/buffer is
+    // localised here and easier to read than threading through a shared fn.
+    // eslint-disable-next-line prefer-const -- captured by buffer's pause/resume closures, assigned after buffer construction
+    let pipeline: ChunkPipeline;
+    const videoDurationS = this.deps.getVideoDurationS();
+    const buffer = new BufferManager(
+      videoEl,
+      () => pipeline.pauseAll(),
+      () => pipeline.resumeAll(),
+      videoDurationS,
+      getEffectiveBufferConfig(),
+      () => this.handleMseDetached(res)
+    );
+    pipeline = new ChunkPipeline(buffer, playbackTracer, playbackLog, videoEl);
+    this.buffer = buffer;
+    this.pipeline = pipeline;
+
+    void buffer
+      .init(RESOLUTION_MIME_TYPE[res])
+      .then(() => {
+        // Restore playback position; browsers clamp currentTime once the
+        // new MediaSource duration is known — setting it here nudges the
+        // decoder to resume where we left off.
+        videoEl.currentTime = savedTime;
+        this.startChunkSeries(res, chunkStart, buffer, /* isFirstChunk */ true);
+        this.startPrefetchLoop(res);
+        this.recreateInProgress = false;
+      })
+      .catch((err: Error) => {
+        playbackLog.error("MSE recreate init failed", { message: err.message });
+        this.sessionSpan?.addEvent("playback.mse_recovery_init_failed", { message: err.message });
+        this.setError(`Playback stopped: MSE recreate failed — ${err.message}`);
+        this.setStatus("idle");
+        this.recreateInProgress = false;
       });
   }
 

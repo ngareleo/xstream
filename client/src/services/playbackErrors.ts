@@ -14,6 +14,12 @@ export type PlaybackErrorCode =
   | "VIDEO_NOT_FOUND"
   | "PROBE_FAILED"
   | "ENCODE_FAILED"
+  /** Chrome detached our SourceBuffer from the MediaSource (cumulative MSE
+   * budget exceeded). Recoverable via MediaSource recreate + resume at
+   * currentTime — handled inside PlaybackController, not by the requestChunk
+   * retry loop. Surfaces here so the user-facing error overlay can show a
+   * meaningful line if the recreate path is exhausted. */
+  | "MSE_DETACHED"
   | "INTERNAL";
 
 export class PlaybackError extends Error {

@@ -152,3 +152,42 @@ describe("PlaybackController retry policy", () => {
     expect(span.events).toContain("recovery.outcome");
   });
 });
+
+interface PrivateRecovery {
+  mseRecreatesRemaining: number;
+  handleMseDetached: (res: string) => void;
+}
+
+describe("PlaybackController MSE recovery", () => {
+  it("surfaces fatal MSE_DETACHED error when recreate budget is exhausted", () => {
+    // The successful-recreate path can't run in `environment: node` because it
+    // constructs a real MediaSource inside BufferManager.init(). Instead we
+    // exercise the budget-exhausted branch — this is the one that matters for
+    // user-facing behaviour (the 4th detach in a session must fail fast, not
+    // loop-recreate).
+    const onError = vi.fn();
+    const onStatusChange = vi.fn();
+    const controller = new PlaybackController(
+      {
+        videoEl: {
+          addEventListener: vi.fn(),
+          removeEventListener: vi.fn(),
+          currentTime: 425, // mid-chunk — expected resume at chunk-boundary floor(425 / 300) * 300 = 300
+        } as unknown as HTMLVideoElement,
+        getVideoId: () => "v-1",
+        getVideoDurationS: () => 1800,
+        startTranscodeChunk: vi.fn(),
+        recordSession: vi.fn(),
+      },
+      { onStatusChange, onError, onJobCreated: vi.fn() }
+    );
+    const priv = controller as unknown as PrivateRecovery;
+    priv.mseRecreatesRemaining = 0;
+
+    priv.handleMseDetached("4k");
+
+    expect(onError).toHaveBeenCalledTimes(1);
+    expect(onError.mock.calls[0][0]).toMatch(/MSE_DETACHED/);
+    expect(onStatusChange).toHaveBeenCalledWith("idle");
+  });
+});
