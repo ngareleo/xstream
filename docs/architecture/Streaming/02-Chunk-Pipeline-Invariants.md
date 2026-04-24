@@ -44,3 +44,10 @@ Code: `client/src/services/chunkPipeline.ts::openSlot` (queueing branch), `::dra
 | Chunks stack at the same PTS, buffer balloons → QuotaExceeded | Chunks N>0 invisible past chunk 0's PTS, playhead skips ahead | Foreground tail fragments into keyframes-only after lookahead init clobber |
 
 A trace where the playhead "skips" a whole chunk and later stalls is almost always (2) or (3); a trace where the buffer balloons to hundreds of MB before stalling is (1).
+
+## Supporting constants
+
+| Constant | Value | Source | Role |
+|---|---|---|---|
+| `MIN_REAL_CHUNK_BYTES` | `1024` | [`client/src/services/playbackConfig.ts:39`](../../../client/src/services/playbackConfig.ts) | Threshold under which a finished chunk's `slot.totalMediaBytes` is treated as a placeholder (ffmpeg emits a ~24-byte tail when `-ss <start>` lands past the encoded content). At 1024 we sit comfortably above any placeholder ffmpeg has been observed to write and well below any real fmp4 init+segment, so the "completed" vs "no_real_content" outcome decision is unambiguous. Drives whether `dispatchOutcome` calls `BufferManager.markStreamDone()` (which fires `MediaSource.endOfStream()`). The `chunk_no_real_content` event on the `chunk.stream` span is the trace-side signal. |
+

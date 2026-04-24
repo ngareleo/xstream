@@ -67,8 +67,9 @@ xstream is split into two workspaces: a Bun server and an Rsbuild/React client. 
 | Relay env | `src/relay/environment.ts` | HTTP fetch + WebSocket subscribe network layer |
 | Library page | `src/pages/LibraryPage.tsx` | Queries all libraries, renders grids, subscribes to scan state for live spinner |
 | Player page | `src/pages/PlayerPage.tsx` | Loads video metadata, renders VideoPlayer |
-| Library grid | `src/components/library-grid/LibraryGrid.tsx` | Relay fragment over a Library's videos connection |
-| Video card | `src/components/video-card/VideoCard.tsx` | Relay fragment, clickable tile with title + duration |
+| Library film list row | `src/components/library-film-list-row/LibraryFilmListRow.tsx` | Relay fragment (`LibraryFilmListRow_video`) over a single video in a library list; raises `FilmSelected` event on click |
+| Film row | `src/components/film-row/FilmRow.tsx` | Relay fragment (`FilmRow_video`); richer list row used in the detail view — title, filename, duration, file size, edit/play actions |
+| Film detail pane | `src/components/film-detail-pane/FilmDetailPane.tsx` | Relay fragment + match/unmatch mutations; side-panel with poster, OMDb metadata, `LinkSearch` for re-matching |
 | Video player | `src/components/video-player/VideoPlayer.tsx` | `NovaEventingInterceptor` for ControlBar events; delegates MSE + transcoding to `useChunkedPlayback` |
 | Control bar | `src/components/control-bar/ControlBar.tsx` | Seek slider, play/pause, resolution selector; raises events via `useNovaEventing().bubble()` |
 | Control bar events | `src/components/control-bar/ControlBar.events.ts` | Event type constants, factory functions, and type guards for ControlBar events |
