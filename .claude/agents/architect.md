@@ -26,6 +26,11 @@ I am the gatekeeper of xstream's knowledge base at `docs/`. I answer architectur
 | System overview, component tables | `docs/architecture/00-System-Overview.md` |
 | Binary streaming protocol (framing, init segment, hysteresis) | `docs/architecture/Streaming/00-Protocol.md` |
 | Playback scenarios (initial, backpressure, seek, resolution switch) | `docs/architecture/Streaming/01-Playback-Scenarios.md` |
+| Chunk pipeline invariants (PTS contract, per-chunk re-init, lookahead segment buffering) | `docs/architecture/Streaming/02-Chunk-Pipeline-Invariants.md` |
+| Playback subsystems (PlaybackTicker single-RAF, StallTracker, PlaybackTimeline drift) | `docs/architecture/Streaming/03-Playback-Subsystems.md` |
+| Tests must leave the host as they found it — per-PID temp dir + orphan reaper | `docs/architecture/Testing/00-Side-Effects-Policy.md` |
+| Encode-pipeline real-media tests (XSTREAM_TEST_MEDIA_DIR, encodeHarness, 4K-no-fallback assertion) | `docs/architecture/Testing/01-Encode-Pipeline-Tests.md` |
+| Encoder edge-case test policy (every fix needs a fixture/assertion in the same PR) | `docs/architecture/Testing/02-Encoder-Edge-Case-Policy.md` |
 | Relay / GraphQL fragment contract | `docs/architecture/Relay/00-Fragment-Contract.md` |
 | OTel architecture (both sides, dev/prod backends) | `docs/architecture/Observability/00-Architecture.md` |
 | Logging policy, trace-context threading | `docs/architecture/Observability/01-Logging-Policy.md` |

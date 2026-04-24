@@ -242,7 +242,9 @@ export class FFmpegFile {
    */
   private vaapiVideoOptions(
     profile: ResolutionProfile,
-    device: string
+    device: string,
+    useSwPad: boolean,
+    isHdr: boolean
   ): { input: string[]; output: string[] } {
     // fluent-ffmpeg's inputOptions tokenises each array element on the FIRST
     // space, which mishandles values containing '=' or ':' — so pass each flag
@@ -256,21 +258,62 @@ export class FFmpegFile {
       "vaapi",
     ];
 
-    // Filter chain stays on the GPU. For 10-bit/HDR sources we still emit
-    // 8-bit H.264 today (matches the software path); the scale_vaapi filter
-    // handles the bit-depth conversion inline via `format=nv12`.
+    // For HDR sources: do BT.2020 → BT.709 tone-mapping on the GPU AND drop
+    // pad_vaapi entirely. Empirically, pad_vaapi rejects the surface format
+    // produced downstream of an HDR/DV source even after tonemap_vaapi runs
+    // (driver returns libva -38 "Function not implemented" between pad_vaapi
+    // and the encoder). HDR output uses scale_vaapi alone — variable output
+    // dimensions are handled by the <video> element's object-fit: contain.
+    // SDR sources keep the padded output that's been working.
+    const tonemap = isHdr ? "tonemap_vaapi=format=nv12:t=bt709:m=bt709:p=bt709," : "";
+
+    // For HDR sources, also force scale_vaapi to tag its output VAAPI surface
+    // as BT.709. Without `out_color_*`, the surface inherits the input's
+    // BT.2020 metadata even after `tonemap_vaapi` ran — h264_vaapi sees a
+    // BT.2020-tagged surface but our output flags say bt709, ffmpeg inserts
+    // an auto-scaler to bridge, libva returns -38 ("Function not implemented")
+    // for the colorspace conversion, and the encoder fails to open. Tagging
+    // the surface explicitly here makes the auto-scaler unnecessary.
+    const scaleColorTag = isHdr
+      ? ":out_color_matrix=bt709:out_color_primaries=bt709:out_color_transfer=bt709:out_range=tv"
+      : "";
     const scale =
       `scale_vaapi=w=${profile.width}:h=${profile.height}:` +
-      `force_original_aspect_ratio=decrease:format=nv12`;
-    // scale_vaapi can't produce padded output directly, so compose with
-    // pad_vaapi to letterbox to the exact profile resolution.
-    const pad = `pad_vaapi=w=${profile.width}:h=${profile.height}:x=(ow-iw)/2:y=(oh-ih)/2`;
+      `force_original_aspect_ratio=decrease:format=nv12${scaleColorTag}`;
+    const padVaapi = `pad_vaapi=w=${profile.width}:h=${profile.height}:x=(ow-iw)/2:y=(oh-ih)/2`;
+    // sw-pad branch: round-trip through CPU memory for the pad step only; one
+    // system-memory copy per frame. Used as the cascade's middle tier when
+    // pad_vaapi rejects a SDR source's surface format (rare but possible).
+    const swPadChain =
+      `${scale},hwdownload,format=nv12,` +
+      `pad=${profile.width}:${profile.height}:(ow-iw)/2:(oh-ih)/2:color=black,` +
+      `hwupload`;
+
+    let filterChain: string;
+    if (isHdr) {
+      // No pad of any kind for HDR — pad_vaapi is broken on these sources and
+      // sw-pad's hwupload also fails on the CPU NV12 it produces.
+      filterChain = `${tonemap}${scale}`;
+    } else if (useSwPad) {
+      filterChain = swPadChain;
+    } else {
+      filterChain = `${scale},${padVaapi}`;
+    }
 
     const maxBitrate = `${Math.round(parseInt(profile.videoBitrate) * 1.2)}k`;
     const bufSize = `${Math.round(parseInt(profile.videoBitrate) * 2)}k`;
 
     const output = [
-      `-vf ${scale},${pad}`,
+      `-vf ${filterChain}`,
+      // NOTE: do NOT set `-colorspace bt709 -color_primaries bt709 -color_trc bt709`
+      // here. On HDR sources (with `tonemap_vaapi` upstream) those output flags
+      // make ffmpeg detect a mismatch between the surface's inherited input
+      // metadata and the tagged output, then insert an auto-scaler — libva
+      // returns -38 ("Function not implemented") and the encoder fails to
+      // open. The H.264 VUI is now correctly tagged via:
+      //   - scale_vaapi's `out_color_*` params for HDR sources (tags the
+      //     surface itself; encoder reads that into the VUI)
+      //   - input metadata pass-through for SDR sources (already bt709)
       `-profile:v high`,
       `-level:v ${profile.h264Level}`,
       `-b:v ${profile.videoBitrate}`,
@@ -298,11 +341,26 @@ export class FFmpegFile {
     hwAccel: HwAccelConfig,
     profile: ResolutionProfile,
     segmentPattern: string,
-    segmentDir: string
+    segmentDir: string,
+    opts: { vaapiSwPad?: boolean; chunkStartSeconds?: number } = {}
   ): ffmpeg.FfmpegCommand {
     const mapping = this.streamMappingOptions();
     const audio = this.audioCodecOptions(profile);
     const hls = this.hlsMuxerOptions(profile, segmentPattern, segmentDir);
+
+    // Shift the OUTPUT timestamps to the chunk's true source-time position so
+    // segments from different chunks don't collide in the client-side
+    // SourceBuffer. Without this, every chunk's segments start at PTS 0
+    // (because we use `-ss <start>` to seek the input — ffmpeg restarts
+    // output PTS from zero) and ChunkPipeline's parallel foreground+lookahead
+    // streams interleave at the buffer's timeline end (sequence-mode auto-
+    // advance), ballooning bytes-in-buffer and tripping QuotaExceededError.
+    // With the offset set, chunk N's segments live at PTS [start, end) and
+    // the client (in `segments` mode) places them at the correct buffer-time.
+    const tsOffset =
+      opts.chunkStartSeconds && opts.chunkStartSeconds > 0
+        ? [`-output_ts_offset ${opts.chunkStartSeconds}`]
+        : [];
 
     switch (hwAccel.kind) {
       case "software":
@@ -316,10 +374,16 @@ export class FFmpegFile {
           ])
           .audioCodec("aac")
           .outputOptions(audio)
+          .outputOptions(tsOffset)
           .outputOptions(hls);
 
       case "vaapi": {
-        const { input, output } = this.vaapiVideoOptions(profile, hwAccel.device);
+        const { input, output } = this.vaapiVideoOptions(
+          profile,
+          hwAccel.device,
+          opts.vaapiSwPad ?? false,
+          this.metadata.isHdr
+        );
         return command
           .inputOptions(input)
           .outputOptions(mapping)
@@ -327,6 +391,7 @@ export class FFmpegFile {
           .outputOptions(output)
           .audioCodec("aac")
           .outputOptions(audio)
+          .outputOptions(tsOffset)
           .outputOptions(hls);
       }
 

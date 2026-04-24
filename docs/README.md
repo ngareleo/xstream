@@ -11,6 +11,11 @@ This tree is the project's single source of truth. Each super-domain has its own
 - [`product/`](product/README.md) — What we're building, for whom, and where the roadmap points.
 - [`code-style/`](code-style/README.md) — Invariants, naming, conventions, anti-patterns. Non-negotiables for anyone writing code.
 
+## Special files at the root
+
+- [`SUMMARY.md`](SUMMARY.md) — ≤120-line orientation read by the `architect` subagent at the start of every invocation. Maintained by `/groom-knowledge-base`.
+- [`todo.md`](todo.md) — project todo list, owned by the `todo` skill.
+
 ## Placement rule (for curators)
 
 - Cross-cutting (client + server both touch it) → `architecture/<Concept>/`. Shared content at the concept root; side-specific nuance under `client/` or `server/` subfolders.

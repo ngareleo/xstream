@@ -173,6 +173,53 @@ if ! $PROD; then
   check_default SEQ_STORE  "~/.seq-store"  "Seq data directory (mounted into the Docker container)"
 fi
 
+# ── Test fixtures (dev only) ─────────────────────────────────────────────────
+
+# check_test_media — when XSTREAM_TEST_MEDIA_DIR is set, validate that it
+# exists and contains at least one expected fixture basename. Unset is fine
+# (the encode tests skip cleanly).
+check_test_media() {
+  local name="XSTREAM_TEST_MEDIA_DIR"
+  local val="${!name:-}"
+  local -a expected=(
+    "Mad Max- Fury Road (2015).mkv"
+    "Furiosa- A Mad Max Saga (2024) 4K.mkv"
+  )
+  if [[ -z "$val" ]]; then
+    info "${BOLD}${CYAN}${name}${NC} (unset — encode tests will skip)"
+    return
+  fi
+  if [[ ! -d "$val" ]]; then
+    fail "${BOLD}${CYAN}${name}${NC}=${val}  (directory does not exist)"
+    ERRORS=$((ERRORS + 1))
+    return
+  fi
+  local found=0 missing=0
+  for basename in "${expected[@]}"; do
+    if [[ -e "$val/$basename" ]]; then
+      info "  ✔ ${basename}"
+      found=$((found + 1))
+    else
+      warn "  missing: ${basename}"
+      missing=$((missing + 1))
+    fi
+  done
+  if (( found == 0 )); then
+    fail "${BOLD}${CYAN}${name}${NC}=${val}  (no expected fixtures found — symlink them in)"
+    ERRORS=$((ERRORS + 1))
+  elif (( missing > 0 )); then
+    info "${BOLD}${CYAN}${name}${NC}=${val}  (${found} fixture(s) found, ${missing} skipped)"
+    WARNINGS=$((WARNINGS + 1))
+  else
+    info "${BOLD}${CYAN}${name}${NC}=${val}  (all ${found} fixture(s) present)"
+  fi
+}
+
+if ! $PROD; then
+  section "── Test fixtures (dev)"
+  check_test_media
+fi
+
 # ── Summary ───────────────────────────────────────────────────────────────────
 
 echo ""

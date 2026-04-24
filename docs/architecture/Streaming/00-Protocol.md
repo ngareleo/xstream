@@ -52,6 +52,8 @@ The init segment must be the **first** data appended to the MSE `SourceBuffer`. 
 
 If any media segment is appended before the init segment, `appendBuffer()` fires an error event and the `SourceBuffer` enters an unrecoverable error state. The entire MSE pipeline must be torn down and re-initialized.
 
+**Each chunk has its own init segment, and continuation chunks (N>0) MUST re-append theirs** — every chunk's ffmpeg encode emits its own `elst` (edit list) carrying that chunk's source-time lead-in offset, and parsing chunk N's media against chunk 0's init silently drops the data. See [`02-Chunk-Pipeline-Invariants.md`](02-Chunk-Pipeline-Invariants.md) § "Per-chunk init segments are required".
+
 The server generates the init segment by running a zero-duration ffmpeg pass on the first `.m4s` output file.
 
 ---
@@ -85,7 +87,7 @@ The `?from=N` query parameter skips directly to segment index N. The init segmen
 
 ## Client Parsing Logic
 
-`client/src/services/StreamingService.ts`:
+`client/src/services/streamingService.ts`:
 
 ```
 fetch('/stream/<jobId>')
@@ -264,9 +266,9 @@ Easy to conflate, but each knob affects a different part of the pipeline:
 
 | Lever | Default | What it controls |
 |---|---|---|
-| `CHUNK_DURATION_S` (`server/src/services/chunker.ts`) | 300s | ffmpeg transcode unit — one ffmpeg process produces one chunk. Affects first-byte latency (smaller = faster start) and chunk-cutover cost (smaller = more frequent cutovers) |
+| `CHUNK_DURATION_S` (`client/src/services/playbackConfig.ts`) | 300s | ffmpeg transcode unit — one ffmpeg process produces one chunk. Affects first-byte latency (smaller = faster start) and chunk-cutover cost (smaller = more frequent cutovers) |
 | Segment duration (ffmpeg `-seg_duration`) | 2s | Wire framing unit — each `.m4s` is 2 seconds of fMP4. Affects append cadence and `appendBuffer` throughput |
-| `forwardTargetS` (`client/src/services/BufferManager.ts`) | 60s | Client-side buffer ceiling — how much media is resident in the SourceBuffer. Independent of ffmpeg; the network can deliver hundreds of segments but the client only keeps `forwardTargetS` ahead of the playhead |
+| `forwardTargetS` (`client/src/services/bufferConfig.ts`) | 60s | Client-side buffer ceiling — how much media is resident in the SourceBuffer. Independent of ffmpeg; the network can deliver hundreds of segments but the client only keeps `forwardTargetS` ahead of the playhead |
 
 If playback feels choppy at 4K, the right lever depends on the symptom:
 - Long time-to-first-frame → shrink `CHUNK_DURATION_S` (documented in `docs/todo.md` CHUNK-001)

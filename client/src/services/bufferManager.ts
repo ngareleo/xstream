@@ -108,7 +108,14 @@ export class BufferManager {
         () => {
           try {
             this.sourceBuffer = ms.addSourceBuffer(mimeType);
-            this.sourceBuffer.mode = "sequence";
+            // segments mode honors each segment's own PTS instead of the UA
+            // auto-advancing timestampOffset per append. The chunker emits
+            // chunk N's segments with `-output_ts_offset {chunkStart}` so they
+            // already carry source-time PTS — appending out of order (e.g.
+            // ChunkPipeline's foreground + lookahead slots interleaving) lands
+            // each segment at its true buffer-time. In sequence mode the same
+            // interleave ballooned the buffer to hundreds of MB.
+            this.sourceBuffer.mode = "segments";
             // Pre-set duration to the full video length so the browser allows
             // seeking anywhere in the video immediately, even before that range
             // is buffered. Without this, videoEl.currentTime is clamped to
@@ -120,7 +127,17 @@ export class BufferManager {
             // Drive back-pressure checks as the video plays forward, so a paused
             // stream gets resumed even when no new segments are being appended.
             this.videoEl.addEventListener("timeupdate", this.handleTimeUpdate);
-            log.info(`MSE ready — sourceBuffer added (${mimeType})`, { mime_type: mimeType });
+            // Log the actual SourceBuffer mode the UA accepted, not the value we
+            // tried to set — Chromium silently keeps "sequence" if it didn't
+            // honour the assignment (rare but possible on some codec configs).
+            // A trace where this says "sequence" while source has "segments"
+            // means a stale client bundle (HMR miss / cached SW / unrefreshed
+            // tab) — see trace 963696a2… for the symptom (chunk 2 stacked on
+            // chunk 1, playhead skipped to chunk 3).
+            log.info(`MSE ready — sourceBuffer added (${mimeType})`, {
+              mime_type: mimeType,
+              source_buffer_mode: this.sourceBuffer.mode,
+            });
             resolve();
           } catch (err) {
             log.error("addSourceBuffer failed", { message: (err as Error).message });
@@ -234,7 +251,35 @@ export class BufferManager {
           if ((err as DOMException).name === "QuotaExceededError" && attempt < 3) {
             continue; // retry after eviction
           }
-          log.error("appendBuffer error", { message: (err as Error).message });
+          // Capture state-at-error so the next failure trace tells us which
+          // InvalidStateError variant fired (closed MediaSource, removed
+          // SourceBuffer, in-flight `updating` race, …) without a code
+          // change. See trace ac249ef0… — 90 identical errors over 36 s with
+          // only `message` made the root cause indistinguishable.
+          const domErr = err as DOMException;
+          // `source_buffer_in_ms_list`: distinguishes "browser detached our
+          // SourceBuffer under memory pressure" (false) from any other
+          // InvalidStateError cause (true). Trace 65ef5d6c… narrowed the
+          // cause to "SB removed from sourceBuffers while we still hold the
+          // ref"; this field nails the final attribution. Cumulative bytes
+          // helps confirm Chromium's MSE-budget hypothesis (typically
+          // ~150–300 MB before forced eviction; we hit InvalidStateError at
+          // 2.1 GB cumulative).
+          const sbInMsList =
+            this.mediaSource !== null && Array.from(this.mediaSource.sourceBuffers).includes(sb);
+          log.error("appendBuffer error", {
+            message: domErr.message,
+            error_name: domErr.name,
+            error_code: domErr.code,
+            media_source_ready_state: this.mediaSource?.readyState ?? "null",
+            source_buffer_updating: sb.updating,
+            source_buffer_present: this.sourceBuffer !== null,
+            source_buffer_in_ms_list: sbInMsList,
+            data_bytes: data.byteLength,
+            segments_appended: this.segmentsAppended,
+            total_bytes_appended: this.totalBytesAppended,
+            attempt,
+          });
           fatalError = true;
           break;
         }
@@ -253,6 +298,20 @@ export class BufferManager {
       this.afterAppendCb?.();
       if (this.segmentsAppended % this.config.healthLogIntervalSegments === 0) {
         const stats = this.bufferStats;
+        // Snapshot the actual SourceBuffer ranges so the next trace shows
+        // empirically *where* segments are landing — not just bufferedSeconds
+        // (which only reads the LAST range and hides chunk-stacking bugs).
+        // Trace b37fc612… showed end(last) plateauing at ~300 while chunk 2
+        // streamed in cleanly with TFDT 300 — needed range visibility to
+        // tell whether chunk 2 created a separate range, overlapped chunk 1,
+        // or landed somewhere else entirely.
+        const ranges: Array<[number, number]> = [];
+        for (let i = 0; i < sb.buffered.length; i++) {
+          ranges.push([
+            parseFloat(sb.buffered.start(i).toFixed(2)),
+            parseFloat(sb.buffered.end(i).toFixed(2)),
+          ]);
+        }
         log.info(
           `Buffer health — ${stats.segmentsAppended} segments, ${(stats.bytesInBuffer / 1_048_576).toFixed(1)} MB in buffer (${stats.bufferedSeconds.toFixed(1)}s), ${(stats.totalBytesAppended / 1_048_576).toFixed(1)} MB total appended`,
           {
@@ -262,6 +321,9 @@ export class BufferManager {
             buffered_s: parseFloat(stats.bufferedSeconds.toFixed(1)),
             total_bytes_appended: stats.totalBytesAppended,
             eviction_count: stats.evictionCount,
+            buffered_ranges_json: JSON.stringify(ranges),
+            buffered_range_count: ranges.length,
+            current_time_s: parseFloat(this.videoEl.currentTime.toFixed(2)),
           }
         );
       }
@@ -419,12 +481,13 @@ export class BufferManager {
         () => {
           try {
             this.sourceBuffer = ms.addSourceBuffer(mimeType);
-            this.sourceBuffer.mode = "sequence";
+            this.sourceBuffer.mode = "segments";
             if (this.videoDurationS > 0) {
               ms.duration = this.videoDurationS;
             }
             log.info(`Background MSE ready — sourceBuffer added (${mimeType})`, {
               mime_type: mimeType,
+              source_buffer_mode: this.sourceBuffer.mode,
             });
             resolve(this.objectUrl as string);
           } catch (err) {
@@ -476,19 +539,12 @@ export class BufferManager {
     this.bytesInBuffer = 0;
     sb.remove(0, Infinity);
     await this.waitForUpdateEnd();
-    // In sequence mode the UA auto-manages timestampOffset, advancing it to
-    // maintain continuity across appends. After flushing, the offset still
-    // reflects the end of the previous chunk, so new segments (whose ffmpeg
-    // timestamps restart near 0 due to -ss input seek) would be placed at the
-    // wrong position in the buffer's timeline. Reset it to the seek position so
-    // segments from the incoming chunk land where videoEl.currentTime expects.
-    if (sb.mode === "sequence") {
-      sb.timestampOffset = timeSeconds;
-    }
+    // In segments mode each segment carries source-time PTS (set by the
+    // chunker via -output_ts_offset), so no timestampOffset gymnastics are
+    // needed after flush — incoming segments land where their PTS says.
     this.videoEl.currentTime = timeSeconds;
-    log.info(`Buffer flushed — seek to ${timeSeconds.toFixed(2)}s (timestampOffset reset)`, {
+    log.info(`Buffer flushed — seek to ${timeSeconds.toFixed(2)}s`, {
       seek_target_s: parseFloat(timeSeconds.toFixed(2)),
-      timestamp_offset_s: parseFloat(timeSeconds.toFixed(2)),
     });
   }
 

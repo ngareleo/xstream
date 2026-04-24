@@ -2,7 +2,7 @@
 name: setup-local
 description: Full local environment setup — install deps, generate Seq credentials, start Seq and dev servers
 disable-model-invocation: true
-allowed-tools: Bash(bash *) Bash(bun *) Bash(lsof *) Bash(grep *) Bash(cat *) Bash(cp *)
+allowed-tools: Bash(bash *) Bash(bun *) Bash(lsof *) Bash(grep *) Bash(cat *) Bash(cp *) Bash(realpath *) Bash(sed *) Bash(printf *) Bash(test *) Bash(ls *)
 ---
 
 You are setting up a fresh local development environment for xstream. Follow these steps in order.
@@ -88,13 +88,48 @@ cp .env.example .env
 
 Report that `.env` was created from `.env.example` and that OMDB_API_KEY and OTEL_EXPORTER_OTLP_HEADERS may need to be filled in.
 
+## 4b. Configure the encode-test fixtures directory
+
+The chunker encode tests (`bun test`) run real ffmpeg encodes against a couple of source movies on disk. Wiring this up is optional — leave unset and the tests skip cleanly — but skipping it means a regression in the HW-encode pipeline won't be caught locally.
+
+Ask the developer (verbatim):
+
+> The chunker encode tests run real ffmpeg encodes against your local copies of these movies:
+>
+>   • Mad Max- Fury Road (2015).mkv
+>   • Furiosa- A Mad Max Saga (2024) 4K.mkv
+>
+> Path to a directory containing them? (Press Enter to skip — encode tests will be skipped.)
+>
+> Tip: if your local filenames differ, create a directory of symlinks pointing at your real files using these basenames.
+
+If they provide a path:
+
+1. Resolve it to absolute (`realpath`).
+2. Confirm the directory exists. If not, report and skip the write.
+3. List which expected basenames are present and which are missing.
+4. If at least one is present, write `XSTREAM_TEST_MEDIA_DIR=<absolute>` to `.env`. Use this idempotent pattern (replaces an existing line, otherwise appends):
+   ```sh
+   ABS=$(realpath "<user-input>")
+   if grep -q '^XSTREAM_TEST_MEDIA_DIR=' .env 2>/dev/null; then
+     sed -i.bak "s|^XSTREAM_TEST_MEDIA_DIR=.*|XSTREAM_TEST_MEDIA_DIR=$ABS|" .env && rm -f .env.bak
+   else
+     printf 'XSTREAM_TEST_MEDIA_DIR=%s\n' "$ABS" >> .env
+   fi
+   ```
+5. If zero expected basenames are present, do NOT write — report the mismatch and recommend symlinking.
+
+If they skip (empty input):
+
+- Print: "Skipped — to enable later, set `XSTREAM_TEST_MEDIA_DIR` in `.env` and re-run `/setup-local`, or run with `XSTREAM_TEST_MEDIA_DIR=<dir> bun test` ad-hoc."
+
 ## 5. Check environment configuration
 
 ```sh
 bun run check-env
 ```
 
-Report any variables shown as missing or misconfigured. Do not block on warnings — only stop if a required variable is missing.
+Report any variables shown as missing or misconfigured. Do not block on warnings — only stop if a required variable is missing. The "Test fixtures (dev)" section will list each expected fixture as ✔ or missing, based on whatever you wrote in step 4b.
 
 ## 6. Start dev servers
 
@@ -129,6 +164,7 @@ Report:
 - ✓ `.env` present
 - ✓ Dev servers running (server :3001, client :5173)
 - ✓ App accessible at http://localhost:5173
+- Encode-test fixtures: ✓ wired (`XSTREAM_TEST_MEDIA_DIR=...`) **or** ⚠ skipped — re-run setup or set the var manually to enable
 - Any items that need manual attention (e.g. OMDB_API_KEY, Seq API key for OTLP)
 
 ## Notes

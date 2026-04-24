@@ -13,8 +13,10 @@ import type { Resolution } from "~/types.js";
 export const CHUNK_DURATION_S = 300;
 
 /** How close to the end of the current chunk (in seconds) we start prefetching
- *  the next one. */
-export const PREFETCH_THRESHOLD_S = 60;
+ *  the next one. Sized to absorb ffmpeg cold-start (~25–30 s on 4K VAAPI) plus
+ *  a HW→software fallback (~30 s of failed VAAPI before the chunker retries),
+ *  with margin left over for backpressure holding chunk N's tail near 20 s. */
+export const PREFETCH_THRESHOLD_S = 90;
 
 /** Minimum buffered seconds before `video.play()` is called on initial load.
  *  Larger resolutions need more lead-time because the first frames take longer

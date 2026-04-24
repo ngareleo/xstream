@@ -21,7 +21,7 @@ The client drives transcoding in **300-second chunks** rather than encoding the 
 
 ### Chunk chaining
 
-When the current chunk stream finishes, `startChunkSeries` chains to the next one. A RAF prefetch loop fires the next chunk's `startTranscode` mutation when `currentTime > chunkEnd - 60s`, so the next `jobId` is usually already in hand (`nextJobIdRef`) — no mutation RTT before streaming resumes. Prefetch requests open their own `transcode.request` span with `chunk.is_prefetch = true`, so Seq queries can separate prefetch RTT from on-demand RTT. Continuation chunks skip re-appending the init segment; the `SourceBuffer` (in `mode="sequence"`) picks up seamlessly.
+When the current chunk stream finishes, `startChunkSeries` chains to the next one. A RAF prefetch loop fires the next chunk's `startTranscode` mutation when `currentTime > chunkEnd - 90s` (`PREFETCH_THRESHOLD_S`), so the next `jobId` is usually already in hand — no mutation RTT before streaming resumes. Prefetch requests open their own `transcode.request` span with `chunk.is_prefetch = true`, so Seq queries can separate prefetch RTT from on-demand RTT. Continuation chunks **must re-append their init segment** (each chunk's `elst` differs); the `SourceBuffer` (in `mode="segments"`, NOT `"sequence"`) places each segment by its TFDT so chunks stitch seamlessly. See [`02-Chunk-Pipeline-Invariants.md`](02-Chunk-Pipeline-Invariants.md) for the full set of rules.
 
 ### Connection-aware ffmpeg lifecycle
 

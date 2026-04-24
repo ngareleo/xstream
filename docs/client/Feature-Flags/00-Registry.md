@@ -4,7 +4,7 @@ This file is the authoritative catalog of feature flags the app ships with.
 
 ## Policy
 
-**Any commit that adds, removes, or renames a flag MUST update this file in the same commit.** Reviewers should block a flag change that doesn't touch `docs/feature-flags.md`. The doc exists so future contributors (and future agents) can answer "what flags exist, what do they do, what are their bounds?" without reading TypeScript.
+**Any commit that adds, removes, or renames a flag MUST update this file in the same commit.** Reviewers should block a flag change that doesn't touch `docs/client/Feature-Flags/00-Registry.md` (this file). The doc exists so future contributors (and future agents) can answer "what flags exist, what do they do, what are their bounds?" without reading TypeScript.
 
 The declaration side of the contract lives in `client/src/config/flagRegistry.ts`; the runtime (cache, hydration, pub/sub) lives in `client/src/config/featureFlags.ts`. See `CLAUDE.md` → *Add a new feature flag* for the step-by-step addition recipe.
 

@@ -22,8 +22,9 @@ function readHwAccel(): "auto" | "off" {
 
 const dev: AppConfig = {
   port: 3001,
-  segmentDir: resolve(root, "tmp/segments"),
-  // Allow DB_PATH override so integration tests can use a temp database
+  // Allow SEGMENT_DIR + DB_PATH overrides so integration tests can write to
+  // a per-PID temp dir without colliding with the dev `tmp/segments`.
+  segmentDir: process.env.SEGMENT_DIR ?? resolve(root, "tmp/segments"),
   dbPath: process.env.DB_PATH ?? resolve(root, "tmp/xstream.db"),
   scanIntervalMs: 30_000,
   hardwareAcceleration: readHwAccel(),

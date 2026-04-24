@@ -51,9 +51,9 @@ All markdown docs under `docs/` follow a nested convention.
 
 Run this skill when your change touches one of:
 
-- `client/src/services/PlaybackController.ts`
-- `client/src/services/StreamingService.ts`
-- `client/src/services/BufferManager.ts`
+- `client/src/services/playbackController.ts`
+- `client/src/services/streamingService.ts`
+- `client/src/services/bufferManager.ts`
 - `client/src/hooks/useChunkedPlayback.ts`
 - `server/src/routes/stream.ts`
 - `server/src/services/chunker.ts`

@@ -46,7 +46,7 @@ grep '^SEQ_ADMIN_PASSWORD=' .seq-credentials | cut -d= -f2
 
 First login after a fresh container forces a password change; update `.seq-credentials` immediately after.
 
-Verify OTel is flowing: run `/otel-logs` after a playback session — the skill logs in automatically and confirms spans arrived.
+Verify OTel is flowing: run `/otel-logs` after a playback session — it queries Seq's HTTP API and confirms spans arrived. For ad-hoc trace queries (filter by trace id, span name, attribute), use the `seq` skill — never drive the Seq UI in a browser unless the user explicitly asks to see it.
 
 ## Env vars — lifecycle
 
