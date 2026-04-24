@@ -12,10 +12,21 @@ import {
   PREFETCH_THRESHOLD_S,
   STARTUP_BUFFER_S,
 } from "./playbackConfig.js";
+import { isPlaybackError } from "./playbackErrors.js";
 import { clearSessionContext, getSessionContext, setSessionContext } from "./playbackSession.js";
 import { PlaybackTicker } from "./playbackTicker.js";
 import { PlaybackTimeline } from "./playbackTimeline.js";
 import { StallTracker } from "./stallTracker.js";
+
+/**
+ * Retry policy for transient `startTranscode` failures (currently only
+ * `CAPACITY_EXHAUSTED`). Mirrors `BufferManager.appendBuffer`'s 3-tier shape:
+ * named attempts, fatal flag, structured per-attempt span events. Backoff
+ * uses the server's `retryAfterMs` hint when present, falling back to the
+ * exponential schedule below.
+ */
+const MAX_RECOVERY_ATTEMPTS = 3;
+const DEFAULT_BACKOFF_MS = [500, 1000, 2000] as const;
 
 export { type PlaybackStatus };
 
@@ -463,13 +474,7 @@ export class PlaybackController {
     );
     const requestCtx = trace.setSpan(sessionCtx, requestSpan);
     return context
-      .with(requestCtx, () =>
-        this.deps.startTranscodeChunk({
-          resolution: res,
-          startTimeSeconds: startS,
-          endTimeSeconds: clampedEnd,
-        })
-      )
+      .with(requestCtx, () => this.runStartChunkWithRetry(res, startS, clampedEnd, requestSpan))
       .then(({ rawJobId, globalJobId }) => {
         this.events.onJobCreated(globalJobId);
         requestSpan.setAttribute("chunk.job_id", rawJobId);
@@ -486,6 +491,77 @@ export class PlaybackController {
         playbackLog.error("Chunk mutation error", { message: err.message });
         throw err;
       });
+  }
+
+  /**
+   * Three-tier retry around `startTranscodeChunk`. Mirrors `BufferManager`'s
+   * QuotaExceededError loop — named attempts, structured per-attempt logging,
+   * fatal break for non-retryable codes. The mutation handler in
+   * `useChunkedPlayback` already discriminates the union and rejects with a
+   * typed `PlaybackError`, so this loop only needs to inspect `code` /
+   * `retryable` / `retryAfterMs`.
+   *
+   * IMPORTANT: do NOT trigger `playback.stalled` for retryable rejections —
+   * `CAPACITY_EXHAUSTED` is healthy backpressure, not a freeze. The retry is
+   * recorded as a `playback.recovery_attempt` event on the surrounding
+   * `transcode.request` span instead.
+   */
+  private async runStartChunkWithRetry(
+    res: Resolution,
+    startS: number,
+    clampedEnd: number,
+    requestSpan: Span
+  ): Promise<{ rawJobId: string; globalJobId: string }> {
+    let lastErr: Error | null = null;
+    for (let attempt = 1; attempt <= MAX_RECOVERY_ATTEMPTS; attempt++) {
+      try {
+        return await this.deps.startTranscodeChunk({
+          resolution: res,
+          startTimeSeconds: startS,
+          endTimeSeconds: clampedEnd,
+        });
+      } catch (err) {
+        lastErr = err as Error;
+        if (!isPlaybackError(err) || !err.retryable) {
+          // Non-retryable code (or untyped error) — record the outcome and
+          // propagate immediately; the caller sets the span ERROR status.
+          requestSpan.addEvent("recovery.outcome", {
+            outcome: isPlaybackError(err) ? "non_retryable" : "untyped_error",
+            "error.code": isPlaybackError(err) ? err.code : "unknown",
+            attempts: attempt,
+          });
+          throw err;
+        }
+        if (attempt === MAX_RECOVERY_ATTEMPTS) {
+          requestSpan.addEvent("recovery.outcome", {
+            outcome: "gave_up",
+            "error.code": err.code,
+            attempts: attempt,
+          });
+          throw err;
+        }
+        const waitMs = err.retryAfterMs ?? DEFAULT_BACKOFF_MS[attempt - 1];
+        requestSpan.addEvent("playback.recovery_attempt", {
+          "error.code": err.code,
+          attempt_number: attempt,
+          attempt_max: MAX_RECOVERY_ATTEMPTS,
+          wait_ms: waitMs,
+        });
+        playbackLog.warn(
+          `Chunk request transient failure [${err.code}] — retrying in ${waitMs}ms (attempt ${attempt}/${MAX_RECOVERY_ATTEMPTS})`,
+          {
+            error_code: err.code,
+            attempt,
+            attempt_max: MAX_RECOVERY_ATTEMPTS,
+            wait_ms: waitMs,
+          }
+        );
+        await new Promise((r) => setTimeout(r, waitMs));
+      }
+    }
+    // Loop only exits via return or throw above; this is unreachable. Keep
+    // the throw so TS sees a definite return path without a non-null bang.
+    throw lastErr ?? new Error("Retry loop exited without resolution");
   }
 
   /**

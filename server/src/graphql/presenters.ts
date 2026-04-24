@@ -10,6 +10,7 @@
 import type { PlaybackHistoryRow } from "../db/queries/playbackHistory.js";
 import type {
   LibraryRow,
+  PlaybackErrorCode,
   TranscodeJobRow,
   VideoMetadataRow,
   VideoRow,
@@ -63,6 +64,7 @@ export interface GQLWatchlistItem {
 }
 
 export interface GQLTranscodeJob {
+  __typename: "TranscodeJob";
   id: string;
   resolution: string;
   status: string;
@@ -72,7 +74,16 @@ export interface GQLTranscodeJob {
   endTimeSeconds: number | null;
   createdAt: string;
   error: string | null;
+  errorCode: PlaybackErrorCode | null;
   _raw: TranscodeJobRow | ActiveJob;
+}
+
+export interface GQLPlaybackError {
+  __typename: "PlaybackError";
+  code: PlaybackErrorCode;
+  message: string;
+  retryable: boolean;
+  retryAfterMs: number | null;
 }
 
 // ── Presenter functions ───────────────────────────────────────────────────────
@@ -138,7 +149,13 @@ export function presentWatchlistItem(row: WatchlistItemRow): GQLWatchlistItem {
 }
 
 export function presentJob(row: TranscodeJobRow | ActiveJob): GQLTranscodeJob {
+  // errorCode lives only on ActiveJob (the in-memory state); restored TranscodeJobRow
+  // entries don't carry it because the DB row is just `error: text`. That's fine for
+  // the subscription path — only the in-memory job (which is what `transcodeJobUpdated`
+  // emits) needs the typed code.
+  const errorCode = "errorCode" in row ? row.errorCode : null;
   return {
+    __typename: "TranscodeJob",
     id: toGlobalId("TranscodeJob", row.id),
     resolution: internalResolutionToGql(row.resolution),
     status: internalStatusToGql(row.status),
@@ -148,7 +165,23 @@ export function presentJob(row: TranscodeJobRow | ActiveJob): GQLTranscodeJob {
     endTimeSeconds: row.end_time_seconds,
     createdAt: row.created_at,
     error: row.error,
+    errorCode,
     _raw: row,
+  };
+}
+
+export function presentPlaybackError(args: {
+  code: PlaybackErrorCode;
+  message: string;
+  retryable: boolean;
+  retryAfterMs?: number;
+}): GQLPlaybackError {
+  return {
+    __typename: "PlaybackError",
+    code: args.code,
+    message: args.message,
+    retryable: args.retryable,
+    retryAfterMs: args.retryAfterMs ?? null,
   };
 }
 

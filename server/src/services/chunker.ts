@@ -10,7 +10,7 @@ import { getJobById, insertJob, updateJobStatus } from "../db/queries/jobs.js";
 import { getSegmentsByJob, insertSegment } from "../db/queries/segments.js";
 import { getVideoById } from "../db/queries/videos.js";
 import { getOtelLogger, getTracer } from "../telemetry/index.js";
-import type { ActiveJob, Resolution } from "../types.js";
+import type { ActiveJob, PlaybackErrorCode, Resolution } from "../types.js";
 import { FFmpegFile } from "./ffmpegFile.js";
 import { getHwAccelConfig, type HwAccelConfig } from "./hwAccel.js";
 import { getJob, setJob } from "./jobStore.js";
@@ -55,6 +55,29 @@ const vaapiVideoState = new Map<string, VaapiVideoState>();
 
 /** Maximum number of concurrently running ffmpeg jobs. */
 const MAX_CONCURRENT_JOBS = 3;
+
+/** Server's hint to the client orchestrator for cap-rejection retry backoff.
+ * Kept short — the cap typically clears as soon as the next chunk's
+ * `notifySubscribers("transcode_complete")` fires. */
+const CAPACITY_RETRY_HINT_MS = 1_000;
+
+/**
+ * Discriminated result for `startTranscodeJob`. The mutation resolver maps
+ * `kind: "ok"` to a `TranscodeJob` GraphQL type and `kind: "error"` to a
+ * `PlaybackError` — both members of the `StartTranscodeResult` union. Replaces
+ * the previous "throw on known failure" pattern, which Relay rendered as a
+ * generic protocol violation (no data on a non-null mutation field) instead
+ * of a typed, retryable signal.
+ */
+export type StartJobResult =
+  | { kind: "ok"; job: ActiveJob }
+  | {
+      kind: "error";
+      code: PlaybackErrorCode;
+      message: string;
+      retryable: boolean;
+      retryAfterMs?: number;
+    };
 
 /**
  * Inflight dedup polling: when a concurrent call finds the same job already
@@ -141,9 +164,16 @@ export async function startTranscodeJob(
   startTimeSeconds?: number,
   endTimeSeconds?: number,
   parentOtelCtx?: OtelContext
-): Promise<ActiveJob> {
+): Promise<StartJobResult> {
   const video = getVideoById(videoId);
-  if (!video) throw new Error(`Video not found: ${videoId}`);
+  if (!video) {
+    return {
+      kind: "error",
+      code: "VIDEO_NOT_FOUND",
+      message: `Video not found: ${videoId}`,
+      retryable: false,
+    };
+  }
 
   const id = jobId(video.content_fingerprint, resolution, startTimeSeconds, endTimeSeconds);
 
@@ -169,7 +199,7 @@ export async function startTranscodeJob(
   const existing = getJob(id);
   if (existing && existing.status !== "error") {
     endResolveSpan("job_cache_hit", { job_status: existing.status });
-    return existing;
+    return { kind: "ok", job: existing };
   }
 
   // If a concurrent call is already initializing this exact job (between this
@@ -181,7 +211,7 @@ export async function startTranscodeJob(
       const pending = getJob(id);
       if (pending) {
         endResolveSpan("job_inflight_resolved");
-        return pending;
+        return { kind: "ok", job: pending };
       }
     }
     // If still not registered after INFLIGHT_DEDUP_TIMEOUT_MS, fall through.
@@ -222,9 +252,13 @@ export async function startTranscodeJob(
       "cap.requested_resolution": resolution,
     });
     resolveSpan.end();
-    throw new Error(
-      `Too many concurrent streams (limit: ${MAX_CONCURRENT_JOBS}). Close another player tab and try again.`
-    );
+    return {
+      kind: "error",
+      code: "CAPACITY_EXHAUSTED",
+      message: `Too many concurrent streams (limit: ${MAX_CONCURRENT_JOBS}). Close another player tab and try again.`,
+      retryable: true,
+      retryAfterMs: CAPACITY_RETRY_HINT_MS,
+    };
   }
 
   // Register synchronously before the first await so any concurrent call with the
@@ -261,6 +295,7 @@ export async function startTranscodeJob(
             initSegmentPath: initPath,
             subscribers: new Set(),
             connections: 0,
+            errorCode: null,
           };
           setJob(restored);
           log.info("Restored completed job from DB", {
@@ -272,7 +307,7 @@ export async function startTranscodeJob(
           // path must release the slot itself or the cap leaks one slot per restore.
           inflightJobIds.delete(id);
           endResolveSpan("job_restored_from_db", { segment_count: dbSegments.length });
-          return restored;
+          return { kind: "ok", job: restored };
         }
       } else {
         // Segment dir was wiped or truncated — force re-encode and wipe any
@@ -312,6 +347,7 @@ export async function startTranscodeJob(
       initSegmentPath: null,
       subscribers: new Set(),
       connections: 0,
+      errorCode: null,
     };
 
     insertJob(job);
@@ -336,12 +372,20 @@ export async function startTranscodeJob(
       jobCtx
     );
 
-    return job;
+    return { kind: "ok", job };
   } catch (err) {
     resolveSpan.setStatus({ code: SpanStatusCode.ERROR, message: (err as Error).message });
     resolveSpan.end();
     inflightJobIds.delete(id);
-    throw err;
+    // Genuinely unexpected — DB write failure, mkdir ENOSPC, etc. Map to the
+    // INTERNAL bucket so the resolver can surface a typed error to the
+    // client; no stack trace makes it to the wire.
+    return {
+      kind: "error",
+      code: "INTERNAL",
+      message: (err as Error).message,
+      retryable: false,
+    };
   }
 }
 
@@ -435,6 +479,7 @@ async function runFfmpeg(
     inflightJobIds.delete(job.id);
     job.status = "error";
     job.error = msg;
+    job.errorCode = "PROBE_FAILED";
     updateJobStatus(job.id, "error", { error: msg });
     notifySubscribers(job);
     return;
@@ -699,6 +744,7 @@ async function runFfmpeg(
       jobSpan.end();
       job.status = "error";
       job.error = err.message;
+      job.errorCode = "ENCODE_FAILED";
       updateJobStatus(job.id, "error", { error: err.message });
       notifySubscribers(job);
     })
