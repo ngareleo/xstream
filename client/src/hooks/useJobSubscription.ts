@@ -10,8 +10,6 @@ const JOB_SUBSCRIPTION = graphql`
       status
       completedSegments
       totalSegments
-      errorCode
-      error
     }
   }
 `;
@@ -20,11 +18,6 @@ export interface JobProgress {
   status: string;
   completedSegments: number;
   totalSegments: number | null | undefined;
-  /** Set when status === "ERROR" — typed code for the underlying failure
-   * (PROBE_FAILED, ENCODE_FAILED, …). Used by VideoPlayer to fail fast with
-   * a meaningful message instead of waiting for the 90 s stream idle timeout. */
-  errorCode: string | null | undefined;
-  error: string | null | undefined;
 }
 
 /**

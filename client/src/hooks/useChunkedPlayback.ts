@@ -9,7 +9,6 @@ import {
   type RecordSessionFn,
   type StartTranscodeChunkFn,
 } from "~/services/playbackController.js";
-import { PlaybackError } from "~/services/playbackErrors.js";
 import { DISPLAY_TO_GQL, type Resolution } from "~/types.js";
 
 export type { PlaybackStatus };
@@ -40,19 +39,10 @@ const START_CHUNK_MUTATION = graphql`
       startTimeSeconds: $startTimeSeconds
       endTimeSeconds: $endTimeSeconds
     ) {
-      __typename
-      ... on TranscodeJob {
-        id
-        status
-        completedSegments
-        totalSegments
-      }
-      ... on PlaybackError {
-        code
-        message
-        retryable
-        retryAfterMs
-      }
+      id
+      status
+      completedSegments
+      totalSegments
     }
   }
 `;
@@ -127,48 +117,11 @@ export function useChunkedPlayback(
             endTimeSeconds,
           },
           onCompleted: (response) => {
-            const result = response.startTranscode;
-            if (result.__typename === "PlaybackError") {
-              // Typed failure — preserve code/retryable/retryAfterMs so
-              // PlaybackController.requestChunk's retry policy can decide.
-              reject(
-                new PlaybackError({
-                  code: result.code as ConstructorParameters<typeof PlaybackError>[0]["code"],
-                  message: result.message,
-                  retryable: result.retryable,
-                  retryAfterMs: result.retryAfterMs ?? null,
-                })
-              );
-              return;
-            }
-            if (result.__typename !== "TranscodeJob") {
-              // Defensive: server added a new union member without a client
-              // update. Treat as INTERNAL — non-retryable, surfaces to user.
-              reject(
-                new PlaybackError({
-                  code: "INTERNAL",
-                  message: `Unknown StartTranscodeResult variant: ${result.__typename}`,
-                  retryable: false,
-                  retryAfterMs: null,
-                })
-              );
-              return;
-            }
-            const globalJobId = result.id;
+            const globalJobId = response.startTranscode.id;
             const rawJobId = atob(globalJobId).replace("TranscodeJob:", "");
             resolve({ rawJobId, globalJobId });
           },
-          onError: (err) =>
-            // Network / Relay protocol errors (not domain errors) — non-retryable.
-            // Domain errors land in onCompleted as the PlaybackError union member.
-            reject(
-              new PlaybackError({
-                code: "INTERNAL",
-                message: `Mutation transport error: ${err.message}`,
-                retryable: false,
-                retryAfterMs: null,
-              })
-            ),
+          onError: (err) => reject(new Error(`Mutation error: ${err.message}`)),
         });
       });
 

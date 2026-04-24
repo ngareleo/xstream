@@ -18,14 +18,12 @@ import type { MediaType, VideoMetadataRow } from "../../types.js";
 import { gqlMediaTypeToInternal, gqlResolutionToInternal } from "../mappers.js";
 import {
   type GQLLibrary,
-  type GQLPlaybackError,
   type GQLPlaybackSession,
   type GQLTranscodeJob,
   type GQLVideo,
   type GQLWatchlistItem,
   presentJob,
   presentLibrary,
-  presentPlaybackError,
   presentPlaybackSession,
   presentVideo,
   presentWatchlistItem,
@@ -33,19 +31,6 @@ import {
 import { fromGlobalId } from "../relay.js";
 
 export const mutationResolvers = {
-  /**
-   * Discriminates union members by the `__typename` set on the presenter
-   * output. Required by graphql-tools because the union has no `interface`
-   * field that yoga could auto-resolve from. Lives at the top level (not
-   * inside `Mutation`) because `StartTranscodeResult` is a type, not a
-   * Mutation field.
-   */
-  StartTranscodeResult: {
-    __resolveType(obj: GQLTranscodeJob | GQLPlaybackError): string {
-      return obj.__typename;
-    },
-  },
-
   Mutation: {
     async scanLibraries(): Promise<GQLLibrary[]> {
       const rows = await scanLibraries();
@@ -66,39 +51,19 @@ export const mutationResolvers = {
         endTimeSeconds?: number;
       },
       ctx: GQLContext
-    ): Promise<GQLTranscodeJob | GQLPlaybackError> {
+    ): Promise<GQLTranscodeJob> {
       const { id: localVideoId } = fromGlobalId(videoId);
       const internalResolution = gqlResolutionToInternal(resolution);
 
-      // Defensive try/catch — startTranscodeJob now returns its own typed
-      // errors for known cases. Anything that still throws is genuinely
-      // unexpected (DB connection failure, etc.) and gets mapped to INTERNAL
-      // so the client never sees an untyped GraphQL `errors[]` for the
-      // playback path. Without this wrapper a single unexpected throw still
-      // becomes Relay's "No data returned" protocol violation.
-      try {
-        const result = await startTranscodeJob(
-          localVideoId,
-          internalResolution,
-          startTimeSeconds,
-          endTimeSeconds,
-          ctx.otelCtx
-        );
-        return result.kind === "ok"
-          ? presentJob(result.job)
-          : presentPlaybackError({
-              code: result.code,
-              message: result.message,
-              retryable: result.retryable,
-              retryAfterMs: result.retryAfterMs,
-            });
-      } catch (err) {
-        return presentPlaybackError({
-          code: "INTERNAL",
-          message: (err as Error).message,
-          retryable: false,
-        });
-      }
+      const job = await startTranscodeJob(
+        localVideoId,
+        internalResolution,
+        startTimeSeconds,
+        endTimeSeconds,
+        ctx.otelCtx
+      );
+
+      return presentJob(job);
     },
 
     async createLibrary(

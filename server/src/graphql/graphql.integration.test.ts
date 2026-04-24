@@ -8,16 +8,16 @@
  * Use unique IDs (gql-lib1, gql-vid1, …) to avoid collisions with other test
  * files that share this database.
  *
- * Run with: bun test src/graphql/__tests__/graphql.integration.test.ts
+ * Run with: bun test src/graphql/graphql.integration.test.ts
  */
 import { beforeAll, describe, expect, test } from "bun:test";
 
 // These imports must come AFTER DB_PATH is set (handled by the preload)
-const { yoga } = await import("../../routes/graphql.js");
-const { getDb } = await import("../../db/index.js");
-const { upsertLibrary } = await import("../../db/queries/libraries.js");
-const { upsertVideo } = await import("../../db/queries/videos.js");
-const { toGlobalId } = await import("../relay.js");
+const { yoga } = await import("../routes/graphql.js");
+const { getDb } = await import("../db/index.js");
+const { upsertLibrary } = await import("../db/queries/libraries.js");
+const { upsertVideo } = await import("../db/queries/videos.js");
+const { toGlobalId } = await import("./relay.js");
 
 function gql(query: string, variables?: Record<string, unknown>): ReturnType<typeof yoga.fetch> {
   return yoga.fetch(
@@ -113,41 +113,5 @@ describe("GraphQL API", () => {
     expect(res.status).toBe(200);
     expect(body.errors).toBeDefined();
     expect(body.errors[0].message).toMatch(/nonexistentField/i);
-  });
-
-  test("startTranscode returns PlaybackError VIDEO_NOT_FOUND for unknown video", async () => {
-    // Hit the resolver with a globalId that doesn't exist in the DB. The new
-    // typed-error contract must return data.startTranscode as a PlaybackError
-    // union member instead of throwing (which would surface as
-    // "Unexpected error: No data returned" — the trace bf25cb77 failure mode).
-    const fakeGlobalId = toGlobalId("Video", "does-not-exist");
-    const res = await gql(
-      `mutation ($videoId: ID!, $resolution: Resolution!) {
-         startTranscode(videoId: $videoId, resolution: $resolution) {
-           __typename
-           ... on TranscodeJob { id }
-           ... on PlaybackError { code message retryable retryAfterMs }
-         }
-       }`,
-      { videoId: fakeGlobalId, resolution: "RESOLUTION_240P" }
-    );
-    const body = (await res.json()) as {
-      data: {
-        startTranscode: {
-          __typename: string;
-          code?: string;
-          message?: string;
-          retryable?: boolean;
-          retryAfterMs?: number | null;
-        };
-      };
-      errors?: unknown[];
-    };
-    expect(res.status).toBe(200);
-    expect(body.errors).toBeUndefined();
-    expect(body.data.startTranscode.__typename).toBe("PlaybackError");
-    expect(body.data.startTranscode.code).toBe("VIDEO_NOT_FOUND");
-    expect(body.data.startTranscode.retryable).toBe(false);
-    expect(body.data.startTranscode.retryAfterMs).toBeNull();
   });
 });

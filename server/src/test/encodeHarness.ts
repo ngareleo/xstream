@@ -157,12 +157,9 @@ export async function runChunk(
   startS: number,
   endS: number
 ): Promise<ActiveJob> {
-  const result = await startTranscodeJob(fixture.videoId, resolution, startS, endS);
-  if (result.kind === "error") {
-    throw new Error(`startTranscodeJob failed: [${result.code}] ${result.message}`);
-  }
-  result.job.connections += 1;
-  return result.job;
+  const job = await startTranscodeJob(fixture.videoId, resolution, startS, endS);
+  job.connections += 1;
+  return job;
 }
 
 /**
