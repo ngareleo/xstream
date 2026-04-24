@@ -126,49 +126,6 @@ export const typeDefs = /* GraphQL */ `
     ERROR
   }
 
-  enum PlaybackErrorCode {
-    """
-    The server hit MAX_CONCURRENT_JOBS. Recoverable — retry after retryAfterMs.
-    """
-    CAPACITY_EXHAUSTED
-    """
-    The requested videoId does not exist in the DB. Non-retryable.
-    """
-    VIDEO_NOT_FOUND
-    """
-    ffprobe rejected the source file. Non-retryable for this resolution.
-    """
-    PROBE_FAILED
-    """
-    ffmpeg failed every fallback tier (HW → sw-pad → software). Non-retryable.
-    """
-    ENCODE_FAILED
-    """
-    Catch-all for unexpected server failures (DB write, mkdir, …). Non-retryable.
-    """
-    INTERNAL
-  }
-
-  """
-  Typed failure for a chunk-start request. Returned by union from startTranscode
-  and surfaced via TranscodeJob.errorCode for failures that happen mid-job
-  (probe / encode) after the mutation already resolved successfully.
-  """
-  type PlaybackError {
-    code: PlaybackErrorCode!
-    message: String!
-    """
-    Whether the orchestration layer should retry the same call.
-    """
-    retryable: Boolean!
-    """
-    Server's hint for how long to wait before retrying. Null when retryable is false.
-    """
-    retryAfterMs: Int
-  }
-
-  union StartTranscodeResult = TranscodeJob | PlaybackError
-
   type TranscodeJob implements Node {
     id: ID!
     video: Video!
@@ -180,10 +137,6 @@ export const typeDefs = /* GraphQL */ `
     endTimeSeconds: Float
     createdAt: String!
     error: String
-    """
-    Typed code for mid-job failures (set when status == ERROR). Null otherwise.
-    """
-    errorCode: PlaybackErrorCode
   }
 
   # ── Playback history ──────────────────────────────────────────────────────────
@@ -228,7 +181,7 @@ export const typeDefs = /* GraphQL */ `
       resolution: Resolution!
       startTimeSeconds: Float
       endTimeSeconds: Float
-    ): StartTranscodeResult!
+    ): TranscodeJob!
 
     createLibrary(
       name: String!

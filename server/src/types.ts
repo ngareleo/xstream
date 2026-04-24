@@ -114,20 +114,6 @@ export interface SegmentRow {
   size_bytes: number | null;
 }
 
-/**
- * Typed code for known playback failure modes. Mirrors the GraphQL
- * `PlaybackErrorCode` enum 1:1 — keep in sync with `schema.ts` /
- * `schema.graphql`. The chunker emits these on `ActiveJob.errorCode` for
- * mid-job failures; the resolver returns them in the `StartTranscodeResult`
- * union for chunk-start failures.
- */
-export type PlaybackErrorCode =
-  | "CAPACITY_EXHAUSTED"
-  | "VIDEO_NOT_FOUND"
-  | "PROBE_FAILED"
-  | "ENCODE_FAILED"
-  | "INTERNAL";
-
 // In-memory job state (superset of DB row, tracks live ffmpeg process)
 export interface ActiveJob extends TranscodeJobRow {
   segments: string[]; // ordered list of completed segment paths
@@ -135,6 +121,4 @@ export interface ActiveJob extends TranscodeJobRow {
   subscribers: Set<ReadableStreamDefaultController>;
   /** Number of active /stream/:jobId HTTP connections consuming this job. */
   connections: number;
-  /** Set when the job fails mid-flight (probe / encode); null otherwise. */
-  errorCode: PlaybackErrorCode | null;
 }

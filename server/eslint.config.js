@@ -18,10 +18,7 @@ export default tseslint.config(
   {
     // Test files use ! for post-expect narrowing — acceptable since the test
     // fails before the assertion is used if the value is null/undefined.
-    // Pattern uses `**/*.test.ts` (not `src/**/*.test.ts`) so it matches both
-    // when ESLint is invoked from `server/` (cwd-relative) and from the repo
-    // root via lint-staged (where the file path is `server/src/...`).
-    files: ["**/*.test.ts"],
+    files: ["src/**/*.test.ts"],
     rules: {
       "@typescript-eslint/no-non-null-assertion": "off",
     },

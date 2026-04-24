@@ -42,9 +42,7 @@ export const queryResolvers = {
       }
       if (type === "TranscodeJob") {
         const row = getJobById(localId);
-        // presentJob already sets __typename: "TranscodeJob" — Node interface
-        // doesn't need an explicit override because the typename matches.
-        return row ? presentJob(row) : null;
+        return row ? { __typename: "TranscodeJob", ...presentJob(row) } : null;
       }
       if (type === "WatchlistItem") {
         const row = getWatchlistItemById(localId);
