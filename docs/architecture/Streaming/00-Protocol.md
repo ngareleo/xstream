@@ -52,6 +52,8 @@ The init segment must be the **first** data appended to the MSE `SourceBuffer`. 
 
 If any media segment is appended before the init segment, `appendBuffer()` fires an error event and the `SourceBuffer` enters an unrecoverable error state. The entire MSE pipeline must be torn down and re-initialized.
 
+**Each chunk has its own init segment, and continuation chunks (N>0) MUST re-append theirs** — every chunk's ffmpeg encode emits its own `elst` (edit list) carrying that chunk's source-time lead-in offset, and parsing chunk N's media against chunk 0's init silently drops the data. See [`02-Chunk-Pipeline-Invariants.md`](02-Chunk-Pipeline-Invariants.md) § "Per-chunk init segments are required".
+
 The server generates the init segment by running a zero-duration ffmpeg pass on the first `.m4s` output file.
 
 ---

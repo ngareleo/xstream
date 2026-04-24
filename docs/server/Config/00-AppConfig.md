@@ -57,11 +57,15 @@ Active when `NODE_ENV` is absent or `development`.
 
 | Field | Value |
 |---|---|
-| `port` | `3001` |
-| `segmentDir` | `./tmp/segments` (relative to project root) |
-| `dbPath` | `./tmp/xstream.db` |
-| `mediaConfigPath` | `./mediaFiles.json` |
-| `scanIntervalMs` | `30000` |
+| Field | Env var | Default |
+|---|---|---|
+| `port` | — | `3001` |
+| `segmentDir` | `SEGMENT_DIR` | `./tmp/segments` (relative to project root) |
+| `dbPath` | `DB_PATH` | `./tmp/xstream.db` |
+| `mediaConfigPath` | — | `./mediaFiles.json` |
+| `scanIntervalMs` | — | `30000` |
+
+`SEGMENT_DIR` and `DB_PATH` are honored in dev (not just prod) so the test harness can route writes to a per-PID temp dir — see [`../../architecture/Testing/00-Side-Effects-Policy.md`](../../architecture/Testing/00-Side-Effects-Policy.md). Don't set them by hand in your dev shell unless you know what you're doing.
 
 ### Prod
 

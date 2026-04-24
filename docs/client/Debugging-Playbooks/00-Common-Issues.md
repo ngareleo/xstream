@@ -183,3 +183,42 @@ Root cause: `DevToolsContext` holds `streamingLogsOpen` at the app root and rese
 Fix for manual/e2e testing: after navigating to the player, reopen the DEV pill (bottom-right) and re-enable **"Stream Logs ON"** before starting playback.
 
 Fix if persistence is needed: persist `streamingLogsOpen` to `localStorage` inside `DevToolsContext` (key `"devtools.streamingLogsOpen"`) — read on mount, write in a `useEffect`.
+
+---
+
+## Playhead skips a chunk and then stalls
+
+Symptoms: playback advances normally through chunk N, then jumps forward by ~5 minutes and immediately stalls with the buffering spinner. User reports "skipping a lot of footage". `Buffer health` log shows the buffered range capped at chunk N's end PTS while bytes-in-buffer keeps rising.
+
+Root cause: chunk N+1's media segments are landing in the SourceBuffer (bytes counter rises) but NOT extending the playable range past chunk N's end. Two known triggers:
+
+1. **`sourceBuffer.mode = "sequence"`** instead of `"segments"`. Check the `MSE ready` log's `source_buffer_mode` field — if it says `sequence`, the client bundle is stale (HMR miss / unrefreshed tab). Hard-refresh the tab.
+2. **Continuation chunks' init segments not appended.** Each chunk's ffmpeg encode emits its own `elst` (edit list); without re-appending the init, chunk N+1's media is parsed against chunk N's edit list and Chrome silently drops the data. `ChunkPipeline.processSegment` must let init segments through unconditionally — see [`../../architecture/Streaming/02-Chunk-Pipeline-Invariants.md`](../../architecture/Streaming/02-Chunk-Pipeline-Invariants.md) § "Per-chunk init segments are required".
+
+Diagnostic: in Seq, query `@MessageTemplate = 'Buffer health' and @TraceId = '...'` and inspect `buffered_ranges_json` over time. If you see `[[..., 300]]` plateauing while `total_bytes_appended` keeps climbing, you're in this scenario.
+
+---
+
+## `appendBuffer error` cascade — same error 30+ times in seconds
+
+Symptoms: Seq shows a tight burst of `appendBuffer error` logs at the rate of incoming network segments (typically every ~400 ms for 4K), all with the same `message: "An attempt was made to use an object that is not, or is no longer, usable"`. Buffer eventually tears down.
+
+Root cause: a non-recoverable `InvalidStateError` is hitting every queued segment. The first error's enriched fields tell you which of four MSE failure modes is firing:
+
+| `error_name` | `media_source_ready_state` | `source_buffer_in_ms_list` | Cause |
+|---|---|---|---|
+| `InvalidStateError` | `closed` / `ended` / `null` | n/a | MediaSource was torn down (teardown raced with in-flight appends) |
+| `InvalidStateError` | `open` | `false` | Browser detached our SourceBuffer under memory pressure (typical at >1 GB cumulative appended for one session) |
+| `InvalidStateError` | `open` | `true` | `SourceBuffer.updating === true` race (concurrent ops from `seek` / `evictBackBuffer`) |
+
+Every appendBuffer-error log carries `error_name`, `error_code`, `media_source_ready_state`, `source_buffer_in_ms_list`, `source_buffer_updating`, `data_bytes`, `segments_appended`, `total_bytes_appended` — see [`../../architecture/Observability/client/00-Spans.md`](../../architecture/Observability/client/00-Spans.md). The cascade itself is a secondary bug (each new network segment re-runs `drainQueue` against the dead SourceBuffer); the fix is to stop the upstream condition.
+
+---
+
+## Buffer balloons to hundreds of MB before stalling
+
+Symptoms: `Buffer health` log shows `buffer_mb` climbing past ~150 MB and `total_bytes_appended` past 400 MB while `buffered_s` stays near the 60 s `forwardTargetS`. Eventually a `QuotaExceededError`-warn log fires and the buffer nukes.
+
+Root cause: parallel foreground+lookahead appends are landing at overlapping PTS instead of contiguous source-time positions, so the SourceBuffer accumulates duplicated data without extending the timeline. Almost always a violation of the **chunk PTS contract** — see [`../../architecture/Streaming/02-Chunk-Pipeline-Invariants.md`](../../architecture/Streaming/02-Chunk-Pipeline-Invariants.md) § "Chunk PTS contract".
+
+Quick check: ffprobe a chunk N>0 segment on disk (`tmp/segments/<jobId>/segment_0000.m4s`); the first packet's `pts_time` should equal `chunkStartSeconds`, not `~0`. If it's near 0, the server's `-output_ts_offset` flag isn't being applied.

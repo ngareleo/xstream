@@ -1,13 +1,78 @@
-# HDR / VAAPI Pad Artifact
+# HDR encoding on VAAPI
 
-**Symptom:** green (or pink) overlay on 4K HDR playback via VAAPI; SDR renders cleanly on the same path.
+How the chunker transcodes HDR10 / HLG / Dolby-Vision 4K sources to 8-bit H.264 SDR on Intel VAAPI without green bars, decoder errors, or silent software fallback.
 
-**Root cause:** `pad_vaapi`'s fill color is interpreted in the *output* color space. On HDR sources, colour matrix/primaries metadata flows through as BT.2020, so `color=black` is decoded under BT.2020→display transforms and becomes chroma green.
+The original title of this file was "HDR Pad Artifact" because the first symptom that surfaced was a green overlay caused by `pad_vaapi` on BT.2020 content. The full picture turned out to be broader — tonemap, surface tagging, and a three-tier fallback cascade — so this file now covers the whole HDR/VAAPI path.
 
-## Workarounds (cheapest first)
+## Symptoms and their root causes
 
-1. Force output colour metadata before `pad_vaapi`: `-colorspace bt709 -color_primaries bt709 -color_trc bt709` (we transcode to 8-bit H.264 SDR, so this is honest).
-2. Pad on the CPU side: `scale_vaapi=...,hwdownload,format=nv12,pad=W:H:x:y:color=black,hwupload`. Costs a system-memory round-trip.
-3. Drop padding entirely (no `force_original_aspect_ratio=decrease`). Only if stretched/cropped output is acceptable.
+| Symptom | Cause |
+|---|---|
+| Green or pink overlay on 4K HDR playback via VAAPI (SDR renders cleanly) | `pad_vaapi` fill color is interpreted in the output color space; on BT.2020 surfaces, `color=black` becomes chroma green |
+| Encoder exits with libva `-38` ("Function not implemented") at the pad or encoder boundary | `pad_vaapi` rejects surfaces downstream of an HDR/DV source on the current driver stack (empirically, on every chunk) |
+| Encoder exits with libva `-38` even after dropping `pad_vaapi` | `-colorspace bt709 -color_primaries bt709 -color_trc bt709` as output flags forces ffmpeg to insert an auto-scaler to bridge the surface's inherited BT.2020 metadata to the tagged BT.709 output — libva rejects the bridge in the encode pipeline |
+| `transcode_fallback_to_software` event fires on every HDR chunk; `hwaccel: software` on `transcode.job` span | Any of the above not handled; the 3-tier cascade fell through to libx264 (which stalls continuously at 4K) |
 
-When touching the VAAPI branch of `applyOutputOptions`, test with an HDR 4K source (e.g. Furiosa 2160p) — SDR-only smoke tests miss this.
+## Current implementation
+
+Two filter-chain variants (`vaapiVideoOptions` in `server/src/services/ffmpegFile.ts`), selected by the `isHdr` flag from `ffprobe` metadata:
+
+**SDR path:**
+```
+scale_vaapi=W:H:force_original_aspect_ratio=decrease:format=nv12,
+pad_vaapi=W:H:x:y
+```
+
+**HDR path:**
+```
+tonemap_vaapi=format=nv12:t=bt709:m=bt709:p=bt709,
+scale_vaapi=W:H:force_original_aspect_ratio=decrease:format=nv12:
+  out_color_matrix=bt709:out_color_primaries=bt709:out_color_transfer=bt709:out_range=tv
+```
+
+Key differences for HDR:
+
+1. **`tonemap_vaapi` does the real color conversion on the GPU** (BT.2020 → BT.709, HDR → SDR). Must come before `scale_vaapi`.
+2. **No `pad_vaapi` for HDR** — the driver rejects the padded surface downstream. HDR output may have variable dimensions (e.g. 3840×1604 for 2.39:1), handled transparently by the `<video>` element's `object-fit: contain`.
+3. **Tag the surface via `scale_vaapi out_color_*`** — this flows the BT.709 metadata through the encoder's VUI without any bridging scaler. DO NOT set `-colorspace bt709 -color_primaries bt709 -color_trc bt709` as output flags (tried in commit `cf6b6c1`, confirmed to break every HDR encode — see the "libva `-38`" row in the symptoms table).
+
+## Three-tier failure cascade
+
+`server/src/services/chunker.ts::runFfmpeg` retries each chunk on encoder failure, walking down a cascade of fallback strategies:
+
+1. **Fast VAAPI** — the filter chain above.
+2. **VAAPI with sw-pad** — HW decode + HW scale, CPU padding (`hwdownload,format=nv12,pad=...,hwupload`). Only attempted for SDR — HDR sources skip this tier because `pad_vaapi` failures tend to mean the whole surface-handling path is unhappy, and sw-pad's `hwupload` fails on the CPU NV12 it produces.
+3. **Software libx264** — final fallback. `hwaccel.forced_software: true` on the resulting `transcode.job` span.
+
+Each tier-transition emits events:
+- `transcode_fallback_to_vaapi_sw_pad` — tier 1 failed, retrying on tier 2. Attaches `ffmpeg_exit_code` + `ffmpeg_stderr` (4 KB tail).
+- `transcode_fallback_to_software` — tier 2 failed (or skipped), retrying on tier 3. Same failure-diagnostic attachments.
+
+The span for the failed tier ends at the failure event; a fresh `transcode.job` span covers the retry. A single chunk that falls through to software therefore produces two sibling spans with different `hwaccel` attributes — useful for spotting intermittent HW failures in traces.
+
+## Per-source VAAPI-state cache
+
+`chunker.ts` keeps an in-memory `vaapiVideoState: Map<string, "needs_sw_pad" | "hw_unsafe">` keyed by `video_id`:
+
+- **First failure** on a source → state becomes `needs_sw_pad`. Subsequent chunks of that video **skip tier 1** and start at tier 2.
+- **Second failure** (sw-pad also fails, or HDR source which skips tier 2) → state becomes `hw_unsafe`. Subsequent chunks **skip VAAPI entirely** and go straight to software.
+
+Wiped on server restart so a driver/ffmpeg upgrade gets re-evaluated.
+
+Events: `vaapi_marked_needs_sw_pad`, `vaapi_marked_unsafe` on the `transcode.job` span.
+
+## Span attributes to inspect when debugging
+
+On `transcode.job`:
+
+- `hwaccel`: the backend actually used (`software` / `vaapi` / `videotoolbox` / …). If an HDR 4K span shows `software`, the cascade fell through.
+- `hwaccel.hdr_tonemap`: boolean, `true` when `tonemap_vaapi` was in the filter chain. If it's `false` on an HDR source, the source-detection logic (`FFmpegFile.isHdr`) missed it.
+- `hwaccel.vaapi_sw_pad`: boolean, `true` for tier-2 retries (SDR only).
+- `hwaccel.forced_software`: boolean, `true` for tier-3 retries.
+
+## When touching the VAAPI branch
+
+1. **Always test with an HDR 4K source.** SDR-only smoke tests miss this whole file's worth of gotchas. Use the encode test (`server/src/services/__tests__/chunker.encode.test.ts` — Furiosa fixture) when `XSTREAM_TEST_MEDIA_DIR` is configured.
+2. **Never add `-colorspace bt709 -color_primaries bt709 -color_trc bt709` as output flags** even if a forum suggests it. See the symptoms table.
+3. **Driver requirement**: jellyfin-ffmpeg + Intel iHD driver ≥ 22.x (for `tonemap_vaapi` support). `bun run setup-ffmpeg` installs the pinned jellyfin-ffmpeg which bundles a compatible driver.
+4. **HDR 4K on VAAPI has exactly 2 effective tiers, not 3.** The tier-2 retry is short-circuited for HDR because HDR produces an identical filter chain at both tiers (no pad in either), so retrying would just fail the same way.

@@ -18,3 +18,4 @@ Cross-cutting concepts that span client and server, or that describe the system 
 | [`Startup/`](Startup/README.md) | Server boot sequence + graceful shutdown. |
 | [`Library-Scan/`](Library-Scan/README.md) | How the library scanner walks media directories and fingerprints files. |
 | [`Deployment/`](Deployment/README.md) | Rust + Tauri packaging plan; stable contracts across the port. |
+| [`Testing/`](Testing/README.md) | Test side-effects policy, encode-pipeline real-media tests, encoder edge-case test policy. |
