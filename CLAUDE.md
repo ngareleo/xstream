@@ -141,6 +141,25 @@ Architect then decides whether `docs/`, `SUMMARY.md`, or the architect index nee
 
 If the change is genuinely irrelevant to the knowledge base (a typo fix, a lint-only change, a dev-only script tweak), tell architect that explicitly — "files changed: X; no docs impact." Architect will log it and return. This preserves the "always notify" discipline without forcing a doc edit on every commit.
 
+## Branch & PR policy
+
+**Main stays healthy.** Never merge a PR into `main` on the user's behalf unless they have explicitly said "merge it" — and even then, only after they have had a chance to test and review. The user's reviews are the gate for main. Don't treat a PR being green in CI as sign-off; green is necessary but not sufficient.
+
+If the user says something ambiguous mid-session like "merge the PR" or "merge the 2 PRs", confirm which of the following they mean BEFORE touching GitHub:
+- "Merge into main" — needs prior review; if they haven't tested yet, say so.
+- "Collapse multiple open PRs into one" — a branch-surgery task, not a GitHub merge.
+- "Merge branch X into branch Y locally" — a git operation on feature branches, main untouched.
+
+Merging to main is not cleanly reversible (`git revert` leaves two reverted merge commits in history; force-push to main is forbidden). The cost of a wrong merge is permanent history noise — always worth a confirming sentence.
+
+**One PR per session.** When a session opens a PR, every subsequent change in that session keeps landing on the same branch and the same PR — push new commits onto it, update the PR description if scope grew, don't open a second PR.
+
+Exceptions (only when the user explicitly says so):
+- "Open a new PR for this" — user wants the next block of work on a separate branch.
+- "Merge what's open first" — user wants the current PR closed before starting the next.
+
+If the current work feels architecturally separable from the open PR and a second PR seems cleaner, **ask before branching** — don't assume. The cost of pausing to confirm is low; the cost of landing scope as two PRs when the user wanted one (or vice-versa) is an awkward history the reviewer then has to reconcile.
+
 ## Skills & Agents index
 
 The full registry is surfaced by the Skill tool at session start. Brief map:
