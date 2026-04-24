@@ -116,7 +116,6 @@ enum PlaybackErrorCode {
   PROBE_FAILED
   ENCODE_FAILED
   INTERNAL
-  MSE_DETACHED
 }
 
 """
@@ -215,7 +214,6 @@ GraphQL enums use ALL_CAPS. Internally the server uses lowercase strings (or dis
 | `PROBE_FAILED` | `probe_failed` (ActiveJob errorCode) |
 | `ENCODE_FAILED` | `encode_failed` (ActiveJob errorCode) |
 | `INTERNAL` | resolver catch-all — only genuinely unexpected throws |
-| `MSE_DETACHED` | client-only; Chrome silently removed our SourceBuffer under memory pressure; never crosses the wire |
 
 ---
 
