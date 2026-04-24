@@ -73,40 +73,78 @@ export default defineConfig({
       compressed: true,
     },
 
-    // Generate an interactive HTML bundle report in CI. Output lands at
-    // dist/stats.html, which the CI workflow uploads as an artifact.
-    ...(process.env.CI
+    // Generate an interactive HTML bundle report in CI (uploaded as an
+    // artifact) or on demand locally via `bun run analyze`
+    // (BUNDLE_ANALYZE=1). Output lands at dist/stats.html. Local runs open
+    // the report in a browser; CI stays headless.
+    ...(process.env.CI || process.env.BUNDLE_ANALYZE
       ? {
           bundleAnalyze: {
             analyzerMode: "static",
-            openAnalyzer: false,
+            openAnalyzer: !process.env.CI,
             reportFilename: "stats.html",
           },
         }
       : {}),
 
     /**
-     * Split vendor dependencies into stable, independently-cacheable chunks.
-     * Grouping by library means a UI-only change doesn't bust the relay or
-     * react cache, and vice versa.
+     * Split vendor dependencies into stable, independently-cacheable chunks
+     * grouped by upgrade cadence — libraries that version together live in
+     * the same chunk so one dependency bump invalidates as little as possible.
+     *
+     * When adding a new heavy dependency, give it its own group if its
+     * upgrade cadence is independent of an existing group; otherwise extend
+     * the closest match. vendor-misc is the residual bucket for small,
+     * unrelated libraries — anything growing past ~50 KB there deserves its
+     * own group.
      */
     chunkSplit: {
       strategy: "custom",
       splitChunks: {
         cacheGroups: {
-          // Relay + GraphQL are tightly coupled; bundle them as one cacheable unit.
+          // Relay + GraphQL runtime + WS transport — the data layer.
           relay: {
-            test: /relay-runtime|react-relay|[/+]graphql[/+]/,
+            test: /relay-runtime|react-relay|[\\/]graphql[\\/]|[\\/]graphql-ws[\\/]/,
             name: "vendor-relay",
             chunks: "all" as const,
           },
-          // React core + DOM + scheduler.
+          // React core + DOM + scheduler. The `node_modules/<pkg>/` anchor
+          // avoids colliding with bun's outer `@scope+react@ver` directories
+          // (e.g. `@nova+react@…`) which would otherwise absorb scoped
+          // packages whose name contains `react`.
           react: {
-            test: /[/+]react@|[/+]react-dom@|\/scheduler\//,
+            test: /[\\/]node_modules[\\/](?:react|react-dom|scheduler)[\\/]/,
             name: "vendor-react",
             chunks: "all" as const,
           },
-          // Remaining node_modules (Griffel, Nova, router, etc.)
+          // OpenTelemetry (api + sdk + exporters + instrumentations).
+          otel: {
+            test: /[\\/]@opentelemetry[\\/]/,
+            name: "vendor-otel",
+            chunks: "all" as const,
+          },
+          // Atomic CSS-in-JS runtime.
+          griffel: {
+            test: /[\\/]@griffel[\\/]/,
+            name: "vendor-griffel",
+            chunks: "all" as const,
+          },
+          // Nova eventing runtime. `enforce` overrides the default minSize
+          // threshold — @nova is small (<10 KB) but upgrades on its own
+          // cadence, so a dedicated chunk is worth one extra HTTP request.
+          nova: {
+            test: /[\\/]@nova[\\/]/,
+            name: "vendor-nova",
+            chunks: "all" as const,
+            enforce: true,
+          },
+          // React Router + its history/remix dependencies.
+          router: {
+            test: /[\\/](?:react-router|react-router-dom|@remix-run[\\/]router|history)[\\/]/,
+            name: "vendor-router",
+            chunks: "all" as const,
+          },
+          // Residual node_modules — small, unrelated libs (react-localization, etc.).
           vendor: {
             test: /[\\/]node_modules[\\/]/,
             name: "vendor-misc",

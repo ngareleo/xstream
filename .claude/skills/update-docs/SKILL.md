@@ -42,7 +42,7 @@ All markdown docs under `docs/` follow a nested convention.
 2. Determine `NN` — next unused two-digit prefix in that folder.
 3. Write the file at `docs/<super-domain>/<Concept>/NN-Topic-Name.md`.
 4. **Update the folder's `README.md`** to add a row for the new topic in the same change.
-5. If the topic is important enough to route callers directly from the architect's index table, notify the architect (or add the row yourself to `.claude/agents/architect.md`).
+5. If the topic is important enough to route callers directly from the architect's retrieval index, notify the architect (or add the row yourself to `docs/INDEX.md`).
 6. If the topic is referenced from CLAUDE.md, skills, agents, or source comments, update those references in the same commit.
 
 **When you rename or move a doc:** use `git mv` so history is preserved, and grep the whole repo for the old path before committing — `grep -rn "<old-path>" .` should return zero hits.

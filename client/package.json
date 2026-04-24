@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "bun run relay && rsbuild dev",
     "build": "tsc && rsbuild build",
+    "analyze": "BUNDLE_ANALYZE=1 tsc && BUNDLE_ANALYZE=1 rsbuild build",
     "relay": "mkdir -p src/relay/__generated__ && relay-compiler",
     "lint": "tsc --noEmit && eslint src",
     "format": "prettier --write src",

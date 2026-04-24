@@ -105,7 +105,7 @@ Verify: `wc -l docs/SUMMARY.md` ≤ 120.
 
 ### 6. Architect index freshness
 
-Read `.claude/agents/architect.md`. Extract each row of the index table. For each file path:
+Read `docs/INDEX.md`. Extract each row. For each file path:
 
 - If the file doesn't exist → remove the row (log to report).
 - For each topic file actually present in `docs/` that has no row → report as "consider adding to index" (don't auto-add; architect decides based on question likelihood).
@@ -139,7 +139,7 @@ If no items in any section, say so explicitly — an all-clean run should be eas
 
 ## Rules
 
-- **Never edit source code.** This skill operates on docs only, plus `.claude/agents/architect.md`'s index and `docs/SUMMARY.md`.
+- **Never edit source code.** This skill operates on docs only, including `docs/INDEX.md` and `docs/SUMMARY.md`.
 - **Never guess on ambiguity.** If a fix candidate isn't exactly one file, skip and report.
 - **Preserve section structure.** When patching a README, add rows in alphabetical or `NN-` order to match sibling tables.
 - **Don't touch `docs/diagrams/`** — those filenames are stable and owned by `update-docs`.
