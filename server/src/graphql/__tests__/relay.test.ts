@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { fromGlobalId, toGlobalId } from "./relay.js";
+import { fromGlobalId, toGlobalId } from "../relay.js";
 
 describe("toGlobalId", () => {
   test("encodes type and id as base64", () => {

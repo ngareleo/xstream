@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { BufferManager } from "./bufferManager.js";
-import { type ChunkOpts, ChunkPipeline } from "./chunkPipeline.js";
-import type * as PlaybackSessionModule from "./playbackSession.js";
+import type { BufferManager } from "~/services/bufferManager.js";
+import { type ChunkOpts, ChunkPipeline } from "~/services/chunkPipeline.js";
+import type * as PlaybackSessionModule from "~/services/playbackSession.js";
 
 /* ── Module mocks ────────────────────────────────────────────────────────── */
 
@@ -37,7 +37,7 @@ interface FakeStreamingService {
   fail(err: Error): void;
 }
 
-vi.mock("./streamingService.js", () => {
+vi.mock("~/services/streamingService.js", () => {
   class StreamingService implements FakeStreamingService {
     jobId: string | null = null;
     paused = false;
@@ -95,7 +95,7 @@ vi.mock("./streamingService.js", () => {
   return { StreamingService };
 });
 
-vi.mock("./playbackSession.js", async (importOriginal) => {
+vi.mock("~/services/playbackSession.js", async (importOriginal) => {
   const actual = await importOriginal<typeof PlaybackSessionModule>();
   return {
     ...actual,

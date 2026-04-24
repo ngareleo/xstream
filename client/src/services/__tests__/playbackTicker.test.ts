@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { PlaybackTicker } from "./playbackTicker.js";
+import { PlaybackTicker } from "~/services/playbackTicker.js";
 
 /**
  * Manual RAF driver — test-controlled clock. Each `flush()` invokes any

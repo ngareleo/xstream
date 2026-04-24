@@ -1,7 +1,7 @@
 import { context } from "@opentelemetry/api";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { StreamingService } from "./streamingService.js";
+import { StreamingService } from "~/services/streamingService.js";
 
 const testCtx = context.active();
 

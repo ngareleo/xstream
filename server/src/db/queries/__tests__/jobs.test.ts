@@ -5,8 +5,8 @@
 // DB_PATH is set by src/test/setup.ts (Bun preload) — do not override it here.
 import { beforeAll, describe, expect, test } from "bun:test";
 
-const { insertJob, updateJobStatus, getJobById, getInterruptedJobs } = await import("./jobs.js");
-const { getDb } = await import("../index.js");
+const { insertJob, updateJobStatus, getJobById, getInterruptedJobs } = await import("../jobs.js");
+const { getDb } = await import("../../index.js");
 
 beforeAll(() => {
   // Seed parent rows required by foreign key constraints
