@@ -35,7 +35,7 @@ Keep rows short (≤ ~120 chars). When adding a new topic file to `docs/`, add i
 | Feature-flag registry | `docs/client/Feature-Flags/00-Registry.md` |
 | Client debugging playbooks | `docs/client/Debugging-Playbooks/00-Common-Issues.md` |
 | Rsbuild chunk-split groups, regex anchor, `bun run analyze` | `docs/client/Bundle-Chunks/00-Strategy.md` |
-| Invariants (the 10 rules) | `docs/code-style/Invariants/00-Never-Violate.md` |
+| Invariants (the full non-negotiables list) | `docs/code-style/Invariants/00-Never-Violate.md` |
 | File naming conventions | `docs/code-style/Naming/00-Conventions.md` |
 | Server conventions | `docs/code-style/Server-Conventions/00-Patterns.md` |
 | Client conventions | `docs/code-style/Client-Conventions/00-Patterns.md` |

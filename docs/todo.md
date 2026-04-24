@@ -28,7 +28,7 @@ These items require the OTel metrics SDK (`MeterProvider`) which is not yet wire
 
 - [ ] **OBS-003** Usage metrics: concurrent stream count, resolution distribution (which resolutions are most used), and session duration. Export as OTel `UpDownCounter` and `Histogram`.
 
-- [ ] **OBS-004** OTel metrics SDK wiring: add `MeterProvider` with a `BatchMetricExporter` + `PeriodicExportingMetricReader` to both `server/src/telemetry.ts` and `client/src/telemetry.ts`. The `@opentelemetry/sdk-metrics` package is not yet installed.
+- [ ] **OBS-004** OTel metrics SDK wiring: add `MeterProvider` with a `BatchMetricExporter` + `PeriodicExportingMetricReader` to both `server/src/telemetry/index.ts` and `client/src/telemetry.ts`. The `@opentelemetry/sdk-metrics` package is not yet installed.
 
 ## Settings / UI
 
@@ -36,4 +36,4 @@ These items require the OTel metrics SDK (`MeterProvider`) which is not yet wire
 
 - [ ] **PLAYBACK-001** Concurrent stream limit UI: currently throws `"Too many concurrent streams"` as an error overlay. Consider a friendlier modal that explains the limit (3 tabs) and links to the Settings page.
 
-- [ ] **FLAGS-001** Centralised release-time feature-flag controls: today flags persist per-user in `user_settings` only, so an operator cannot soft-launch a flag to everyone with a single toggle. Add a server-side `feature_flags` table with a precedence model (global override > user setting > `FLAG_REGISTRY.defaultValue`) and an admin UI to flip the global override. `getFlag` / `getEffectiveBufferConfig` should read the resolved value without caller changes. See `docs/feature-flags.md` for the current architecture.
+- [ ] **FLAGS-001** Centralised release-time feature-flag controls: today flags persist per-user in `user_settings` only, so an operator cannot soft-launch a flag to everyone with a single toggle. Add a server-side `feature_flags` table with a precedence model (global override > user setting > `FLAG_REGISTRY.defaultValue`) and an admin UI to flip the global override. `getFlag` / `getEffectiveBufferConfig` should read the resolved value without caller changes. See `docs/client/Feature-Flags/README.md` for the current architecture.
