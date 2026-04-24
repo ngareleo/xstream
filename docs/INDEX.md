@@ -11,6 +11,7 @@ Keep rows short (≤ ~120 chars). When adding a new topic file to `docs/`, add i
 | Playback scenarios (initial, backpressure, seek, resolution switch) | `docs/architecture/Streaming/01-Playback-Scenarios.md` |
 | Chunk pipeline invariants (PTS contract, per-chunk re-init, lookahead segment buffering) | `docs/architecture/Streaming/02-Chunk-Pipeline-Invariants.md` |
 | Playback subsystems (PlaybackTicker single-RAF, StallTracker, PlaybackTimeline drift) | `docs/architecture/Streaming/03-Playback-Subsystems.md` |
+| Demand-driven streaming (pull contract, MSE detach recovery, Rust translation) | `docs/architecture/Streaming/04-Demand-Driven-Streaming.md` |
 | Tests must leave the host as they found it — per-PID temp dir + orphan reaper | `docs/architecture/Testing/00-Side-Effects-Policy.md` |
 | Encode-pipeline real-media tests (XSTREAM_TEST_MEDIA_DIR, encodeHarness, 4K-no-fallback assertion) | `docs/architecture/Testing/01-Encode-Pipeline-Tests.md` |
 | Encoder edge-case test policy (every fix needs a fixture/assertion in the same PR) | `docs/architecture/Testing/02-Encoder-Edge-Case-Policy.md` |
