@@ -42,11 +42,28 @@ interface FakeBuffer {
   // The afterAppend callback the controller registers — exposed so tests can
   // simulate "a segment was just appended" without spinning a real timer.
   triggerAppend: () => void;
+  // Seek call site is what the snap-back test asserts against. The fake
+  // returns a Promise that resolves when `resolveSeek` is called, so tests
+  // can inspect controller state both before and after the .then runs.
+  seek: (timeSeconds: number) => Promise<void>;
+  seekCalls: number[];
+  resolveSeek: () => void;
+}
+
+interface FakePipeline {
+  hasLookahead: () => boolean;
+  resumeLookahead: () => void;
+  cancel: (reason: string) => void;
+  cancelCalls: string[];
+}
+
+interface FakeTimeline {
+  clearLookahead: () => void;
 }
 
 interface PrivateController {
   buffer: FakeBuffer | null;
-  pipeline: { hasLookahead: () => boolean; resumeLookahead: () => void } | null;
+  pipeline: FakePipeline | { hasLookahead: () => boolean; resumeLookahead: () => void } | null;
   hasStartedPlayback: boolean;
   isHandlingSeek: boolean;
   status: "idle" | "loading" | "playing";
@@ -54,14 +71,30 @@ interface PrivateController {
   userPausePrefetchFired: boolean;
   chunkEnd: number;
   resolution: string;
+  timeline: FakeTimeline;
   waitForStartupBuffer: (buffer: FakeBuffer, target: number, onPlay: () => void) => void;
   handlePlaying: () => void;
   handleUserPause: () => void;
   handleUserPlay: () => void;
+  startChunkSeries: (res: string, startS: number, buffer: FakeBuffer, isFirst: boolean) => void;
+}
+
+function makeFakePipeline(): FakePipeline {
+  const cancelCalls: string[] = [];
+  return {
+    hasLookahead: () => false,
+    resumeLookahead: vi.fn(),
+    cancel: (reason: string): void => {
+      cancelCalls.push(reason);
+    },
+    cancelCalls,
+  };
 }
 
 function makeFakeBuffer(): FakeBuffer {
   let appendCb: (() => void) | null = null;
+  let seekResolve: (() => void) | null = null;
+  const seekCalls: number[] = [];
   const buf: FakeBuffer = {
     bufferedEnd: 0,
     bufferedAhead: null,
@@ -71,6 +104,14 @@ function makeFakeBuffer(): FakeBuffer {
     getBufferedAheadSeconds: (): number | null => buf.bufferedAhead,
     tickBackpressure: vi.fn(),
     triggerAppend: (): void => appendCb?.(),
+    seek: (t: number): Promise<void> => {
+      seekCalls.push(t);
+      return new Promise<void>((resolve) => {
+        seekResolve = resolve;
+      });
+    },
+    seekCalls,
+    resolveSeek: (): void => seekResolve?.(),
   };
   return buf;
 }
@@ -84,6 +125,11 @@ function makeController(opts?: { currentTime?: number; durationS?: number }): {
     removeEventListener: vi.fn(),
     currentTime: opts?.currentTime ?? 0,
     ended: false,
+    // handleSeeking iterates videoEl.buffered to detect already-buffered seek
+    // targets. Empty TimeRanges-shaped object means "nothing buffered" so the
+    // seek path always proceeds (which is what we want when testing it).
+    buffered: { length: 0, start: () => 0, end: () => 0 },
+    play: vi.fn().mockResolvedValue(undefined),
   } as unknown as HTMLVideoElement;
   const controller = new PlaybackController(
     {
@@ -239,5 +285,96 @@ describe("PlaybackController user-pause poller (Change D V1)", () => {
     const first = priv.userPauseInterval;
     priv.handleUserPause();
     expect(priv.userPauseInterval).toBe(first);
+  });
+});
+
+describe("PlaybackController.handleSeeking (slider snap-back + stale-prefetch fixes)", () => {
+  // handleSeeking is private; pull it via the same type-cast trick used for
+  // other handlers. Defined here because it depends on the augmented
+  // PrivateController shape with pipeline.cancel + timeline.clearLookahead.
+  interface SeekableController {
+    handleSeeking: () => void;
+    seekTo: (t: number) => void;
+    chunkEnd: number;
+    status: "idle" | "loading" | "playing";
+    hasStartedPlayback: boolean;
+    isHandlingSeek: boolean;
+    buffer: FakeBuffer | null;
+    pipeline: FakePipeline;
+    timeline: FakeTimeline;
+    // We stub startChunkSeries so the test doesn't need a live ChunkPipeline
+    // or `requestChunk` mock — we're only asserting state at the seek-handler
+    // level, not the full chunk flow.
+    startChunkSeries: (res: string, startS: number, buffer: FakeBuffer, isFirst: boolean) => void;
+  }
+
+  function setUpSeekable(currentTime: number): {
+    controller: PlaybackController;
+    priv: SeekableController;
+    buf: FakeBuffer;
+  } {
+    const { controller, videoEl } = makeController({ currentTime });
+    (videoEl as unknown as { currentTime: number }).currentTime = currentTime;
+    const priv = controller as unknown as SeekableController;
+    priv.status = "playing";
+    priv.hasStartedPlayback = true;
+    const buf = makeFakeBuffer();
+    priv.buffer = buf;
+    priv.pipeline = makeFakePipeline();
+    priv.timeline = { clearLookahead: vi.fn() };
+    priv.chunkEnd = 900; // stale value from a prior chunk — must be reset on seek
+    priv.startChunkSeries = vi.fn();
+    return { controller, priv, buf };
+  }
+
+  it("passes the user's intended seekTime to buf.seek (NOT the snapped chunk boundary)", () => {
+    // The slider snap-back bug: clicking at 720s used to call buf.seek(600)
+    // (the chunk boundary), which then set videoEl.currentTime = 600 and the
+    // playhead visually jumped backward. Fix: pass seekTime so currentTime
+    // stays at the user's intended position.
+    const { controller, priv, buf } = setUpSeekable(720);
+
+    controller.seekTo(720);
+    priv.handleSeeking();
+
+    expect(buf.seekCalls).toEqual([720]);
+    // The chunk REQUEST still uses snapTime — that assertion lives in the
+    // companion test below (must wait for buf.seek's .then to fire).
+  });
+
+  it("invalidates chunkEnd before buf.seek so RAF prefetch can't fire stale", () => {
+    // Trace 5d5b5137… caught the regression: prefetchFired was reset to false
+    // synchronously, but chunkEnd was only updated INSIDE the buf.seek().then.
+    // RAF could fire between, prefetch the OLD chunk against the NEW
+    // currentTime, and request chunk [900, 1200] while the seek was to 1500.
+    const { controller, priv } = setUpSeekable(1500);
+    expect(priv.chunkEnd).toBe(900); // baseline: stale value from prior chunk
+
+    controller.seekTo(1500);
+    priv.handleSeeking();
+
+    // Synchronously after handleSeeking returns, chunkEnd is 0. The RAF
+    // prefetch loop's gate (`chunkEnd > 0 && chunkEnd < videoDurationS`) now
+    // bails until startChunkSeries restores it inside the .then().
+    expect(priv.chunkEnd).toBe(0);
+  });
+
+  it("passes the snapped chunk boundary to startChunkSeries (server cache key unchanged)", () => {
+    // Companion to the snap-back test — the chunk REQUEST must keep using
+    // snapTime so the server's job-cache key (sha1 of contentKey|res|start|end)
+    // matches across seeks within the same chunk window.
+    const { controller, priv, buf } = setUpSeekable(720);
+
+    controller.seekTo(720);
+    priv.handleSeeking();
+    // Resolve the in-flight buf.seek so the .then() body fires.
+    buf.resolveSeek();
+
+    // Wait one microtask for the .then to run, then assert.
+    return Promise.resolve().then(() => {
+      expect(priv.startChunkSeries).toHaveBeenCalledTimes(1);
+      const call = (priv.startChunkSeries as ReturnType<typeof vi.fn>).mock.calls[0];
+      expect(call[1]).toBe(600); // snapTime, not seekTime
+    });
   });
 });

@@ -538,6 +538,39 @@ async function runFfmpeg(
     }
   }, ORPHAN_TIMEOUT_MS);
 
+  // Wall-clock upper bound on encode time. orphan_no_connection covers the
+  // "client never connected" case; the 180s idle_timeout in stream.ts covers
+  // "ffmpeg stopped producing segments". Neither catches a job that makes
+  // slow but non-zero progress while a client is still subscribed — that
+  // would otherwise tie up an MAX_CONCURRENT_JOBS slot indefinitely.
+  //
+  // Budget = 3× chunk duration. Realistic worst case on this system is
+  // SW libx264 at 1080p (~10 min for a 5-min chunk; SW 4K is architecturally
+  // ruled out — VAAPI-required); 3× gives ~5 min headroom. For ad-hoc
+  // full-video transcodes (no startTime/endTime), fall back to an absolute
+  // 1-hour cap — pre-Tauri prototype path; not the primary use case.
+  const MAX_ENCODE_RATE_MULTIPLIER = 3;
+  const ABSOLUTE_FALLBACK_MS = 60 * 60 * 1000; // 1 h, only for full-video transcodes
+  const chunkWindowSeconds = endTime != null && startTime != null ? endTime - startTime : null;
+  const MAX_ENCODE_MS =
+    chunkWindowSeconds != null
+      ? Math.ceil(chunkWindowSeconds * MAX_ENCODE_RATE_MULTIPLIER * 1000)
+      : ABSOLUTE_FALLBACK_MS;
+  const maxEncodeTimer = setTimeout(() => {
+    const currentJob = getJob(job.id);
+    if (currentJob && currentJob.status === "running") {
+      log.warn(
+        `Max encode time exceeded — killing ffmpeg (chunk ${chunkWindowSeconds ?? "full-video"}s, budget ${MAX_ENCODE_MS}ms)`,
+        {
+          job_id: job.id,
+          chunk_duration_s: chunkWindowSeconds ?? -1,
+          max_encode_ms: MAX_ENCODE_MS,
+        }
+      );
+      killJob(job.id, "max_encode_timeout");
+    }
+  }, MAX_ENCODE_MS);
+
   // Throttle fluent-ffmpeg's per-second progress callback to one event every 10 s
   // so a full 300 s chunk emits ~30 transcode_progress events — enough to spot
   // encode-rate drops without dominating Seq ingest.
@@ -579,6 +612,7 @@ async function runFfmpeg(
     )
     .on("error", (err) => {
       clearTimeout(orphanTimer);
+      clearTimeout(maxEncodeTimer);
       activeCommands.delete(job.id);
       // Clear killedJobs entry if present. A SIGTERM can cause ffmpeg to exit via
       // both .on("error") and .on("end") depending on the OS; clearing here ensures
@@ -750,6 +784,7 @@ async function runFfmpeg(
     })
     .on("end", () => {
       clearTimeout(orphanTimer);
+      clearTimeout(maxEncodeTimer);
       activeCommands.delete(job.id);
 
       if (killedJobs.has(job.id)) {

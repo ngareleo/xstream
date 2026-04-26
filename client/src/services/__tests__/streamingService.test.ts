@@ -187,6 +187,45 @@ describe("StreamingService frame parser", () => {
     expect(calledUrl).toBe("/stream/job42?from=5");
   });
 
+  it("cancel() during in-flight onSegment does not throw null-reader error", async () => {
+    // Regression for trace 5d5b5137… — successive seeks crashed with:
+    //   "Stream error: can't access property 'read', this.reader is null"
+    // The race: cancel() nulls this.reader while the loop is suspended on an
+    // `await onSegment(...)`. The next iteration's `await this.reader.read()`
+    // dereferences null. Fix: snapshot reader at top of loop + bail if null
+    // after onSegment resolves.
+    const p1 = new Uint8Array([1, 2, 3]);
+    const p2 = new Uint8Array([4, 5, 6]);
+    // Two frames in one chunk — onSegment fires twice, cancel after the first
+    // (so the loop is between awaits when cancel runs).
+    mockFetch([new Uint8Array([...makeFrame(p1), ...makeFrame(p2)])]);
+
+    const service = new StreamingService();
+    const errors: Error[] = [];
+    let cancelled = false;
+
+    const startPromise = service.start(
+      "job1",
+      0,
+      async () => {
+        // First segment triggers cancel mid-onSegment, simulating the
+        // seek-during-stream race. The second segment's slot would normally
+        // race the cancel and crash on the null reader.
+        if (!cancelled) {
+          cancelled = true;
+          service.cancel();
+        }
+      },
+      (e) => errors.push(e),
+      () => {},
+      testCtx
+    );
+    await startPromise;
+
+    // No null-deref TypeError, no AbortError surfaced as onError.
+    expect(errors).toHaveLength(0);
+  });
+
   it("cancel() stops processing and does not call onError", async () => {
     // Infinite stream — never closes
     let _enqueueFn: ((chunk: Uint8Array) => void) | null = null;

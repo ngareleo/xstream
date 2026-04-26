@@ -12,6 +12,9 @@
 | `graphql.request` | every Relay fetch | `operation.name` (via fetch instrumentation) |
 | log: `playback.start` | `startPlayback` called | `video_id`, `resolution`, `duration_s` |
 | log: `playback.seek` | seek triggered | `seek_target_s`, `snapped_to_s` |
+| log: `Buffer flushed — seek to {seekTime}s` | `BufferManager.seek` — buffer flushed for a seek | `seekTime` here is the **user's intended seek position** (the raw slider value), NOT the chunk-boundary snap. The chunk request uses the snapped boundary for cache-key alignment; `buf.seek` and `video.currentTime` receive `seekTime` so the playhead visually lands where the user clicked. See [Streaming/01-Playback-Scenarios.md § Seek](../../Streaming/01-Playback-Scenarios.md#scenario-3-seek) for the full split. |
+| log: `Skipping \`playing\` event — seek in flight` | `PlaybackController.handlePlaying` — residual `playing` DOM event arrived while `isHandlingSeek = true` | No attributes. By design this uses `log.info` (not `span.addEvent`) so it appears mid-session in Seq without waiting for `playback.session` to close (see user memory: long-span events buffer until page leave). A companion `playback.playing_event_skipped_during_seek` span event is also added to `playback.session`. |
+| log: `Reader nulled — exiting stream loop cleanly` | `StreamingService` inner read loop — `this.reader` was set to `null` by a concurrent `cancel()` call between the snapshot check and the `await reader.read()` | No attributes. Normal cancel-race signal; `info` level. |
 | log: `playback.stall` | buffering >2s | `stall_duration_ms` |
 | log: `playback.resolution_switch` | resolution changed | `from`, `to` |
 | log: `playback.error` | any playback error | `message`, `component` |

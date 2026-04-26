@@ -1023,12 +1023,26 @@ export class PlaybackController {
     this.pipeline?.cancel("seek");
     this.timeline.clearLookahead();
     this.prefetchFired = false;
+    // Invalidate chunkEnd BEFORE buf.seek().then() runs. The RAF prefetch loop
+    // gates on `chunkEnd > 0 && chunkEnd < videoDurationS`; without this reset
+    // the loop sees the OLD chunkEnd and the NEW (post-user-seekTo)
+    // currentTime, computes a hugely negative timeUntilEnd, and fires a stale
+    // prefetch. Trace 5d5b5137… caught it: chunk [900, 1200] requested while
+    // the seek target was 1500. startChunkSeries restores chunkEnd inside the
+    // .then() once the new chunk is known.
+    this.chunkEnd = 0;
     // Seek invalidates the user-pause prefetch (different chunk now). Cleanup
     // is idempotent so it's safe to call even when not paused.
     this.clearUserPauseState();
 
     const buf = this.buffer;
-    void buf.seek(snapTime).then(() => {
+    // Pass the user's INTENDED position (seekTime), not the snapped chunk
+    // boundary. The chunk REQUEST below still uses snapTime so the server's
+    // job-cache key stays aligned and ffmpeg's `-ss` boundary is unchanged —
+    // only videoEl.currentTime differs. Without this, currentTime would be
+    // forced back to the chunk boundary (e.g. 720s click → playhead snaps
+    // to 600s), which is the visible "slider moves backward" UX bug.
+    void buf.seek(seekTime).then(() => {
       this.isHandlingSeek = false;
       if (!this.buffer) return;
 
