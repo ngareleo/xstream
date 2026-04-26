@@ -58,6 +58,10 @@ export const VideoPlayer: FC<Props> = ({ video }) => {
   const [resolution, setResolution] = useState<Resolution>(nativeMax);
   const [activeJobId, setActiveJobId] = useState<string | null>(null);
   const [jobProgress, setJobProgress] = useState<JobProgress | null>(null);
+  /** Subscription-surfaced job failure (probe / encode / killed). Distinct from
+   * the hook's `error` (mutation-side) so we can fail fast on the long-running
+   * job dying instead of waiting for the 90s stream idle timeout. */
+  const [jobError, setJobError] = useState<string | null>(null);
   const [controlsVisible, setControlsVisible] = useState(true);
   const [isEnded, setIsEnded] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -71,6 +75,20 @@ export const VideoPlayer: FC<Props> = ({ video }) => {
 
   useJobSubscription(activeJobId, (progress) => {
     setJobProgress(progress);
+    if (progress.status === "ERROR") {
+      // Map the typed code to a user-facing line. We don't auto-retry from the
+      // subscription path: PROBE_FAILED / ENCODE_FAILED reflect file or
+      // encoder problems that aren't transient.
+      const code = progress.errorCode ?? "INTERNAL";
+      const detail = progress.error ?? "";
+      const userMessage =
+        code === "PROBE_FAILED"
+          ? `This file could not be opened by ffprobe. ${detail}`
+          : code === "ENCODE_FAILED"
+            ? `Transcoding failed at every fallback tier. ${detail}`
+            : `Playback stopped: ${detail || code}`;
+      setJobError(userMessage);
+    }
     if (progress.status === "COMPLETE" || progress.status === "ERROR") {
       setActiveJobId(null);
     }
@@ -232,8 +250,8 @@ export const VideoPlayer: FC<Props> = ({ video }) => {
       {/* Transcode progress label */}
       {progressLabel && <div className={styles.progressLabel}>{progressLabel}</div>}
 
-      {/* Error overlay */}
-      {error && <div className={styles.errorOverlay}>{error}</div>}
+      {/* Error overlay — show whichever side surfaced first (mutation or job-lifecycle) */}
+      {(error || jobError) && <div className={styles.errorOverlay}>{error ?? jobError}</div>}
 
       {/* End screen — shown when playback reaches the end (lazy-loaded) */}
       {isEnded && (

@@ -5,7 +5,7 @@
 // DB_PATH is set by src/test/setup.ts (Bun preload) — do not override it here.
 import { describe, expect, test } from "bun:test";
 
-const { upsertLibrary, getAllLibraries, getLibraryById } = await import("./libraries.js");
+const { upsertLibrary, getAllLibraries, getLibraryById } = await import("../libraries.js");
 
 const LIB: Parameters<typeof upsertLibrary>[0] = {
   id: "lib1",

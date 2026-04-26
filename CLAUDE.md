@@ -62,7 +62,7 @@ xstream/
 
 Full content lives under `docs/code-style/`. Agents working on code MUST respect these — they are the non-negotiables, not suggestions.
 
-- [`docs/code-style/Invariants/00-Never-Violate.md`](docs/code-style/Invariants/00-Never-Violate.md) — the 10 structural rules that, if broken, silently corrupt runtime behaviour (SQL routing, MSE state, init-segment order, URL-encoded Relay IDs, one-resolver-per-field, …).
+- [`docs/code-style/Invariants/00-Never-Violate.md`](docs/code-style/Invariants/00-Never-Violate.md) — the structural rules that, if broken, silently corrupt runtime behaviour (SQL routing, MSE state, init-segment order, URL-encoded Relay IDs, one-resolver-per-field, typed-error contract, pull-based streaming, …).
 - [`docs/code-style/Naming/00-Conventions.md`](docs/code-style/Naming/00-Conventions.md) — React components vs camelCase everything else.
 - [`docs/code-style/Server-Conventions/00-Patterns.md`](docs/code-style/Server-Conventions/00-Patterns.md) — resolver shape, presenter layer, `setFfmpegPath` discipline.
 - [`docs/code-style/Client-Conventions/00-Patterns.md`](docs/code-style/Client-Conventions/00-Patterns.md) — Relay fragment contract, Griffel, Nova eventing, localization.

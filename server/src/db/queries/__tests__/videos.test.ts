@@ -12,8 +12,8 @@ const {
   getVideosByLibrary,
   countVideosByLibrary,
   getStreamsByVideoId,
-} = await import("./videos.js");
-const { getDb } = await import("../index.js"); // needed to seed FK parent rows
+} = await import("../videos.js");
+const { getDb } = await import("../../index.js"); // needed to seed FK parent rows
 
 beforeAll(() => {
   getDb()

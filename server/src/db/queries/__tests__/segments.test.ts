@@ -5,8 +5,8 @@
 // DB_PATH is set by src/test/setup.ts (Bun preload) — do not override it here.
 import { beforeAll, describe, expect, test } from "bun:test";
 
-const { insertSegment, getSegmentsByJob, getSegment } = await import("./segments.js");
-const { getDb } = await import("../index.js"); // needed to seed FK parent rows
+const { insertSegment, getSegmentsByJob, getSegment } = await import("../segments.js");
+const { getDb } = await import("../../index.js"); // needed to seed FK parent rows
 
 beforeAll(() => {
   // Seed required parent rows
