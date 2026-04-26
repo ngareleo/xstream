@@ -31,6 +31,7 @@ Keep rows short (≤ ~120 chars). When adding a new topic file to `docs/`, add i
 | Web server layer migration (Bun.serve → axum + tower, RequestContext middleware, configurable CORS/bind) | `docs/architecture/Deployment/04-Web-Server-Layer.md` |
 | Database layer migration (bun:sqlite → rusqlite bundled; WAL pragma; identity DB split for sharing) | `docs/architecture/Deployment/05-Database-Layer.md` |
 | File-handling layer migration (walkdir + notify, ffmpeg manifest pinning, content-addressed cache index, two-DB split) | `docs/architecture/Deployment/06-File-Handling-Layer.md` |
+| Peer-to-peer streaming model (passthrough, Ed25519 invite tokens, content-addressed cache reuse, cross-peer traceparent, invariants) | `docs/architecture/Sharing/00-Peer-Streaming.md` |
 | Resolution ladder + enum mirror chain | `docs/server/Config/01-Resolution-Ladder.md` |
 | AppConfig, `mediaFiles.json` | `docs/server/Config/00-AppConfig.md` |
 | GraphQL schema surface | `docs/server/GraphQL-Schema/00-Surface.md` |

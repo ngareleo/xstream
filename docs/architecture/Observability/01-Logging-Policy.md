@@ -173,3 +173,15 @@ One `error` log per failure event. Twenty identical errors mean the loop is not 
 - **Re-scanned existing videos** — only log when a video is newly discovered (`isNew` check before upsert).
 - **Successful no-ops** — if a function is called but exits early because nothing changed, log nothing.
 - **Timing details that belong in span attributes** — put `encode_duration_ms` on the span, not a separate log record.
+
+## Cross-peer traceparent
+
+The W3C `traceparent` header carries the trace context end-to-end across the wire. Today this matters within a single node (client → server). Once peer-to-peer sharing ships (`docs/architecture/Sharing/00-Peer-Streaming.md`), the same `traceparent` flows from peer B's client → peer A's server, producing a single trace across two machines.
+
+Load-bearing rules — the Rust port must respect these from day one even though sharing has not landed:
+
+- **Never strip an inbound `traceparent`.** Whichever middleware extracts the request context must propagate the header's value into the resolver/handler context untouched. Do not regenerate a span ID for inbound requests; the inbound parent span ID is the parent.
+- **OTel exporter destination is per-node.** Each node ships to its own configured OTLP endpoint. Cross-peer correlation works because both sides emit spans with the same `trace_id` — operators with a shared Seq pull both nodes into one view; operators with one Seq per node correlate by `trace_id` across logs.
+- **No app-level peer ID in trace fields.** A `peer_pubkey` may appear as a span attribute on inbound peer requests but is NOT used for correlation — `trace_id` is the only correlation key.
+
+Cross-reference: `docs/architecture/Sharing/00-Peer-Streaming.md` §5 (Cross-peer observability) and §8 (Invariants 5 + 8).
