@@ -2,13 +2,17 @@
 
 The three load-bearing rules that keep chunked playback from skipping or stalling under foreground+lookahead concurrency. All three must hold simultaneously — violating any one silently breaks the buffered-range timeline. Each entry below names the symptom that exposed it (so a future regression is recognizable in a trace).
 
-## 1. Chunk PTS contract — `-output_ts_offset` + `mode = "segments"`
+## 1. Chunk PTS contract — relative tfdt + `mode = "segments"` + per-chunk `timestampOffset`
 
-Every chunk's segments are emitted with `-output_ts_offset {chunkStartSeconds}` so chunk N's segments live at PTS `[chunkStart, chunkEnd)` in the source-time timeline, NOT at PTS 0 (which is what ffmpeg's `-ss <start>` seek defaults to). Paired with the client's `sourceBuffer.mode = "segments"` (NOT `"sequence"`), this means each chunk's segments land at the correct buffer-time regardless of append order.
+ffmpeg's HLS-fmp4 muxer writes each chunk's segments with **chunk-relative `tfdt`** (0, 2, 4, …, within the chunk window), regardless of `-output_ts_offset`. The `-output_ts_offset {chunkStartSeconds}` flag does not change the segments' baseMediaDecodeTime — it only causes the ffmpeg muxer to emit an `elst` empty edit of `chunkStartSeconds` into init.mp4 alongside the relative-`tfdt` segments. Chromium MSE in `mode = "segments"` ignores edit lists, so segments land at raw `tfdt`.
 
-Without the offset + segments-mode combo, parallel foreground+lookahead appends interleave at the buffer's timeline end (sequence-mode auto-advances `timestampOffset` per append) and the buffer balloons unbounded — observed as 426 MB / 128 s buffered ahead → `QuotaExceededError` × 3 → user-visible stall.
+To bridge that gap into source-time playback positions, `ChunkPipeline.processSegment` calls `BufferManager.setTimestampOffset(slot.opts.chunkStartS)` on every chunk's init append before the first media segment lands. The browser then resolves `timestampOffset + tfdt = source-time` per segment. Chunk [4200, 4500)'s segment_0080 with `tfdt = 160 s` lands at playback position `4200 + 160 = 4360 s`, which is what `currentTime` is after a seek to mid-chunk.
 
-Code: `server/src/services/ffmpegFile.ts::applyOutputOptions` (offset emission), `client/src/services/bufferManager.ts::init` (mode flip).
+`mode = "segments"` (NOT `"sequence"`) is required because `"sequence"` auto-advances `timestampOffset` per append and would fight the explicit per-chunk assignment — segments would interleave from foreground+lookahead at the buffer's timeline end and the buffer would balloon unbounded (426 MB / 128 s buffered ahead → `QuotaExceededError` × 3 → user-visible stall, observed historically).
+
+The pre-fix bug: before `setTimestampOffset` was wired (see commit XYZ), the offset stayed at 0 for every chunk. Chunk 0 worked by accident (chunkStart=0 → no offset needed). After a mid-chunk seek to e.g. 4365 s, post-seek segments landed at playback time 160 s; `currentTime` was 4360 s; back-buffer eviction (`evictEnd = currentTime − 10`) wiped them on every append; `v.buffered` stayed empty indefinitely, `seeking = true` never cleared. Trace `334667f2…` captured the symptom.
+
+Code: `client/src/services/bufferManager.ts::setTimestampOffset` (assigns `sb.timestampOffset` with `waitForUpdateEnd` guard), `client/src/services/chunkPipeline.ts::processSegment` (calls it on every `isInit === true`), `server/src/services/ffmpegFile.ts::applyOutputOptions` (`-output_ts_offset` is now mostly cosmetic — the elst it produces is stripped server-side per § 2a).
 
 ## 2. Per-chunk init segments are required
 
@@ -17,6 +21,16 @@ Code: `server/src/services/ffmpegFile.ts::applyOutputOptions` (offset emission),
 Trace `8281b0fb…` confirmed this empirically (chunks 2-3 streamed cleanly with TFDT 300+/600+ but `sb.buffered` stayed capped at 300.04, playhead skipped past them). SPS/PPS are identical across our chunk encodes (only `elst` differs), so re-init causes at most a one-frame decoder hiccup, not a stall — the earlier "no continuation init" defensive filter was wrong.
 
 Code: `client/src/services/chunkPipeline.ts::processSegment` (init flows through to BufferManager unconditionally).
+
+### 2a. Server strips `edts` from each init.mp4 (defensive cleanup)
+
+ffmpeg's mov muxer writes an empty `edts > elst` of duration `output_ts_offset` into every init.mp4 it emits with that flag set. Chromium MSE in `mode = "segments"` **ignores** edit lists today — the load-bearing PTS shift now lives in the client's per-chunk `timestampOffset` (see Invariant #1). Stripping the `edts` is therefore not strictly required for correctness, but it is shipped as defense-in-depth: a future Chromium release that starts honouring edit lists in segments mode would silently double-shift segment PTS (`elst` empty edit + client `timestampOffset`) and re-introduce the same stuck-buffer symptom. Removing the box up front makes the resolved PTS unambiguous on the wire.
+
+`server/src/routes/stream.ts` runs each init.mp4 through `services/initSegment.ts::stripEdtsBoxes` before the length-prefixed write, removing the `edts` box from every `trak` and patching parent `trak` + `moov` size headers. Stripped bytes are cached on `ActiveJob.strippedInitBytes` so reconnects skip the parse. Idempotent for chunk 0 (no `output_ts_offset` → no `edts` written → strip is a no-op).
+
+The strip is byte-surgical: only the `edts` box is removed, every other box (`mvhd`, `mdhd`, `tkhd`, codec config) is byte-identical.
+
+Code: `server/src/services/initSegment.ts` (`stripEdtsBoxes`), `server/src/routes/stream.ts` (cache + strip wiring), `server/src/services/__tests__/initSegment.test.ts` (fixture-driven assertions).
 
 ## 3. Lookahead buffers segments locally; appends only on promotion
 

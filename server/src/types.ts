@@ -137,4 +137,8 @@ export interface ActiveJob extends TranscodeJobRow {
   connections: number;
   /** Set when the job fails mid-flight (probe / encode); null otherwise. */
   errorCode: PlaybackErrorCode | null;
+  /** Cached `init.mp4` bytes with the `edts` box stripped — see
+   *  `services/initSegment.ts`. Populated lazily on the first `stream`
+   *  request that emits the init segment; reused on reconnects. */
+  strippedInitBytes?: Uint8Array;
 }

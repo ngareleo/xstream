@@ -43,6 +43,7 @@ function makeHarness(opts: { throwsOnAppend: Error; sbInMsList: boolean }): {
   const videoEl = {
     addEventListener: vi.fn(),
     removeEventListener: vi.fn(),
+    currentTime: 0,
   } as unknown as HTMLVideoElement;
   const onMseDetached = vi.fn();
   const buffer = new BufferManager(

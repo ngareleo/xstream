@@ -123,12 +123,16 @@ function makeMockSpan(): {
 
 interface FakeBuffer {
   appendCalls: Array<{ bytes: number; resolve: () => void; reject: (err: Error) => void }>;
+  /** Records every `setTimestampOffset(N)` call in order — exercised by
+   *  ChunkPipeline.processSegment on every chunk's init. */
+  setTimestampOffsetCalls: number[];
   markStreamDoneCalls: number;
   bufferedAheadSeconds: number;
   /** Set true to make `waitIfPaused` block until `releasePause()` is called. */
   paused: boolean;
   releasePause(): void;
   appendSegment(data: ArrayBuffer): Promise<void>;
+  setTimestampOffset(offsetS: number): Promise<void>;
   markStreamDone(): void;
   getBufferedAheadSeconds(_currentTime: number): number;
   waitIfPaused(): Promise<void>;
@@ -138,6 +142,7 @@ function makeFakeBuffer(): FakeBuffer {
   let resumeResolve: (() => void) | null = null;
   const buf: FakeBuffer = {
     appendCalls: [],
+    setTimestampOffsetCalls: [],
     markStreamDoneCalls: 0,
     bufferedAheadSeconds: 20,
     paused: false,
@@ -154,6 +159,10 @@ function makeFakeBuffer(): FakeBuffer {
         // can pop from appendCalls before the microtask runs.
         queueMicrotask(resolve);
       });
+    },
+    setTimestampOffset(offsetS: number): Promise<void> {
+      buf.setTimestampOffsetCalls.push(offsetS);
+      return Promise.resolve();
     },
     markStreamDone(): void {
       buf.markStreamDoneCalls += 1;
@@ -359,6 +368,36 @@ describe("ChunkPipeline", () => {
     const slot = createdServices[0];
     await slot.deliverInit();
     expect(buffer.appendCalls).toHaveLength(1);
+  });
+
+  it("setTimestampOffset fires with chunkStartS on every chunk's init append", async () => {
+    // Anchors the relative-tfdt → playback-time mapping. Without this call
+    // post-seek segments land at playback time `tfdt` (e.g. 160s) instead of
+    // `chunkStart + tfdt` (e.g. 4360s). See `02-Chunk-Pipeline-Invariants.md`
+    // Invariant #1.
+    const buffer = makeFakeBuffer();
+    const pipeline = makePipeline(buffer);
+    pipeline.startForeground(baseOpts({ jobId: "fg-0", chunkStartS: 0, isFirstChunk: true }));
+    await createdServices[0].deliverInit();
+    expect(buffer.setTimestampOffsetCalls).toEqual([0]);
+
+    // A continuation chunk at 4200s must offset by 4200 BEFORE the init's
+    // appendSegment is called.
+    pipeline.startForeground(baseOpts({ jobId: "fg-1", chunkStartS: 4200 }));
+    await createdServices[1].deliverInit();
+    expect(buffer.setTimestampOffsetCalls).toEqual([0, 4200]);
+  });
+
+  it("setTimestampOffset is NOT called for media segments — only init", async () => {
+    const buffer = makeFakeBuffer();
+    const pipeline = makePipeline(buffer);
+    pipeline.startForeground(baseOpts({ jobId: "fg", chunkStartS: 300, isFirstChunk: false }));
+
+    const slot = createdServices[0];
+    await slot.deliverInit();
+    await slot.deliverMedia();
+    await slot.deliverMedia();
+    expect(buffer.setTimestampOffsetCalls).toEqual([300]);
   });
 
   it("onFirstChunkInit fires after the first chunk's init segment is appended", async () => {

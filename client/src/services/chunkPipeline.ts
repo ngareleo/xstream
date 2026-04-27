@@ -397,6 +397,14 @@ export class ChunkPipeline {
     }
 
     try {
+      if (isInit) {
+        // Re-anchor the SourceBuffer's coordinate system for this chunk —
+        // ffmpeg writes segments with relative tfdt (0+ within the chunk),
+        // so a chunk starting at chunkStartS=4200 needs the offset set
+        // before its first media segment lands. See `BufferManager.init`'s
+        // mode-comment for why MSE ignores ffmpeg's `elst` empty edit.
+        await this.buffer.setTimestampOffset(slot.opts.chunkStartS);
+      }
       await this.buffer.appendSegment(segData);
       firstAppendSpan?.end();
       if (isInit && slot.opts.isFirstChunk) {

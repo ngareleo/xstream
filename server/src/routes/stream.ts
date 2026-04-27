@@ -5,6 +5,7 @@ import { join } from "path";
 import { getJobById } from "../db/queries/jobs.js";
 import { getSegmentsByJob } from "../db/queries/segments.js";
 import { killJob } from "../services/chunker.js";
+import { stripEdtsBoxes } from "../services/initSegment.js";
 import { addConnection, getJob, removeConnection } from "../services/jobStore.js";
 import { getOtelLogger, getTracer } from "../telemetry/index.js";
 
@@ -260,10 +261,26 @@ export function handleStream(req: Request): Response {
         }
 
         try {
-          const initBytes = await readFile(initPath);
-          totalBytesSent += initBytes.byteLength;
-          span.addEvent("init_sent", { bytes: initBytes.byteLength });
-          writeLengthPrefixed(controller, new Uint8Array(initBytes));
+          // Reuse the per-job cached strip on reconnects; populate on first hit.
+          // Falls through to fresh strip when activeJob is null (DB-restored
+          // path) — caching only makes sense while the job is in memory.
+          const cachedJob = getJob(jobId);
+          let stripped = cachedJob?.strippedInitBytes;
+          let originalBytes: number;
+          if (stripped) {
+            originalBytes = stripped.byteLength;
+          } else {
+            const initBytes = await readFile(initPath);
+            originalBytes = initBytes.byteLength;
+            stripped = stripEdtsBoxes(new Uint8Array(initBytes));
+            if (cachedJob) cachedJob.strippedInitBytes = stripped;
+          }
+          totalBytesSent += stripped.byteLength;
+          span.addEvent("init_sent", {
+            bytes: stripped.byteLength,
+            bytes_stripped: originalBytes - stripped.byteLength,
+          });
+          writeLengthPrefixed(controller, stripped);
           lastSentAt = Date.now();
           initSent = true;
         } catch (err) {

@@ -55,6 +55,12 @@ export class BufferManager {
   private evictionCount = 0;
   private segmentsAppended = 0;
 
+  // Mirrors `sourceBuffer.timestampOffset` so callers can skip a no-op assign.
+  // ChunkPipeline.processSegment writes this on every chunk's init append to
+  // shift the chunk's relative tfdt (0+) into source-time playback position
+  // (chunkStart + tfdt). See setTimestampOffset for the full rationale.
+  private timestampOffsetS = 0;
+
   constructor(
     videoEl: HTMLVideoElement,
     onPause: BufferPauseCallback,
@@ -122,13 +128,19 @@ export class BufferManager {
         () => {
           try {
             this.sourceBuffer = ms.addSourceBuffer(mimeType);
-            // segments mode honors each segment's own PTS instead of the UA
-            // auto-advancing timestampOffset per append. The chunker emits
-            // chunk N's segments with `-output_ts_offset {chunkStart}` so they
-            // already carry source-time PTS — appending out of order (e.g.
-            // ChunkPipeline's foreground + lookahead slots interleaving) lands
-            // each segment at its true buffer-time. In sequence mode the same
-            // interleave ballooned the buffer to hundreds of MB.
+            // segments mode places each segment at `timestampOffset + tfdt`,
+            // giving us explicit control of the per-chunk offset. The chunker
+            // emits each chunk's segments with relative tfdt (0, 2, 4, …
+            // within the chunk window) — the `-output_ts_offset` flag on the
+            // server records the chunk-start as an empty `elst` edit but
+            // Chromium MSE ignores edit lists, so the client must shift the
+            // segments itself. ChunkPipeline calls
+            // `BufferManager.setTimestampOffset(slot.opts.chunkStartS)` on
+            // every chunk's init append, so a segment with tfdt=160 in chunk
+            // [4200, 4500) lands at playback time 4360. Sequence mode would
+            // auto-advance the offset per append and fight that explicit
+            // assignment — segments interleave from foreground+lookahead
+            // would also balloon the buffer (observed historically).
             this.sourceBuffer.mode = "segments";
             // Pre-set duration to the full video length so the browser allows
             // seeking anywhere in the video immediately, even before that range
@@ -172,6 +184,33 @@ export class BufferManager {
    */
   setAfterAppend(cb: (() => void) | null): void {
     this.afterAppendCb = cb;
+  }
+
+  /**
+   * Shifts the SourceBuffer's coordinate system so subsequent media segments
+   * land at `tfdt + offsetS`. Called by `ChunkPipeline.processSegment` on
+   * every chunk's init append with `slot.opts.chunkStartS`.
+   *
+   * Chunker emits relative tfdt (0+) per chunk; this offset bridges the gap
+   * to absolute source time — see the `init()` mode-comment for the full
+   * rationale. Idempotent: a no-op assign is skipped, so chunks at the same
+   * offset (re-init within a chunk) don't pay the wait-for-updateend cost.
+   *
+   * Must be awaited before the next `appendSegment` so `sb.timestampOffset`
+   * is settled before MSE consumes the next byte. Per spec the assignment
+   * throws InvalidStateError while `sb.updating` is true; the wait below
+   * mirrors `appendBuffer`'s own guard.
+   */
+  async setTimestampOffset(offsetS: number): Promise<void> {
+    if (offsetS === this.timestampOffsetS) return;
+    const sb = this.sourceBuffer;
+    if (!sb) {
+      this.timestampOffsetS = offsetS;
+      return;
+    }
+    await this.waitForUpdateEnd();
+    sb.timestampOffset = offsetS;
+    this.timestampOffsetS = offsetS;
   }
 
   async appendSegment(data: ArrayBuffer): Promise<void> {
@@ -225,9 +264,29 @@ export class BufferManager {
       let fatalError = false;
       for (let attempt = 0; attempt <= 3 && !appended && !this.seekAbort; attempt++) {
         if (attempt > 0) {
-          log.warn(`QuotaExceededError — evicting buffer and retrying (attempt ${attempt}/3)`, {
-            attempt,
-          });
+          // Capture SB state at the moment quota was hit. Distinguishes
+          // "quota with N MB legitimately buffered" from "quota with empty
+          // buffered ranges" — the latter would point at Chrome's hidden
+          // per-SB cap rather than our own back-buffer leak.
+          const quotaBufLen = sb.buffered.length;
+          // Sentinel: -1 means "no buffered range" (paired with buffered_range_count=0).
+          // Keeps the attribute schema flat (number) — logger rejects nulls.
+          const quotaBufStart = quotaBufLen > 0 ? parseFloat(sb.buffered.start(0).toFixed(2)) : -1;
+          const quotaBufEnd =
+            quotaBufLen > 0 ? parseFloat(sb.buffered.end(quotaBufLen - 1).toFixed(2)) : -1;
+          log.warn(
+            `QuotaExceededError — evicting buffer and retrying (attempt ${attempt}/3) — buffered=${quotaBufLen} range(s), bytesInBuffer=${(this.bytesInBuffer / 1_048_576).toFixed(1)}MB, currentTime=${this.videoEl.currentTime.toFixed(2)}s`,
+            {
+              attempt,
+              buffered_range_count: quotaBufLen,
+              buf_start_s: quotaBufStart,
+              buf_end_s: quotaBufEnd,
+              buffer_bytes: this.bytesInBuffer,
+              buffer_mb: parseFloat((this.bytesInBuffer / 1_048_576).toFixed(2)),
+              current_time_s: parseFloat(this.videoEl.currentTime.toFixed(2)),
+              data_bytes: data.byteLength,
+            }
+          );
           if (attempt === 1) {
             await this.evictBackBuffer();
           } else if (attempt === 2) {
@@ -399,6 +458,31 @@ export class BufferManager {
     const bufStart = sb.buffered.start(0);
 
     if (bufStart < evictEnd) {
+      // Diagnostic: dump full SB range state on every eviction so the
+      // post-seek stuck-buffer trace can pinpoint *why* the eviction math
+      // matched (legitimate back-buffer growth vs racing currentTime vs
+      // segments landing behind the playhead). Safe in steady state — only
+      // fires when there's actually back-buffer to evict.
+      const ranges: Array<[number, number]> = [];
+      for (let i = 0; i < sb.buffered.length; i++) {
+        ranges.push([
+          parseFloat(sb.buffered.start(i).toFixed(2)),
+          parseFloat(sb.buffered.end(i).toFixed(2)),
+        ]);
+      }
+      const bufferedEnd = sb.buffered.end(sb.buffered.length - 1);
+      log.warn(
+        `Eviction firing — bufStart=${bufStart.toFixed(2)}s, bufferedEnd=${bufferedEnd.toFixed(2)}s, currentTime=${this.timeRef.currentTime.toFixed(2)}s, evictEnd=${evictEnd.toFixed(2)}s, ${sb.buffered.length} range(s)`,
+        {
+          buf_start_s: parseFloat(bufStart.toFixed(2)),
+          buffered_end_s: parseFloat(bufferedEnd.toFixed(2)),
+          current_time_s: parseFloat(this.timeRef.currentTime.toFixed(2)),
+          evict_end_s: parseFloat(evictEnd.toFixed(2)),
+          buffered_range_count: sb.buffered.length,
+          buffered_ranges_json: JSON.stringify(ranges),
+          back_buffer_keep_s: this.config.backBufferKeepS,
+        }
+      );
       // Proportional byte estimate: evicted fraction of total buffered duration.
       const totalBufferedS = sb.buffered.end(sb.buffered.length - 1) - sb.buffered.start(0);
       const evictDurationS = evictEnd - bufStart;
@@ -598,9 +682,10 @@ export class BufferManager {
     this.bytesInBuffer = 0;
     sb.remove(0, Infinity);
     await this.waitForUpdateEnd();
-    // In segments mode each segment carries source-time PTS (set by the
-    // chunker via -output_ts_offset), so no timestampOffset gymnastics are
-    // needed after flush — incoming segments land where their PTS says.
+    // No explicit timestampOffset reset here — the next chunk's init append
+    // (via ChunkPipeline.processSegment → BufferManager.setTimestampOffset)
+    // re-anchors the offset to the new chunk's chunkStartS before its first
+    // media segment lands. Resetting to 0 here would just churn for no win.
     this.videoEl.currentTime = timeSeconds;
     log.info(`Buffer flushed — seek to ${timeSeconds.toFixed(2)}s`, {
       seek_target_s: parseFloat(timeSeconds.toFixed(2)),
