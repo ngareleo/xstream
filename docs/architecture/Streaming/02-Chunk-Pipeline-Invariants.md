@@ -12,7 +12,7 @@ The chunker spawns ffmpeg with `-ss <chunkStartS>`, no `-output_ts_offset`. ffmp
 
 ### Forward play vs. seek anchoring
 
-- **Forward play / lookahead** chunks are anchored on the canonical 300 s grid (`chunkStartS = N × 300`). The cache-key (`jobId = sha1("v2|content|res|start|end")`) hits across replays because successive forward-play sessions request the same `(start, end)` tuples.
+- **Forward play / lookahead** chunks are anchored on the canonical 300 s grid (`chunkStartS = N × 300`). The cache-key (`jobId = sha1("v3|content|res|start|end")`) hits across replays because successive forward-play sessions request the same `(start, end)` tuples.
 - **Seek chunks** are anchored at the user's actual `seekTime` (NOT the snap boundary). This avoids forcing ffmpeg to encode the chunk-prefix segments the user doesn't need before producing their first useful one — the chunker spawns `-ss seekTime` so segment 0 is already what the user wants. Seek chunks end at the next snap boundary (`nextSnap = ceil((seekTime + 0.001) / 300) * 300`) so the prefetched continuation chunk is back on the canonical grid and re-joins the cache.
 
 Trade-off: seek chunks are one-offs that don't cache across re-seeks. Re-seeking to the same exact second misses cache. Acceptable; interactive scrubbing dominates over second-precise re-seeking. Pre-fix evidence (trace `9da5539d…`): fresh-cache mid-chunk seek wall-clock latency was 16-60 s because ffmpeg had to grind through the chunk-prefix encode before reaching the user's segment. Post-fix: ~1-2 s (VAAPI cold-start + first-segment latency).
@@ -26,6 +26,13 @@ ffmpeg writes SPS/PPS NAL units only into init.mp4's `avcC` box by default. Chro
 `server/src/services/ffmpegFile.ts::applyOutputOptions` adds `-bsf:v dump_extra=keyframe` to both encoder branches (libx264 software, h264_vaapi). The bitstream filter is encoder-agnostic — it injects SPS/PPS NAL units before every keyframe in the encoded output, regardless of which encoder produced the frame.
 
 Defense-in-depth: if a future codec bug or unknown-Chromium-behaviour still flips MS to `"ended"` mid-playback, `BufferManager.init`'s `sourceended` event listener invokes `onMseDetached` (when `streamDone === false`) which routes through to `PlaybackController.handleMseDetached` — the existing per-session 3-recreate budget rebuilds the MediaSource at the user's current position. Diagnostic listeners on `sourceended` / `sourceclose` / `videoEl.error` are kept in place for future regressions.
+
+`handleMseDetached` is the single convergence point for two distinct Chromium failure modes:
+
+1. **Explicit SB detach under memory pressure** — `InvalidStateError` from `appendBuffer` with `source_buffer_in_ms_list: false` (trace `65ef5d6c`). Detected in `BufferManager.drainQueue`.
+2. **`endOfStream(decode_error)` from the chunk demuxer** — MS sealed with no JS-visible exception; surfaces via the `sourceended` listener when `streamDone === false` (trace `38e711a9`). Added after the `dump_extra=keyframe` BSF fix reduced but did not eliminate the path.
+
+When the 3-recreate budget is exhausted, the surfaced error code is `MSE_DETACHED` for both paths. The code is intentionally not renamed to `MSE_RECOVERY_EXHAUSTED` or similar: (a) it is client-only — never crosses the wire, no external consumer; (b) from the retry-policy and error-overlay perspective both paths mean the same thing ("MSE session unrecoverable, rebuild budget spent"); (c) the rename cost (propagates across `playbackErrors.ts`, `playbackController.ts`, Seq filter strings, ADR, this doc) is not worth the marginal precision gain on a defensive path the user rarely sees.
 
 Code: `server/src/services/ffmpegFile.ts::applyOutputOptions` (BSF), `client/src/services/bufferManager.ts::init` (sourceended listener + recovery hook), `client/src/services/playbackController.ts::handleMseDetached` (rebuild — now seek-anchored, resumes at `videoEl.currentTime` directly per § 1).
 
