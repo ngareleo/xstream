@@ -79,7 +79,7 @@ The server generates the init segment by running a zero-duration ffmpeg pass on 
 - `ActiveJob.connections` tracks how many HTTP connections are consuming each job.
 - When the last connection drops (or times out), `killJob` sends SIGTERM to the ffmpeg process. This prevents zombie processes when users navigate away.
 - Multiple tabs on the same job share a `connections` count; ffmpeg is only killed when **all** connections close.
-- Maximum concurrent running jobs: `MAX_CONCURRENT_JOBS = 3`. A 4th `startTranscode` call while 3 are running throws `"Too many concurrent streams"`.
+- Maximum concurrent running jobs: `MAX_CONCURRENT_JOBS = 3` (exported from `server/src/services/ffmpegPool.ts`). A 4th `startTranscode` call while 3 slots are occupied throws `"Too many concurrent streams"`. The cap formula is `liveActiveCount + reservations.size >= 3`, where `liveActiveCount = liveCommands.size − dyingJobIds.size`. Jobs that have been SIGTERM'd but haven't yet exited do **not** count toward the cap — they are tracked in a `dyingJobIds` set and their slot is freed immediately on the kill call. This prevents rapid back-to-back seeks from exhausting the cap while 4K-software flushes are still in flight. After `FORCE_KILL_TIMEOUT_MS` (2 s) a SIGKILL is escalated automatically, bounding the zombie window.
 
 The `?from=N` query parameter skips directly to segment index N. The init segment is always sent regardless of `from`.
 

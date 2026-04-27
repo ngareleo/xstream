@@ -10,5 +10,6 @@ The length-prefixed binary streaming protocol on `/stream/:jobId` plus the clien
 | [`03-Playback-Subsystems.md`](03-Playback-Subsystems.md) | `PlaybackTicker` (single RAF), `StallTracker` (spinner debounce), `PlaybackTimeline` (drift predictions) — the modules `PlaybackController` composes. |
 | [`04-Demand-Driven-Streaming.md`](04-Demand-Driven-Streaming.md) | Pull-based `ReadableStream` contract (`pull` not `start`), `drainAndDispatch` pause cooperation, MSE detach recovery path, Rust/Tauri translation notes. |
 | [`05-Single-SourceBuffer-ADR.md`](05-Single-SourceBuffer-ADR.md) | ADR: why xstream uses one SourceBuffer per session — MSE_DETACHED is cumulative, multi-SB breaks all three chunk-pipeline invariants. |
+| [`06-FfmpegPool.md`](06-FfmpegPool.md) | Bounded ffmpeg pool: cap formula (dying excluded), kill/SIGKILL escalation, KillReason union, shutdown sweep, telemetry fields. |
 
 Diagrams are in [`../../diagrams/`](../../diagrams/). The `.mmd` is authoritative; the `.png` is regenerated via the `update-docs` skill.

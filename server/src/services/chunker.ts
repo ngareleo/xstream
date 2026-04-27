@@ -1,6 +1,6 @@
 import { type Context as OtelContext, context, SpanStatusCode, trace } from "@opentelemetry/api";
 import { createHash } from "crypto";
-import ffmpeg, { type FfmpegCommand } from "fluent-ffmpeg";
+import ffmpeg from "fluent-ffmpeg";
 import { watch } from "fs";
 import { access, mkdir, rm, stat } from "fs/promises";
 import { join, resolve } from "path";
@@ -12,6 +12,14 @@ import { getVideoById } from "../db/queries/videos.js";
 import { getOtelLogger, getTracer } from "../telemetry/index.js";
 import type { ActiveJob, PlaybackErrorCode, Resolution } from "../types.js";
 import { FFmpegFile } from "./ffmpegFile.js";
+import {
+  hasInflightOrLive,
+  killJob,
+  type Reservation,
+  snapshotCap,
+  spawnProcess,
+  tryReserveSlot,
+} from "./ffmpegPool.js";
 import { getHwAccelConfig, type HwAccelConfig } from "./hwAccel.js";
 import { getJob, setJob } from "./jobStore.js";
 
@@ -23,25 +31,6 @@ import { getJob, setJob } from "./jobStore.js";
 const log = getOtelLogger("chunker");
 const chunkerTracer = getTracer("chunker");
 
-// Tracks all ffmpeg processes currently encoding so they can be killed on shutdown.
-const activeCommands = new Map<string, FfmpegCommand>();
-
-// Job IDs that were deliberately killed (SIGTERM/SIGKILL). When ffmpeg exits cleanly
-// after a SIGTERM it fires .on("end") rather than .on("error"), which would otherwise
-// mark the job "complete" with a truncated segment set. This set lets the "end" handler
-// detect a kill and treat the exit as an error instead.
-const killedJobs = new Set<string>();
-
-// Reason for each deliberate kill, consumed by the .on("end") handler to annotate
-// the job span and log record with why ffmpeg was stopped.
-const killReasons = new Map<string, string>();
-
-// Job IDs currently being initialized — between the start of startTranscodeJob and
-// the setJob() call that makes them visible in jobStore. Guards against concurrent
-// calls with identical parameters spawning duplicate ffmpeg processes during the
-// async window (ffprobe, mkdir) before setJob() registers the job.
-const inflightJobIds = new Set<string>();
-
 // Per-source VAAPI capability state, learned from prior failures.
 // - "needs_sw_pad" — pure VAAPI failed (typically pad_vaapi rejecting the
 //   surface format on HDR/DV sources); subsequent chunks start at the
@@ -52,9 +41,6 @@ const inflightJobIds = new Set<string>();
 // gets re-evaluated.
 type VaapiVideoState = "needs_sw_pad" | "hw_unsafe";
 const vaapiVideoState = new Map<string, VaapiVideoState>();
-
-/** Maximum number of concurrently running ffmpeg jobs. */
-const MAX_CONCURRENT_JOBS = 3;
 
 /** Server's hint to the client orchestrator for cap-rejection retry backoff.
  * Kept short — the cap typically clears as soon as the next chunk's
@@ -88,74 +74,10 @@ const INFLIGHT_DEDUP_POLL_MS = 100;
 const INFLIGHT_DEDUP_TIMEOUT_MS = 5_000;
 const INFLIGHT_DEDUP_MAX_RETRIES = INFLIGHT_DEDUP_TIMEOUT_MS / INFLIGHT_DEDUP_POLL_MS;
 
-/**
- * Gracefully shuts down all active ffmpeg jobs:
- * 1. Sends SIGTERM to every running process.
- * 2. Waits up to `timeoutMs` for each to exit.
- * 3. SIGKILLs any process that did not exit within the timeout.
- */
-export async function killAllActiveJobs(timeoutMs = 5000): Promise<void> {
-  if (activeCommands.size === 0) return;
-
-  const exitPromises = [...activeCommands.entries()].map(([id, command]) => {
-    return new Promise<void>((resolve) => {
-      const cleanup = (): void => {
-        activeCommands.delete(id);
-        resolve();
-      };
-      command.once("end", cleanup);
-      command.once("error", cleanup);
-      log.info("Killing ffmpeg — server_shutdown", { job_id: id, kill_reason: "server_shutdown" });
-      killedJobs.add(id);
-      try {
-        command.kill("SIGTERM");
-      } catch {
-        killedJobs.delete(id);
-        cleanup();
-      }
-    });
-  });
-
-  const timeout = new Promise<void>((resolve) => setTimeout(resolve, timeoutMs));
-  await Promise.race([Promise.all(exitPromises), timeout]);
-
-  // SIGKILL any processes that didn't exit within the timeout
-  for (const [id, command] of activeCommands) {
-    log.warn("Force-killing job (SIGTERM timeout)", { job_id: id });
-    try {
-      command.kill("SIGKILL");
-    } catch {
-      // already gone
-    }
-  }
-  activeCommands.clear();
-}
-
 function jobId(contentKey: string, resolution: Resolution, start?: number, end?: number): string {
   return createHash("sha1")
     .update(`${contentKey}|${resolution}|${start ?? ""}|${end ?? ""}`)
     .digest("hex");
-}
-
-/**
- * Kills the ffmpeg process for a specific job. Safe to call even if the job has
- * already finished — the command map won't contain it in that case.
- */
-export function killJob(id: string, reason = "client_request"): void {
-  const command = activeCommands.get(id);
-  if (!command) return;
-  log.info(`Killing ffmpeg — ${reason}`, { job_id: id, kill_reason: reason });
-  // Mark as killed BEFORE sending the signal. ffmpeg sometimes exits cleanly on
-  // SIGTERM (firing .on("end") instead of .on("error")), which would mark the job
-  // "complete" with a truncated segment set. The killedJobs set prevents that.
-  killedJobs.add(id);
-  killReasons.set(id, reason);
-  try {
-    command.kill("SIGTERM");
-  } catch {
-    killedJobs.delete(id);
-    killReasons.delete(id);
-  }
 }
 
 export async function startTranscodeJob(
@@ -205,7 +127,7 @@ export async function startTranscodeJob(
   // If a concurrent call is already initializing this exact job (between this
   // function's entry and the setJob() call below), wait for it to register rather
   // than spawning a second ffmpeg process.
-  if (inflightJobIds.has(id)) {
+  if (hasInflightOrLive(id)) {
     for (let i = 0; i < INFLIGHT_DEDUP_MAX_RETRIES; i++) {
       await Bun.sleep(INFLIGHT_DEDUP_POLL_MS);
       const pending = getJob(id);
@@ -218,16 +140,15 @@ export async function startTranscodeJob(
     log.warn("Inflight dedup timeout — proceeding", { job_id: id });
   }
 
-  // Guard against runaway resource use — cap concurrent ffmpeg processes.
-  // Include inflightJobIds in the count: those jobs haven't called activeCommands.set
-  // yet (that happens after ffprobe inside runFfmpeg), so activeCommands.size alone
-  // would undercount concurrent work during the initialization window.
-  if (activeCommands.size + inflightJobIds.size >= MAX_CONCURRENT_JOBS) {
-    // Trace f503cb13… hit this with the foreground+lookahead pair active —
-    // a third job was squatting. Capture the live set so the next trace
-    // tells us *which* job is the squatter (stale active, abandoned
-    // resolution-switch, etc.) without code spelunking.
-    const activeJobs = [...activeCommands.keys()].map((jid) => {
+  // Reserve a pool slot synchronously before the first await so any concurrent
+  // call with the same parameters sees this job as in-flight and waits rather
+  // than racing for the same cap slot. Reservation lifetime: held across probe
+  // + restore decision + setJob, then either consumed by spawnProcess (ffmpeg
+  // launches) or released (restore-from-DB / probe failure / catch).
+  const reservation = tryReserveSlot(id);
+  if (!reservation) {
+    const snap = snapshotCap();
+    const liveJobsDetail = snap.liveJobIds.map((jid) => {
       const j = getJob(jid);
       return {
         id: jid,
@@ -239,14 +160,16 @@ export async function startTranscodeJob(
     });
     resolveSpan.setStatus({
       code: SpanStatusCode.ERROR,
-      message: `Too many concurrent streams (limit: ${MAX_CONCURRENT_JOBS})`,
+      message: `Too many concurrent streams (limit: ${snap.limit})`,
     });
     resolveSpan.addEvent("concurrency_cap_reached", {
-      "cap.limit": MAX_CONCURRENT_JOBS,
-      "cap.active_count": activeCommands.size,
-      "cap.inflight_count": inflightJobIds.size,
-      "cap.active_jobs_json": JSON.stringify(activeJobs),
-      "cap.inflight_ids_json": JSON.stringify([...inflightJobIds]),
+      "cap.limit": snap.limit,
+      "cap.active_count": snap.liveCount,
+      "cap.inflight_count": snap.inflightCount,
+      "cap.dying_count": snap.dyingCount,
+      "cap.active_jobs_json": JSON.stringify(liveJobsDetail),
+      "cap.inflight_ids_json": JSON.stringify(snap.inflightJobIds),
+      "cap.dying_ids_json": JSON.stringify(snap.dyingJobIds),
       "cap.requested_video_id": videoId,
       "cap.requested_chunk_start_s": startTimeSeconds ?? 0,
       "cap.requested_resolution": resolution,
@@ -255,15 +178,11 @@ export async function startTranscodeJob(
     return {
       kind: "error",
       code: "CAPACITY_EXHAUSTED",
-      message: `Too many concurrent streams (limit: ${MAX_CONCURRENT_JOBS}). Close another player tab and try again.`,
+      message: `Too many concurrent streams (limit: ${snap.limit}). Close another player tab and try again.`,
       retryable: true,
       retryAfterMs: CAPACITY_RETRY_HINT_MS,
     };
   }
-
-  // Register synchronously before the first await so any concurrent call with the
-  // same parameters sees this job as in-flight and waits rather than proceeding.
-  inflightJobIds.add(id);
 
   try {
     // Restore a completed job from a previous server session without re-encoding.
@@ -302,10 +221,10 @@ export async function startTranscodeJob(
             job_id: id,
             segment_count: dbSegments.length,
           });
-          // Restore is a non-runFfmpeg exit path: runFfmpeg's `inflightJobIds.delete`
-          // (paired with `activeCommands.set`) never fires for restored jobs, so this
-          // path must release the slot itself or the cap leaks one slot per restore.
-          inflightJobIds.delete(id);
+          // Restore is a non-runFfmpeg exit path: spawnProcess never consumes
+          // the reservation for restored jobs, so this path must release the
+          // slot itself or the cap leaks one slot per restore.
+          reservation.release();
           endResolveSpan("job_restored_from_db", { segment_count: dbSegments.length });
           return { kind: "ok", job: restored };
         }
@@ -358,11 +277,11 @@ export async function startTranscodeJob(
     const jobCtx = trace.setSpan(parentOtelCtx ?? context.active(), resolveSpan);
     endResolveSpan("job_started");
     // Job is now in jobStore — any concurrent duplicate can find it via getJob().
-    // Keep id in inflightJobIds until runFfmpeg calls activeCommands.set() (after
-    // ffprobe). Deleting it here would open a window where neither activeCommands
-    // nor inflightJobIds counts this job, letting the MAX_CONCURRENT_JOBS cap be
-    // bypassed by a concurrent call during the ffprobe window.
+    // Reservation stays held until spawnProcess inside runFfmpeg consumes it
+    // (after ffprobe). The pool's reservations Set keeps the cap honest during
+    // the ffprobe window so a concurrent call cannot bypass it.
     void runFfmpeg(
+      reservation,
       job,
       video.path,
       resolution,
@@ -376,7 +295,7 @@ export async function startTranscodeJob(
   } catch (err) {
     resolveSpan.setStatus({ code: SpanStatusCode.ERROR, message: (err as Error).message });
     resolveSpan.end();
-    inflightJobIds.delete(id);
+    reservation.release();
     // Genuinely unexpected — DB write failure, mkdir ENOSPC, etc. Map to the
     // INTERNAL bucket so the resolver can surface a typed error to the
     // client; no stack trace makes it to the wire.
@@ -390,6 +309,7 @@ export async function startTranscodeJob(
 }
 
 async function runFfmpeg(
+  reservation: Reservation,
   job: ActiveJob,
   inputPath: string,
   resolution: Resolution,
@@ -474,9 +394,9 @@ async function runFfmpeg(
       message: (err as Error).message,
     });
     jobSpan.end();
-    // Probe failed before activeCommands.set could take ownership — release the
-    // inflight slot here so the cap doesn't leak when ffprobe rejects the file.
-    inflightJobIds.delete(job.id);
+    // Probe failed before spawnProcess could take ownership — release the
+    // reservation here so the cap doesn't leak when ffprobe rejects the file.
+    reservation.release();
     job.status = "error";
     job.error = msg;
     job.errorCode = "PROBE_FAILED";
@@ -497,8 +417,8 @@ async function runFfmpeg(
 
   // fluent-ffmpeg discards ffmpeg's stderr by default — only `err.message`
   // (e.g. "ffmpeg exited with code 218: Conversion failed!") makes it into
-  // the .on("error") handler. Capture the most recent stderr lines so the
-  // failure events we emit to Seq carry the actual ffmpeg complaint.
+  // the onError hook. Capture the most recent stderr lines so the failure
+  // events we emit to Seq carry the actual ffmpeg complaint.
   const STDERR_RING_LINES = 200;
   const STDERR_ATTR_MAX_BYTES = 4_096;
   const stderrRing: string[] = [];
@@ -517,15 +437,11 @@ async function runFfmpeg(
     return match ? parseInt(match[1], 10) : -1;
   };
 
-  // Register the inotify watch BEFORE calling .run() so the kernel queues events
-  // from the very first file ffmpeg writes (init.mp4 and segment_0000.m4s).
-  // Calling watchSegments after .on("start") risks missing early segment events.
+  // Register the inotify watch BEFORE spawnProcess calls .run() so the kernel
+  // queues events from the very first file ffmpeg writes (init.mp4 and
+  // segment_0000.m4s). Wiring the watcher after the spawn risks missing early
+  // segment events.
   watchSegments(job, segmentDir, initPath);
-
-  activeCommands.set(job.id, command);
-  // Now tracked by activeCommands — remove from inflight so the slot is counted
-  // exactly once and the concurrent-job cap isn't double-counted.
-  inflightJobIds.delete(job.id);
 
   // Kill orphaned jobs — prefetched chunks that start encoding but whose stream
   // connection is never opened (e.g. user seeks away before the stream starts).
@@ -542,7 +458,7 @@ async function runFfmpeg(
   // "client never connected" case; the 180s idle_timeout in stream.ts covers
   // "ffmpeg stopped producing segments". Neither catches a job that makes
   // slow but non-zero progress while a client is still subscribed — that
-  // would otherwise tie up an MAX_CONCURRENT_JOBS slot indefinitely.
+  // would otherwise tie up a pool slot indefinitely.
   //
   // Budget = 3× chunk duration. Realistic worst case on this system is
   // SW libx264 at 1080p (~10 min for a 5-min chunk; SW 4K is architecturally
@@ -578,54 +494,123 @@ async function runFfmpeg(
   let lastProgressAt = 0;
 
   let encodeStart = 0;
-  file
+
+  /** Reserve a slot for the next cascade tier and recurse. Called from onError
+   * synchronously after the pool released the prior slot, so the cap is normally
+   * free. The defensive guard handles the rare race where 3 other jobs filled
+   * the slot in the same microtask. */
+  const cascadeTo = (forceSoftware_: boolean, useSwVaapiPad_: boolean): void => {
+    const next = tryReserveSlot(job.id);
+    if (!next) {
+      log.error("Cascade aborted — concurrency cap reached during retry", {
+        job_id: job.id,
+        video_id: job.video_id,
+        resolution,
+      });
+      jobSpan.addEvent("cascade_aborted_cap_full");
+      jobSpan.end();
+      job.status = "error";
+      job.error = "Cascade retry blocked by concurrency cap";
+      job.errorCode = "ENCODE_FAILED";
+      updateJobStatus(job.id, "error", { error: job.error });
+      notifySubscribers(job);
+      return;
+    }
+    void runFfmpeg(
+      next,
+      job,
+      inputPath,
+      resolution,
+      segmentDir,
+      startTime,
+      endTime,
+      parentOtelCtx,
+      forceSoftware_,
+      useSwVaapiPad_
+    );
+  };
+
+  const fullCommand = file
     .applyOutputOptions(command, jobHwAccel, profile, segmentPattern, segmentDir, {
       vaapiSwPad: effUseSwVaapiPad,
       chunkStartSeconds: startTime ?? 0,
     })
-    .output(join(segmentDir, "playlist.m3u8"))
-    .on("start", (cmd) => {
+    .output(join(segmentDir, "playlist.m3u8"));
+
+  spawnProcess(reservation, fullCommand, {
+    onStart: (cmd) => {
       encodeStart = Date.now();
       jobSpan.addEvent("transcode_started", { resolution, cmd: cmd.slice(0, 120) });
-    })
-    .on("stderr", captureStderr)
-    .on(
-      "progress",
-      (p: {
-        frames?: number;
-        currentFps?: number;
-        currentKbps?: number;
-        timemark?: string;
-        percent?: number;
-      }) => {
-        const now = Date.now();
-        if (now - lastProgressAt < PROGRESS_INTERVAL_MS) return;
-        lastProgressAt = now;
-        jobSpan.addEvent("transcode_progress", {
-          frames: p.frames ?? 0,
-          fps: p.currentFps ?? 0,
-          kbps: p.currentKbps ?? 0,
-          timemark: p.timemark ?? "",
-          percent: p.percent ?? 0,
-        });
-      }
-    )
-    .on("error", (err) => {
+    },
+    onStderr: captureStderr,
+    onProgress: (p) => {
+      const now = Date.now();
+      if (now - lastProgressAt < PROGRESS_INTERVAL_MS) return;
+      lastProgressAt = now;
+      jobSpan.addEvent("transcode_progress", {
+        frames: p.frames ?? 0,
+        fps: p.currentFps ?? 0,
+        kbps: p.currentKbps ?? 0,
+        timemark: p.timemark ?? "",
+        percent: p.percent ?? 0,
+      });
+    },
+    onComplete: () => {
       clearTimeout(orphanTimer);
       clearTimeout(maxEncodeTimer);
-      activeCommands.delete(job.id);
-      // Clear killedJobs entry if present. A SIGTERM can cause ffmpeg to exit via
-      // both .on("error") and .on("end") depending on the OS; clearing here ensures
-      // the entry doesn't linger if the error path fires instead of the end path.
-      killedJobs.delete(job.id);
+      const segmentCount = job.segments.filter(Boolean).length;
       const encodeDurationMs = encodeStart > 0 ? Date.now() - encodeStart : 0;
+      log.info("Transcode complete", {
+        job_id: job.id,
+        video_id: job.video_id,
+        resolution,
+        segment_count: segmentCount,
+        encode_duration_ms: encodeDurationMs,
+      });
+      jobSpan.addEvent("transcode_complete", {
+        segment_count: segmentCount,
+        encode_duration_ms: encodeDurationMs,
+      });
+      jobSpan.end();
+      job.status = "complete";
+      job.total_segments = segmentCount;
+      updateJobStatus(job.id, "complete", {
+        total_segments: job.total_segments,
+        completed_segments: job.total_segments,
+      });
+      notifySubscribers(job);
+    },
+    onKilled: (reason) => {
+      clearTimeout(orphanTimer);
+      clearTimeout(maxEncodeTimer);
+      // Treat a killed job as an error so the next startTranscodeJob call
+      // wipes the stale segment dir and re-encodes rather than serving a
+      // truncated stream from a partial fragment set.
+      const msg = `ffmpeg killed — ${reason}`;
+      log.info(`Transcode killed: ${reason}`, {
+        job_id: job.id,
+        video_id: job.video_id,
+        resolution,
+        kill_reason: reason,
+      });
+      jobSpan.addEvent("transcode_killed", { kill_reason: reason });
+      jobSpan.end();
+      job.status = "error";
+      job.error = msg;
+      updateJobStatus(job.id, "error", { error: msg });
+      notifySubscribers(job);
+    },
+    onError: (err) => {
+      clearTimeout(orphanTimer);
+      clearTimeout(maxEncodeTimer);
+      const encodeDurationMs = encodeStart > 0 ? Date.now() - encodeStart : 0;
+      const ffmpegStderr = stderrTail();
+      const ffmpegExitCode = exitCodeOf(err.message);
 
       // Three-tier failure cascade for VAAPI:
       //   tier 1 (fast)  → tier 2 (sw-pad VAAPI) → tier 3 (software libx264)
       // Other HW backends fall straight to software (no sw-pad equivalent).
       // Each tier is a single retry; if every tier fails, mark the job errored.
-      const ffmpegStderr = stderrTail();
-      const ffmpegExitCode = exitCodeOf(err.message);
 
       // Tier 2 → 3: sw-pad VAAPI failed; mark the source hw_unsafe and fall
       // through to software libx264. After this, every future chunk of the
@@ -657,17 +642,7 @@ async function runFfmpeg(
           message: err.message,
         });
         jobSpan.end();
-        void runFfmpeg(
-          job,
-          inputPath,
-          resolution,
-          segmentDir,
-          startTime,
-          endTime,
-          parentOtelCtx,
-          /* forceSoftware */ true,
-          /* useSwVaapiPad  */ false
-        );
+        cascadeTo(/* forceSoftware */ true, /* useSwVaapiPad */ false);
         return;
       }
 
@@ -709,17 +684,7 @@ async function runFfmpeg(
           message: err.message,
         });
         jobSpan.end();
-        void runFfmpeg(
-          job,
-          inputPath,
-          resolution,
-          segmentDir,
-          startTime,
-          endTime,
-          parentOtelCtx,
-          /* forceSoftware */ false,
-          /* useSwVaapiPad  */ true
-        );
+        cascadeTo(/* forceSoftware */ false, /* useSwVaapiPad */ true);
         return;
       }
 
@@ -744,17 +709,7 @@ async function runFfmpeg(
           message: err.message,
         });
         jobSpan.end();
-        void runFfmpeg(
-          job,
-          inputPath,
-          resolution,
-          segmentDir,
-          startTime,
-          endTime,
-          parentOtelCtx,
-          /* forceSoftware */ true,
-          /* useSwVaapiPad  */ false
-        );
+        cascadeTo(/* forceSoftware */ true, /* useSwVaapiPad */ false);
         return;
       }
 
@@ -781,58 +736,8 @@ async function runFfmpeg(
       job.errorCode = "ENCODE_FAILED";
       updateJobStatus(job.id, "error", { error: err.message });
       notifySubscribers(job);
-    })
-    .on("end", () => {
-      clearTimeout(orphanTimer);
-      clearTimeout(maxEncodeTimer);
-      activeCommands.delete(job.id);
-
-      if (killedJobs.has(job.id)) {
-        // ffmpeg exited cleanly after SIGTERM — treat as error, not completion,
-        // so the next startTranscodeJob call will wipe the stale segment dir and
-        // re-encode rather than serving a truncated stream.
-        const reason = killReasons.get(job.id) ?? "unknown";
-        killedJobs.delete(job.id);
-        killReasons.delete(job.id);
-        const msg = `ffmpeg killed — ${reason}`;
-        log.info(`Transcode killed: ${reason}`, {
-          job_id: job.id,
-          video_id: job.video_id,
-          resolution,
-          kill_reason: reason,
-        });
-        jobSpan.addEvent("transcode_killed", { kill_reason: reason });
-        jobSpan.end();
-        job.status = "error";
-        job.error = msg;
-        updateJobStatus(job.id, "error", { error: msg });
-        notifySubscribers(job);
-        return;
-      }
-
-      const segmentCount = job.segments.filter(Boolean).length;
-      const encodeDurationMs = encodeStart > 0 ? Date.now() - encodeStart : 0;
-      log.info("Transcode complete", {
-        job_id: job.id,
-        video_id: job.video_id,
-        resolution,
-        segment_count: segmentCount,
-        encode_duration_ms: encodeDurationMs,
-      });
-      jobSpan.addEvent("transcode_complete", {
-        segment_count: segmentCount,
-        encode_duration_ms: encodeDurationMs,
-      });
-      jobSpan.end();
-      job.status = "complete";
-      job.total_segments = segmentCount;
-      updateJobStatus(job.id, "complete", {
-        total_segments: job.total_segments,
-        completed_segments: job.total_segments,
-      });
-      notifySubscribers(job);
-    })
-    .run();
+    },
+  });
 }
 
 function watchSegments(job: ActiveJob, segmentDir: string, initPath: string): void {

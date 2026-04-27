@@ -4,7 +4,7 @@ import { join } from "path";
 
 import { getJobById } from "../db/queries/jobs.js";
 import { getSegmentsByJob } from "../db/queries/segments.js";
-import { killJob } from "../services/chunker.js";
+import { killJob } from "../services/ffmpegPool.js";
 import { addConnection, getJob, removeConnection } from "../services/jobStore.js";
 import { getOtelLogger, getTracer } from "../telemetry/index.js";
 
