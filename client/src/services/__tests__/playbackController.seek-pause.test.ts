@@ -341,19 +341,21 @@ describe("PlaybackController.handleSeeking (slider snap-back + stale-prefetch fi
     expect(buf.seekCalls).toEqual([720]);
   });
 
-  it("sets chunkEnd to the next-snap boundary so RAF prefetch fires at the correct boundary", () => {
+  it("sets chunkEnd to the small seek-chunk window so RAF prefetch fires immediately", () => {
     // Pre-fix: chunkEnd was reset to 0 to gate out a stale prefetch race
-    // (trace 5d5b5137…). Post-fix: chunkEnd is set to nextSnap synchronously
-    // so the RAF gate is active immediately — the seek chunk may be only
-    // a few seconds long if the user seeks deep into a chunk window.
+    // (trace 5d5b5137…). Then chunkEnd was set to nextSnap synchronously,
+    // which works but leaves the seek chunk up to 300s long. Now chunkEnd is
+    // clamped to seekTime + FIRST_CHUNK_DURATION_S (capped by nextSnap) so
+    // the prefetch RAF threshold (PREFETCH_THRESHOLD_S = 90) trips immediately
+    // and a continuation chunk eager-warms ffmpeg in parallel.
     const { controller, priv } = setUpSeekable(1500);
     expect(priv.chunkEnd).toBe(900); // baseline: stale value from prior chunk
 
     controller.seekTo(1500);
     priv.handleSeeking();
 
-    // nextSnap = ceil((1500 + 0.001) / 300) * 300 = 1800
-    expect(priv.chunkEnd).toBe(1800);
+    // seekChunkEnd = min(1500 + 30, nextSnap=1800, dur) = 1530
+    expect(priv.chunkEnd).toBe(1530);
   });
 
   it("anchors the chunk REQUEST at seekTime — no longer snaps to chunk boundary", () => {
@@ -381,8 +383,8 @@ describe("PlaybackController.handleSeeking (slider snap-back + stale-prefetch fi
 
   it("anchors at seekTime even when it lands exactly on a chunk boundary", () => {
     // Edge case: with the +0.001 nudge in nextSnap derivation, a seek to
-    // exactly 600 still produces a [600, 900) chunk (NOT a degenerate
-    // [600, 600) zero-length one).
+    // exactly 600 still produces a non-degenerate seek chunk
+    // (NOT [600, 600) zero-length).
     const { controller, priv, buf } = setUpSeekable(600);
 
     controller.seekTo(600);
@@ -393,7 +395,8 @@ describe("PlaybackController.handleSeeking (slider snap-back + stale-prefetch fi
       const call = (priv.startChunkSeries as ReturnType<typeof vi.fn>).mock.calls[0];
       expect(call[1]).toBe(600); // chunkStartS = seekTime
       expect(call[4]).toBe(0); // fromIndex
-      expect(priv.chunkEnd).toBe(900); // nextSnap, not 600
+      // seekChunkEnd = min(600 + 30, nextSnap=900, dur) = 630
+      expect(priv.chunkEnd).toBe(630);
     });
   });
 

@@ -8,6 +8,7 @@ import { BufferManager } from "./bufferManager.js";
 import { ChunkPipeline, type StreamOutcome } from "./chunkPipeline.js";
 import {
   CHUNK_DURATION_S,
+  FIRST_CHUNK_DURATION_S,
   type PlaybackStatus,
   PREFETCH_THRESHOLD_S,
   STARTUP_BUFFER_S,
@@ -250,25 +251,40 @@ export class PlaybackController {
     this.buffer = buffer;
     this.pipeline = pipeline;
 
-    void context.with(sessionCtx, () =>
-      buffer
-        .init(RESOLUTION_MIME_TYPE[res])
-        .then(() => {
-          playbackLog.info(`MSE ready: ${RESOLUTION_MIME_TYPE[res]}`, {
-            mime_type: RESOLUTION_MIME_TYPE[res],
+    // Fire the foreground chunk mutation in PARALLEL with `buffer.init()` —
+    // they have no causal dependency. The mutation's GraphQL RTT (~100–500 ms)
+    // and ffmpeg cold-start (10–30 s on 4K VAAPI before init.mp4 lands) now
+    // overlap with MSE bootstrap, instead of running serially after it. We
+    // still await both before opening the foreground stream — `pipeline.startForeground`
+    // requires the SourceBuffer (from init) and the rawJobId (from the
+    // mutation), so the order at that point is `Promise.all`-gated, not
+    // serial.
+    const firstChunkEnd = Math.min(FIRST_CHUNK_DURATION_S, videoDurationS);
+    void context.with(sessionCtx, () => {
+      const initPromise = buffer.init(RESOLUTION_MIME_TYPE[res]).then(() => {
+        playbackLog.info(`MSE ready: ${RESOLUTION_MIME_TYPE[res]}`, {
+          mime_type: RESOLUTION_MIME_TYPE[res],
+        });
+      });
+      const chunkPromise = this.requestChunk(res, 0, firstChunkEnd, false);
+      return Promise.all([initPromise, chunkPromise])
+        .then(([, rawJobId]) => {
+          if (!this.pipeline) return; // Tore down between request and response.
+          this.startChunkSeries(res, 0, buffer, true, 0, {
+            endS: firstChunkEnd,
+            preIssuedJobId: rawJobId,
           });
-          this.startChunkSeries(res, 0, buffer, true);
           this.startPrefetchLoop(res);
         })
         .catch((err: Error) => {
-          const msg = `MSE init failed: ${err.message}`;
-          playbackLog.error("MSE init failed", { message: err.message });
-          sessionSpan.addEvent("mse_init_failed", { message: err.message });
+          const msg = `Playback start failed: ${err.message}`;
+          playbackLog.error("Playback start failed", { message: err.message });
+          sessionSpan.addEvent("playback_start_failed", { message: err.message });
           sessionSpan.setStatus({ code: SpanStatusCode.ERROR, message: err.message });
           this.setError(msg);
           this.setStatus("idle");
-        })
-    );
+        });
+    });
   }
 
   seekTo(targetSeconds: number): void {
@@ -383,11 +399,16 @@ export class PlaybackController {
   private handleChunkEnded(
     res: Resolution,
     chunkStartS: number,
+    chunkEndS: number,
     buffer: BufferManager,
     outcome: StreamOutcome
   ): void {
     const videoDurationS = this.deps.getVideoDurationS();
-    const chunkEnd = Math.min(chunkStartS + CHUNK_DURATION_S, videoDurationS);
+    // chunkEndS is passed in by the caller (matches what was actually requested
+    // — important since the first chunk uses FIRST_CHUNK_DURATION_S, not the
+    // steady-state CHUNK_DURATION_S, so the formula `start + CHUNK_DURATION_S`
+    // would overshoot for chunk 0).
+    const chunkEnd = Math.min(chunkEndS, videoDurationS);
     const isLast = chunkEnd >= videoDurationS;
 
     if (outcome === "no_real_content") {
@@ -621,14 +642,25 @@ export class PlaybackController {
     /** Server-side segment skip via `?from=K`. Non-zero only on seeks that
      *  land mid-chunk — see handleSeeking for the rationale. Default 0 keeps
      *  initial play / MSE recovery / chunk N→N+1 chain unchanged. */
-    fromIndex = 0
+    fromIndex = 0,
+    /** Optional overrides. `endS` lets the seek path clamp the chunk end to
+     *  `nextSnap` so the continuation re-aligns with the canonical 300s grid.
+     *  `preIssuedJobId` lets startPlayback hand in a jobId already fetched in
+     *  parallel with `buffer.init()` — avoiding a second mutation for the
+     *  same `(start, end)` tuple. */
+    override?: { endS?: number; preIssuedJobId?: string }
   ): void {
     const videoDurationS = this.deps.getVideoDurationS();
-    const chunkEnd = Math.min(startS + CHUNK_DURATION_S, videoDurationS);
+    const windowSize = isFirstChunk ? FIRST_CHUNK_DURATION_S : CHUNK_DURATION_S;
+    const chunkEnd = override?.endS ?? Math.min(startS + windowSize, videoDurationS);
     this.chunkEnd = chunkEnd;
     this.prefetchFired = false;
 
-    void this.requestChunk(res, startS, chunkEnd, false)
+    const jobIdPromise = override?.preIssuedJobId
+      ? Promise.resolve(override.preIssuedJobId)
+      : this.requestChunk(res, startS, chunkEnd, false);
+
+    void jobIdPromise
       .then((rawJobId) => {
         if (!this.pipeline) return; // Tore down between request and response.
         this.timeline.setForegroundChunk(startS, chunkEnd);
@@ -639,7 +671,7 @@ export class PlaybackController {
           isFirstChunk,
           resolution: res,
           fromIndex,
-          onStreamEnded: (outcome) => this.handleChunkEnded(res, startS, buffer, outcome),
+          onStreamEnded: (outcome) => this.handleChunkEnded(res, startS, chunkEnd, buffer, outcome),
           onError: (err) => this.setError(err.message),
           onFirstChunkInit: isFirstChunk
             ? (): void => this.armStartupBufferCheck(buffer, res)
@@ -808,7 +840,8 @@ export class PlaybackController {
                 chunkStartS: nextStart,
                 isFirstChunk: false,
                 resolution: res,
-                onStreamEnded: (outcome) => this.handleChunkEnded(res, nextStart, buffer, outcome),
+                onStreamEnded: (outcome) =>
+                  this.handleChunkEnded(res, nextStart, nextEnd, buffer, outcome),
                 onError: (err) => this.setError(err.message),
                 onFirstMediaSegmentArrived: (atMs) =>
                   this.timeline.recordLookaheadFirstByte(rawJobId, atMs),
@@ -897,12 +930,12 @@ export class PlaybackController {
           this.bgPipeline = null;
           // Re-point the bg slot's onStreamEnded forwarder so the now-foreground
           // chunk's natural completion drives chunk continuation.
+          const newChunkEnd = Math.min(chunkStart + CHUNK_DURATION_S, videoDurationS);
           this.bgOnStreamEnded = (outcome): void =>
-            this.handleChunkEnded(newRes, chunkStart, bgBuffer, outcome);
+            this.handleChunkEnded(newRes, chunkStart, newChunkEnd, bgBuffer, outcome);
 
           this.resolution = newRes;
           // Resume chunk series from the swapped position
-          const newChunkEnd = Math.min(chunkStart + CHUNK_DURATION_S, videoDurationS);
           this.chunkEnd = newChunkEnd;
           this.prefetchFired = false;
           this.startPrefetchLoop(newRes);
@@ -1000,12 +1033,16 @@ export class PlaybackController {
     this.stallTracker.end("seek");
     // The seek chunk is anchored at the user's actual position, not the chunk
     // grid — ffmpeg's `-ss seekTime` produces the user's first segment
-    // immediately. The seek chunk ends at the next snap boundary so the
-    // prefetched continuation chunk is back on the canonical grid (cache
-    // friendly for forward play). See `02-Chunk-Pipeline-Invariants.md` § 1.
+    // immediately. We then clamp the seek chunk to FIRST_CHUNK_DURATION_S so
+    // the prefetch RAF threshold (PREFETCH_THRESHOLD_S = 90) trips immediately
+    // and a continuation chunk's ffmpeg starts in parallel. The continuation
+    // is bounded by `nextSnap` so it lands back on the canonical grid where
+    // possible. See `02-Chunk-Pipeline-Invariants.md` § 1.
     // The +0.001 nudges seeks that land exactly on a boundary to the *next*
     // boundary, avoiding a degenerate zero-length seek chunk.
     const nextSnap = Math.ceil((seekTime + 0.001) / CHUNK_DURATION_S) * CHUNK_DURATION_S;
+    const videoDurationS = this.deps.getVideoDurationS();
+    const seekChunkEnd = Math.min(seekTime + FIRST_CHUNK_DURATION_S, nextSnap, videoDurationS);
 
     // Guard against re-entrancy: BufferManager.seek() sets videoEl.currentTime
     // to reposition the playhead, which queues a second "seeking" task. By the
@@ -1029,9 +1066,10 @@ export class PlaybackController {
     this.hasStartedPlayback = false;
 
     playbackLog.info(
-      `Seek to ${seekTime.toFixed(1)}s → flushing buffer, requesting [${seekTime.toFixed(1)}, ${nextSnap}) anchored at the seek position`,
+      `Seek to ${seekTime.toFixed(1)}s → flushing buffer, requesting [${seekTime.toFixed(1)}, ${seekChunkEnd}) anchored at the seek position`,
       {
         seek_target_s: parseFloat(seekTime.toFixed(1)),
+        seek_chunk_end_s: seekChunkEnd,
         next_snap_s: nextSnap,
       }
     );
@@ -1040,11 +1078,10 @@ export class PlaybackController {
     this.pipeline?.cancel("seek");
     this.timeline.clearLookahead();
     this.prefetchFired = false;
-    // Set chunkEnd to the next-snap boundary so the RAF prefetch fires when
-    // currentTime > nextSnap - PREFETCH_THRESHOLD_S. The RAF guard requires
-    // chunkEnd > 0 (otherwise it ignores ticks); we want it active immediately
-    // since on a deep seek the seek chunk may be only a few seconds long.
-    this.chunkEnd = nextSnap;
+    // Set chunkEnd to the small seek-chunk's end so the RAF prefetch fires
+    // immediately (timeUntilEnd ≤ PREFETCH_THRESHOLD_S = 90 trivially holds
+    // for a ≤30s window), eager-warming ffmpeg for the continuation chunk.
+    this.chunkEnd = seekChunkEnd;
     // Seek invalidates the user-pause prefetch (different chunk now). Cleanup
     // is idempotent so it's safe to call even when not paused.
     this.clearUserPauseState();
@@ -1075,7 +1112,15 @@ export class PlaybackController {
       // the user's first segment in ~1-2 s instead of waiting through the
       // chunk-prefix encode that snap-aligned starts forced. No `?from=K`
       // skip needed: every segment ffmpeg emits is at-or-ahead of seekTime.
-      this.startChunkSeries(this.resolution, seekTime, buf, false, 0);
+      // `endS: seekChunkEnd` clamps the window to FIRST_CHUNK_DURATION_S (or
+      // to nextSnap if shorter), so the prefetch RAF threshold trips
+      // immediately and the continuation chunk eager-warms ffmpeg in parallel.
+      // `isFirstChunk: false` keeps the existing seek startup-buffer wiring
+      // (waitForStartupBuffer call above) — armStartupBufferCheck is reserved
+      // for the very first chunk of a session, not for re-fills after seek.
+      this.startChunkSeries(this.resolution, seekTime, buf, false, 0, {
+        endS: seekChunkEnd,
+      });
     });
   };
 
@@ -1168,7 +1213,8 @@ export class PlaybackController {
           chunkStartS: nextStart,
           isFirstChunk: false,
           resolution: res,
-          onStreamEnded: (outcome) => this.handleChunkEnded(res, nextStart, buffer, outcome),
+          onStreamEnded: (outcome) =>
+            this.handleChunkEnded(res, nextStart, nextEnd, buffer, outcome),
           onError: (err) => this.setError(err.message),
           onFirstMediaSegmentArrived: (atMs) =>
             this.timeline.recordLookaheadFirstByte(rawJobId, atMs),

@@ -1,6 +1,6 @@
 # Playback Scenarios
 
-The client drives transcoding in **300-second chunks** rather than encoding the full video upfront. Each chunk is a separate ffmpeg job covering a time window `[startS, endS)`. Four distinct flows cover the pipeline end-to-end: initial playback, back-pressure, seek, and resolution switch. Each has its own sequence diagram below; the `.mmd` sources are authoritative and can be re-rendered in draw.io via the `open_drawio_mermaid` MCP tool.
+The client drives transcoding in **300-second chunks** for steady-state playback; the first chunk after Play or a Seek uses a shorter **30-second window** (`FIRST_CHUNK_DURATION_S`) so the prefetch RAF trips immediately and ffmpeg for chunk N+1 starts encoding in parallel with chunk N's initial fill. Each chunk is a separate ffmpeg job covering a time window `[startS, endS)`. Four distinct flows cover the pipeline end-to-end: initial playback, back-pressure, seek, and resolution switch. Each has its own sequence diagram below; the `.mmd` sources are authoritative and can be re-rendered in draw.io via the `open_drawio_mermaid` MCP tool.
 
 ## Scenario 1: Initial playback (happy path)
 
@@ -10,8 +10,8 @@ The client drives transcoding in **300-second chunks** rather than encoding the 
 
 `PlaybackController.startPlayback(res)` opens the `playback.session` span and drives the boot sequence:
 
-1. `BufferManager.init(mimeType)` creates a `MediaSource` and arms a `SourceBuffer`.
-2. `PlaybackController.requestChunk` opens a `transcode.request` span (with `chunk.is_prefetch = false`) around the `startTranscode` GraphQL mutation for the `(videoId, resolution, 0, 300)` window. The auto-generated `graphql.request` HTTP span nests underneath via `context.with`. The span closes when the mutation resolves and records `chunk.job_id`.
+1. **`buffer.init` and the `startTranscode` mutation run in parallel via `Promise.all`.** `BufferManager.init(mimeType)` creates a `MediaSource` and arms a `SourceBuffer`; simultaneously `PlaybackController.requestChunk` fires the `startTranscode` GraphQL mutation for the `(videoId, resolution, 0, FIRST_CHUNK_DURATION_S)` = `(…, 0, 30)` window. This means ffmpeg's cold-start overlaps with the `sourceopen` handshake rather than waiting behind it.
+2. `PlaybackController.requestChunk` opens a `transcode.request` span (with `chunk.is_prefetch = false`) around the mutation. The auto-generated `graphql.request` HTTP span nests underneath via `context.with`. The span closes when the mutation resolves and records `chunk.job_id`. The pre-issued `jobId` is plumbed directly into `pipeline.startForeground` — no second mutation fires when the pipeline opens.
 3. `chunker.startTranscodeJob` computes a deterministic `jobId = SHA-1(fingerprint + res + start + end)`. If `tmp/segments/<jobId>/init.mp4` exists the job is restored from cache; otherwise a new ffmpeg process spawns and `fs.watch` starts tracking segment files. The `transcode.job` span covers the full ffmpeg lifetime (probe + encode) and closes on `transcode_complete`, `transcode_error`, or `transcode_killed`.
 4. The client opens a `chunk.stream` span and calls `StreamingService.start(jobId, …, ctx)`. `ctx` is propagated as `traceparent`, so the server's `stream.request` span nests under the client's `chunk.stream`. On span end it records `chunk.bytes_streamed` and `chunk.segments_received` — giving per-chunk bandwidth in a single Seq query.
 5. `GET /stream/<jobId>` waits up to 60 s for `init.mp4`, writes it length-prefixed, then loops over newly-appearing `segment_NNNN.m4s` files.
@@ -21,7 +21,7 @@ The client drives transcoding in **300-second chunks** rather than encoding the 
 
 ### Chunk chaining
 
-When the current chunk stream finishes, `startChunkSeries` chains to the next one. A RAF prefetch loop fires the next chunk's `startTranscode` mutation when `currentTime > chunkEnd - 90s` (`PREFETCH_THRESHOLD_S`), so the next `jobId` is usually already in hand — no mutation RTT before streaming resumes. Prefetch requests open their own `transcode.request` span with `chunk.is_prefetch = true`, so Seq queries can separate prefetch RTT from on-demand RTT. Continuation chunks **must re-append their init segment** (each chunk's `elst` differs); the `SourceBuffer` (in `mode="segments"`, NOT `"sequence"`) places each segment by its TFDT so chunks stitch seamlessly. See [`02-Chunk-Pipeline-Invariants.md`](02-Chunk-Pipeline-Invariants.md) for the full set of rules.
+When the current chunk stream finishes, `startChunkSeries` chains to the next one. A RAF prefetch loop fires the next chunk's `startTranscode` mutation when `currentTime > chunkEnd - PREFETCH_THRESHOLD_S (90 s)`. Because the first chunk window is only 30 s, `chunkEnd − 90` is negative — the prefetch fires immediately after play starts, so chunk 2 (`[30, 330)`) begins encoding in parallel with chunk 1's fill. Prefetch requests open their own `transcode.request` span with `chunk.is_prefetch = true`, so Seq queries can separate prefetch RTT from on-demand RTT. Continuation chunks **must re-append their init segment** (each chunk's `elst` differs); the `SourceBuffer` (in `mode="segments"`, NOT `"sequence"`) places each segment by its TFDT so chunks stitch seamlessly. See [`02-Chunk-Pipeline-Invariants.md`](02-Chunk-Pipeline-Invariants.md) for the full set of rules.
 
 ### Connection-aware ffmpeg lifecycle
 
@@ -57,9 +57,9 @@ If `t` lies within the current `SourceBuffer`'s buffered range, playback resumes
 2. `StreamingService.cancel()` aborts the current fetch.
 3. `chunkEnd` is reset to `0` synchronously at the top of the seek handler (before any async work) to prevent the RAF prefetch loop from firing a stale chunk request while the seek is in flight.
 4. `BufferManager.seek(t)` — note **`t` (the user's raw seek position), not `snapTime`** — flushes the `SourceBuffer` (`remove(0, Infinity)`), resets `timestampOffset`, and sets `video.currentTime = t`. Using `t` here keeps the playhead at the position the user clicked; using `snapTime` would visually snap the slider backward to the chunk boundary, which is confusing UX.
-5. `startTranscode(videoId, res, snapTime, snapTime + 300)` uses `snapTime` as the server request boundary so the cache key is chunk-aligned and the same job can be reused across multiple seeks into the same 300-second window.
+5. `startTranscode(videoId, res, snapTime, seekChunkEnd)` — the server-side start is still `snapTime` (boundary-aligned, cache-friendly), but the **end** is clamped: `seekChunkEnd = min(seekTime + FIRST_CHUNK_DURATION_S, nextSnap, videoDurationS)`. This mirrors what the post-Play path does: the seek chunk is at most 30 s long, so the prefetch RAF fires almost immediately after the seek buffer fills, eager-warming the next chunk in parallel.
 
-**The two-value split:** the chunk SERVER REQUEST uses `snapTime` (boundary-aligned, cache-friendly); `buf.seek`, `video.currentTime`, and all client-side seek logs use `seekTime = t` (the user's intent). These were the same value before PR #30 round-2; changing `buf.seek` to receive `t` fixes the slider snap-back without touching the server cache key.
+**The two-value split:** the server request start uses `snapTime` (boundary-aligned, cache-friendly); `buf.seek`, `video.currentTime`, and all client-side seek logs use `seekTime = t` (the user's intent). Continuation chunks pick up on the canonical 300 s grid via the `nextSnap` cap on `seekChunkEnd`. These were the same value before PR #30 round-2; changing `buf.seek` to receive `t` fixes the slider snap-back without touching the server cache key.
 
 ## Scenario 4: Resolution switch (background buffer)
 

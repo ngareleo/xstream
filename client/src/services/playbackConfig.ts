@@ -12,6 +12,12 @@ import type { Resolution } from "~/types.js";
  *  for exactly this many seconds of media. */
 export const CHUNK_DURATION_S = 300;
 
+/** Window length for the very first chunk after Play and after a seek. Picked
+ *  short enough that the prefetch RAF (PREFETCH_THRESHOLD_S = 90) trips
+ *  immediately and eager-warms ffmpeg for the next chunk in parallel. Keeps
+ *  initial-fill snappy without changing the steady-state cadence. */
+export const FIRST_CHUNK_DURATION_S = 30;
+
 /** How close to the end of the current chunk (in seconds) we start prefetching
  *  the next one. Sized to absorb ffmpeg cold-start (~25–30 s on 4K VAAPI) plus
  *  a HW→software fallback (~30 s of failed VAAPI before the chunker retries),
