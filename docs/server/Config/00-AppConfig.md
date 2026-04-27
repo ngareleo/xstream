@@ -51,33 +51,52 @@ Lives at the project root. Committed to git. Paths are machine-specific — edit
 
 ## AppConfig (server/src/config.ts)
 
-### Dev (default)
+`AppConfig` is exported from `server/src/config.ts` as the `config` singleton. It composes five groups of fields:
 
-Active when `NODE_ENV` is absent or `development`.
+### Top-level scalar fields
 
-| Field | Value |
-|---|---|
-| Field | Env var | Default |
-|---|---|---|
-| `port` | — | `3001` |
-| `segmentDir` | `SEGMENT_DIR` | `./tmp/segments` (relative to project root) |
-| `dbPath` | `DB_PATH` | `./tmp/xstream.db` |
-| `mediaConfigPath` | — | `./mediaFiles.json` |
-| `scanIntervalMs` | — | `30000` |
+| Field | Env var | Dev default | Prod default | Notes |
+|---|---|---|---|---|
+| `port` | `PORT` | `3001` | `8080` | |
+| `segmentDir` | `SEGMENT_DIR` | `./tmp/segments` | `./tmp/segments` | Override in tests to route to a per-PID temp dir |
+| `dbPath` | `DB_PATH` | `./tmp/xstream.db` | `./tmp/xstream.db` | Override in tests; persistent storage recommended in prod |
+| `scanIntervalMs` | `SCAN_INTERVAL_MS` | `30000` | `30000` | |
+| `hardwareAcceleration` | `HW_ACCEL` | `"auto"` | `"auto"` | `"off"` forces software encode |
 
 `SEGMENT_DIR` and `DB_PATH` are honored in dev (not just prod) so the test harness can route writes to a per-PID temp dir — see [`../../architecture/Testing/00-Side-Effects-Policy.md`](../../architecture/Testing/00-Side-Effects-Policy.md). Don't set them by hand in your dev shell unless you know what you're doing.
 
-### Prod
+### `transcode` section (`TranscodeConfig`)
 
-Active when `NODE_ENV=production`. Fields marked with an env var are required in production.
+All ops-tunable timing and policy knobs for ffmpeg process management. Both dev and prod profiles use the shared `transcodeDefaults` object — these values apply in both environments unless overridden in code.
 
-| Field | Env var | Default |
+| Field | Default | Purpose |
 |---|---|---|
-| `port` | `PORT` | `8080` |
-| `segmentDir` | `SEGMENT_DIR` | `./tmp/segments` |
-| `dbPath` | `DB_PATH` | `./tmp/xstream.db` |
-| `mediaConfigPath` | — | `./mediaFiles.json` |
-| `scanIntervalMs` | `SCAN_INTERVAL_MS` | `30000` |
+| `maxConcurrentJobs` | `3` | Cap on concurrently encoding ffmpeg processes (dying jobs excluded from count). |
+| `forceKillTimeoutMs` | `2 000` | SIGTERM → SIGKILL grace per job. Caps the dying-zombie window for 4K-software encodes. |
+| `shutdownTimeoutMs` | `5 000` | Total wait in `killAllJobs` before the terminal SIGKILL pass. Must be > `forceKillTimeoutMs`. |
+| `orphanTimeoutMs` | `30 000` | Kill ffmpeg if a job has zero connections after this many ms (covers prefetched chunks where the user seeks away). |
+| `maxEncodeRateMultiplier` | `3` | Wall-clock budget multiplier — actual budget = `chunk_duration_s × this × 1 000 ms`. |
+| `capacityRetryHintMs` | `1 000` | `retryAfterMs` returned to the client on a `CAPACITY_EXHAUSTED` rejection. |
+| `inflightDedupTimeoutMs` | `5 000` | Max time a concurrent caller polls jobStore waiting for a peer to finish registering the same job. |
+
+The pool reads these via `config.transcode.*`. See [`../../architecture/Streaming/06-FfmpegPool.md`](../../architecture/Streaming/06-FfmpegPool.md) for the cap formula and shutdown sweep logic.
+
+### `stream` section (`StreamConfig`)
+
+| Field | Default | Purpose |
+|---|---|---|
+| `connectionIdleTimeoutMs` | `180 000` | Idle window before `/stream/:jobId` declares the connection dead and kills the job. Must exceed the widest back-pressure halt the client can induce (~60 s with default `forwardTargetS`). |
+
+### Dev vs Prod
+
+Active profile is selected by `NODE_ENV`:
+
+| `NODE_ENV` | Profile |
+|---|---|
+| absent or `development` | `dev` (port 3001) |
+| `production` | `prod` (port 8080, `PORT` env var honored) |
+
+Both profiles share `transcodeDefaults` and `streamDefaults` — there are no per-environment overrides on the policy knobs today. Env-var overrides for the `transcode.*` / `stream.*` fields are planned groundwork for ops tuning.
 
 In production, `segmentDir` and `dbPath` should be set to persistent storage locations (not `/tmp`). The same `mediaFiles.json` is used in both environments — `env: "prod"` entries activate when `NODE_ENV=production`.
 
