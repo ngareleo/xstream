@@ -65,7 +65,7 @@ Two methods parallel to the existing `pauseAll` / `resumeAll` but targeting only
 
 ### `waitForStartupBuffer` — buffered-ahead, not absolute bufferedEnd
 
-`waitForStartupBuffer` gates `video.play()` on `bufferedAhead >= target` (seconds ahead of `currentTime`) rather than `bufferedEnd >= target` (absolute timeline position). The fix matters on seek: after a seek to e.g. 600 s, the first appended segment lands at PTS ≈ 600 s (`-output_ts_offset` keeps chunk-relative PTS in the source-time domain), so `bufferedEnd ≈ 602 s` trivially exceeded a 5 s threshold after just one 2 s segment — `video.play()` fired with only ~2 s of data ahead and stalled immediately. Comparing ahead-of-currentTime makes the threshold resolution-independent and seek-safe.
+`waitForStartupBuffer` gates `video.play()` on `bufferedAhead >= target` (seconds ahead of `currentTime`) rather than `bufferedEnd >= target` (absolute timeline position). The fix matters on seek: after a seek to e.g. 600 s, `BufferManager.setTimestampOffset(600)` places the chunk's raw `tfdt`-relative segments at PTS ≈ 600 s in the source timeline, so `bufferedEnd ≈ 602 s` trivially exceeded a 5 s threshold after just one 2 s segment — `video.play()` fired with only ~2 s of data ahead and stalled immediately. Comparing ahead-of-currentTime makes the threshold resolution-independent and seek-safe.
 
 ## Why three files instead of one
 

@@ -49,7 +49,7 @@ xstream is split into two workspaces: a Bun server and an Rsbuild/React client. 
 | Query layer | `src/db/queries/` | All SQL — one file per table |
 | Library scanner | `src/services/libraryScanner.ts` | Walks media directories, runs ffprobe + content fingerprint concurrently per file, upserts DB |
 | Scan store | `src/services/scanStore.ts` | In-memory scan state pub/sub; exposes `isScanRunning`, `markScanStarted/Ended`, async `subscribeToScan()` |
-| Chunker | `src/services/chunker.ts` | Manages ffmpeg jobs, watches output dir, updates jobStore + DB; `killAllActiveJobs()` for graceful shutdown |
+| Chunker | `src/services/chunker.ts` | Manages ffmpeg jobs, watches output dir, updates jobStore + DB. Process-pool concerns (cap, kill/SIGKILL escalation, `killAllJobs()` for graceful shutdown) live in `src/services/ffmpegPool.ts`. |
 | Job store | `src/services/jobStore.ts` | In-memory map of active jobs (source of truth for streaming) |
 | GraphQL handler | `src/routes/graphql.ts` | graphql-yoga instance with schema and CORS config |
 | Stream handler | `src/routes/stream.ts` | Reads segments from jobStore, writes length-prefixed binary frames |

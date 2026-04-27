@@ -52,7 +52,7 @@ The init segment must be the **first** data appended to the MSE `SourceBuffer`. 
 
 If any media segment is appended before the init segment, `appendBuffer()` fires an error event and the `SourceBuffer` enters an unrecoverable error state. The entire MSE pipeline must be torn down and re-initialized.
 
-**Each chunk has its own init segment, and continuation chunks (N>0) MUST re-append theirs** — every chunk's ffmpeg encode emits its own `elst` (edit list) carrying that chunk's source-time lead-in offset, and parsing chunk N's media against chunk 0's init silently drops the data. See [`02-Chunk-Pipeline-Invariants.md`](02-Chunk-Pipeline-Invariants.md) § "Per-chunk init segments are required".
+**Each chunk has its own init segment, and continuation chunks (N>0) MUST re-append theirs** — each chunk is a separate ffmpeg encode with its own `avcC` (SPS/PPS in v3 also flow in-band via the `dump_extra=keyframe` bitstream filter). The client also calls `BufferManager.setTimestampOffset(chunkStartS)` on every init append; together these are what place each chunk's segments at their absolute timeline position. See [`02-Chunk-Pipeline-Invariants.md`](02-Chunk-Pipeline-Invariants.md) § "Per-chunk init segments are required".
 
 The server generates the init segment by running a zero-duration ffmpeg pass on the first `.m4s` output file.
 
@@ -71,7 +71,7 @@ The server generates the init segment by running a zero-duration ffmpeg pass on 
    - If segment file exists at the expected path → read → write frame → increment index.
    - If `job.status === 'complete'` or `'error'` → break.
    - Else → `await sleep(100)` and retry.
-   - **90-second idle timeout**: if no segment has been sent for 90s while waiting for the encoder, close the connection and kill the job (see below).
+   - **`config.stream.connectionIdleTimeoutMs` (default 180 s)**: if no segment has been sent within that window while waiting for the encoder, close the connection and kill the job (see below).
 5. On `req.signal.aborted` (client disconnect): `removeConnection(jobId)`. If `connections === 0` and job is `running` → `killJob(jobId)` (SIGTERM).
 6. On natural stream end: `removeConnection(jobId)` and close.
 
@@ -79,9 +79,7 @@ The server generates the init segment by running a zero-duration ffmpeg pass on 
 - `ActiveJob.connections` tracks how many HTTP connections are consuming each job.
 - When the last connection drops (or times out), `killJob` sends SIGTERM to the ffmpeg process. This prevents zombie processes when users navigate away.
 - Multiple tabs on the same job share a `connections` count; ffmpeg is only killed when **all** connections close.
-- Maximum concurrent running jobs: `config.transcode.maxConcurrentJobs` (default `3`, defined in `server/src/config.ts`). A 4th `startTranscode` call while 3 slots are occupied throws `"Too many concurrent streams"`. The cap formula is `liveActiveCount + reservations.size >= config.transcode.maxConcurrentJobs`, where `liveActiveCount = liveCommands.size − dyingJobIds.size`. Jobs that have been SIGTERM'd but haven't yet exited do **not** count toward the cap — they are tracked in a `dyingJobIds` set and their slot is freed immediately on the kill call. This prevents rapid back-to-back seeks from exhausting the cap while 4K-software flushes are still in flight. After `config.transcode.forceKillTimeoutMs` (default 2 s) a SIGKILL is escalated automatically, bounding the zombie window.
-
-The `?from=N` query parameter skips directly to segment index N. The init segment is always sent regardless of `from`.
+- Maximum concurrent running jobs: `config.transcode.maxConcurrentJobs` (default `3`, defined in `server/src/config.ts`). A 4th `startTranscode` call while 3 slots are occupied returns a typed `CAPACITY_EXHAUSTED` `PlaybackError` (with `retryAfterMs = config.transcode.capacityRetryHintMs`) — never throws. The cap formula is `liveActiveCount + reservations.size >= config.transcode.maxConcurrentJobs`, where `liveActiveCount = liveCommands.size − dyingJobIds.size`. Jobs that have been SIGTERM'd but haven't yet exited do **not** count toward the cap — they are tracked in a `dyingJobIds` set and their slot is freed immediately on the kill call. This prevents rapid back-to-back seeks from exhausting the cap while 4K-software flushes are still in flight. After `config.transcode.forceKillTimeoutMs` (default 2 s) a SIGKILL is escalated automatically, bounding the zombie window.
 
 ---
 
@@ -123,23 +121,23 @@ The MSE `SourceBuffer` has strict rules:
 
 ## Seeking Protocol
 
-Seeks always flush and restart at a 300-second chunk boundary:
+Seeks anchor a fresh ffmpeg encode at the user's seek position. The chunk runs from `seekTime` to the next 300-second grid line (so the *prefetched* continuation chunk lands back on the canonical grid and is cache-friendly for forward play).
 
 1. `"seeking"` event fires on the `<video>` element.
 2. `StreamingService.cancel()` — aborts the current fetch.
-3. Snap seek time to chunk boundary: `snapTime = Math.floor(seekTime / 300) * 300`.
-4. `BufferManager.seek(snapTime)`:
+3. `BufferManager.seek(seekTime)`:
    - `await waitForUpdateEnd()`
    - `sourceBuffer.remove(0, Infinity)` — clear all buffered content
    - `await waitForUpdateEnd()`
    - Reset append queue, flags, and `afterAppendCb`
-   - Set `video.currentTime = snapTime`
-5. `startChunkSeries(res, snapTime, buffer)` — fires a new `startTranscode` mutation for `[snapTime, snapTime+300s)` and begins streaming.
-6. Server streams init segment + all media segments from the beginning of the chunk.
+   - Set `video.currentTime = seekTime` (the user's intended position, not a snapped boundary)
+4. `startChunkSeries(res, seekTime, buffer)` — fires a new `startTranscode` mutation for `[seekTime, nextSnap)` where `nextSnap = Math.ceil(seekTime / 300) * 300`. The server runs ffmpeg with `-ss seekTime`, so segment 0 of the produced fMP4 *is* the user's first useful frame.
+5. On every init append, `BufferManager.setTimestampOffset(chunkStartS)` shifts MSE placement so segments land at their absolute source-time position.
+6. Server streams init segment + media segments as ffmpeg produces them.
 
-Snapping to a 300-second boundary ensures the new job reuses an existing cached segment directory if the same chunk was previously encoded.
+Trade-off: re-seeking to the same exact second misses the chunk cache (the `jobId` hash is keyed on `start_s`). Acceptable — interactive scrubbing dominates, and the seek-to-ready latency benefit (sub-5 s vs. 16–60 s pre-refactor) is the load-bearing UX win.
 
-**Note:** Because seeks always restart at a chunk boundary, seek accuracy is at most `video.currentTime - snapTime` (up to 300s) from the user's target. The video element then fast-forwards through the already-buffered content to reach the actual seek point.
+**Seek accuracy:** the first appended segment starts at the keyframe ffmpeg's `-ss` lands on (typically within ~1 s of `seekTime`); the video element resumes at `seekTime` once `bufferedAhead ≥ STARTUP_BUFFER_S[res]`.
 
 ---
 
@@ -232,10 +230,10 @@ No ffmpeg kill, no reconnect. When playback drains the buffer below `forwardResu
 | **Halt duration** | ≈ gap (a few seconds) | ≈ gap (tens of seconds) |
 | **Underrun margin** | 16s → safe; rarely starves | 20s → safe; resume floor ≥5s is plenty |
 | **Telemetry volume** | One `buffer.halt` span per short cycle — noisy | One span per ~40s of playback — calm |
-| **ffmpeg throttling** | Frequent flip between blocked/unblocked; ffmpeg stays warm | Long idle windows; must stay under `CONNECTION_TIMEOUT_MS` (180s) or the server kills the job |
+| **ffmpeg throttling** | Frequent flip between blocked/unblocked; ffmpeg stays warm | Long idle windows; must stay under `config.stream.connectionIdleTimeoutMs` (180 s) or the server kills the job |
 | **Network-blip resilience** | Smaller buffer ceiling, less cushion during jitter | Larger cushion absorbs transient stalls |
 
-Narrow gaps are pathological — they spam `buffer.halt` spans and make it hard to see real problems in Seq. Very wide gaps (>120s halts) risk tripping `CONNECTION_TIMEOUT_MS`. The default 40s gap sits comfortably between the two.
+Narrow gaps are pathological — they spam `buffer.halt` spans and make it hard to see real problems in Seq. Very wide gaps (>120s halts) risk tripping `config.stream.connectionIdleTimeoutMs`. The default 40s gap sits comfortably between the two.
 
 #### Key numbers separate from the gap
 

@@ -105,3 +105,36 @@ killAllJobs(timeoutMs?): Promise<void>
 ```
 
 The pool exports no module-private timing constants; all tunables come from `AppConfig` so callers and tests can read them through one source of truth.
+
+## Exported types
+
+```typescript
+// Opaque handle returned by tryReserveSlot; consumed by spawnProcess.
+type Reservation = { jobId: string };
+
+// Callbacks handed to spawnProcess; exactly one of onComplete/onError/onKilled fires.
+type ProcessHooks = {
+  onProgress?: (data: ProgressData) => void;
+  onComplete: () => void;
+  onError: (err: Error) => void;
+  onKilled: (reason: KillReason) => void;
+};
+
+// Progress data forwarded from fluent-ffmpeg's progress event.
+type ProgressData = {
+  percent?: number;
+  timemark?: string;
+  currentFps?: number;
+};
+
+// Snapshot of cap state at a point in time; returned by snapshotCap().
+type CapSnapshot = {
+  live: number;          // liveCommands.size
+  dying: number;         // dyingJobIds.size
+  reservations: number;  // reservations.size
+  used: number;          // live − dying + reservations (the cap formula numerator)
+  limit: number;         // config.transcode.maxConcurrentJobs
+};
+```
+
+`KillReason` is documented in the § above.

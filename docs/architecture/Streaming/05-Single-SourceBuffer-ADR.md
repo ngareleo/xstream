@@ -18,9 +18,9 @@ The right counter-pressure is the `remove()` calls `BufferManager` already issue
 
 All three invariants in [`02-Chunk-Pipeline-Invariants.md`](02-Chunk-Pipeline-Invariants.md) assume a single `SourceBuffer`:
 
-1. **PTS contract**: `sourceBuffer.mode = "segments"` + `-output_ts_offset` places each chunk's segments at their correct source-timeline position. With multiple SBs, each new SB would start at its own internal timeline; getting cross-SB PTS alignment right requires reproducing the `timestampOffset` arithmetic that `segments` mode handles automatically.
+1. **PTS contract**: `sourceBuffer.mode = "segments"` + a per-chunk `sourceBuffer.timestampOffset = chunkStartS` (set by `BufferManager.setTimestampOffset` on each init append) places each chunk's raw `tfdt`-relative segments at their correct source-timeline position. With multiple SBs, each new SB would start at its own internal timeline; getting cross-SB PTS alignment right requires reproducing the same `timestampOffset` arithmetic — with no gain over single-SB.
 
-2. **Per-chunk init re-append**: Each chunk's `init.mp4` is appended to the same SB, replacing the previous chunk's `elst` box at the chunk-boundary moment. Rotating to a fresh SB would require full MSE re-init handshake at every chunk boundary — same overhead as the resolution-switch path, without the mime-type reason that forces it there.
+2. **Per-chunk init re-append**: Each chunk's `init.mp4` is appended to the same SB at the chunk-boundary moment; this is also the moment `setTimestampOffset(chunkStartS)` is applied (invariant #1 and #2 are inseparable). Rotating to a fresh SB would require full MSE re-init handshake at every chunk boundary — same overhead as the resolution-switch path, without the mime-type reason that forces it there.
 
 3. **Lookahead queuing + drain**: The lookahead slot queues segments in JS memory and drains into the same SB on promotion, so chunk N's init only lands in the SB at the moment chunk N-1's foreground stream ends. A per-SB model would require each lookahead to own its SB from open time, which immediately violates invariant #3 — the lookahead's init would clobber the foreground's in-flight decode context.
 
