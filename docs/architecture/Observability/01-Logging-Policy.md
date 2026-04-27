@@ -140,7 +140,9 @@ killJob(id, "client_disconnected");
 // → span event: transcode_killed { kill_reason: "client_disconnected" }
 ```
 
-Standard kill reasons: `client_disconnected`, `stream_idle_timeout`, `orphan_no_connection`, `server_shutdown`.
+Standard kill reasons: `client_disconnected`, `stream_idle_timeout`, `orphan_no_connection`, `server_shutdown`, `max_encode_timeout`.
+
+`max_encode_timeout` fires when the server's wall-clock budget for a single ffmpeg process is exceeded. Budget = `(endTime - startTime) × 3 × 1000` ms (3× the chunk's nominal duration, covering SW-1080p worst-case). An absolute 1-hour cap applies for full-video transcodes where `endTime = videoDuration`. This kill runs alongside (not instead of) the `orphan_no_connection` 30 s kill — the orphan guard covers abandoned jobs, this covers stuck encodes that still have a live connection. Implemented via `maxEncodeTimer` in `chunker.ts`.
 
 For stream cleanup on the client side, log the segment count at the point of teardown so the message tells the whole story:
 

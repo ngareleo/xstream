@@ -419,6 +419,18 @@ export class BufferManager {
   };
 
   /**
+   * Public hook to drive `checkForwardBuffer` from outside `timeupdate`.
+   * Used by the user-pause path: while the video element is paused, the
+   * browser stops firing `timeupdate`, so backpressure would never engage —
+   * the network fetch keeps appending until MSE detaches the SourceBuffer.
+   * The controller's pause poller calls this on a timer to drive the same
+   * forward-buffer check the playing-time path does.
+   */
+  tickBackpressure(): void {
+    this.checkForwardBuffer();
+  }
+
+  /**
    * Returns a promise that resolves the next time backpressure releases, or
    * resolves immediately if no backpressure is currently engaged. Used by
    * `ChunkPipeline.drainAndDispatch` to throttle the lookahead-queue drain

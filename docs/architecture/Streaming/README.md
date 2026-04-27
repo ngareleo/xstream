@@ -9,5 +9,6 @@ The length-prefixed binary streaming protocol on `/stream/:jobId` plus the clien
 | [`02-Chunk-Pipeline-Invariants.md`](02-Chunk-Pipeline-Invariants.md) | The three rules that keep foreground+lookahead concurrency from skipping or stalling: PTS contract, per-chunk re-init, lookahead segment buffering. |
 | [`03-Playback-Subsystems.md`](03-Playback-Subsystems.md) | `PlaybackTicker` (single RAF), `StallTracker` (spinner debounce), `PlaybackTimeline` (drift predictions) — the modules `PlaybackController` composes. |
 | [`04-Demand-Driven-Streaming.md`](04-Demand-Driven-Streaming.md) | Pull-based `ReadableStream` contract (`pull` not `start`), `drainAndDispatch` pause cooperation, MSE detach recovery path, Rust/Tauri translation notes. |
+| [`05-Single-SourceBuffer-ADR.md`](05-Single-SourceBuffer-ADR.md) | ADR: why xstream uses one SourceBuffer per session — MSE_DETACHED is cumulative, multi-SB breaks all three chunk-pipeline invariants. |
 
 Diagrams are in [`../../diagrams/`](../../diagrams/). The `.mmd` is authoritative; the `.png` is regenerated via the `update-docs` skill.

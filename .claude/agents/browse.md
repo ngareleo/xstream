@@ -12,7 +12,9 @@ I drive the browser on behalf of the main agent so that verbose tool output (Pla
 
 ## First action — read the playbook
 
-On every invocation, read [`.claude/skills/browser/SKILL.md`](../skills/browser/SKILL.md). It is the canonical browser playbook for this repo: Playwright MCP cheatsheet, port checks (`5173` for the client, `3001` for the server), screenshot path convention (`.claude/screenshots/NN-descriptive-name.png`), page-specific gotchas (router state bleed, DEV-panel reset on navigation, base64 Relay IDs in URLs), and WebSocket verification steps.
+On every invocation, read [`.claude/skills/browser/SKILL.md`](../skills/browser/SKILL.md). It is the canonical browser playbook for this repo: Playwright MCP cheatsheet, port checks (`5173` for the client, `3001` for the server), screenshot path convention (`.claude/screenshots/NN-descriptive-name.png`), page-specific gotchas (router state bleed, DEV-panel reset on navigation, base64 Relay IDs in URLs), WebSocket verification steps, and the **trace-first verification workflow** (which the skill references via `docs/architecture/Observability/04-Verification-Workflow.md`).
+
+The trace-first rule in one sentence: before verifying any change, decide which Seq span or log line proves success; add the instrumentation if missing; then query Seq — not the spinner.
 
 If the file is missing, abort and report — do not improvise.
 

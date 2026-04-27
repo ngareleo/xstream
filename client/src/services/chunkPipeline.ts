@@ -54,6 +54,14 @@ export interface ChunkOpts {
    *  measure prefetch-to-first-byte latency. The wall-clock instant is
    *  captured at arrival, not after the append resolves. */
   onFirstMediaSegmentArrived?: (atMs: DOMHighResTimeStamp) => void;
+  /** Server-side segment skip — sent as `?from=K` on the /stream/<jobId>
+   *  request. Used by the seek path to skip segments that land entirely
+   *  behind the user's seekTime (Chrome MSE auto-evicts those frames as
+   *  they're appended in `mode="segments"`, wasting bandwidth + append
+   *  serialization time). 0 / undefined means start at the chunk's first
+   *  segment, which is the right default for initial play, MSE recovery,
+   *  resolution switch, and chunk N→N+1 continuation. */
+  fromIndex?: number;
 }
 
 interface QueuedSegment {
@@ -217,6 +225,23 @@ export class ChunkPipeline {
     this.lookahead?.svc.resume();
   }
 
+  /** Pause only the lookahead's reader. Used by the user-pause prefetch path:
+   *  open chunk N+1 as a lookahead so server keeps the connection alive past
+   *  the orphan_no_connection 30 s timer, but immediately suspend the read so
+   *  segments don't accumulate in the slot's queuedSegments RAM buffer for
+   *  the duration of the pause (could otherwise reach 200-400 MB on a 4K
+   *  pre-encode). ffmpeg keeps writing segments to disk regardless. */
+  pauseLookahead(): void {
+    this.lookahead?.svc.pause();
+  }
+
+  /** Resume only the lookahead's reader. Paired with pauseLookahead — called
+   *  on user resume so the lookahead starts pulling its on-disk segments
+   *  through to the queue, ready for promotion at the next chunk handover. */
+  resumeLookahead(): void {
+    this.lookahead?.svc.resume();
+  }
+
   /** Acts on a stream outcome — called for foreground naturally and for the
    *  lookahead's deferred outcome on promotion. Owns the markStreamDone call
    *  for `no_real_content`, which must NOT happen while the foreground is
@@ -286,7 +311,7 @@ export class ChunkPipeline {
 
     void slot.svc.start(
       opts.jobId,
-      0,
+      opts.fromIndex ?? 0,
       async (segData, isInit) => {
         // Lookahead slots queue segments instead of appending — see
         // `Slot.isLookahead` doc for the elst/init-clash rationale. The

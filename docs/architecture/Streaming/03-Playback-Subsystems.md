@@ -41,6 +41,32 @@ Snapshots are surfaced as attributes on `playback.session` and `chunk.stream` sp
 
 `PlaybackController` owns the timeline, calls its update methods at the right transitions (foreground change, lookahead open, first byte arrival, promotion).
 
+## User-pause backpressure poller
+
+While the `<video>` element is paused by the user, `timeupdate` is silent, so `BufferManager.checkForwardBuffer` (the normal backpressure driver) never runs. Without intervention the network fetch keeps appending until Chrome detaches the `SourceBuffer` under memory pressure.
+
+`PlaybackController` wires two event listeners to plug this gap:
+
+- `pause` → `handleUserPause`: starts a `setInterval` at 1 s, calling `checkUserPauseTick()` immediately and on every tick.
+- `play` → `handleUserPlay`: clears the interval and calls `pipeline.resumeLookahead()` to wake the lookahead reader (see below).
+
+Guards in `handleUserPause` skip the implicit `pause` that fires when `video.ended` is true, and skip any pause-side-effect of a seek (browser fires `pause / seeking / play` in some seek paths).
+
+### `checkUserPauseTick` — one tick
+
+Each tick does two things:
+
+1. `buffer.tickBackpressure()` — calls `BufferManager.checkForwardBuffer()` (promoted to public for this purpose) so the backpressure hysteresis loop runs normally even while `timeupdate` is silent.
+2. **Pause-time prefetch** — once buffered-ahead ≥ `forwardTargetS` (default 60 s), fires the chunk N+1 `startTranscode` mutation exactly once (guarded by `userPausePrefetchFired`). On success, opens a lookahead slot via `pipeline.openLookahead(...)` and **immediately** calls `pipeline.pauseLookahead()`. Result: ffmpeg pre-encodes segments to disk; segments stay on disk — nothing accumulates in the JS `queuedSegments` queue during the pause. When the user resumes, `handleUserPlay` calls `pipeline.resumeLookahead()`, the reader wakes, segments drain into the queue and are ready for promotion at the next chunk boundary.
+
+### `pauseLookahead` / `resumeLookahead` (`ChunkPipeline`)
+
+Two methods parallel to the existing `pauseAll` / `resumeAll` but targeting only the lookahead slot. Used exclusively by the user-pause path so the foreground slot's reader is never touched.
+
+### `waitForStartupBuffer` — buffered-ahead, not absolute bufferedEnd
+
+`waitForStartupBuffer` gates `video.play()` on `bufferedAhead >= target` (seconds ahead of `currentTime`) rather than `bufferedEnd >= target` (absolute timeline position). The fix matters on seek: after a seek to e.g. 600 s, the first appended segment lands at PTS ≈ 600 s (`-output_ts_offset` keeps chunk-relative PTS in the source-time domain), so `bufferedEnd ≈ 602 s` trivially exceeded a 5 s threshold after just one 2 s segment — `video.play()` fired with only ~2 s of data ahead and stalled immediately. Comparing ahead-of-currentTime makes the threshold resolution-independent and seek-safe.
+
 ## Why three files instead of one
 
 - `PlaybackTicker` is dependency-free and used by anyone (including `StallTracker`). Lives separately so future RAF-driven features don't re-invent the multiplexer.

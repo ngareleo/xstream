@@ -92,6 +92,21 @@ export const ControlBar: FC<Props> = ({
     void bubble({ reactEvent: e, event: createSeekRequestedEvent(targetSeconds) });
   };
 
+  // Hover tooltip on the seek bar — shows the timestamp the click WOULD seek
+  // to. Same x→seconds math as handleSeek so the tooltip and the click target
+  // can never disagree.
+  const [hoverPx, setHoverPx] = useState<number | null>(null);
+  const [hoverSeconds, setHoverSeconds] = useState<number>(0);
+  const handleSeekHover = (e: MouseEvent<HTMLDivElement>): void => {
+    if (!data.durationSeconds) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = Math.max(0, Math.min(rect.width, e.clientX - rect.left));
+    const fraction = x / rect.width;
+    setHoverPx(x);
+    setHoverSeconds(fraction * data.durationSeconds);
+  };
+  const handleSeekHoverEnd = (): void => setHoverPx(null);
+
   const handleSkip =
     (seconds: number) =>
     (reactEvent: MouseEvent): void => {
@@ -137,8 +152,15 @@ export const ControlBar: FC<Props> = ({
         aria-valuenow={currentTime}
         tabIndex={0}
         onClick={handleSeek}
+        onMouseMove={handleSeekHover}
+        onMouseLeave={handleSeekHoverEnd}
       >
         <div className={styles.trackFill} style={{ width: `${progressPct}%` }} />
+        {hoverPx !== null && (
+          <div className={styles.trackTooltip} style={{ left: `${hoverPx}px` }}>
+            {formatDuration(hoverSeconds)}
+          </div>
+        )}
       </div>
 
       {/* Controls row */}

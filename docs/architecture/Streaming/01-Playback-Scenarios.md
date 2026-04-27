@@ -55,8 +55,11 @@ If `t` lies within the current `SourceBuffer`'s buffered range, playback resumes
 
 1. `snapTime = Math.floor(t / 300) * 300` aligns the restart to a chunk boundary so the new job shares a cache directory with any existing `(videoId, res, snapTime)` job.
 2. `StreamingService.cancel()` aborts the current fetch.
-3. `BufferManager.seek(snapTime)` flushes the `SourceBuffer` (`remove(0, Infinity)`), resets `timestampOffset`, and sets `video.currentTime`.
-4. `startTranscode(videoId, res, snapTime, snapTime + 300)` re-enters the Scenario 1 flow from the GraphQL step onward.
+3. `chunkEnd` is reset to `0` synchronously at the top of the seek handler (before any async work) to prevent the RAF prefetch loop from firing a stale chunk request while the seek is in flight.
+4. `BufferManager.seek(t)` — note **`t` (the user's raw seek position), not `snapTime`** — flushes the `SourceBuffer` (`remove(0, Infinity)`), resets `timestampOffset`, and sets `video.currentTime = t`. Using `t` here keeps the playhead at the position the user clicked; using `snapTime` would visually snap the slider backward to the chunk boundary, which is confusing UX.
+5. `startTranscode(videoId, res, snapTime, snapTime + 300)` uses `snapTime` as the server request boundary so the cache key is chunk-aligned and the same job can be reused across multiple seeks into the same 300-second window.
+
+**The two-value split:** the chunk SERVER REQUEST uses `snapTime` (boundary-aligned, cache-friendly); `buf.seek`, `video.currentTime`, and all client-side seek logs use `seekTime = t` (the user's intent). These were the same value before PR #30 round-2; changing `buf.seek` to receive `t` fixes the slider snap-back without touching the server cache key.
 
 ## Scenario 4: Resolution switch (background buffer)
 

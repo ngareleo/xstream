@@ -12,6 +12,7 @@ Keep rows short (≤ ~120 chars). When adding a new topic file to `docs/`, add i
 | Chunk pipeline invariants (PTS contract, per-chunk re-init, lookahead segment buffering) | `docs/architecture/Streaming/02-Chunk-Pipeline-Invariants.md` |
 | Playback subsystems (PlaybackTicker single-RAF, StallTracker, PlaybackTimeline drift) | `docs/architecture/Streaming/03-Playback-Subsystems.md` |
 | Demand-driven streaming (pull contract, MSE detach recovery, Rust translation) | `docs/architecture/Streaming/04-Demand-Driven-Streaming.md` |
+| Single-SourceBuffer ADR (why not multi-SB rotation; MSE_DETACHED, invariants, resolution-switch exception) | `docs/architecture/Streaming/05-Single-SourceBuffer-ADR.md` |
 | Tests must leave the host as they found it — per-PID temp dir + orphan reaper | `docs/architecture/Testing/00-Side-Effects-Policy.md` |
 | Encode-pipeline real-media tests (XSTREAM_TEST_MEDIA_DIR, encodeHarness, 4K-no-fallback assertion) | `docs/architecture/Testing/01-Encode-Pipeline-Tests.md` |
 | Encoder edge-case test policy (every fix needs a fixture/assertion in the same PR) | `docs/architecture/Testing/02-Encoder-Edge-Case-Policy.md` |
@@ -21,6 +22,7 @@ Keep rows short (≤ ~120 chars). When adding a new topic file to `docs/`, add i
 | Server spans (`stream.request`, `job.resolve`, `transcode.job`) | `docs/architecture/Observability/server/00-Spans.md` |
 | Client spans (`playback.session`, `chunk.stream`, `buffer.backpressure`) | `docs/architecture/Observability/client/00-Spans.md` |
 | Seq search filters | `docs/architecture/Observability/02-Searching-Seq.md` |
+| Trace-first verification workflow (decide signal, add logs, query Seq; span.addEvent gotcha) | `docs/architecture/Observability/04-Verification-Workflow.md` |
 | OTel env vars, switching backends, Seq API-key setup | `docs/architecture/Observability/03-Config-And-Backends.md` |
 | Server boot sequence + graceful shutdown | `docs/architecture/Startup/00-Boot-And-Shutdown.md` |
 | Library scanner pipeline | `docs/architecture/Library-Scan/00-Flow.md` |

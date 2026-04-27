@@ -12,6 +12,15 @@ import type { Resolution } from "~/types.js";
  *  for exactly this many seconds of media. */
 export const CHUNK_DURATION_S = 300;
 
+/** HLS fMP4 segment duration emitted by the chunker. Mirrors the server's
+ *  `RESOLUTION_PROFILES[res].segmentDuration` (currently 2 s for every
+ *  resolution). Used by the seek path to compute `?from=K` so the server
+ *  skips segments that land entirely behind the user's seekTime — without
+ *  it Chrome's MSE auto-evicts those frames as they're appended (segments
+ *  are placed at PTS=chunkStart in `mode="segments"`, so they're "behind"
+ *  currentTime when seekTime > chunkStart). */
+export const SEGMENT_DURATION_S = 2;
+
 /** How close to the end of the current chunk (in seconds) we start prefetching
  *  the next one. Sized to absorb ffmpeg cold-start (~25–30 s on 4K VAAPI) plus
  *  a HW→software fallback (~30 s of failed VAAPI before the chunker retries),
