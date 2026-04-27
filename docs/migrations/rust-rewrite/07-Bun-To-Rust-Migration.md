@@ -341,5 +341,5 @@ Post-cutover, `bun run lint` only covers `client/`. The Rust workspace owns its 
 - [`04-Web-Server-Layer.md`](04-Web-Server-Layer.md) — axum router, RequestContext middleware, configurable CORS/bind.
 - [`05-Database-Layer.md`](05-Database-Layer.md) — rusqlite (bundled), two-DB split for sharing.
 - [`06-File-Handling-Layer.md`](06-File-Handling-Layer.md) — walkdir + notify, content-addressed cache index.
-- [`Sharing/00-Peer-Streaming.md`](../Sharing/00-Peer-Streaming.md) — peer-to-peer streaming model.
+- [`Sharing/00-Peer-Streaming.md`](../../architecture/Sharing/00-Peer-Streaming.md) — peer-to-peer streaming model.
 - [`08-Tauri-Packaging.md`](08-Tauri-Packaging.md) — bundling, signing, self-hosted updates.

@@ -4,7 +4,7 @@
 
 **Read first.**
 
-- [`Startup/00-Boot-And-Shutdown.md`](../Startup/00-Boot-And-Shutdown.md) — current boot order
+- [`Startup/00-Boot-And-Shutdown.md`](../../architecture/Startup/00-Boot-And-Shutdown.md) — current boot order
 - [`01-Streaming-Layer.md`](01-Streaming-Layer.md) — `/stream/:jobId` handler details
 - [`02-Observability-Layer.md`](02-Observability-Layer.md) — traceparent extraction middleware
 - [`03-GraphQL-Layer.md`](03-GraphQL-Layer.md) — yoga handler + WS subscription transport (separate batch)

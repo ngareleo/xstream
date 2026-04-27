@@ -208,9 +208,9 @@ These are deferred to the moment sharing is implemented; they do NOT block the R
 
 ## Cross-references
 
-- [`docs/architecture/Deployment/00-Rust-Tauri-Port.md`](../Deployment/00-Rust-Tauri-Port.md) — anchor doc; sharing is forward-pointed from there.
-- [`docs/architecture/Deployment/01-Streaming-Layer.md`](../Deployment/01-Streaming-Layer.md) — per-connection pull isolation, idle timeout.
-- [`docs/architecture/Deployment/02-Observability-Layer.md`](../Deployment/02-Observability-Layer.md) — W3C traceparent threading.
-- [`docs/architecture/Deployment/04-Web-Server-Layer.md`](../Deployment/04-Web-Server-Layer.md) — `RequestContext` middleware seam, configurable bind + CORS.
-- [`docs/architecture/Deployment/05-Database-Layer.md`](../Deployment/05-Database-Layer.md) — two-DB split (cache vs. identity).
-- [`docs/architecture/Deployment/06-File-Handling-Layer.md`](../Deployment/06-File-Handling-Layer.md) — content-addressed cache index, identity DB location.
+- [`docs/migrations/rust-rewrite/00-Rust-Tauri-Port.md`](../../migrations/rust-rewrite/00-Rust-Tauri-Port.md) — anchor doc; sharing is forward-pointed from there.
+- [`docs/migrations/rust-rewrite/01-Streaming-Layer.md`](../../migrations/rust-rewrite/01-Streaming-Layer.md) — per-connection pull isolation, idle timeout.
+- [`docs/migrations/rust-rewrite/02-Observability-Layer.md`](../../migrations/rust-rewrite/02-Observability-Layer.md) — W3C traceparent threading.
+- [`docs/migrations/rust-rewrite/04-Web-Server-Layer.md`](../../migrations/rust-rewrite/04-Web-Server-Layer.md) — `RequestContext` middleware seam, configurable bind + CORS.
+- [`docs/migrations/rust-rewrite/05-Database-Layer.md`](../../migrations/rust-rewrite/05-Database-Layer.md) — two-DB split (cache vs. identity).
+- [`docs/migrations/rust-rewrite/06-File-Handling-Layer.md`](../../migrations/rust-rewrite/06-File-Handling-Layer.md) — content-addressed cache index, identity DB location.

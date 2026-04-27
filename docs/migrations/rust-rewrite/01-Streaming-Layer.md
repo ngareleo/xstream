@@ -2,11 +2,11 @@
 
 **Scope.** The end-to-end streaming pipeline from `startTranscode` mutation through ffmpeg encode to the length-prefixed binary stream consumed by the React client. This doc captures the current Bun reality, the contracts the Rust port must preserve, the recommended Rust shape, and the forward constraints needed so the port doesn't foreclose multi-peer sharing.
 
-**Read first.** The protocol-level docs in [`Streaming/`](../Streaming/README.md) cover the wire format, playback scenarios, and chunk-pipeline invariants. This doc is the **server-side migration view** and assumes the reader has skimmed:
+**Read first.** The protocol-level docs in [`Streaming/`](../../architecture/Streaming/README.md) cover the wire format, playback scenarios, and chunk-pipeline invariants. This doc is the **server-side migration view** and assumes the reader has skimmed:
 
-- [`Streaming/00-Protocol.md`](../Streaming/00-Protocol.md) — wire framing, init segment, backpressure, seeking
-- [`Streaming/02-Chunk-Pipeline-Invariants.md`](../Streaming/02-Chunk-Pipeline-Invariants.md) — PTS contract, per-chunk init re-append, lookahead
-- [`Streaming/04-Demand-Driven-Streaming.md`](../Streaming/04-Demand-Driven-Streaming.md) — pull contract, MSE detach recovery
+- [`Streaming/00-Protocol.md`](../../architecture/Streaming/00-Protocol.md) — wire framing, init segment, backpressure, seeking
+- [`Streaming/02-Chunk-Pipeline-Invariants.md`](../../architecture/Streaming/02-Chunk-Pipeline-Invariants.md) — PTS contract, per-chunk init re-append, lookahead
+- [`Streaming/04-Demand-Driven-Streaming.md`](../../architecture/Streaming/04-Demand-Driven-Streaming.md) — pull contract, MSE detach recovery
 - [`00-Rust-Tauri-Port.md`](00-Rust-Tauri-Port.md) — stable contracts that survive the rewrite
 
 ---
@@ -68,7 +68,7 @@ W3C trace-context flows in via the `traceparent` request header; the `stream.req
 
 **Connection lifecycle** (`stream.ts:105-152`):
 
-`finalise(reason)` is the single cleanup path; reasons are `"complete" | "client_disconnected" | "idle_timeout"`. It calls `removeConnection(jobId)` and, when the active-connection count reaches zero with the job still `running`, calls `killJob(jobId, kill_reason)` with the matching `kill_reason` enum value (see [`Observability/01-Logging-Policy.md`](../Observability/01-Logging-Policy.md)).
+`finalise(reason)` is the single cleanup path; reasons are `"complete" | "client_disconnected" | "idle_timeout"`. It calls `removeConnection(jobId)` and, when the active-connection count reaches zero with the job still `running`, calls `killJob(jobId, kill_reason)` with the matching `kill_reason` enum value (see [`Observability/01-Logging-Policy.md`](../../architecture/Observability/01-Logging-Policy.md)).
 
 ### 1.2 Chunker — `server/src/services/chunker.ts`
 
@@ -268,7 +268,7 @@ The `mpsc::channel(16)` size is per-consumer, not shared. For 4K segments at ~6 
 
 ### 4.4 traceparent already works cross-peer
 
-`stream.ts:67-76` extracts `traceparent` from the inbound request's headers regardless of origin. When peer B's client opens `GET /stream/:jobId` against peer A, peer A's `stream.request` span correctly nests under peer B's `chunk.stream` span — same trace ID, no protocol change. The Rust port preserves this with `opentelemetry::propagation::TextMapPropagator::extract` over `axum::http::HeaderMap`. **Constraint:** the inbound `traceparent` header must pass through any future auth middleware unchanged. Cross-reference [`02-Observability-Layer.md`](02-Observability-Layer.md) and [`Sharing/00-Peer-Streaming.md`](../Sharing/00-Peer-Streaming.md) once authored.
+`stream.ts:67-76` extracts `traceparent` from the inbound request's headers regardless of origin. When peer B's client opens `GET /stream/:jobId` against peer A, peer A's `stream.request` span correctly nests under peer B's `chunk.stream` span — same trace ID, no protocol change. The Rust port preserves this with `opentelemetry::propagation::TextMapPropagator::extract` over `axum::http::HeaderMap`. **Constraint:** the inbound `traceparent` header must pass through any future auth middleware unchanged. Cross-reference [`02-Observability-Layer.md`](02-Observability-Layer.md) and [`Sharing/00-Peer-Streaming.md`](../../architecture/Sharing/00-Peer-Streaming.md) once authored.
 
 ---
 

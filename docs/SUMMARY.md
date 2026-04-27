@@ -55,7 +55,7 @@ The client drives transcoding in **300-second chunks**. For each chunk, it fires
 | Observability (spans, logging, Seq) | [`architecture/Observability/`](architecture/Observability/README.md) |
 | Relay / GraphQL contract | [`architecture/Relay/`](architecture/Relay/README.md) |
 | Test side-effects policy + encode-pipeline tests + encoder edge-case policy | [`architecture/Testing/`](architecture/Testing/README.md) |
-| Rust + Tauri migration (port plan + layer-by-layer deep-dives) | [`architecture/Deployment/`](architecture/Deployment/README.md) |
+| Rust + Tauri migration (port plan + layer-by-layer deep-dives) | [`migrations/rust-rewrite/`](migrations/rust-rewrite/README.md) |
 | Server config, ladder, schema, DB, HW-accel | [`server/`](server/README.md) |
 | Client feature flags, debugging playbooks | [`client/`](client/README.md) |
 | Invariants, naming, conventions, anti-patterns | [`code-style/`](code-style/README.md) |

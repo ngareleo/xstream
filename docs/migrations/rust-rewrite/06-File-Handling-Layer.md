@@ -442,7 +442,7 @@ These are explicit non-decisions to revisit during implementation.
 - [`00-Rust-Tauri-Port.md`](00-Rust-Tauri-Port.md) — anchor doc, stable contracts list.
 - [`01-Streaming-Layer.md`](01-Streaming-Layer.md) — segment serving from `tmp/segments/<jobId>/`; the file layout is shared with this doc.
 - [`05-Database-Layer.md`](05-Database-Layer.md) — two-DB split (cache vs identity); `getLruJobs` query and segment row shape.
-- [`docs/architecture/Library-Scan/00-Flow.md`](../Library-Scan/00-Flow.md) — high-level scanner flow + scanStore subscription side.
+- [`docs/architecture/Library-Scan/00-Flow.md`](../../architecture/Library-Scan/00-Flow.md) — high-level scanner flow + scanStore subscription side.
 - [`docs/server/Hardware-Acceleration/00-Overview.md`](../../server/Hardware-Acceleration/00-Overview.md) — why ffmpeg is version-pinned.
 - [`docs/code-style/Server-Conventions/00-Patterns.md`](../../code-style/Server-Conventions/00-Patterns.md) — `setFfmpegPath` discipline (becomes structural in Rust).
-- Forward: [`Sharing/00-Peer-Streaming.md`](../Sharing/00-Peer-Streaming.md) — the cache-index and identity-DB constraints above feed the sharing model.
+- Forward: [`Sharing/00-Peer-Streaming.md`](../../architecture/Sharing/00-Peer-Streaming.md) — the cache-index and identity-DB constraints above feed the sharing model.

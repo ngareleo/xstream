@@ -23,4 +23,4 @@ Forward constraints baked into the per-layer migration docs:
 - **Database** (`05-Database-Layer.md`): two-DB split — cache DB in `tmp/`-class storage, identity DB in `app_data_dir()`.
 - **File handling** (`06-File-Handling-Layer.md`): explicit `(videoId, resolution, startS, endS)` → `JobId` cache index; eviction keeps the index consistent.
 
-Single authoritative spec: [`Sharing/00-Peer-Streaming.md`](../Sharing/00-Peer-Streaming.md).
+Single authoritative spec: [`Sharing/00-Peer-Streaming.md`](../../architecture/Sharing/00-Peer-Streaming.md).

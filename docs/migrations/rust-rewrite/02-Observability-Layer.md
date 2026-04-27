@@ -2,11 +2,11 @@
 
 **Scope.** OpenTelemetry instrumentation in the Bun server and the React client: span creation, structured logging, OTLP export, W3C trace-context propagation, and how the Rust port preserves all of it without breaking existing Seq queries.
 
-**Read first.** The implementation-agnostic policies live in [`Observability/`](../Observability/README.md) and survive the rewrite unchanged. This doc focuses on the **runtime SDK and the seams that change.**
+**Read first.** The implementation-agnostic policies live in [`Observability/`](../../architecture/Observability/README.md) and survive the rewrite unchanged. This doc focuses on the **runtime SDK and the seams that change.**
 
-- [`Observability/00-Architecture.md`](../Observability/00-Architecture.md) — both-sides OTel pipeline, OTLP path, `/ingest/otlp` proxy
-- [`Observability/01-Logging-Policy.md`](../Observability/01-Logging-Policy.md) — levels, message-body discipline, `kill_reason` enum, threading rules
-- [`Observability/04-Verification-Workflow.md`](../Observability/04-Verification-Workflow.md) — trace-first verification + the long-span `addEvent` gotcha
+- [`Observability/00-Architecture.md`](../../architecture/Observability/00-Architecture.md) — both-sides OTel pipeline, OTLP path, `/ingest/otlp` proxy
+- [`Observability/01-Logging-Policy.md`](../../architecture/Observability/01-Logging-Policy.md) — levels, message-body discipline, `kill_reason` enum, threading rules
+- [`Observability/04-Verification-Workflow.md`](../../architecture/Observability/04-Verification-Workflow.md) — trace-first verification + the long-span `addEvent` gotcha
 - [`01-Streaming-Layer.md`](01-Streaming-Layer.md) — already covers `stream.request` traceparent extraction
 
 ---
@@ -123,7 +123,7 @@ export function clearSessionContext(): void { _sessionCtx = context.active(); }
 export function getSessionContext(): Context { return _sessionCtx; }
 ```
 
-Module-level singleton because the browser has no `AsyncLocalStorage`. Each `getClientLogger(...).info(...)` call attaches `getSessionContext()` to the log record (`telemetry.ts:139, 148, 157`), and every fetch on the playback path is wrapped: `await context.with(getSessionContext(), () => fetch(url, opts))`. Without the wrap, the SDK assigns a new random traceId per fetch and the trace tree fragments. Cross-reference [`Observability/01-Logging-Policy.md`](../Observability/01-Logging-Policy.md) §"Threading trace context into streaming fetches".
+Module-level singleton because the browser has no `AsyncLocalStorage`. Each `getClientLogger(...).info(...)` call attaches `getSessionContext()` to the log record (`telemetry.ts:139, 148, 157`), and every fetch on the playback path is wrapped: `await context.with(getSessionContext(), () => fetch(url, opts))`. Without the wrap, the SDK assigns a new random traceId per fetch and the trace tree fragments. Cross-reference [`Observability/01-Logging-Policy.md`](../../architecture/Observability/01-Logging-Policy.md) §"Threading trace context into streaming fetches".
 
 **Long-span gotcha** (memory feedback): `playback.session` lives for the entire player-page session. `span.addEvent()` calls on it buffer in memory until the span ends — they don't appear in Seq mid-session. Use `log.info(...)` for mid-session signals; reserve `addEvent` on the long-lived span for events that only matter post-mortem. This invariant is implementation-agnostic and survives the rewrite unchanged — but the Rust port's `tracing-opentelemetry` bridge has the same property, so the rule still applies for any long-lived server span (e.g. a future `peer.session`).
 
@@ -156,7 +156,7 @@ Standard `kill_reason` values used in span events and log attributes: `client_di
 | `/v1/traces` and `/v1/logs` paths | `${endpoint}/v1/traces`, `${endpoint}/v1/logs` | Use the standard collector paths (default in `opentelemetry-otlp`) |
 | Span names listed in §1.3 | scattered across `chunker.ts` + `stream.ts` | Emit identical names + attribute keys |
 | `kill_reason` enum values | scattered | Emit identical strings |
-| Logging policy (levels, message body, when to span vs log) | [`Observability/01-Logging-Policy.md`](../Observability/01-Logging-Policy.md) | Implementation-agnostic — survives unchanged |
+| Logging policy (levels, message body, when to span vs log) | [`Observability/01-Logging-Policy.md`](../../architecture/Observability/01-Logging-Policy.md) | Implementation-agnostic — survives unchanged |
 
 ---
 
@@ -264,7 +264,7 @@ The current Bun setup ships traces to the LOCAL Seq instance (`http://localhost:
 - **Does peer A ship its server-side spans to peer A's Seq, or to peer B's?** Architectural answer: peer A ships to peer A's own configured OTLP endpoint. Trace correlation works because the trace-id is shared via `traceparent`; assembling the full trace requires both Seq instances to point at the same backend (e.g. a shared dev Seq) OR a query-time merge. For first-cut sharing, accept that the trace splits across two backends and revisit when Tauri ships.
 - **Should peer B's client OTLP go to peer A or peer B?** Peer B's own Seq — the client is co-located with peer B. The peer A server-side leg lives in peer A's backend. Document this so a debugger looking for "the full trace" knows to query both.
 
-This belongs primarily in [`Sharing/00-Peer-Streaming.md`](../Sharing/00-Peer-Streaming.md); cross-link, don't duplicate.
+This belongs primarily in [`Sharing/00-Peer-Streaming.md`](../../architecture/Sharing/00-Peer-Streaming.md); cross-link, don't duplicate.
 
 ### 4.3 Service-name discrimination
 
@@ -276,7 +276,7 @@ When sharing ships, new kill reasons appear (`peer_token_expired`, `peer_unautho
 
 ### 4.5 Append a "Cross-peer traceparent" note to the existing logging policy
 
-[`Observability/01-Logging-Policy.md`](../Observability/01-Logging-Policy.md) currently covers client→server in a single instance only. When `Sharing/00-Peer-Streaming.md` lands, append a small section to that policy doc cross-linking to it, so future agents reading the policy file directly find the cross-peer rule. This is a doc-edit follow-up, not a runtime change.
+[`Observability/01-Logging-Policy.md`](../../architecture/Observability/01-Logging-Policy.md) currently covers client→server in a single instance only. When `Sharing/00-Peer-Streaming.md` lands, append a small section to that policy doc cross-linking to it, so future agents reading the policy file directly find the cross-peer rule. This is a doc-edit follow-up, not a runtime change.
 
 ---
 
