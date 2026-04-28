@@ -27,7 +27,16 @@ Keep rows short (≤ ~120 chars). When adding a new topic file to `docs/`, add i
 | OTel env vars, switching backends, Seq API-key setup | `docs/architecture/Observability/03-Config-And-Backends.md` |
 | Server boot sequence + graceful shutdown | `docs/architecture/Startup/00-Boot-And-Shutdown.md` |
 | Library scanner pipeline | `docs/architecture/Library-Scan/00-Flow.md` |
-| Rust + Tauri port plan, stable contracts | `docs/architecture/Deployment/00-Rust-Tauri-Port.md` |
+| Rust + Tauri port plan, stable contracts | `docs/migrations/rust-rewrite/00-Rust-Tauri-Port.md` |
+| Streaming layer migration (pull → axum, semaphore cap, content-addressed cache, per-consumer isolation) | `docs/migrations/rust-rewrite/01-Streaming-Layer.md` |
+| Observability layer migration (OTel → tracing + opentelemetry-otlp, traceparent middleware, cross-peer flow) | `docs/migrations/rust-rewrite/02-Observability-Layer.md` |
+| GraphQL layer migration (yoga + graphql-tools → async-graphql; SDL parity; typed-error union; subscription transport) | `docs/migrations/rust-rewrite/03-GraphQL-Layer.md` |
+| Web server layer migration (Bun.serve → axum + tower, RequestContext middleware, configurable CORS/bind) | `docs/migrations/rust-rewrite/04-Web-Server-Layer.md` |
+| Database layer migration (bun:sqlite → rusqlite bundled; WAL pragma; identity DB split for sharing) | `docs/migrations/rust-rewrite/05-Database-Layer.md` |
+| File-handling layer migration (walkdir + notify, ffmpeg manifest pinning, content-addressed cache index, two-DB split) | `docs/migrations/rust-rewrite/06-File-Handling-Layer.md` |
+| Bun → Rust synthesis (runtime model, concurrency primitives, idiom translation, crate picks, migration order) | `docs/migrations/rust-rewrite/07-Bun-To-Rust-Migration.md` |
+| Tauri packaging (bundle layout, embedded server, bundled ffmpeg, Ed25519 self-hosted updates, code-signing, CI matrix) | `docs/migrations/rust-rewrite/08-Tauri-Packaging.md` |
+| Peer-to-peer streaming model (passthrough, Ed25519 invite tokens, content-addressed cache reuse, cross-peer traceparent, invariants) | `docs/architecture/Sharing/00-Peer-Streaming.md` |
 | Resolution ladder + enum mirror chain | `docs/server/Config/01-Resolution-Ladder.md` |
 | AppConfig, `mediaFiles.json` | `docs/server/Config/00-AppConfig.md` |
 | GraphQL schema surface | `docs/server/GraphQL-Schema/00-Surface.md` |

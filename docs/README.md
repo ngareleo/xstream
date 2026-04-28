@@ -4,9 +4,10 @@ This tree is the project's single source of truth. Each super-domain has its own
 
 ## Super-domains
 
-- [`architecture/`](architecture/README.md) — Cross-cutting concepts that span client and server: Streaming, Relay, Observability, Startup, Library-Scan, Deployment.
+- [`architecture/`](architecture/README.md) — Cross-cutting concepts that span client and server: Streaming, Relay, Observability, Startup, Library-Scan, Sharing.
 - [`client/`](client/README.md) — Topics scoped to the React client: Feature-Flags, Debugging-Playbooks.
 - [`server/`](server/README.md) — Topics scoped to the Bun server: Config, GraphQL-Schema, DB-Schema, Hardware-Acceleration.
+- [`migrations/`](migrations/README.md) — Time-bounded migration efforts that span multiple domains: Rust + Tauri rewrite.
 - [`design/`](design/README.md) — UI design spec: tokens, layout, visual language.
 - [`product/`](product/README.md) — What we're building, for whom, and where the roadmap points.
 - [`code-style/`](code-style/README.md) — Invariants, naming, conventions, anti-patterns. Non-negotiables for anyone writing code.
