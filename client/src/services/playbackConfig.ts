@@ -12,10 +12,13 @@ import type { Resolution } from "~/types.js";
  *  for exactly this many seconds of media. */
 export const CHUNK_DURATION_S = 300;
 
-/** Window length for the very first chunk after Play and after a seek. Picked
- *  short enough that the prefetch RAF (PREFETCH_THRESHOLD_S = 90) trips
- *  immediately and eager-warms ffmpeg for the next chunk in parallel. Keeps
- *  initial-fill snappy without changing the steady-state cadence. */
+/** Window length for the first chunk after a mid-file seek (startS > 0).
+ *  Picked short enough that the prefetch RAF (PREFETCH_THRESHOLD_S = 90)
+ *  trips immediately and eager-warms ffmpeg for the next chunk in parallel.
+ *  NOT used at startS = 0 — `-ss 0 -t 30` on VAAPI HDR 4K silently produces
+ *  zero segments (trace 1bac05bd…). Cold-start, MSE recovery at
+ *  currentTime < 300, and seek-to-0 all fall back to CHUNK_DURATION_S. See
+ *  `docs/server/Hardware-Acceleration/01-HDR-Pad-Artifact.md`. */
 export const FIRST_CHUNK_DURATION_S = 30;
 
 /** How close to the end of the current chunk (in seconds) we start prefetching

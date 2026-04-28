@@ -271,7 +271,15 @@ export class PlaybackController {
     // requires the SourceBuffer (from init) and the rawJobId (from the
     // mutation), so the order at that point is `Promise.all`-gated, not
     // serial.
-    const firstChunkEnd = Math.min(FIRST_CHUNK_DURATION_S, videoDurationS);
+    // VAAPI HDR 4K + `-ss 0 -t 30` produces 0 segments (trace 1bac05bd…):
+    // ffmpeg exits cleanly after ~12s of wallclock without writing anything,
+    // and the client hangs waiting for an init.mp4 that never arrives. The
+    // same file with `-ss 0 -t 300` works, and `-ss N -t 30` for N>0 also
+    // works — only the `start=0 + short window` combination triggers it.
+    // Until the ffmpeg root cause is found, cold-start uses the full
+    // CHUNK_DURATION_S window. The small-first-chunk optimization is
+    // preserved for mid-file seeks (startS > 0) where it's safe.
+    const firstChunkEnd = Math.min(CHUNK_DURATION_S, videoDurationS);
     void context.with(sessionCtx, () => {
       const initPromise = buffer.init(RESOLUTION_MIME_TYPE[res]).then(() => {
         playbackLog.info(`MSE ready: ${RESOLUTION_MIME_TYPE[res]}`, {
@@ -678,7 +686,12 @@ export class PlaybackController {
     override?: { endS?: number; preIssuedJobId?: string }
   ): void {
     const videoDurationS = this.deps.getVideoDurationS();
-    const windowSize = isFirstChunk ? FIRST_CHUNK_DURATION_S : CHUNK_DURATION_S;
+    // The small-first-chunk optimization is unsafe at startS = 0 — see
+    // startPlayback for the VAAPI HDR 4K trace. Mid-file recovery (e.g.
+    // handleMseDetached at currentTime < 300, which floors chunkStart to 0)
+    // would otherwise hit the same bug. Force the safe 300 s window when
+    // startS === 0.
+    const windowSize = isFirstChunk && startS > 0 ? FIRST_CHUNK_DURATION_S : CHUNK_DURATION_S;
     const chunkEnd = override?.endS ?? Math.min(startS + windowSize, videoDurationS);
     this.chunkEnd = chunkEnd;
     // NOTE: `prefetchFired` is intentionally NOT reset here. Every caller
@@ -1086,7 +1099,11 @@ export class PlaybackController {
     // boundary, avoiding a degenerate zero-length seek chunk.
     const nextSnap = Math.ceil((seekTime + 0.001) / CHUNK_DURATION_S) * CHUNK_DURATION_S;
     const videoDurationS = this.deps.getVideoDurationS();
-    const seekChunkEnd = Math.min(seekTime + FIRST_CHUNK_DURATION_S, nextSnap, videoDurationS);
+    // Seeking to exactly 0 (e.g. user "restart") would otherwise trigger the
+    // same VAAPI HDR 4K `-ss 0 -t 30` bug as cold-start. Use the safe 300 s
+    // window when seekTime === 0; only mid-file seeks get the small window.
+    const seekWindowSize = seekTime > 0 ? FIRST_CHUNK_DURATION_S : CHUNK_DURATION_S;
+    const seekChunkEnd = Math.min(seekTime + seekWindowSize, nextSnap, videoDurationS);
 
     // Guard against re-entrancy: BufferManager.seek() sets videoEl.currentTime
     // to reposition the playhead, which queues a second "seeking" task. By the
