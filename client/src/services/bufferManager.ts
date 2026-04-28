@@ -1,11 +1,14 @@
 import { type Span } from "@opentelemetry/api";
 
+import { type BufferConfig, clientConfig } from "~/config/appConfig.js";
 import { getClientLogger, getClientTracer } from "~/telemetry.js";
 
-import { type BufferConfig, DEFAULT_BUFFER_CONFIG } from "./bufferConfig.js";
 import { getSessionContext } from "./playbackSession.js";
 
-export { type BufferConfig, DEFAULT_BUFFER_CONFIG };
+export { type BufferConfig };
+/** Re-exported alias for backward compatibility with consumers that previously
+ *  imported `DEFAULT_BUFFER_CONFIG`. Now points at `clientConfig.buffer`. */
+export const DEFAULT_BUFFER_CONFIG: BufferConfig = clientConfig.buffer;
 
 const log = getClientLogger("bufferManager");
 const tracer = getClientTracer("bufferManager");

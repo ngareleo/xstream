@@ -4,13 +4,15 @@
 
 - [ ] **SEEK-001** Seek reuse: when seeking into a time region that is already fully buffered (or partially buffered by an in-progress chunk stream), reuse the existing segments instead of flushing and restarting the stream at the chunk boundary. Currently seek always flushes the SourceBuffer and starts a new chunk job. Optimization: detect whether `video.buffered` already covers the seek target and skip the flush + re-fetch if so.
 
-- [ ] **CHUNK-001** Adaptive chunk duration: calibrate `CHUNK_DURATION_S` per resolution so encoding latency stays roughly constant. At 4K a 300s chunk can take 30–60s of encode time before the first segment arrives; 90s chunks would be ready in ~10–20s. At 240p, 300s chunks finish in < 5s. Consider `CHUNK_DURATION_BY_RES` table rather than a single constant.
+- [ ] **CHUNK-001** Adaptive chunk duration: calibrate `clientConfig.playback.chunkDurationS` per resolution so encoding latency stays roughly constant. At 4K a 300s chunk can take 30–60s of encode time before the first segment arrives; 90s chunks would be ready in ~10–20s. At 240p, 300s chunks finish in < 5s. Consider replacing the scalar with a `Record<Resolution, number>` table (e.g. `chunkDurationByResS`) under `clientConfig.playback`. **Also relevant to OBS-STDERR-001**: if per-resolution chunk durations are used, the VAAPI `-ss 0 -t SHORT` workaround can be lifted for 4K (it would always use a longer first chunk naturally) without losing the small-window win for lower resolutions.
 
 - [ ] **INIT-001** Init segment deduplication: for the same video + resolution, the init segment (`init.mp4`) is always identical across chunk jobs. Cache it once at `tmp/segments/<fingerprint>-<resolution>/init.mp4` and symlink from each chunk job directory. Saves the ffprobe + init-write overhead for chunks 2+.
 
 - [ ] **HEARTBEAT-001** Server-side heartbeat: `req.signal.aborted` only fires on clean TCP disconnect. Frozen/sleeping browser tabs hold sockets open indefinitely. Add a client-side `setInterval` pinging `GET /stream/:jobId/ping` every 5s; server resets `lastPingAt` per job. A background timer kills any job whose `lastPingAt` is older than 15s and `connections > 0`. Most reliable runaway-process defense.
 
 - [ ] **STREAM-001** Stream from partial segments: currently `stream.ts` polls 100ms waiting for the fs watcher to flag a segment ready. With `ReadableStream` + `fs.createReadStream` we could start sending a partially-written `.m4s` as soon as its header is available — reducing per-segment latency. Significant complexity; defer until chunk model is stable.
+
+- [ ] **OBS-STDERR-001** Capture ffmpeg stderr in `transcode_complete` span event: today `stderr_tail` is only attached to cascade-failure events (`transcode_fallback_to_software` etc.), not to the final `transcode_complete` event. Add it to `transcode_complete` too so silent failures (`segment_count: 0`, exit code 0) are diagnosable without a separate stderr stream. Secondary benefit: detect `segment_count == 0` after a clean exit and force the cascade to fall through to the next tier (structural fix for the VAAPI HDR `-ss 0 -t SHORT` silent-zero-output bug). See `docs/server/Hardware-Acceleration/01-HDR-Pad-Artifact.md` § "VAAPI silent-success failures".
 
 ## Cache / Storage
 

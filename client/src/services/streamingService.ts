@@ -15,7 +15,6 @@ export class StreamingService {
 
   async start(
     jobId: string,
-    fromIndex: number,
     onSegment: SegmentCallback,
     onError: ErrorCallback,
     onDone: () => void,
@@ -24,7 +23,7 @@ export class StreamingService {
     this.abortController = new AbortController();
     let response: Response;
 
-    const url = `/stream/${jobId}${fromIndex > 0 ? `?from=${fromIndex}` : ""}`;
+    const url = `/stream/${jobId}`;
     log.info(`Fetching ${url}`, { url, job_id: jobId });
 
     try {

@@ -6,8 +6,8 @@ Three small, single-purpose modules that `PlaybackController` composes to keep t
 
 `client/src/services/playbackTicker.ts` is the one `requestAnimationFrame` tick that drives every per-frame poll the playback subsystem needs:
 
-- Startup-buffer check (waits for ≥ `STARTUP_BUFFER_S` seconds buffered before calling `video.play()`)
-- Prefetch trigger (fires when `currentTime` crosses `chunkEnd - PREFETCH_THRESHOLD_S`)
+- Startup-buffer check (waits for ≥ `clientConfig.playback.startupBufferS` seconds buffered before calling `video.play()`)
+- Prefetch trigger (fires when `currentTime` crosses `chunkEnd - clientConfig.playback.prefetchThresholdS`)
 - Background-buffer ready check during a resolution swap
 - `StallTracker`'s 2 s spinner debounce
 
@@ -19,11 +19,24 @@ Owned by `PlaybackController`; passed into `StallTracker` via deps so the spinne
 
 ## `StallTracker` — buffering-spinner debounce
 
-`client/src/services/stallTracker.ts` watches the HTMLMediaElement `waiting` event and shows the buffering spinner only after a continuous stall exceeds `BUFFERING_SPINNER_DELAY_MS` (default 2 s). Brief decoder hiccups under the threshold are swallowed.
+`client/src/services/stallTracker.ts` watches the HTMLMediaElement `waiting` event and shows the buffering spinner only after a continuous stall exceeds `clientConfig.playback.bufferingSpinnerDelayMs` (default 2 s). Brief decoder hiccups under the threshold are swallowed.
 
 Uses the shared `PlaybackTicker` for its delay timer (registered handler fires every frame, checks elapsed time vs the threshold). Opens the `playback.stalled` span when the threshold trips, ends it on `playing` / `seek` / `teardown`.
 
-Gated on `hasStartedPlayback` — the initial startup-buffer wait is its own loading path, not a stall.
+The spinner-state machine has **four mutually exclusive layers**. The first three are checked inside `StallTracker.onWaiting`; the fourth is a guard in `PlaybackController.handlePlaying`:
+
+| Layer | Owner | Guard | Suppresses |
+|---|---|---|---|
+| Cold-start loading | `StallTracker` | `hasStartedPlayback === false` | `onWaiting` arming the debounce — startup has its own loading-spinner path |
+| Decoder warmup post-`play()` | `StallTracker` | `isInFirstRenderGrace()` — a 5 s timestamp window set in `waitForStartupBuffer.tryPlay` when `hasStartedPlayback` flips true, cleared on the first DOM `playing` event or `resetForNewSession` | `onWaiting` arming the debounce — the decoder fires `waiting` for hundreds of ms after `video.play()` before rendering the first frame; this is not a stall |
+| Mid-playback stall | `StallTracker` | neither guard active | debounce arms; spinner shows after 2 s; `playback.stalled` span opens |
+| Seek-resume auto-resume | `PlaybackController` | `firstFrameRecorded === true` in `handlePlaying` | status staying "loading" after a seek — `handleSeeking` sets `status("loading")` but the video element auto-resumes (we never `pause()` on seek), so the DOM `playing` event fires before `tryPlay → onPlay` does; `firstFrameRecorded` (set once per session in `tryPlay`'s threshold-met branch, reset only by `resetForNewSession`) is the correct discriminator: session has played before → flip status immediately; true cold-start → wait for `tryPlay` |
+
+**Note — paused-at-seek case (PR #35):** when the user is already paused at `handleSeeking` time, the startup-buffer path still runs (so the spinner hides via `setStatus("playing")`), but `onPlay` checks `videoEl.paused` before calling `videoEl.play()` and skips it if true. `status` and `videoEl.paused` are independent axes — controller-level "in session" vs DOM-level "actively rendering frames" — and seek-resume must respect both.
+
+Only the third layer represents a genuine user-visible stall. `playback.stalled` spans are therefore always mid-playback events, never startup or warmup noise. The fourth layer is not a stall at all — it is a status-flip gap unique to the seek path where the browser's auto-resume races ahead of the controller's startup-buffer machinery.
+
+`isInFirstRenderGrace` is supplied as a dep `() => boolean` from `PlaybackController` so `StallTracker` stays free of controller state.
 
 ## `PlaybackTimeline` — observability data
 

@@ -137,13 +137,13 @@ Seeks anchor a fresh ffmpeg encode at the user's seek position. The chunk runs f
 
 Trade-off: re-seeking to the same exact second misses the chunk cache (the `jobId` hash is keyed on `start_s`). Acceptable — interactive scrubbing dominates, and the seek-to-ready latency benefit (sub-5 s vs. 16–60 s pre-refactor) is the load-bearing UX win.
 
-**Seek accuracy:** the first appended segment starts at the keyframe ffmpeg's `-ss` lands on (typically within ~1 s of `seekTime`); the video element resumes at `seekTime` once `bufferedAhead ≥ STARTUP_BUFFER_S[res]`.
+**Seek accuracy:** the first appended segment starts at the keyframe ffmpeg's `-ss` lands on (typically within ~1 s of `seekTime`); the video element resumes at `seekTime` once `bufferedAhead ≥ clientConfig.playback.startupBufferS[res]`.
 
 ---
 
 ## Startup Buffer
 
-`useChunkedPlayback` waits until `bufferedEnd >= STARTUP_BUFFER_S[res]` before calling `video.play()`. This keeps the loading spinner up long enough for smooth initial playback, calibrated per resolution:
+`useChunkedPlayback` waits until `bufferedEnd >= clientConfig.playback.startupBufferS[res]` before calling `video.play()`. This keeps the loading spinner up long enough for smooth initial playback, calibrated per resolution:
 
 | Resolution | Startup threshold |
 |---|---|
@@ -152,7 +152,9 @@ Trade-off: re-seeking to the same exact second misses the chunk cache (the `jobI
 | `480p` | 3s |
 | `720p` | 4s |
 | `1080p` | 6s |
-| `4k` | 10s |
+| `4k` | 5s |
+
+The 4K threshold was lowered from 10 s after a Seq cold-start trace showed the startup-buffer fill phase accounted for ~69 % of TTFF (~2.1 s of a ~3.1 s total). 5 s gives ~1 s back to the user; immediate post-`play()` stalls are surfaced by the existing `playback.stalled` span.
 
 Detection is driven by `BufferManager.setAfterAppend(tryStart)` — a callback that fires synchronously inside `drainQueue` after every real `appendBuffer` call. This works correctly in headless environments (Playwright, CI) where `requestAnimationFrame` fires slowly or not at all between segment appends. A RAF loop is also started as a fallback for slow live-transcode paths where no new segment arrives for several seconds.
 
@@ -264,12 +266,12 @@ Easy to conflate, but each knob affects a different part of the pipeline:
 
 | Lever | Default | What it controls |
 |---|---|---|
-| `CHUNK_DURATION_S` (`client/src/services/playbackConfig.ts`) | 300s | ffmpeg transcode unit — one ffmpeg process produces one chunk. Affects first-byte latency (smaller = faster start) and chunk-cutover cost (smaller = more frequent cutovers) |
+| `clientConfig.playback.chunkDurationS` (`client/src/config/appConfig.ts`) | 300s | ffmpeg transcode unit — one ffmpeg process produces one chunk. Affects first-byte latency (smaller = faster start) and chunk-cutover cost (smaller = more frequent cutovers) |
 | Segment duration (ffmpeg `-seg_duration`) | 2s | Wire framing unit — each `.m4s` is 2 seconds of fMP4. Affects append cadence and `appendBuffer` throughput |
-| `forwardTargetS` (`client/src/services/bufferConfig.ts`) | 60s | Client-side buffer ceiling — how much media is resident in the SourceBuffer. Independent of ffmpeg; the network can deliver hundreds of segments but the client only keeps `forwardTargetS` ahead of the playhead |
+| `clientConfig.buffer.forwardTargetS` (`client/src/config/appConfig.ts`) | 60s | Client-side buffer ceiling — how much media is resident in the SourceBuffer. Independent of ffmpeg; the network can deliver hundreds of segments but the client only keeps `forwardTargetS` ahead of the playhead |
 
 If playback feels choppy at 4K, the right lever depends on the symptom:
-- Long time-to-first-frame → shrink `CHUNK_DURATION_S` (documented in `docs/todo.md` CHUNK-001)
+- Long time-to-first-frame → shrink `clientConfig.playback.chunkDurationS` (documented in `docs/todo.md` CHUNK-001)
 - Decoder underruns mid-stream → raise `forwardResumeS` (more cushion when stream resumes)
 - Out-of-memory on a low-spec client → lower `forwardTargetS`
 

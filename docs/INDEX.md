@@ -35,6 +35,7 @@ Keep rows short (≤ ~120 chars). When adding a new topic file to `docs/`, add i
 | HW-accel overview, tagged union, adding a backend | `docs/server/Hardware-Acceleration/00-Overview.md` |
 | HDR pad artifact + workarounds | `docs/server/Hardware-Acceleration/01-HDR-Pad-Artifact.md` |
 | fluent-ffmpeg quirks (argv, `setFfmpegPath`) | `docs/server/Hardware-Acceleration/02-Fluent-FFmpeg-Quirks.md` |
+| Client compile-time tunables (`clientConfig`), two-layer config model | `docs/client/Config/00-ClientConfig.md` |
 | Feature-flag registry | `docs/client/Feature-Flags/00-Registry.md` |
 | Client debugging playbooks | `docs/client/Debugging-Playbooks/00-Common-Issues.md` |
 | Rsbuild chunk-split groups, regex anchor, `bun run analyze` | `docs/client/Bundle-Chunks/00-Strategy.md` |

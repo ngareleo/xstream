@@ -1,6 +1,6 @@
 # Playback Scenarios
 
-The client drives transcoding in **300-second chunks** rather than encoding the full video upfront. Each chunk is a separate ffmpeg job covering a time window `[startS, endS)`. Four distinct flows cover the pipeline end-to-end: initial playback, back-pressure, seek, and resolution switch. Each has its own sequence diagram below; the `.mmd` sources are authoritative and can be re-rendered in draw.io via the `open_drawio_mermaid` MCP tool.
+The client drives transcoding in **300-second chunks** for steady-state playback; the first chunk after Play or a Seek uses a shorter **30-second window** (`clientConfig.playback.firstChunkDurationS`) so the prefetch RAF trips immediately and ffmpeg for chunk N+1 starts encoding in parallel with chunk N's initial fill. Each chunk is a separate ffmpeg job covering a time window `[startS, endS)`. Four distinct flows cover the pipeline end-to-end: initial playback, back-pressure, seek, and resolution switch. Each has its own sequence diagram below; the `.mmd` sources are authoritative and can be re-rendered in draw.io via the `open_drawio_mermaid` MCP tool.
 
 ## Scenario 1: Initial playback (happy path)
 
@@ -10,18 +10,18 @@ The client drives transcoding in **300-second chunks** rather than encoding the 
 
 `PlaybackController.startPlayback(res)` opens the `playback.session` span and drives the boot sequence:
 
-1. `BufferManager.init(mimeType)` creates a `MediaSource` and arms a `SourceBuffer`.
-2. `PlaybackController.requestChunk` opens a `transcode.request` span (with `chunk.is_prefetch = false`) around the `startTranscode` GraphQL mutation for the `(videoId, resolution, 0, 300)` window. The auto-generated `graphql.request` HTTP span nests underneath via `context.with`. The span closes when the mutation resolves and records `chunk.job_id`.
+1. **`buffer.init` and the `startTranscode` mutation run in parallel via `Promise.all`.** `BufferManager.init(mimeType)` creates a `MediaSource` and arms a `SourceBuffer`; simultaneously `PlaybackController.requestChunk` fires the `startTranscode` GraphQL mutation for the `(videoId, resolution, 0, clientConfig.playback.firstChunkDurationS)` = `(…, 0, 30)` window. This means ffmpeg's cold-start overlaps with the `sourceopen` handshake rather than waiting behind it.
+2. `PlaybackController.requestChunk` opens a `transcode.request` span (with `chunk.is_prefetch = false`) around the mutation. The auto-generated `graphql.request` HTTP span nests underneath via `context.with`. The span closes when the mutation resolves and records `chunk.job_id`. The pre-issued `jobId` is plumbed directly into `pipeline.startForeground` — no second mutation fires when the pipeline opens.
 3. `chunker.startTranscodeJob` computes a deterministic `jobId = SHA-1(fingerprint + res + start + end)`. If `tmp/segments/<jobId>/init.mp4` exists the job is restored from cache; otherwise a new ffmpeg process spawns and `fs.watch` starts tracking segment files. The `transcode.job` span covers the full ffmpeg lifetime (probe + encode) and closes on `transcode_complete`, `transcode_error`, or `transcode_killed`.
 4. The client opens a `chunk.stream` span and calls `StreamingService.start(jobId, …, ctx)`. `ctx` is propagated as `traceparent`, so the server's `stream.request` span nests under the client's `chunk.stream`. On span end it records `chunk.bytes_streamed` and `chunk.segments_received` — giving per-chunk bandwidth in a single Seq query.
 5. `GET /stream/<jobId>` waits up to 60 s for `init.mp4`, writes it length-prefixed, then loops over newly-appearing `segment_NNNN.m4s` files.
 6. `StreamingService` accumulates bytes, extracts complete frames by the 4-byte length prefix, and calls `onSegment(data, isInit)` back into `BufferManager`.
 7. `BufferManager.appendSegment` serialises `SourceBuffer.appendBuffer` calls through a queue. After each append it runs `evictBackBuffer()`, `checkForwardBuffer()`, and the `afterAppendCb`.
-8. Once `bufferedEnd >= STARTUP_BUFFER_S[res]`, `video.play()` is called and `status` flips to `playing`.
+8. Once `bufferedEnd >= clientConfig.playback.startupBufferS[res]`, `video.play()` is called and `status` flips to `playing`.
 
 ### Chunk chaining
 
-When the current chunk stream finishes, `startChunkSeries` chains to the next one. A RAF prefetch loop fires the next chunk's `startTranscode` mutation when `currentTime > chunkEnd - 90s` (`PREFETCH_THRESHOLD_S`), so the next `jobId` is usually already in hand — no mutation RTT before streaming resumes. Prefetch requests open their own `transcode.request` span with `chunk.is_prefetch = true`, so Seq queries can separate prefetch RTT from on-demand RTT. Continuation chunks **must re-append their init segment** (each chunk's `elst` differs); the `SourceBuffer` (in `mode="segments"`, NOT `"sequence"`) places each segment by its TFDT so chunks stitch seamlessly. See [`02-Chunk-Pipeline-Invariants.md`](02-Chunk-Pipeline-Invariants.md) for the full set of rules.
+When the current chunk stream finishes, `startChunkSeries` chains to the next one. A RAF prefetch loop fires the next chunk's `startTranscode` mutation when `currentTime > chunkEnd - clientConfig.playback.prefetchThresholdS (90 s)`. Because the first chunk window is only 30 s, `chunkEnd − 90` is negative — the prefetch fires immediately after play starts, so chunk 2 (`[30, 330)`) begins encoding in parallel with chunk 1's fill. Prefetch requests open their own `transcode.request` span with `chunk.is_prefetch = true`, so Seq queries can separate prefetch RTT from on-demand RTT. Continuation chunks **must re-append their init segment** (each chunk's `elst` differs); the `SourceBuffer` (in `mode="segments"`, NOT `"sequence"`) places each segment by its TFDT so chunks stitch seamlessly. See [`02-Chunk-Pipeline-Invariants.md`](02-Chunk-Pipeline-Invariants.md) for the full set of rules.
 
 ### Connection-aware ffmpeg lifecycle
 
@@ -39,9 +39,9 @@ ffmpeg dies within seconds of the last tab closing — no zombies. `chunker.star
 
 > Source: [`streaming-02-backpressure.mmd`](../../diagrams/streaming-02-backpressure.mmd)
 
-Once the steady-state append loop is running, `BufferManager.checkForwardBuffer` runs after every append. If `bufferedAhead > FORWARD_TARGET_S (60 s)` it opens a `buffer.halt` span (parented on `playback.session` so it survives chunk boundaries) and calls `StreamingService.pause()`, which suspends the fetch loop on a `resumeResolve` promise — no further `reader.read()` calls are issued, so TCP back-pressure propagates all the way to the server's write loop and ffmpeg throttles naturally.
+Once the steady-state append loop is running, `BufferManager.checkForwardBuffer` runs after every append. If `bufferedAhead > clientConfig.buffer.forwardTargetS (60 s)` it opens a `buffer.halt` span (parented on `playback.session` so it survives chunk boundaries) and calls `StreamingService.pause()`, which suspends the fetch loop on a `resumeResolve` promise — no further `reader.read()` calls are issued, so TCP back-pressure propagates all the way to the server's write loop and ffmpeg throttles naturally.
 
-As the `<video>` element plays and `timeupdate` fires, `bufferedAhead` drains. When it falls below `FORWARD_RESUME_S (20 s)`, the `BufferManager` calls `StreamingService.resume()`, which resolves the promise and reawakens `reader.read()`, and closes the `buffer.halt` span with `buffer.buffered_ahead_s_at_resume` recorded. The 60 s / 20 s split is a 40-second hysteresis gap — wide enough that each pause/drain cycle lasts ~40 s and cycles don't chain back-to-back at steady state, so one halt = one span and the span duration reads directly as the stall length. Seeks and teardowns close the span early via a `halt_ended_by_seek` or `halt_ended_by_teardown` event. See [`../Streaming/00-Protocol.md#hysteresis-tuning-the-gap`](./00-Protocol.md#hysteresis-tuning-the-gap) for the considerations behind those numbers.
+As the `<video>` element plays and `timeupdate` fires, `bufferedAhead` drains. When it falls below `clientConfig.buffer.forwardResumeS (20 s)`, the `BufferManager` calls `StreamingService.resume()`, which resolves the promise and reawakens `reader.read()`, and closes the `buffer.halt` span with `buffer.buffered_ahead_s_at_resume` recorded. The 60 s / 20 s split is a 40-second hysteresis gap — wide enough that each pause/drain cycle lasts ~40 s and cycles don't chain back-to-back at steady state, so one halt = one span and the span duration reads directly as the stall length. Seeks and teardowns close the span early via a `halt_ended_by_seek` or `halt_ended_by_teardown` event. See [`../Streaming/00-Protocol.md#hysteresis-tuning-the-gap`](./00-Protocol.md#hysteresis-tuning-the-gap) for the considerations behind those numbers.
 
 ## Scenario 3: Seek
 
@@ -57,9 +57,9 @@ If `t` lies within the current `SourceBuffer`'s buffered range, playback resumes
 2. `StreamingService.cancel()` aborts the current fetch.
 3. `chunkEnd` is reset to `0` synchronously at the top of the seek handler (before any async work) to prevent the RAF prefetch loop from firing a stale chunk request while the seek is in flight.
 4. `BufferManager.seek(t)` — note **`t` (the user's raw seek position), not `snapTime`** — flushes the `SourceBuffer` (`remove(0, Infinity)`), resets `timestampOffset`, and sets `video.currentTime = t`. Using `t` here keeps the playhead at the position the user clicked; using `snapTime` would visually snap the slider backward to the chunk boundary, which is confusing UX.
-5. `startTranscode(videoId, res, snapTime, snapTime + 300)` uses `snapTime` as the server request boundary so the cache key is chunk-aligned and the same job can be reused across multiple seeks into the same 300-second window.
+5. `startTranscode(videoId, res, snapTime, seekChunkEnd)` — the server-side start is still `snapTime` (boundary-aligned, cache-friendly), but the **end** is clamped: `seekChunkEnd = min(seekTime + clientConfig.playback.firstChunkDurationS, nextSnap, videoDurationS)`. This mirrors what the post-Play path does: the seek chunk is at most 30 s long, so the prefetch RAF fires almost immediately after the seek buffer fills, eager-warming the next chunk in parallel.
 
-**The two-value split:** the chunk SERVER REQUEST uses `snapTime` (boundary-aligned, cache-friendly); `buf.seek`, `video.currentTime`, and all client-side seek logs use `seekTime = t` (the user's intent). These were the same value before PR #30 round-2; changing `buf.seek` to receive `t` fixes the slider snap-back without touching the server cache key.
+**The two-value split:** the server request start uses `snapTime` (boundary-aligned, cache-friendly); `buf.seek`, `video.currentTime`, and all client-side seek logs use `seekTime = t` (the user's intent). Continuation chunks pick up on the canonical 300 s grid via the `nextSnap` cap on `seekChunkEnd`. These were the same value before PR #30 round-2; changing `buf.seek` to receive `t` fixes the slider snap-back without touching the server cache key.
 
 ## Scenario 4: Resolution switch (background buffer)
 
@@ -72,7 +72,7 @@ MSE's `SourceBuffer` can only be initialised with one MIME type / resolution pro
 1. `PlaybackController.switchResolution(newRes)` snaps the current playhead to the nearest chunk boundary (`chunkStart`).
 2. `bgBuffer.initBackground()` creates a `MediaSource` attached to an offscreen `<video>`, returning a `bgObjectUrl`. `sourceopen` fires and the background `SourceBuffer` is armed without disturbing the visible `<video>`.
 3. A new transcode job starts at `(videoId, newRes, chunkStart, chunkStart + 300)` and streams silently into `bgBuffer`.
-4. A RAF loop polls `bgBuffer.bufferedEnd`. When it clears `STARTUP_BUFFER_S[newRes]`:
+4. A RAF loop polls `bgBuffer.bufferedEnd`. When it clears `clientConfig.playback.startupBufferS[newRes]`:
    - The foreground stream is cancelled and its `BufferManager` torn down (releasing the foreground object URL).
    - `video.src = bgObjectUrl`, `video.currentTime = playhead`, `video.play()`.
    - The background buffer is promoted to foreground.

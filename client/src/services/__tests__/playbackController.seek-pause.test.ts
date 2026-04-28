@@ -65,6 +65,7 @@ interface PrivateController {
   buffer: FakeBuffer | null;
   pipeline: FakePipeline | { hasLookahead: () => boolean; resumeLookahead: () => void } | null;
   hasStartedPlayback: boolean;
+  firstFrameRecorded: boolean;
   isHandlingSeek: boolean;
   status: "idle" | "loading" | "playing";
   userPauseInterval: ReturnType<typeof setInterval> | null;
@@ -212,11 +213,49 @@ describe("PlaybackController.handlePlaying (spinner-race fix)", () => {
     const priv = controller as unknown as PrivateController;
     priv.isHandlingSeek = false;
     priv.hasStartedPlayback = true;
+    priv.firstFrameRecorded = true;
     priv.status = "loading";
 
     priv.handlePlaying();
 
     expect(priv.status).toBe("playing");
+  });
+
+  it("restores playing status on seek-resume auto-resume (hasStartedPlayback=false, firstFrameRecorded=true)", () => {
+    // Seek-resume bug: video element auto-resumes as soon as the new buffer
+    // is available, firing DOM `playing` BEFORE tryPlay's startup-buffer
+    // threshold is met. handleSeeking has reset hasStartedPlayback to false,
+    // so the previous `&& hasStartedPlayback` guard kept status="loading"
+    // for the whole startup-fill window — user saw spinner over playing
+    // video. firstFrameRecorded persists across seeks (only reset on
+    // resetForNewSession), so it correctly admits this case.
+    const { controller } = makeController();
+    const priv = controller as unknown as PrivateController;
+    priv.isHandlingSeek = false;
+    priv.hasStartedPlayback = false; // reset by handleSeeking
+    priv.firstFrameRecorded = true; // set by cold-start tryPlay earlier in the session
+    priv.status = "loading";
+
+    priv.handlePlaying();
+
+    expect(priv.status).toBe("playing");
+  });
+
+  it("does NOT restore playing status during cold-start before any frame has rendered", () => {
+    // Cold-start, before tryPlay's threshold has been met. Video element is
+    // paused (videoEl.play() not called yet), so no spurious DOM `playing`
+    // event would actually fire — but if one did, status must remain
+    // "loading" until the proper cold-start gate (tryPlay → onPlay).
+    const { controller } = makeController();
+    const priv = controller as unknown as PrivateController;
+    priv.isHandlingSeek = false;
+    priv.hasStartedPlayback = false;
+    priv.firstFrameRecorded = false;
+    priv.status = "loading";
+
+    priv.handlePlaying();
+
+    expect(priv.status).toBe("loading");
   });
 });
 
@@ -313,9 +352,11 @@ describe("PlaybackController.handleSeeking (slider snap-back + stale-prefetch fi
     controller: PlaybackController;
     priv: SeekableController;
     buf: FakeBuffer;
+    videoEl: HTMLVideoElement;
   } {
     const { controller, videoEl } = makeController({ currentTime });
-    (videoEl as unknown as { currentTime: number }).currentTime = currentTime;
+    (videoEl as unknown as { currentTime: number; paused: boolean }).currentTime = currentTime;
+    (videoEl as unknown as { paused: boolean }).paused = false;
     const priv = controller as unknown as SeekableController;
     priv.status = "playing";
     priv.hasStartedPlayback = true;
@@ -325,7 +366,7 @@ describe("PlaybackController.handleSeeking (slider snap-back + stale-prefetch fi
     priv.timeline = { clearLookahead: vi.fn() };
     priv.chunkEnd = 900; // stale value from a prior chunk — must be reset on seek
     priv.startChunkSeries = vi.fn();
-    return { controller, priv, buf };
+    return { controller, priv, buf, videoEl };
   }
 
   it("passes the user's intended seekTime to buf.seek (NOT a snapped chunk boundary)", () => {
@@ -341,19 +382,21 @@ describe("PlaybackController.handleSeeking (slider snap-back + stale-prefetch fi
     expect(buf.seekCalls).toEqual([720]);
   });
 
-  it("sets chunkEnd to the next-snap boundary so RAF prefetch fires at the correct boundary", () => {
+  it("sets chunkEnd to the small seek-chunk window so RAF prefetch fires immediately", () => {
     // Pre-fix: chunkEnd was reset to 0 to gate out a stale prefetch race
-    // (trace 5d5b5137…). Post-fix: chunkEnd is set to nextSnap synchronously
-    // so the RAF gate is active immediately — the seek chunk may be only
-    // a few seconds long if the user seeks deep into a chunk window.
+    // (trace 5d5b5137…). Then chunkEnd was set to nextSnap synchronously,
+    // which works but leaves the seek chunk up to 300s long. Now chunkEnd is
+    // clamped to seekTime + FIRST_CHUNK_DURATION_S (capped by nextSnap) so
+    // the prefetch RAF threshold (PREFETCH_THRESHOLD_S = 90) trips immediately
+    // and a continuation chunk eager-warms ffmpeg in parallel.
     const { controller, priv } = setUpSeekable(1500);
     expect(priv.chunkEnd).toBe(900); // baseline: stale value from prior chunk
 
     controller.seekTo(1500);
     priv.handleSeeking();
 
-    // nextSnap = ceil((1500 + 0.001) / 300) * 300 = 1800
-    expect(priv.chunkEnd).toBe(1800);
+    // seekChunkEnd = min(1500 + 30, nextSnap=1800, dur) = 1530
+    expect(priv.chunkEnd).toBe(1530);
   });
 
   it("anchors the chunk REQUEST at seekTime — no longer snaps to chunk boundary", () => {
@@ -373,16 +416,15 @@ describe("PlaybackController.handleSeeking (slider snap-back + stale-prefetch fi
     return Promise.resolve().then(() => {
       expect(priv.startChunkSeries).toHaveBeenCalledTimes(1);
       const call = (priv.startChunkSeries as ReturnType<typeof vi.fn>).mock.calls[0];
-      // call args: (res, chunkStartS, buf, isFirstChunk, fromIndex)
+      // call args: (res, chunkStartS, buf, isFirstChunk, override)
       expect(call[1]).toBe(720); // chunkStartS = seekTime, not snapTime (600)
-      expect(call[4]).toBe(0); // fromIndex always 0; ?from=K is gone
     });
   });
 
   it("anchors at seekTime even when it lands exactly on a chunk boundary", () => {
     // Edge case: with the +0.001 nudge in nextSnap derivation, a seek to
-    // exactly 600 still produces a [600, 900) chunk (NOT a degenerate
-    // [600, 600) zero-length one).
+    // exactly 600 still produces a non-degenerate seek chunk
+    // (NOT [600, 600) zero-length).
     const { controller, priv, buf } = setUpSeekable(600);
 
     controller.seekTo(600);
@@ -392,8 +434,8 @@ describe("PlaybackController.handleSeeking (slider snap-back + stale-prefetch fi
     return Promise.resolve().then(() => {
       const call = (priv.startChunkSeries as ReturnType<typeof vi.fn>).mock.calls[0];
       expect(call[1]).toBe(600); // chunkStartS = seekTime
-      expect(call[4]).toBe(0); // fromIndex
-      expect(priv.chunkEnd).toBe(900); // nextSnap, not 600
+      // seekChunkEnd = min(600 + 30, nextSnap=900, dur) = 630
+      expect(priv.chunkEnd).toBe(630);
     });
   });
 
@@ -408,5 +450,44 @@ describe("PlaybackController.handleSeeking (slider snap-back + stale-prefetch fi
     priv.handleSeeking();
 
     expect(priv.seekTarget).toBe(564.9); // not 300 (the old snapTime)
+  });
+
+  it("does NOT call videoEl.play() after seek when user was paused", async () => {
+    // Pre-fix: handleSeeking's onPlay callback unconditionally called
+    // videoEl.play(), auto-resuming a user who had intentionally paused
+    // before seeking. Fix: respect videoEl.paused at onPlay time.
+    const { controller, priv, buf, videoEl } = setUpSeekable(720);
+    (videoEl as unknown as { paused: boolean }).paused = true; // user is paused
+
+    controller.seekTo(720);
+    priv.handleSeeking();
+    buf.resolveSeek();
+    // Yield so buf.seek().then() runs and waitForStartupBuffer wires up.
+    await Promise.resolve();
+    await Promise.resolve();
+
+    // Drive tryPlay's threshold: STARTUP_BUFFER_S["240p"] = 2 (default).
+    buf.bufferedAhead = 5;
+    buf.triggerAppend();
+
+    expect(videoEl.play).not.toHaveBeenCalled();
+    expect(priv.status).toBe("playing"); // spinner still hides
+  });
+
+  it("DOES call videoEl.play() after seek when user was playing", async () => {
+    const { controller, priv, buf, videoEl } = setUpSeekable(720);
+    (videoEl as unknown as { paused: boolean }).paused = false; // user is playing
+
+    controller.seekTo(720);
+    priv.handleSeeking();
+    buf.resolveSeek();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    buf.bufferedAhead = 5;
+    buf.triggerAppend();
+
+    expect(videoEl.play).toHaveBeenCalledTimes(1);
+    expect(priv.status).toBe("playing");
   });
 });

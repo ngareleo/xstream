@@ -13,7 +13,7 @@ Before opening a player or clicking play, answer:
 
 Example: verifying the post-seek startup gate uses buffered-ahead rather than absolute `bufferedEnd`:
 
-> "After a seek to 600 s, the `playback.start` log should fire no earlier than when `bufferedAhead >= STARTUP_BUFFER_S[res]`. In Seq, query `@MessageTemplate = 'Buffer health' and @TraceId = '...'` and confirm the `buffered_s` reading at the moment `video.play()` is called is positive and meaningful — not ~2 s because a single segment bumped absolute `bufferedEnd` past 600 + 5 s."
+> "After a seek to 600 s, the `playback.start` log should fire no earlier than when `bufferedAhead >= clientConfig.playback.startupBufferS[res]`. In Seq, query `@MessageTemplate = 'Buffer health' and @TraceId = '...'` and confirm the `buffered_s` reading at the moment `video.play()` is called is positive and meaningful — not ~2 s because a single segment bumped absolute `bufferedEnd` past 600 + 5 s."
 
 Without this up-front decision, browser verification becomes "does it look OK?" — which is insufficient.
 

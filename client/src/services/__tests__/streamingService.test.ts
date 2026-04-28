@@ -49,7 +49,6 @@ describe("StreamingService frame parser", () => {
 
     await service.start(
       "job1",
-      0,
       async (data, isInit) => {
         segments.push({ data, isInit });
       },
@@ -76,7 +75,6 @@ describe("StreamingService frame parser", () => {
 
     await service.start(
       "job1",
-      0,
       async (_, isInit) => {
         initFlags.push(isInit);
       },
@@ -103,7 +101,6 @@ describe("StreamingService frame parser", () => {
 
     await service.start(
       "job1",
-      0,
       async (data) => {
         segments.push(data);
       },
@@ -131,7 +128,6 @@ describe("StreamingService frame parser", () => {
 
     await service.start(
       "job1",
-      0,
       async (data) => {
         payloads.push(new Uint8Array(data));
       },
@@ -155,7 +151,6 @@ describe("StreamingService frame parser", () => {
 
     await service.start(
       "job1",
-      0,
       async () => {},
       (err) => {
         throw err;
@@ -167,24 +162,6 @@ describe("StreamingService frame parser", () => {
     );
 
     expect(done).toBe(true);
-  });
-
-  it("includes ?from=N in the URL when fromIndex > 0", async () => {
-    const fetchMock = vi.fn().mockResolvedValue({ ok: true, body: makeStream([]) });
-    vi.stubGlobal("fetch", fetchMock);
-
-    const service = new StreamingService();
-    await service.start(
-      "job42",
-      5,
-      async () => {},
-      () => {},
-      () => {},
-      testCtx
-    );
-
-    const calledUrl = fetchMock.mock.calls[0][0] as string;
-    expect(calledUrl).toBe("/stream/job42?from=5");
   });
 
   it("cancel() during in-flight onSegment does not throw null-reader error", async () => {
@@ -206,7 +183,6 @@ describe("StreamingService frame parser", () => {
 
     const startPromise = service.start(
       "job1",
-      0,
       async () => {
         // First segment triggers cancel mid-onSegment, simulating the
         // seek-during-stream race. The second segment's slot would normally
@@ -242,7 +218,6 @@ describe("StreamingService frame parser", () => {
     // Start but don't await — it will hang until cancelled
     const startPromise = service.start(
       "job1",
-      0,
       async () => {},
       (e) => errors.push(e),
       () => {},

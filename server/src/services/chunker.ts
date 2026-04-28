@@ -565,6 +565,35 @@ async function runFfmpeg(
       clearTimeout(maxEncodeTimer);
       const segmentCount = job.segments.filter(Boolean).length;
       const encodeDurationMs = encodeStart > 0 ? Date.now() - encodeStart : 0;
+      // Silent-failure diagnostic: ffmpeg exited cleanly but produced zero
+      // segments (e.g. -ss 0 -t SHORT on VAAPI HDR 4K — the existing
+      // 3-tier cascade only fires on non-zero exit, so this case slips
+      // through without any error signal). Emit the captured stderr tail
+      // so the failure mode is debuggable in Seq. Tracked as
+      // OBS-STDERR-001 in docs/todo.md; root cause investigation pending
+      // — see docs/server/Hardware-Acceleration/01-HDR-Pad-Artifact.md.
+      if (segmentCount === 0) {
+        const ffmpegStderr = stderrTail();
+        log.warn("Transcode produced zero segments despite clean exit", {
+          job_id: job.id,
+          video_id: job.video_id,
+          resolution,
+          chunk_start_s: startTime ?? 0,
+          chunk_duration_s: endTime !== undefined ? endTime - (startTime ?? 0) : -1,
+          encode_duration_ms: encodeDurationMs,
+          ffmpeg_stderr: ffmpegStderr,
+        });
+        jobSpan.addEvent("transcode_silent_failure", {
+          chunk_start_s: startTime ?? 0,
+          chunk_duration_s: endTime !== undefined ? endTime - (startTime ?? 0) : -1,
+          encode_duration_ms: encodeDurationMs,
+          ffmpeg_stderr: ffmpegStderr,
+        });
+        jobSpan.setStatus({
+          code: SpanStatusCode.ERROR,
+          message: "Clean exit but zero segments written",
+        });
+      }
       log.info("Transcode complete", {
         job_id: job.id,
         video_id: job.video_id,

@@ -22,7 +22,6 @@ interface FakeStreamingService {
   onDone: (() => void) | null;
   start(
     jobId: string,
-    fromIndex: number,
     onSegment: (data: ArrayBuffer, isInit: boolean) => Promise<void>,
     onError: (err: Error) => void,
     onDone: () => void
@@ -52,7 +51,6 @@ vi.mock("~/services/streamingService.js", () => {
 
     start(
       jobId: string,
-      _fromIndex: number,
       onSegment: (data: ArrayBuffer, isInit: boolean) => Promise<void>,
       onError: (err: Error) => void,
       onDone: () => void

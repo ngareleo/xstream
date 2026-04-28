@@ -41,6 +41,7 @@ class TestTicker {
 let videoEl: { currentTime: number };
 let bufferedAhead: number | null;
 let hasStarted: boolean;
+let inFirstRenderGrace: boolean;
 let spinnerShown: number;
 let ticker: TestTicker;
 let dateNow = 1_000_000_000_000;
@@ -51,6 +52,7 @@ function makeTracker(): StallTracker {
     videoEl: videoEl as unknown as HTMLVideoElement,
     getBufferedAheadSeconds: () => bufferedAhead,
     hasStartedPlayback: () => hasStarted,
+    isInFirstRenderGrace: () => inFirstRenderGrace,
     onSpinnerShow: () => {
       spinnerShown += 1;
     },
@@ -62,6 +64,7 @@ beforeEach(() => {
   videoEl = { currentTime: 42.5 };
   bufferedAhead = 30;
   hasStarted = true;
+  inFirstRenderGrace = false;
   spinnerShown = 0;
   ticker = new TestTicker();
   dateNow = 1_000_000_000_000;
@@ -81,6 +84,26 @@ describe("StallTracker", () => {
     tracker.onWaiting();
     expect(ticker.pendingHandlers()).toBe(0);
     expect(spinnerShown).toBe(0);
+  });
+
+  it("onWaiting is suppressed during first-render grace (post-`play()` warmup)", () => {
+    // Repro of the seek-resume spinner-flash UX bug: tryPlay flips
+    // hasStartedPlayback=true and calls videoEl.play(); the decoder fires
+    // `waiting` while rendering the first frame, which previously armed the
+    // 2 s spinner-debounce and re-showed the spinner over playing video.
+    inFirstRenderGrace = true;
+    const tracker = makeTracker();
+    tracker.onWaiting();
+    expect(ticker.pendingHandlers()).toBe(0);
+    expect(spinnerShown).toBe(0);
+
+    // Once the first DOM `playing` event fires (controller clears the grace),
+    // subsequent waiting events behave normally again.
+    inFirstRenderGrace = false;
+    tracker.onWaiting();
+    expect(ticker.pendingHandlers()).toBe(1);
+    ticker.tick(BUFFERING_SPINNER_DELAY_MS);
+    expect(spinnerShown).toBe(1);
   });
 
   it("spinner fires after BUFFERING_SPINNER_DELAY_MS of continuous stall", () => {
