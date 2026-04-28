@@ -42,3 +42,9 @@ export const RESOLUTION_MIME_TYPE: Record<Resolution, string> = {
   "1080p": 'video/mp4; codecs="avc1.640028,mp4a.40.2"', // H.264 High L4.0
   "4k": 'video/mp4; codecs="avc1.640033,mp4a.40.2"', // H.264 High L5.1
 };
+
+/** Internal playback-controller status used to drive the spinner / play
+ *  button state. NOT the same as `videoEl.paused` — the controller is
+ *  "in session" while playing OR paused; "idle" before play and after
+ *  teardown; "loading" during cold-start and seek-fill phases. */
+export type PlaybackStatus = "idle" | "loading" | "playing";

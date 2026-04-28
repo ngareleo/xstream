@@ -16,11 +16,11 @@
  */
 import { type Span, SpanStatusCode, trace, type Tracer } from "@opentelemetry/api";
 
+import { clientConfig } from "~/config/appConfig.js";
 import type { ClientLog } from "~/telemetry.js";
 import type { Resolution } from "~/types.js";
 
 import type { BufferManager } from "./bufferManager.js";
-import { CHUNK_DURATION_S, MIN_REAL_CHUNK_BYTES } from "./playbackConfig.js";
 import { getSessionContext } from "./playbackSession.js";
 import { StreamingService } from "./streamingService.js";
 
@@ -28,7 +28,7 @@ import { StreamingService } from "./streamingService.js";
 export type StreamOutcome =
   /** Real content streamed; caller should chain to the next chunk. */
   | "completed"
-  /** ffmpeg produced only a placeholder (<MIN_REAL_CHUNK_BYTES); pipeline already
+  /** ffmpeg produced only a placeholder (<clientConfig.playback.minRealChunkBytes); pipeline already
    *  called buffer.markStreamDone(); caller should not chain another chunk. */
   | "no_real_content";
 
@@ -180,7 +180,7 @@ export class ChunkPipeline {
       // Decide the outcome NOW with the post-drain byte counter — deferring
       // to here is what lets the lookahead-queueing path produce the same
       // outcome as the live foreground path would for the same content.
-      const hasRealContent = slot.totalMediaBytes >= MIN_REAL_CHUNK_BYTES;
+      const hasRealContent = slot.totalMediaBytes >= clientConfig.playback.minRealChunkBytes;
       if (!hasRealContent) {
         slot.span.addEvent("chunk_no_real_content");
       }
@@ -214,6 +214,23 @@ export class ChunkPipeline {
   /** Resume both slots' readers. */
   resumeAll(): void {
     this.foreground?.svc.resume();
+    this.lookahead?.svc.resume();
+  }
+
+  /** Pause only the lookahead's reader. Used by the user-pause prefetch path:
+   *  open chunk N+1 as a lookahead so server keeps the connection alive past
+   *  the orphan_no_connection 30 s timer, but immediately suspend the read so
+   *  segments don't accumulate in the slot's queuedSegments RAM buffer for
+   *  the duration of the pause (could otherwise reach 200-400 MB on a 4K
+   *  pre-encode). ffmpeg keeps writing segments to disk regardless. */
+  pauseLookahead(): void {
+    this.lookahead?.svc.pause();
+  }
+
+  /** Resume only the lookahead's reader. Paired with pauseLookahead — called
+   *  on user resume so the lookahead starts pulling its on-disk segments
+   *  through to the queue, ready for promotion at the next chunk handover. */
+  resumeLookahead(): void {
     this.lookahead?.svc.resume();
   }
 
@@ -286,7 +303,6 @@ export class ChunkPipeline {
 
     void slot.svc.start(
       opts.jobId,
-      0,
       async (segData, isInit) => {
         // Lookahead slots queue segments instead of appending — see
         // `Slot.isLookahead` doc for the elst/init-clash rationale. The
@@ -318,7 +334,7 @@ export class ChunkPipeline {
           return;
         }
         // Foreground path: byte counter is accurate, decide outcome inline.
-        const hasRealContent = slot.totalMediaBytes >= MIN_REAL_CHUNK_BYTES;
+        const hasRealContent = slot.totalMediaBytes >= clientConfig.playback.minRealChunkBytes;
         const outcome: StreamOutcome = hasRealContent ? "completed" : "no_real_content";
         if (!hasRealContent) {
           span.addEvent("chunk_no_real_content");
@@ -360,7 +376,9 @@ export class ChunkPipeline {
         {
           attributes: {
             "chunk.job_id": slot.opts.jobId,
-            "chunk.number": Math.floor(slot.opts.chunkStartS / CHUNK_DURATION_S),
+            "chunk.number": Math.floor(
+              slot.opts.chunkStartS / clientConfig.playback.chunkDurationS
+            ),
             "chunk.start_s": slot.opts.chunkStartS,
             "chunk.segment_bytes": segData.byteLength,
             "playback.current_time_s_at_arrival": parseFloat(arrivalCurrentTime.toFixed(2)),
@@ -372,6 +390,14 @@ export class ChunkPipeline {
     }
 
     try {
+      if (isInit) {
+        // Re-anchor the SourceBuffer's coordinate system for this chunk —
+        // ffmpeg writes segments with relative tfdt (0+ within the chunk),
+        // so a chunk starting at chunkStartS=4200 needs the offset set
+        // before its first media segment lands. See `BufferManager.init`'s
+        // mode-comment for why MSE ignores ffmpeg's `elst` empty edit.
+        await this.buffer.setTimestampOffset(slot.opts.chunkStartS);
+      }
       await this.buffer.appendSegment(segData);
       firstAppendSpan?.end();
       if (isInit && slot.opts.isFirstChunk) {

@@ -15,7 +15,6 @@ export class StreamingService {
 
   async start(
     jobId: string,
-    fromIndex: number,
     onSegment: SegmentCallback,
     onError: ErrorCallback,
     onDone: () => void,
@@ -24,7 +23,7 @@ export class StreamingService {
     this.abortController = new AbortController();
     let response: Response;
 
-    const url = `/stream/${jobId}${fromIndex > 0 ? `?from=${fromIndex}` : ""}`;
+    const url = `/stream/${jobId}`;
     log.info(`Fetching ${url}`, { url, job_id: jobId });
 
     try {
@@ -82,15 +81,28 @@ export class StreamingService {
       // (from BufferManager's back-pressure callback) unblocks the loop
       // without any polling.
       while (true) {
+        // Snapshot the reader at the top of every iteration. cancel() (called
+        // by seek/teardown/resolution-switch) sets this.reader = null, and
+        // can fire while this loop is suspended at any await below. Without
+        // this snapshot, the next `this.reader.read()` after cancel hits a
+        // null deref — caught in trace 5d5b5137… as
+        // `Stream error: can't access property "read", this.reader is null`
+        // after two rapid seeks.
+        const reader = this.reader;
+        if (!reader) {
+          log.info("Reader nulled — exiting stream loop cleanly", { job_id: jobId });
+          return;
+        }
         if (this.paused) {
           // Suspend here until resume() calls this.resumeResolve().
           await new Promise<void>((resolve) => {
             this.resumeResolve = resolve;
           });
           if (!this.reader) return; // cancelled during pause
+          continue; // re-snapshot at top
         }
 
-        const { done, value } = await this.reader.read();
+        const { done, value } = await reader.read();
         if (done) break;
 
         // Concat incoming bytes onto buffer
@@ -112,6 +124,9 @@ export class StreamingService {
 
           const segData = buffer.slice(4, 4 + segLen).buffer;
           await onSegment(segData, isFirstSegment);
+          // cancel() can fire during await onSegment — bail before the next
+          // segment slice or pause-await touches this.reader.
+          if (!this.reader) return;
           isFirstSegment = false;
           segmentCount++;
 

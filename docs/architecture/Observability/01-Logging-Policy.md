@@ -140,7 +140,9 @@ killJob(id, "client_disconnected");
 // → span event: transcode_killed { kill_reason: "client_disconnected" }
 ```
 
-Standard kill reasons: `client_disconnected`, `stream_idle_timeout`, `orphan_no_connection`, `server_shutdown`.
+Standard kill reasons: `client_disconnected`, `stream_idle_timeout`, `orphan_no_connection`, `server_shutdown`, `max_encode_timeout`.
+
+`max_encode_timeout` fires when the server's wall-clock budget for a single ffmpeg process is exceeded. Budget = `(endTime - startTime) × 3 × 1000` ms (3× the chunk's nominal duration, covering SW-1080p worst-case). An absolute 1-hour cap applies for full-video transcodes where `endTime = videoDuration`. This kill runs alongside (not instead of) the `orphan_no_connection` 30 s kill — the orphan guard covers abandoned jobs, this covers stuck encodes that still have a live connection. Implemented via `maxEncodeTimer` in `chunker.ts`.
 
 For stream cleanup on the client side, log the segment count at the point of teardown so the message tells the whole story:
 
@@ -166,6 +168,16 @@ if (fatalError || this.seekAbort) {
 ```
 
 One `error` log per failure event. Twenty identical errors mean the loop is not guarded.
+
+## Span attribute shape: one-shot vs snapshot
+
+A long-lived span like `playback.session` can carry two kinds of attributes that must not be confused:
+
+**One-shot metrics** — set exactly once, guarded by a boolean (`firstFrameRecorded`, `firstPrefetchRecorded`). Use this for events that are intrinsically cold-start-scoped and must not be overwritten by seek-resumes or MSE recovery cycles. Examples: `playback.time_to_first_frame_ms`, `playback.time_to_first_prefetch_ms`. The guard resets only in `resetForNewSession`.
+
+**Snapshot / continuous metrics** — overwritten on each update cycle (e.g. `updateSessionTimelineAttrs()`). Use this for state that is always current and meaningful at span-end. Examples: `playback.foreground_chunk_start_s`, `playback.rolling_avg_first_byte_latency_ms`.
+
+Both patterns are valid. Choose by asking: "Is the first occurrence of this metric the load-bearing one, or is the most recent occurrence?"  If first-occurrence, use a one-shot guard. If most-recent, use a snapshot update. Don't mix them on the same metric.
 
 ## What NOT to log
 

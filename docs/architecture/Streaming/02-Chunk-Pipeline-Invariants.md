@@ -2,19 +2,45 @@
 
 The three load-bearing rules that keep chunked playback from skipping or stalling under foreground+lookahead concurrency. All three must hold simultaneously — violating any one silently breaks the buffered-range timeline. Each entry below names the symptom that exposed it (so a future regression is recognizable in a trace).
 
-## 1. Chunk PTS contract — `-output_ts_offset` + `mode = "segments"`
+## 1. Chunk PTS contract — raw tfdt + `mode = "segments"` + per-chunk `timestampOffset`
 
-Every chunk's segments are emitted with `-output_ts_offset {chunkStartSeconds}` so chunk N's segments live at PTS `[chunkStart, chunkEnd)` in the source-time timeline, NOT at PTS 0 (which is what ffmpeg's `-ss <start>` seek defaults to). Paired with the client's `sourceBuffer.mode = "segments"` (NOT `"sequence"`), this means each chunk's segments land at the correct buffer-time regardless of append order.
+The chunker spawns ffmpeg with `-ss <chunkStartS>`, no `-output_ts_offset`. ffmpeg's HLS-fmp4 muxer writes each chunk's segments with **raw `tfdt`** (0, 2, 4, …, relative to whatever `-ss` lands on). The init.mp4 is edit-list-free.
 
-Without the offset + segments-mode combo, parallel foreground+lookahead appends interleave at the buffer's timeline end (sequence-mode auto-advances `timestampOffset` per append) and the buffer balloons unbounded — observed as 426 MB / 128 s buffered ahead → `QuotaExceededError` × 3 → user-visible stall.
+`ChunkPipeline.processSegment` calls `BufferManager.setTimestampOffset(slot.opts.chunkStartS)` on every chunk's init append before the first media segment lands. The browser then resolves `timestampOffset + tfdt = source-time` per segment. A seek-anchored chunk requested at `seekTime = 4365` produces segment 0 with `tfdt = 0`, lands at playback position `4365 + 0 = 4365` — exactly where the user clicked.
 
-Code: `server/src/services/ffmpegFile.ts::applyOutputOptions` (offset emission), `client/src/services/bufferManager.ts::init` (mode flip).
+`mode = "segments"` (NOT `"sequence"`) is required because `"sequence"` auto-advances `timestampOffset` per append and would fight the explicit per-chunk assignment — segments would interleave from foreground+lookahead at the buffer's timeline end and the buffer would balloon unbounded (426 MB / 128 s buffered ahead → `QuotaExceededError` × 3 → user-visible stall, observed historically).
+
+### Forward play vs. seek anchoring
+
+- **Forward play / lookahead** chunks are anchored on the canonical 300 s grid (`chunkStartS = N × 300`) from chunk 2 onward. The **first chunk** in a new play session uses `[0, clientConfig.playback.firstChunkDurationS)` = `[0, 30)` rather than `[0, 300)`. This is a deliberate one-off cache key (distinct from any pre-existing `[0, 300)` warm entry) that shrinks the time-to-first-frame by letting the prefetch RAF fire at ~0 s rather than ~210 s, so chunk 2 (`[30, 330)`) starts encoding in parallel almost immediately. Subsequent chunks resume the canonical grid via the `nextSnap` cap. The cache-key (`jobId = sha1("v3|content|res|start|end")`) hits across replays for every chunk that falls on the canonical grid.
+- **Seek chunks** are anchored at the user's actual `seekTime` (NOT the snap boundary). This avoids forcing ffmpeg to encode the chunk-prefix segments the user doesn't need before producing their first useful one — the chunker spawns `-ss seekTime` so segment 0 is already what the user wants. The seek chunk window ends at `min(seekTime + clientConfig.playback.firstChunkDurationS, nextSnap, videoDurationS)` — the 30 s cap ensures the prefetch RAF trips immediately after the seek, eager-warming the next ffmpeg job in parallel. If `nextSnap` is closer than 30 s, the window is clamped to `nextSnap` so the continuation chunk (still requested on the canonical grid) is still cache-friendly.
+
+Trade-off: seek chunks are one-offs that don't cache across re-seeks. Re-seeking to the same exact second misses cache. Acceptable; interactive scrubbing dominates over second-precise re-seeking. Pre-fix evidence (trace `9da5539d…`): fresh-cache mid-chunk seek wall-clock latency was 16-60 s because ffmpeg had to grind through the chunk-prefix encode before reaching the user's segment. Post-fix: ~1-2 s (VAAPI cold-start + first-segment latency).
+
+Code: `client/src/services/bufferManager.ts::setTimestampOffset`, `client/src/services/chunkPipeline.ts::processSegment` (calls it on every `isInit === true`), `client/src/services/playbackController.ts::handleSeeking` (anchors at `seekTime`), `server/src/services/chunker.ts::jobId` (hash version `v3` — `v2` invalidated `output_ts_offset`-era chunks; `v3` invalidates chunks encoded without the `dump_extra=keyframe` BSF, see § 1a).
+
+### 1a. Encoder must inject SPS/PPS in-band on every keyframe
+
+ffmpeg writes SPS/PPS NAL units only into init.mp4's `avcC` box by default. Chromium's chunk demuxer needs them in-band on every keyframe to reset its decoder context across fragment seams; without them, `appendBuffer()` accepts the bytes silently but the demuxer can fail at the sample-prepare step and Chromium internally calls `endOfStream(decode_error)` on the MediaSource — sealing it permanently with no JavaScript-visible event other than `videoEl.error` (`code = 3`, `MEDIA_ERR_DECODE`) and the `sourceended` MediaSource event. Trace `38e711a9…` captured this: 5.6 s after a fresh seek, the demuxer rejected a video sample and 16 ms later the MS was sealed.
+
+`server/src/services/ffmpegFile.ts::applyOutputOptions` adds `-bsf:v dump_extra=keyframe` to both encoder branches (libx264 software, h264_vaapi). The bitstream filter is encoder-agnostic — it injects SPS/PPS NAL units before every keyframe in the encoded output, regardless of which encoder produced the frame.
+
+Defense-in-depth: if a future codec bug or unknown-Chromium-behaviour still flips MS to `"ended"` mid-playback, `BufferManager.init`'s `sourceended` event listener invokes `onMseDetached` (when `streamDone === false`) which routes through to `PlaybackController.handleMseDetached` — the existing per-session 3-recreate budget rebuilds the MediaSource at the user's current position. Diagnostic listeners on `sourceended` / `sourceclose` / `videoEl.error` are kept in place for future regressions.
+
+`handleMseDetached` is the single convergence point for two distinct Chromium failure modes:
+
+1. **Explicit SB detach under memory pressure** — `InvalidStateError` from `appendBuffer` with `source_buffer_in_ms_list: false` (trace `65ef5d6c`). Detected in `BufferManager.drainQueue`.
+2. **`endOfStream(decode_error)` from the chunk demuxer** — MS sealed with no JS-visible exception; surfaces via the `sourceended` listener when `streamDone === false` (trace `38e711a9`). Added after the `dump_extra=keyframe` BSF fix reduced but did not eliminate the path.
+
+When the 3-recreate budget is exhausted, the surfaced error code is `MSE_DETACHED` for both paths. The code is intentionally not renamed to `MSE_RECOVERY_EXHAUSTED` or similar: (a) it is client-only — never crosses the wire, no external consumer; (b) from the retry-policy and error-overlay perspective both paths mean the same thing ("MSE session unrecoverable, rebuild budget spent"); (c) the rename cost (propagates across `playbackErrors.ts`, `playbackController.ts`, Seq filter strings, ADR, this doc) is not worth the marginal precision gain on a defensive path the user rarely sees.
+
+Code: `server/src/services/ffmpegFile.ts::applyOutputOptions` (BSF), `client/src/services/bufferManager.ts::init` (sourceended listener + recovery hook), `client/src/services/playbackController.ts::handleMseDetached` (rebuild — now seek-anchored, resumes at `videoEl.currentTime` directly per § 1).
 
 ## 2. Per-chunk init segments are required
 
-`ChunkPipeline.openSlot` appends every chunk's `init.mp4` to the SourceBuffer, including continuations (chunks N>0). Each chunk's ffmpeg encode emits its own `elst` (edit list) box carrying that chunk's source-time lead-in offset; without re-appending the init, chunk N's media segments are parsed against chunk 0's edit list and Chrome silently drops them — they land in the SourceBuffer (bytes counter rises) but never extend `sb.buffered` past chunk 0's PTS.
+`ChunkPipeline.openSlot` appends every chunk's `init.mp4` to the SourceBuffer, including continuations (chunks N>0). The init append is the moment `setTimestampOffset(chunkStartS)` is applied (see Invariant #1) — without it, chunk N's segments would land at the previous chunk's offset and overwrite the buffered range.
 
-Trace `8281b0fb…` confirmed this empirically (chunks 2-3 streamed cleanly with TFDT 300+/600+ but `sb.buffered` stayed capped at 300.04, playhead skipped past them). SPS/PPS are identical across our chunk encodes (only `elst` differs), so re-init causes at most a one-frame decoder hiccup, not a stall — the earlier "no continuation init" defensive filter was wrong.
+Historically (pre-`v2` cached chunks) the init also carried an `elst` empty edit derived from `-output_ts_offset`. That mechanism is gone — the chunker no longer emits `-output_ts_offset` and the muxer therefore writes no `elst`. Future re-init still costs at most a one-frame decoder hiccup (SPS/PPS are identical across same-resolution chunks), so re-init is structurally cheap and behaviourally required by the timestampOffset contract.
 
 Code: `client/src/services/chunkPipeline.ts::processSegment` (init flows through to BufferManager unconditionally).
 
@@ -49,5 +75,6 @@ A trace where the playhead "skips" a whole chunk and later stalls is almost alwa
 
 | Constant | Value | Source | Role |
 |---|---|---|---|
-| `MIN_REAL_CHUNK_BYTES` | `1024` | [`client/src/services/playbackConfig.ts:39`](../../../client/src/services/playbackConfig.ts) | Threshold under which a finished chunk's `slot.totalMediaBytes` is treated as a placeholder (ffmpeg emits a ~24-byte tail when `-ss <start>` lands past the encoded content). At 1024 we sit comfortably above any placeholder ffmpeg has been observed to write and well below any real fmp4 init+segment, so the "completed" vs "no_real_content" outcome decision is unambiguous. Drives whether `dispatchOutcome` calls `BufferManager.markStreamDone()` (which fires `MediaSource.endOfStream()`). The `chunk_no_real_content` event on the `chunk.stream` span is the trace-side signal. |
+| `clientConfig.playback.firstChunkDurationS` | `30` | [`client/src/config/appConfig.ts`](../../../client/src/config/appConfig.ts) | Window length of the first chunk after Play and after a seek. Short enough that `clientConfig.playback.prefetchThresholdS = 90` trips almost immediately (at `currentTime ≥ firstChunkDurationS − 90`, clamped to 0), eager-warming ffmpeg for the next chunk in parallel. Reduces time-to-first-frame and time-to-first-frame-after-seek by overlapping chunk N+1's ffmpeg cold-start with chunk N's initial fill. Does not affect the steady-state 300 s cadence. |
+| `clientConfig.playback.minRealChunkBytes` | `1024` | [`client/src/config/appConfig.ts`](../../../client/src/config/appConfig.ts) | Threshold under which a finished chunk's `slot.totalMediaBytes` is treated as a placeholder (ffmpeg emits a ~24-byte tail when `-ss <start>` lands past the encoded content). At 1024 we sit comfortably above any placeholder ffmpeg has been observed to write and well below any real fmp4 init+segment, so the "completed" vs "no_real_content" outcome decision is unambiguous. Drives whether `dispatchOutcome` calls `BufferManager.markStreamDone()` (which fires `MediaSource.endOfStream()`). The `chunk_no_real_content` event on the `chunk.stream` span is the trace-side signal. |
 

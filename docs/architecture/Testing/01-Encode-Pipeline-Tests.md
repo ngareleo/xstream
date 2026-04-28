@@ -13,7 +13,7 @@ The `/setup-local` skill has a step that prompts for this directory and writes i
 For each `(fixture, resolution)` combination:
 
 - **Sequential consecutive encodes** — chunks 0..3 in order. Each completes, segments hit disk, init.mp4 + at least one `*.m4s` per job.
-- **Concurrent foreground+lookahead pair** — chunks 0 and 1 fired via `Promise.all`. Both complete, neither starves the other, and the chunk-1 first packet's PTS is within ±1 s of `chunkStartSeconds` (the [chunk PTS contract](../Streaming/02-Chunk-Pipeline-Invariants.md#1-chunk-pts-contract------output_ts_offset--mode--segments) — without `-output_ts_offset`, chunk-1 PTS would be ~0).
+- **Concurrent foreground+lookahead pair** — chunks 0 and 1 fired via `Promise.all`. Both complete, neither starves the other, and the chunk-1 first packet's PTS is within ±1 s of `chunkStartSeconds` (the [chunk PTS contract](../Streaming/02-Chunk-Pipeline-Invariants.md#1-chunk-pts-contract--raw-tfdt--mode--segments--per-chunk-timestampoffset) — the client's `BufferManager.setTimestampOffset(chunkStartS)` maps raw `tfdt`-relative segments to source-time; without it, chunk-1 PTS would be ~0).
 
 For 4K resolution on hosts with a working iGPU:
 

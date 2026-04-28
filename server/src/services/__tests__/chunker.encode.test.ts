@@ -35,7 +35,7 @@ import {
 } from "../../test/encodeHarness.js";
 import { drainCapturedSpans, resetCapturedSpans } from "../../test/traceCapture.js";
 import type { Resolution } from "../../types.js";
-import { killAllActiveJobs } from "../chunker.js";
+import { killAllJobs } from "../ffmpegPool.js";
 
 // ── Suite-wide setup ────────────────────────────────────────────────────────
 
@@ -66,7 +66,7 @@ const hwAvailable: boolean = await (async () => {
 
 describe.skipIf(skipSuite)("chunker encode pipeline", () => {
   afterAll(async () => {
-    await killAllActiveJobs(5_000);
+    await killAllJobs(5_000);
   });
 
   // ── Per-fixture × per-resolution structural tests ────────────────────────

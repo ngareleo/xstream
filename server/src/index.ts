@@ -9,8 +9,8 @@ import { config } from "./config.js";
 import { closeDb, getDb } from "./db/index.js";
 import { schema, yoga } from "./routes/graphql.js";
 import { handleStream } from "./routes/stream.js";
-import { killAllActiveJobs } from "./services/chunker.js";
 import { resolveFfmpegPaths } from "./services/ffmpegPath.js";
+import { killAllJobs } from "./services/ffmpegPool.js";
 import { detectHwAccel } from "./services/hwAccel.js";
 import { restoreInterruptedJobs } from "./services/jobRestore.js";
 import { scanLibraries } from "./services/libraryScanner.js";
@@ -117,7 +117,7 @@ async function bootstrap(): Promise<void> {
 
 async function shutdown(signal: string): Promise<void> {
   log.info("Shutdown initiated", { signal });
-  await killAllActiveJobs(5000);
+  await killAllJobs(5000);
   closeDb();
   log.info("Shutdown complete");
   process.exit(0);

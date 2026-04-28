@@ -27,8 +27,8 @@ const data = useLazyLoadQuery<LibraryPageQuery>(LIBRARIES_QUERY, {});
 ```
 
 ```tsx
-// ❌ wrong — in src/components/VideoCard.tsx
-const data = useLazyLoadQuery<VideoCardQuery>(SOME_QUERY, { id }); // don't do this
+// ❌ wrong — in src/components/poster-card/PosterCard.tsx
+const data = useLazyLoadQuery<PosterCardQuery>(SOME_QUERY, { id }); // don't do this
 ```
 
 ### 2. Components declare data with fragments
@@ -36,9 +36,9 @@ const data = useLazyLoadQuery<VideoCardQuery>(SOME_QUERY, { id }); // don't do t
 Every component that reads GraphQL data must declare a fragment on the exact type it needs and call `useFragment` to access it. The fragment key (`$key` type) is the only prop the component receives from its parent.
 
 ```tsx
-// src/components/VideoCard.tsx
+// src/components/poster-card/PosterCard.tsx
 const VIDEO_FRAGMENT = graphql`
-  fragment VideoCard_video on Video {
+  fragment PosterCard_video on Video {
     id
     title
     durationSeconds
@@ -47,10 +47,10 @@ const VIDEO_FRAGMENT = graphql`
 `;
 
 interface Props {
-  video: VideoCard_video$key; // ← fragment key, NOT the raw data
+  video: PosterCard_video$key; // ← fragment key, NOT the raw data
 }
 
-export function VideoCard({ video }: Props) {
+export function PosterCard({ video }: Props) {
   const data = useFragment(VIDEO_FRAGMENT, video);
   // use data.title, data.durationSeconds, etc.
 }
@@ -61,8 +61,8 @@ export function VideoCard({ video }: Props) {
 Fragments must be named `<ComponentName>_<propName>`:
 
 ```graphql
-fragment VideoCard_video on Video { ... }   # ✅
-fragment VideoCardFragment on Video { ... } # ❌
+fragment PosterCard_video on Video { ... }   # ✅
+fragment PosterCardFragment on Video { ... } # ❌
 ```
 
 The relay-compiler enforces this if you configure `fragmentNameSuffix`.

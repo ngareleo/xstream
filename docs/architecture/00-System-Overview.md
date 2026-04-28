@@ -49,7 +49,7 @@ xstream is split into two workspaces: a Bun server and an Rsbuild/React client. 
 | Query layer | `src/db/queries/` | All SQL — one file per table |
 | Library scanner | `src/services/libraryScanner.ts` | Walks media directories, runs ffprobe + content fingerprint concurrently per file, upserts DB |
 | Scan store | `src/services/scanStore.ts` | In-memory scan state pub/sub; exposes `isScanRunning`, `markScanStarted/Ended`, async `subscribeToScan()` |
-| Chunker | `src/services/chunker.ts` | Manages ffmpeg jobs, watches output dir, updates jobStore + DB; `killAllActiveJobs()` for graceful shutdown |
+| Chunker | `src/services/chunker.ts` | Manages ffmpeg jobs, watches output dir, updates jobStore + DB. Process-pool concerns (cap, kill/SIGKILL escalation, `killAllJobs()` for graceful shutdown) live in `src/services/ffmpegPool.ts`. |
 | Job store | `src/services/jobStore.ts` | In-memory map of active jobs (source of truth for streaming) |
 | GraphQL handler | `src/routes/graphql.ts` | graphql-yoga instance with schema and CORS config |
 | Stream handler | `src/routes/stream.ts` | Reads segments from jobStore, writes length-prefixed binary frames |
@@ -74,5 +74,5 @@ xstream is split into two workspaces: a Bun server and an Rsbuild/React client. 
 | Control bar | `src/components/control-bar/ControlBar.tsx` | Seek slider, play/pause, resolution selector; raises events via `useNovaEventing().bubble()` |
 | Control bar events | `src/components/control-bar/ControlBar.events.ts` | Event type constants, factory functions, and type guards for ControlBar events |
 | Chunked playback hook | `src/hooks/useChunkedPlayback.ts` | Client-driven chunk scheduling, prefetch, seek restart, resolution switch via background buffer |
-| Streaming service | `src/services/StreamingService.ts` | Fetch loop, length-prefix frame parser, pause/resume/cancel |
-| Buffer manager | `src/services/BufferManager.ts` | MSE SourceBuffer wrapper, sliding window eviction, back-pressure, `setAfterAppend` notification |
+| Streaming service | `src/services/streamingService.ts` | Fetch loop, length-prefix frame parser, pause/resume/cancel |
+| Buffer manager | `src/services/bufferManager.ts` | MSE SourceBuffer wrapper, sliding window eviction, back-pressure, `setAfterAppend` notification |

@@ -9,7 +9,7 @@
  *     boundaries. Surfacing the predictions as span attributes makes the
  *     mismatch visible at a glance.
  *  2. Regression detection. The `onDrift` callback fires when an actual event
- *     diverges from the prediction by more than `DRIFT_THRESHOLD_MS`,
+ *     diverges from the prediction by more than `clientConfig.playback.driftThresholdMs`,
  *     producing a `playback.timeline_drift` event in the session span. A
  *     trace with a drift event is a trace whose pipeline timing changed
  *     unexpectedly relative to the recent baseline.
@@ -20,9 +20,7 @@
  * rolling avg of prior handovers in this session.
  */
 
-const DRIFT_THRESHOLD_MS = 5000;
-/** Number of recent first-byte latencies kept for the rolling average. */
-const ROLLING_WINDOW = 5;
+import { clientConfig } from "~/config/appConfig.js";
 
 export interface PlaybackTimelineDrift {
   dimension: "lookahead_first_byte";
@@ -88,7 +86,7 @@ export class PlaybackTimeline {
     if (predictedLatency !== null) {
       const predictedAtMs = this.lookaheadOpenedAtMs + predictedLatency;
       const driftMs = actualAtMs - predictedAtMs;
-      if (Math.abs(driftMs) > DRIFT_THRESHOLD_MS) {
+      if (Math.abs(driftMs) > clientConfig.playback.driftThresholdMs) {
         this.events.onDrift({
           dimension: "lookahead_first_byte",
           predictedAtMs,
@@ -100,7 +98,7 @@ export class PlaybackTimeline {
     }
 
     this.firstByteLatenciesMs.push(latencyMs);
-    if (this.firstByteLatenciesMs.length > ROLLING_WINDOW) {
+    if (this.firstByteLatenciesMs.length > clientConfig.playback.rollingFirstByteWindow) {
       this.firstByteLatenciesMs.shift();
     }
   }

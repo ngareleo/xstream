@@ -14,11 +14,14 @@ export type PlaybackErrorCode =
   | "VIDEO_NOT_FOUND"
   | "PROBE_FAILED"
   | "ENCODE_FAILED"
-  /** Chrome detached our SourceBuffer from the MediaSource (cumulative MSE
-   * budget exceeded). Recoverable via MediaSource recreate + resume at
-   * currentTime — handled inside PlaybackController, not by the requestChunk
-   * retry loop. Surfaces here so the user-facing error overlay can show a
-   * meaningful line if the recreate path is exhausted. */
+  /** MSE session became unrecoverable and the 3-recreate budget is exhausted.
+   * Two paths converge here: (1) Chrome silently detached our SourceBuffer
+   * under memory pressure (`InvalidStateError` + `source_buffer_in_ms_list:
+   * false`); (2) Chromium's chunk demuxer called `endOfStream(decode_error)`
+   * internally, sealing the MediaSource while `streamDone === false`.
+   * Both are handled inside `PlaybackController.handleMseDetached`; this code
+   * surfaces on the error overlay if all 3 rebuild attempts fail. Client-only —
+   * never crosses the wire. */
   | "MSE_DETACHED"
   | "INTERNAL";
 

@@ -43,6 +43,23 @@ export const useControlBarStyles = makeStyles({
     borderRadius: "2px",
     pointerEvents: "none",
   },
+  trackTooltip: {
+    position: "absolute",
+    bottom: "calc(100% + 10px)",
+    transform: "translateX(-50%)",
+    backgroundColor: tokens.colorSurface2,
+    color: tokens.colorWhite,
+    fontSize: "11px",
+    fontFamily: tokens.fontMono,
+    fontVariantNumeric: "tabular-nums",
+    letterSpacing: "-0.02em",
+    padding: "4px 8px",
+    borderRadius: tokens.radiusSm,
+    border: `1px solid ${tokens.colorBorder}`,
+    pointerEvents: "none",
+    whiteSpace: "nowrap",
+    zIndex: "10",
+  },
 
   // ── Controls row ───────────────────────────────────────────────────────────
   row: {

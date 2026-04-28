@@ -43,22 +43,30 @@ Without this, a lookahead chunk already downloaded at the segment level could st
 
 ## MSE detach recovery (`MSE_DETACHED`)
 
-Chrome may silently remove a `SourceBuffer` from `MediaSource.sourceBuffers` under memory pressure. The symptom is `InvalidStateError` from `appendBuffer` with `source_buffer_in_ms_list: false` in the `appendBuffer error` log (trace `65ef5d6c`).
+`PlaybackController.handleMseDetached` is the single convergence point for two Chromium failure modes that both make the current `MediaSource` session unrecoverable:
+
+| Trigger | Symptom | Detection point |
+|---|---|---|
+| Memory-pressure SB eviction | `InvalidStateError` from `appendBuffer` with `source_buffer_in_ms_list: false` | `BufferManager.drainQueue` fires `onMseDetached` callback (trace `65ef5d6c`) |
+| Chunk-demuxer `endOfStream(decode_error)` | MS sealed; `videoEl.error.code === 3` + `sourceended` fires while `streamDone === false` | `BufferManager.init` `sourceended` listener fires `onMseDetached` (trace `38e711a9`) |
+
+The second path can occur even with the `-bsf:v dump_extra=keyframe` BSF in place — the BSF eliminates the most common trigger but does not foreclose all unknown Chromium-internal decoder-reset scenarios.
 
 ### Detection
 
-`BufferManager.drainQueue` already logs `source_buffer_in_ms_list` on every `appendBuffer` error. When the error name is `InvalidStateError` AND `source_buffer_in_ms_list === false`, the optional `onMseDetached` callback is fired.
+- **Path 1 (appendBuffer error):** `BufferManager.drainQueue` logs `source_buffer_in_ms_list` on every `appendBuffer` error. When `err.name === "InvalidStateError"` and `source_buffer_in_ms_list === false`, the `onMseDetached` callback is fired.
+- **Path 2 (sourceended):** `BufferManager.init` registers a `sourceended` listener on the `MediaSource`. When it fires while `streamDone === false`, the same `onMseDetached` callback is fired.
 
 ### Recovery
 
 `PlaybackController.handleMseDetached(res)`:
 
 1. Tears down `BufferManager` and the current chunk pipeline.
-2. Rebuilds both at the floor-aligned chunk boundary of `video.currentTime` (same logic as a seek).
-3. Re-initialises MSE and restarts the chunk series from that boundary.
+2. Rebuilds both anchored at `videoEl.currentTime` directly (seek-anchored — same rationale as the seek path; no snap math).
+3. Re-initialises MSE and restarts the chunk series from that position.
 4. Budget: **3 recreates per session**. Beyond that, surfaces a fatal `MSE_DETACHED` error to the user via the playback error contract.
 
-`MSE_DETACHED` is a value in `PlaybackErrorCode` (client-only — it never crosses the wire) and in `client/src/services/playbackErrors.ts`.
+`MSE_DETACHED` is a value in `PlaybackErrorCode` (client-only — it never crosses the wire). It is intentionally not renamed to reflect the two-path coverage: from the retry-policy and error-overlay perspective both paths mean "MSE session is unrecoverable, rebuild budget spent." See `02-Chunk-Pipeline-Invariants.md § 1a` for the full rationale.
 
 ### Observability
 

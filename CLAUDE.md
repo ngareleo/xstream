@@ -58,6 +58,15 @@ xstream/
     └── utils/                      # pure helpers — formatters, lazy
 ```
 
+## Engineering principles
+
+Two non-negotiables that govern how bugs and unknowns are approached:
+
+- **Fix root causes, not symptoms.** When a bug's cause is unknown, the plan starts with *find the cause* — usually by adding the diagnostic instrumentation that's currently missing. Do not propose a behavioural workaround in the same plan. If a workaround already exists in production, the plan to address the underlying bug must include removing it, not leave it indefinitely. Reject patterns like *bump the constant past the failing threshold*, *force the fallback path that's worse*, *add a special-case branch that sidesteps the broken code* — each wins time-to-recovery at the cost of permanent debt. "If we don't know, we investigate" is the default.
+- **Don't weaken safety timeouts as a bug fix.** Safety timeouts encode intent; if a legit case looks like an abandonment, fix the structural reason — don't bump the timer. Same shape as the rule above, narrower domain.
+
+Both rules pair with the existing `docs/code-style/Anti-Patterns/00-What-Not-To-Do.md` list. When a plan or PR seems to violate either, surface that fact before shipping.
+
 ## Code style and invariants
 
 Full content lives under `docs/code-style/`. Agents working on code MUST respect these — they are the non-negotiables, not suggestions.

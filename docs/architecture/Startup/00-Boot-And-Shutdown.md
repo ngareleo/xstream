@@ -13,7 +13,7 @@
 
 SIGTERM and SIGINT handlers call `shutdown()`:
 
-1. `killAllActiveJobs()` — sends SIGTERM to every running ffmpeg process
+1. `killAllJobs(5000)` from `server/src/services/ffmpegPool.ts` — sends SIGTERM to every live ffmpeg process, waits up to 5 s, then SIGKILL any that are still alive. Per-job SIGKILL escalation (2 s) fires first, so laggards are usually gone before the 5 s sweep expires.
 2. `closeDb()` — closes the SQLite connection (flushes WAL)
 3. `process.exit(0)`
 

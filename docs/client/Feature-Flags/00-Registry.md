@@ -8,6 +8,8 @@ This file is the authoritative catalog of feature flags the app ships with.
 
 The declaration side of the contract lives in `client/src/config/flagRegistry.ts`; the runtime (cache, hydration, pub/sub) lives in `client/src/config/featureFlags.ts`. See `CLAUDE.md` → *Add a new feature flag* for the step-by-step addition recipe.
 
+Compile-time defaults (the fallback layer under feature flags) live in `client/src/config/appConfig.ts`. See [`../Config/00-ClientConfig.md`](../Config/00-ClientConfig.md) for the two-layer model and the full knob table.
+
 ## How flags work today
 
 Per-user persistence. Each flag maps to a row in the server's `user_settings` key/value table (one row per `(userId, key)` pair — today there is effectively one user, but the shape is already per-user). On app boot, `FeatureFlagsProvider` issues a single bulk `settings(keys)` GraphQL query for every key in `FLAG_REGISTRY` and hydrates the module-level cache in `featureFlags.ts`. From that point on:
@@ -27,15 +29,19 @@ Flags are grouped by `category` in the Settings → Flags tab.
 
 | Key | Type | Default | Range | Purpose |
 |---|---|---|---|---|
-| `flag.experimentalBuffer` | boolean | `false` | — | Master switch for the buffer tuning overrides below. When off, `PlaybackController` ignores the per-flag values and uses `DEFAULT_BUFFER_CONFIG` (60 s target / 20 s resume / 10 s back-keep). When on, the two `config.buffer*` values below are read at `new BufferManager(...)` time. |
-| `config.bufferForwardTargetS` | number | `DEFAULT_BUFFER_CONFIG.forwardTargetS` (currently 60) | `[2, 120]` step `1` | Pause the stream when `bufferedAhead` exceeds this many seconds. Raising this increases peak resident buffer memory (at 4K, 70 s ≈ 133 MB); lowering it risks underruns on bursty networks. Only applied when `flag.experimentalBuffer` is on. |
-| `config.bufferForwardResumeS` | number | `DEFAULT_BUFFER_CONFIG.forwardResumeS` (currently 20) | `[0, 60]` step `1` | Resume the stream when `bufferedAhead` drops below this many seconds. The gap to the target is the hysteresis width — narrower gaps cause rapid pause/resume churn, wider gaps produce longer halts. Values below ~5 s are risky (a single network hiccup during refill can drain to 0 and stall the video). Only applied when `flag.experimentalBuffer` is on. |
+| `flag.experimentalBuffer` | boolean | `false` | — | Master switch for the buffer tuning overrides below. When off, `PlaybackController` ignores the per-flag values and uses `clientConfig.buffer` (60 s target / 20 s resume / 10 s back-keep). When on, the two `config.buffer*` values below are read at `new BufferManager(...)` time. |
+| `config.bufferForwardTargetS` | number | `clientConfig.buffer.forwardTargetS` (60) | `[2, 120]` step `1` | Pause the stream when `bufferedAhead` exceeds this many seconds. Raising this increases peak resident buffer memory (at 4K, 70 s ≈ 133 MB); lowering it risks underruns on bursty networks. Only applied when `flag.experimentalBuffer` is on. |
+| `config.bufferForwardResumeS` | number | `clientConfig.buffer.forwardResumeS` (20) | `[0, 60]` step `1` | Resume the stream when `bufferedAhead` drops below this many seconds. The gap to the target is the hysteresis width — narrower gaps cause rapid pause/resume churn, wider gaps produce longer halts. Values below ~5 s are risky (a single network hiccup during refill can drain to 0 and stall the video). Only applied when `flag.experimentalBuffer` is on. |
 
 For the full tradeoff explainer (mental model, memory table per resolution, chunks vs segments vs buffer), see [`Streaming Protocol → Hysteresis: tuning the gap`](./Streaming%20Protocol.md#hysteresis-tuning-the-gap).
 
 ### telemetry, ui, experimental
 
-No flags registered yet. The categories exist so future flags can slot in without a UI change.
+| Key | Type | Default | Category | Purpose |
+|---|---|---|---|---|
+| `flag.devForceShortChunkAtZero` | boolean | `false` | `experimental` | Dev-only escape hatch. When on, bypasses the three `startS === 0` guards in `PlaybackController` (`startPlayback`, `startChunkSeries`, `handleSeeking`) so a cold-start or seek-to-0 issues a short (30 s) first chunk even at position 0. Used to reproduce the VAAPI HDR silent-zero-output bug (`-ss 0 -t 30` exits cleanly with `segmentCount: 0`) and capture its stderr. Ships off by default; remove when the root-cause fix lands. |
+
+**Convention — `experimental` category:** flags in this category are dev-only escape hatches that ship off by default. They exist to reproduce or diagnose specific bugs and are expected to be removed once the root-cause fix lands. Do not surface them in release builds; they bypass production safety guards.
 
 ## Naming convention
 

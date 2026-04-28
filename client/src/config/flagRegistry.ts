@@ -13,7 +13,7 @@
  * grouped by `category` and displayed together in the UI.
  */
 
-import { DEFAULT_BUFFER_CONFIG } from "~/services/bufferConfig.js";
+import { clientConfig } from "~/config/appConfig.js";
 
 export type FlagValueType = "boolean" | "number";
 export type FlagValue = boolean | number;
@@ -39,6 +39,14 @@ export const FLAG_KEYS = {
   experimentalBuffer: "flag.experimentalBuffer",
   bufferForwardTargetS: "config.bufferForwardTargetS",
   bufferForwardResumeS: "config.bufferForwardResumeS",
+  /** Dev-only escape hatch for reproducing the VAAPI HDR 4K silent-failure
+   *  bug (`-ss 0 -t 30` produces zero segments — see
+   *  `docs/server/Hardware-Acceleration/01-HDR-Pad-Artifact.md`). When ON,
+   *  the client uses `FIRST_CHUNK_DURATION_S` even at `startS === 0` so the
+   *  bug fires and `transcode_silent_failure` events land in Seq with
+   *  ffmpeg stderr captured. Default OFF; remove once the root cause is
+   *  fixed (Phase 5 of the plan). */
+  devForceShortChunkAtZero: "flag.devForceShortChunkAtZero",
 } as const;
 
 export const FLAG_REGISTRY: readonly FlagDescriptor[] = [
@@ -46,7 +54,7 @@ export const FLAG_REGISTRY: readonly FlagDescriptor[] = [
     key: FLAG_KEYS.experimentalBuffer,
     name: "Experimental buffer tuning",
     description:
-      "When on, the next playback session uses the buffer values below instead of the defaults. Off falls back to DEFAULT_BUFFER_CONFIG.",
+      "When on, the next playback session uses the buffer values below instead of the defaults. Off falls back to clientConfig.buffer.",
     valueType: "boolean",
     defaultValue: false,
     category: "playback",
@@ -56,7 +64,7 @@ export const FLAG_REGISTRY: readonly FlagDescriptor[] = [
     name: "Buffer forward target (s)",
     description: "Pause the stream when bufferedAhead exceeds this many seconds.",
     valueType: "number",
-    defaultValue: DEFAULT_BUFFER_CONFIG.forwardTargetS,
+    defaultValue: clientConfig.buffer.forwardTargetS,
     category: "playback",
     min: 2,
     max: 120,
@@ -68,10 +76,19 @@ export const FLAG_REGISTRY: readonly FlagDescriptor[] = [
     description:
       "Resume the stream when bufferedAhead drops below this. Gap to target is the hysteresis width — narrower gaps cause rapid pause/resume churn.",
     valueType: "number",
-    defaultValue: DEFAULT_BUFFER_CONFIG.forwardResumeS,
+    defaultValue: clientConfig.buffer.forwardResumeS,
     category: "playback",
     min: 0,
     max: 60,
     step: 1,
+  },
+  {
+    key: FLAG_KEYS.devForceShortChunkAtZero,
+    name: "Dev: force short first chunk at startS=0",
+    description:
+      "Reproduces the VAAPI HDR 4K silent-failure bug. When ON, cold-start uses FIRST_CHUNK_DURATION_S=30 instead of the safe 300s window, so the failure mode triggers and `transcode_silent_failure` events land in Seq for diagnosis. Leave OFF unless investigating.",
+    valueType: "boolean",
+    defaultValue: false,
+    category: "experimental",
   },
 ];

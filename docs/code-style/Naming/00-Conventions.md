@@ -2,9 +2,9 @@
 
 | What | Pattern | Examples |
 |---|---|---|
-| React component (`.tsx` exporting a component) | `PascalCase.tsx` | `VideoCard.tsx`, `ControlBar.tsx`, `DashboardPage.tsx` |
+| React component (`.tsx` exporting a component) | `PascalCase.tsx` | `PosterCard.tsx`, `ControlBar.tsx`, `DashboardPage.tsx` |
 | React component folder | `kebab-case/` | `video-card/`, `control-bar/`, `dashboard-page/` |
-| Component-satellite files (same folder) | mirror the component's PascalCase prefix | `VideoCard.styles.ts`, `VideoCard.strings.ts`, `VideoCard.events.ts`, `VideoCard.stories.tsx` |
+| Component-satellite files (same folder) | mirror the component's PascalCase prefix | `PosterCard.styles.ts`, `PosterCard.strings.ts`, `PosterCard.events.ts`, `PosterCard.stories.tsx` |
 | Anything else (hook, util, service, config, test, server file) | `camelCase.ts` | `useChunkedPlayback.ts`, `formatters.ts`, `chunkPipeline.ts`, `chunker.ts`, `streamingService.test.ts` |
 
 **Files exporting a class are still camelCase.** The class name stays PascalCase; the filename does not mirror it. The PascalCase-mirrors-filename rule applies only to React components and their satellites.

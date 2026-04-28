@@ -9,8 +9,7 @@
  * query. Once hydrated, `getFlag(key, default)` returns synchronously.
  */
 
-import { type BufferConfig, DEFAULT_BUFFER_CONFIG } from "~/services/bufferConfig.js";
-
+import { type BufferConfig, clientConfig } from "./appConfig.js";
 import { FLAG_KEYS, FLAG_REGISTRY, type FlagValue, type FlagValueType } from "./flagRegistry.js";
 
 const cache = new Map<string, FlagValue>();
@@ -82,16 +81,16 @@ export function getFlagsSnapshot(): number {
  */
 export function getEffectiveBufferConfig(): BufferConfig {
   const experimental = getFlag<boolean>(FLAG_KEYS.experimentalBuffer, false);
-  if (!experimental) return DEFAULT_BUFFER_CONFIG;
+  if (!experimental) return clientConfig.buffer;
   return {
-    ...DEFAULT_BUFFER_CONFIG,
+    ...clientConfig.buffer,
     forwardTargetS: getFlag<number>(
       FLAG_KEYS.bufferForwardTargetS,
-      DEFAULT_BUFFER_CONFIG.forwardTargetS
+      clientConfig.buffer.forwardTargetS
     ),
     forwardResumeS: getFlag<number>(
       FLAG_KEYS.bufferForwardResumeS,
-      DEFAULT_BUFFER_CONFIG.forwardResumeS
+      clientConfig.buffer.forwardResumeS
     ),
   };
 }

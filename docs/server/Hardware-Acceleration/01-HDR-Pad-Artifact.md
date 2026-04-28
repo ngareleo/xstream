@@ -12,6 +12,7 @@ The original title of this file was "HDR Pad Artifact" because the first symptom
 | Encoder exits with libva `-38` ("Function not implemented") at the pad or encoder boundary | `pad_vaapi` rejects surfaces downstream of an HDR/DV source on the current driver stack (empirically, on every chunk) |
 | Encoder exits with libva `-38` even after dropping `pad_vaapi` | `-colorspace bt709 -color_primaries bt709 -color_trc bt709` as output flags forces ffmpeg to insert an auto-scaler to bridge the surface's inherited BT.2020 metadata to the tagged BT.709 output — libva rejects the bridge in the encode pipeline |
 | `transcode_fallback_to_software` event fires on every HDR chunk; `hwaccel: software` on `transcode.job` span | Any of the above not handled; the 3-tier cascade fell through to libx264 (which stalls continuously at 4K) |
+| `transcode.job` ends `cleanly` with `segment_count: 0` after a short wallclock — no error event, no fallback. Specifically `-ss 0 -t 30` on VAAPI HDR 4K. Same file at `-ss 0 -t 300` works (150 segments); `-ss N -t 30` for N > 0 also works. | Unknown — likely a flush/pipeline-depth interaction between `tonemap_vaapi` + `scale_vaapi` + the H.264 VAAPI encoder when the input window is short and starts at the file head. Reproduced in traces `1bac05bd…`, `b3dbbc34…`, `3d0f0d6f…`. ffmpeg `stderr` is not captured in the OTel pipeline today, so the failure is silent. Workaround in client: `client/src/services/playbackController.ts` forces `clientConfig.playback.chunkDurationS` instead of `clientConfig.playback.firstChunkDurationS` whenever `startS === 0` (cold-start, MSE recovery at currentTime < 300, seek-to-0). Mid-file seeks (`startS > 0`) keep the small-window optimization. |
 
 ## Current implementation
 
@@ -35,6 +36,18 @@ Key differences for HDR:
 1. **`tonemap_vaapi` does the real color conversion on the GPU** (BT.2020 → BT.709, HDR → SDR). Must come before `scale_vaapi`.
 2. **No `pad_vaapi` for HDR** — the driver rejects the padded surface downstream. HDR output may have variable dimensions (e.g. 3840×1604 for 2.39:1), handled transparently by the `<video>` element's `object-fit: contain`.
 3. **Tag the surface via `scale_vaapi out_color_*`** — this flows the BT.709 metadata through the encoder's VUI without any bridging scaler. DO NOT set `-colorspace bt709 -color_primaries bt709 -color_trc bt709` as output flags (tried in commit `cf6b6c1`, confirmed to break every HDR encode — see the "libva `-38`" row in the symptoms table).
+
+## VAAPI silent-success failures — outside the cascade
+
+The three-tier cascade in `chunker.ts` only catches **encoder errors with non-zero exit codes**. There is a second class of VAAPI failure that bypasses it entirely: ffmpeg exits zero, `transcode_complete` fires, but `segment_count: 0`. No error event, no fallback, no retry.
+
+Known instance: `-ss 0 -t 30` on VAAPI HDR 4K (reproduced traces `1bac05bd…`, `b3dbbc34…`, `3d0f0d6f…`). The same file works at `-ss 0 -t 300` and at `-ss N -t 30` for N > 0. Root cause is unknown — likely a flush/pipeline-depth interaction between `tonemap_vaapi` + `scale_vaapi` + H.264 VAAPI encoder on a short window starting at the file head. ffmpeg stderr is not captured in OTel today, so the cause remains opaque.
+
+**Current workaround (client-side):** `playbackController.ts` forces `clientConfig.playback.chunkDurationS` (300 s) instead of `clientConfig.playback.firstChunkDurationS` (30 s) whenever `startS === 0` — i.e. cold start, MSE recovery at `currentTime < 300`, and seek-to-0. Mid-file seeks (`startS > 0`) keep the small-window optimization.
+
+**Cost of the workaround:** cold-start eager-prefetch is disabled; chunk N+1 won't fire until ~210 s into chunk N. Mid-file seeks are unaffected.
+
+**Structural fix (tracked as OBS-STDERR-001 in `docs/todo.md`):** capture ffmpeg stderr in the `transcode.job` span (a `stderr_tail` attribute already exists for cascade-error events but not for `transcode_complete`), then detect `segment_count == 0` after a clean exit and force the cascade to fall through to the next tier.
 
 ## Three-tier failure cascade
 
