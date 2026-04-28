@@ -36,9 +36,18 @@ Keep rows short (≤ ~120 chars). When adding a new topic file to `docs/`, add i
 | File-handling layer migration (walkdir + notify, ffmpeg manifest pinning, content-addressed cache index, two-DB split) | `docs/migrations/rust-rewrite/06-File-Handling-Layer.md` |
 | Bun → Rust synthesis (runtime model, concurrency primitives, idiom translation, crate picks, migration order) | `docs/migrations/rust-rewrite/07-Bun-To-Rust-Migration.md` |
 | Tauri packaging (bundle layout, embedded server, bundled ffmpeg, Ed25519 self-hosted updates, code-signing, CI matrix) | `docs/migrations/rust-rewrite/08-Tauri-Packaging.md` |
+| Rust+Tauri release-journey playbook (4-step execution shape, parallel-track callout, out-of-scope list) | `docs/migrations/rust-rewrite/Plan/00-README.md` |
+| Step 1 — Rust GraphQL + Observability cutover (`useRustGraphQL` flag, side-by-side servers, player page known-broken when on) | `docs/migrations/rust-rewrite/Plan/01-GraphQL-And-Observability.md` |
+| Step 2 — Rust streaming cutover (`useRustStreaming` flag, `/stream/:jobId` framing preserved, sharing constraints) | `docs/migrations/rust-rewrite/Plan/02-Streaming.md` |
+| Step 3 — Tauri packaging step (embedded server, bundled jellyfin-ffmpeg, flag removal sweep, HW-accel softening) | `docs/migrations/rust-rewrite/Plan/03-Tauri-Packaging.md` |
+| Step 4 — Release plumbing + first beta (per-OS signing, Ed25519 updates, CI release matrix, soak group) | `docs/migrations/rust-rewrite/Plan/04-Release.md` |
 | Peer-to-peer streaming model (passthrough, Ed25519 invite tokens, content-addressed cache reuse, cross-peer traceparent, invariants) | `docs/architecture/Sharing/00-Peer-Streaming.md` |
+| Interim desktop-shell decision (Electron + Bun-as-sidecar; architectural surface, caveats, distribution, updates, CI, invariants) | `docs/architecture/Deployment/00-Interim-Desktop-Shell.md` |
+| Interim deployment decisions (HW-accel options + recommendation, Bun packaging, library picker, signing, channels) | `docs/architecture/Deployment/01-Decisions.md` |
+| Electron packaging internals (build pipeline, asar, extraResources, installed bundle layout, auto-update mechanics) | `docs/architecture/Deployment/02-Electron-Packaging-Internals.md` |
+| Shipping ffmpeg (manifest, portable strategy for all OSes, runtime resolution under Electron, GPL compliance) | `docs/architecture/Deployment/03-Shipping-FFmpeg.md` |
 | Resolution ladder + enum mirror chain | `docs/server/Config/01-Resolution-Ladder.md` |
-| AppConfig, `mediaFiles.json` | `docs/server/Config/00-AppConfig.md` |
+| AppConfig, library configuration | `docs/server/Config/00-AppConfig.md` |
 | GraphQL schema surface | `docs/server/GraphQL-Schema/00-Surface.md` |
 | DB schema | `docs/server/DB-Schema/00-Tables.md` |
 | HW-accel overview, tagged union, adding a backend | `docs/server/Hardware-Acceleration/00-Overview.md` |

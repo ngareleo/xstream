@@ -27,22 +27,23 @@ bun install
 
 ### 2. Configure media libraries
 
-Edit `mediaFiles.json` in the project root. Add entries for your local video directories:
+Libraries live in the SQLite DB. Add one via the `createLibrary` GraphQL mutation once the server is running, e.g. from a GraphQL client pointed at `http://localhost:3001/graphql`:
 
-```json
-{
-  "libraries": [
-    {
-      "name": "My Videos",
-      "path": "/absolute/path/to/your/videos",
-      "mediaType": "movies",
-      "env": "dev"
-    }
-  ]
+```graphql
+mutation {
+  createLibrary(
+    name: "My Videos"
+    path: "/absolute/path/to/your/videos"
+    mediaType: "movies"
+    extensions: [".mp4", ".mkv", ".mov", ".avi", ".m4v", ".webm"]
+  ) {
+    id
+    name
+  }
 }
 ```
 
-The `path` must be an absolute path to a directory containing video files (`.mp4`, `.mkv`, `.mov`, `.avi`, `.m4v`, `.webm`). Files can be nested in subdirectories.
+`path` must be an absolute path to a directory containing video files. Files can be nested in subdirectories. Use `deleteLibrary` / `updateLibrary` to manage entries; the next scan cycle picks up changes automatically.
 
 ### 3. Generate Relay artifacts
 
@@ -97,7 +98,6 @@ The server scans your configured media libraries on startup. You should see your
 
 ```
 xstream/
-├── mediaFiles.json        # media library paths (edit locally)
 ├── server/                # Bun server (GraphQL + streaming)
 ├── client/                # Vite + React client
 ├── docs/                  # architecture documentation
@@ -175,7 +175,7 @@ NODE_ENV=production \
   bun run start
 ```
 
-In production, set `env: "prod"` on your `mediaFiles.json` entries and point `SEGMENT_DIR` and `DB_PATH` to persistent storage (not `/tmp`).
+In production, create library entries with `env: "prod"` (the `createLibrary` mutation accepts an `env` arg) and point `SEGMENT_DIR` and `DB_PATH` to persistent storage (not `/tmp`).
 
 ---
 

@@ -83,7 +83,8 @@ Most domain knowledge lives in skills, subagents, or `docs/`. The main agent sho
 
 | Topic | Go to |
 |---|---|
-| Architecture, streaming pipeline, backpressure, HW-accel, tech-choice trade-offs, Rust/Tauri plan | `architect` subagent |
+| Architecture, streaming pipeline, backpressure, HW-accel, tech-choice trade-offs | `architect` subagent |
+| Rust/Tauri migration plan + release-journey playbook (layer refs, Plan/ steps, what's in/out of scope per step) | `migrations-lead` subagent |
 | Local dev setup, ffmpeg pinning, env vars, CI/CD, zombie ffmpeg, VAAPI driver gaps, OMDb auto-match | `devops` subagent |
 | Any browser interaction (UI verification, Seq inspection, playback checks) | `browser` skill |
 | Writing a React component | `write-component` skill |
@@ -98,7 +99,7 @@ Most domain knowledge lives in skills, subagents, or `docs/`. The main agent sho
 | Streaming protocol + playback scenarios | `docs/architecture/Streaming/` |
 | Observability (spans, logging policy, Seq) | `docs/architecture/Observability/` |
 | Relay fragment contract | `docs/architecture/Relay/` |
-| Config (`mediaFiles.json`, AppConfig, resolution profiles) | `docs/server/Config/` |
+| Config (AppConfig, library configuration, resolution profiles) | `docs/server/Config/` |
 | GraphQL schema surface | `docs/server/GraphQL-Schema/` |
 | DB schema | `docs/server/DB-Schema/` |
 | Hardware acceleration (VAAPI, HDR, fluent-ffmpeg quirks) | `docs/server/Hardware-Acceleration/` |
@@ -133,15 +134,20 @@ Full policy: [`docs/architecture/Observability/01-Logging-Policy.md`](docs/archi
 - Client: `getClientLogger` + wrap playback-path fetches with `context.with(getSessionContext(), () => fetch(…))`.
 - Server: extract `traceparent` from headers; yoga resolvers receive it as `ctx.otelCtx`.
 
-## Update protocol — notify the architect after changes
+## Update protocol — notify the curator after changes
 
-Before marking **any task that modified code or docs** as complete, spawn the `architect` subagent with a short change summary:
+Before marking **any task that modified code or docs** as complete, spawn the relevant curator subagent with a short change summary:
 
 - **Files changed** — list of paths touched by `Write`/`Edit` during the task.
 - **Description** — one sentence on what changed.
 - **Why** — rationale (fix, feature, refactor) and a link to the issue or feedback memory if applicable.
 
-Architect then decides whether `docs/`, `SUMMARY.md`, or the architect index needs updating, and does so directly. This keeps the RAG coherent without requiring the caller to know what to update.
+Routing:
+
+- Edits inside `docs/migrations/**` → notify `migrations-lead`. It curates the migration tree and loops `architect` in if a cross-cutting INDEX row needs adding.
+- Everything else (server / client code, other `docs/` subtrees, `.claude/`, `CLAUDE.md`, `README.md`) → notify `architect`.
+
+The curator decides whether `docs/`, `SUMMARY.md`, or the cross-cutting index needs updating, and does so directly (architect-only for `INDEX.md` and `SUMMARY.md`). This keeps the RAG coherent without requiring the caller to know what to update.
 
 **When the rule fires:**
 
@@ -173,7 +179,7 @@ If the current work feels architecturally separable from the open PR and a secon
 
 The full registry is surfaced by the Skill tool at session start. Brief map:
 
-- **Subagents** (`.claude/agents/`): `architect` (knowledge-base curator + design / tech choices), `devops` (dev flow / release / backend ops)
+- **Subagents** (`.claude/agents/`): `architect` (knowledge-base curator + design / tech choices), `migrations-lead` (Rust/Tauri migration playbook + layer refs in `docs/migrations/`), `devops` (dev flow / release / backend ops)
 - **Skills** (`.claude/skills/`): `browser`, `write-component`, `implement-design`, `feature-flags`, `test`, `debug-backend`, `debug-ui`, `e2e-test`, `update-docs`, `otel-logs`, `setup-local`, `create-pr`, `resolve-comments`, `reflect`, `todo`, `groom-knowledge-base`
 
 When the user asks about "ultrareview" or how to run it, explain that `/ultrareview` launches a multi-agent cloud review. It is user-triggered and billed; don't attempt to launch it yourself.

@@ -10,15 +10,15 @@ The database file lives at `tmp/xstream.db` (dev) or `$DB_PATH` (prod).
 
 ### `libraries`
 
-Populated from `mediaFiles.json` on each startup. Upserted by `path` so renames in config update the display name without losing associated videos.
+Populated via the `createLibrary` GraphQL mutation. Upserted by `path` so renames update the display name without losing associated videos.
 
 | Column | Type | Constraints | Description |
 |---|---|---|---|
 | `id` | TEXT | PRIMARY KEY | SHA-1 of `path` |
-| `name` | TEXT | NOT NULL | Display name from `mediaFiles.json` |
+| `name` | TEXT | NOT NULL | Display name supplied by the mutation |
 | `path` | TEXT | NOT NULL UNIQUE | Absolute path to library root directory |
 | `media_type` | TEXT | NOT NULL | `'movies'` or `'tvShows'` |
-| `env` | TEXT | NOT NULL | `'dev'` or `'prod'` — mirrors `mediaFiles.json` |
+| `env` | TEXT | NOT NULL | `'dev'` or `'prod'` — filtered against `NODE_ENV` at scan time |
 
 ---
 

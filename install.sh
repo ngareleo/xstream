@@ -47,24 +47,14 @@ bun install
 info "Creating tmp/ directories..."
 mkdir -p tmp/segments
 
-# ── 4. mediaFiles.json check ──────────────────────────────────────────────────
-
-if [ ! -f mediaFiles.json ]; then
-  error "mediaFiles.json not found. It should be at the project root."
-fi
-
-info "mediaFiles.json found."
-info "  → Edit the 'path' fields to point to your local video directories."
-info "  → Dev entries use env: \"dev\", prod entries use env: \"prod\"."
-
-# ── 5. Relay compiler ─────────────────────────────────────────────────────────
+# ── 4. Relay compiler ─────────────────────────────────────────────────────────
 
 # server/schema.graphql is committed. Re-run relay-compiler if you change the
 # schema, then commit the updated __generated__/ artifacts.
 info "Generating Relay compiler artifacts..."
 (cd client && bun relay) && info "Relay artifacts up to date." || warning "Relay compiler failed — run 'cd client && bun relay' after fixing schema issues."
 
-# ── 6. Scripts ────────────────────────────────────────────────────────────────
+# ── 5. Scripts ────────────────────────────────────────────────────────────────
 
 chmod +x scripts/stop.sh scripts/clean.sh scripts/seq-start.sh scripts/seq-stop.sh
 info "Utility scripts ready:"
@@ -74,7 +64,7 @@ info "  bun clean:db      — clean + also wipe the main SQLite database"
 info "  bun seq:start     — start (or create) the Seq log management container"
 info "  bun seq:stop      — stop the Seq container"
 
-# ── 7. Environment ────────────────────────────────────────────────────────────
+# ── 6. Environment ────────────────────────────────────────────────────────────
 
 if [ ! -f ".env" ]; then
   warning "No .env file found."
@@ -84,7 +74,7 @@ else
   info ".env found."
 fi
 
-# ── 8. Done ───────────────────────────────────────────────────────────────────
+# ── 7. Done ───────────────────────────────────────────────────────────────────
 
 echo ""
 info "Setup complete. To start development:"

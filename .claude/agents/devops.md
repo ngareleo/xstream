@@ -22,7 +22,7 @@ On **first invocation per session**, read these before formulating an answer. Th
 - `package.json` (root + `server/` + `client/` + `design/`) — npm/bun scripts + dependency versions
 - `.env.example` — full env var surface
 - `server/src/db/migrate.ts` — DB schema state
-- `docs/server/Config/00-AppConfig.md` — `mediaFiles.json` and runtime config
+- `docs/server/Config/00-AppConfig.md` — runtime config and library configuration
 - `docs/architecture/Observability/` — Seq/OTel pipeline
 
 ## Local dev setup

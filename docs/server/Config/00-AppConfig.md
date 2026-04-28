@@ -1,51 +1,20 @@
 # Configuration
 
-## mediaFiles.json
+## Library configuration
 
-Lives at the project root. Committed to git. Paths are machine-specific — edit them locally. Do not add machine-specific paths to a `.env` file; the JSON structure makes the intent clear.
+Libraries live exclusively in the `libraries` table of the SQLite DB. They are populated via the `createLibrary` GraphQL mutation (and removed via `deleteLibrary`). There is no on-disk config file for media folders — the previous `mediaFiles.json` mechanism was removed.
 
-### Format
+`libraryScanner.scanLibraries()` reads from `getAllLibraries()` (the DB table) on every scan cycle. The scanner runs at startup and then every `scanIntervalMs` (default 30 s); the `scanLibraries` GraphQL mutation triggers an immediate rescan.
 
-```json
-{
-  "libraries": [
-    {
-      "name": "My Videos",
-      "path": "/home/dag/Videos",
-      "mediaType": "movies",
-      "env": "dev"
-    },
-    {
-      "name": "Movies",
-      "path": "/mnt/storage/Movies",
-      "mediaType": "movies",
-      "env": "prod"
-    },
-    {
-      "name": "TV Shows",
-      "path": "/mnt/storage/TV",
-      "mediaType": "tvShows",
-      "env": "prod"
-    }
-  ]
-}
-```
+| Field (column) | Description |
+|---|---|
+| `name` | Display name shown in the UI. Not unique. |
+| `path` | **Unique.** Absolute path to the root directory. Duplicate paths fail the mutation. |
+| `mediaType` | `"movies"` \| `"tvShows"`. Stored and surfaced via GraphQL; the scanner walks recursively regardless of this value. |
+| `env` | `"dev"` \| `"prod"`. Filtered by `NODE_ENV` at startup so a single DB can host both dev and prod entries. |
+| `videoExtensions` | JSON array of file extensions to match (e.g. `[".mkv", ".mp4"]`). |
 
-### Fields
-
-| Field | Type | Description |
-|---|---|---|
-| `name` | string | Display name shown in the UI. Not unique — two libraries can share a name. |
-| `path` | string | **Unique.** Absolute path to the root directory. Duplicate paths are skipped with a warning. |
-| `mediaType` | `"movies"` \| `"tvShows"` | Stored in the DB and surfaced via GraphQL; the scanner currently walks all directories recursively regardless of this value. |
-| `env` | `"dev"` \| `"prod"` | Which environment this entry is active in. Filtered by `NODE_ENV` at startup. |
-
-### Rules
-
-- `path` is the unique key. Two entries with the same path — the first wins, the second is logged and skipped.
-- Entries with `env` not matching the current environment are silently ignored.
-- If a path does not exist on disk, the library is skipped with a `[scanner] Path not accessible` warning. The server continues starting up.
-- The server picks up config changes on restart or on the next automatic scan cycle (every `scanIntervalMs`, default 30 s). The `scanLibraries` GraphQL mutation can also be called to trigger an immediate rescan.
+Entries whose `env` does not match the current `NODE_ENV` are silently ignored. Inaccessible paths log a `[scanner] Path not accessible` warning and the server continues starting up.
 
 ---
 
@@ -98,7 +67,7 @@ Active profile is selected by `NODE_ENV`:
 
 Both profiles share `transcodeDefaults` and `streamDefaults` — there are no per-environment overrides on the policy knobs today. Env-var overrides for the `transcode.*` / `stream.*` fields are planned groundwork for ops tuning.
 
-In production, `segmentDir` and `dbPath` should be set to persistent storage locations (not `/tmp`). The same `mediaFiles.json` is used in both environments — `env: "prod"` entries activate when `NODE_ENV=production`.
+In production, `segmentDir` and `dbPath` should be set to persistent storage locations (not `/tmp`). Library entries in the DB are filtered by `env` against `NODE_ENV`, so a single DB can serve both dev and prod profiles.
 
 ---
 

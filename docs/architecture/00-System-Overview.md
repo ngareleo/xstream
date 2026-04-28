@@ -43,7 +43,7 @@ xstream is split into two workspaces: a Bun server and an Rsbuild/React client. 
 | Component | File | Responsibility |
 |---|---|---|
 | Entry point | `src/index.ts` | Startup sequence, `Bun.serve()`, route dispatch |
-| Config | `src/config.ts` | Dev/prod AppConfig, resolution profiles, mediaFiles.json loader |
+| Config | `src/config.ts` | Dev/prod AppConfig, resolution profiles |
 | DB connection | `src/db/index.ts` | SQLite singleton with WAL mode and foreign keys enabled; `closeDb()` for graceful shutdown |
 | Migrations | `src/db/migrate.ts` | Idempotent schema creation on every startup |
 | Query layer | `src/db/queries/` | All SQL — one file per table |
