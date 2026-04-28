@@ -102,6 +102,16 @@ export class PlaybackController {
   // Same shape for the first prefetch RAF fire — `prefetchFired` is reset on
   // every chunk boundary, so a separate session-scoped flag is needed.
   private firstPrefetchRecorded = false;
+  // Wall-clock deadline during which `StallTracker.onWaiting` should skip
+  // its spinner-debounce. Set when `tryPlay` flips `hasStartedPlayback` →
+  // true (cold-start AND seek-resume) because the video element fires
+  // `waiting` for hundreds of ms while the decoder renders the first frame
+  // post-`play()`. Without this, the 2 s debounce can fire and re-show the
+  // spinner over already-playing video — the wrong UX impression on seek.
+  // Cleared in `handlePlaying` (decoder rendered) and naturally expires 5 s
+  // after the grace begins so an extreme-stall path still surfaces a
+  // spinner if `playing` never fires.
+  private firstRenderGraceUntil: number | null = null;
 
   private buffer: BufferManager | null = null;
   private pipeline: ChunkPipeline | null = null;
@@ -191,6 +201,8 @@ export class PlaybackController {
       getBufferedAheadSeconds: () =>
         this.buffer?.getBufferedAheadSeconds(deps.videoEl.currentTime) ?? null,
       hasStartedPlayback: () => this.hasStartedPlayback,
+      isInFirstRenderGrace: () =>
+        this.firstRenderGraceUntil !== null && performance.now() < this.firstRenderGraceUntil,
       onSpinnerShow: () => this.setStatus("loading"),
       ticker: this.ticker,
     });
@@ -382,6 +394,7 @@ export class PlaybackController {
     this.sessionStartMs = null;
     this.firstFrameRecorded = false;
     this.firstPrefetchRecorded = false;
+    this.firstRenderGraceUntil = null;
     clearSessionContext();
 
     this.events.onJobCreated(null);
@@ -407,6 +420,13 @@ export class PlaybackController {
       const ahead = buffer.getBufferedAheadSeconds(videoEl.currentTime);
       if (ahead !== null && ahead >= target) {
         this.hasStartedPlayback = true;
+        // Open the first-render grace window so StallTracker doesn't arm
+        // its 2 s spinner-debounce while the decoder is rendering the first
+        // frame after `play()`. The video element fires `waiting` for the
+        // hundreds-of-ms decoder warmup; that's not a user-visible freeze
+        // and shouldn't show the spinner. Cleared by `handlePlaying`; also
+        // self-expires after 5 s so a true post-resume stall still surfaces.
+        this.firstRenderGraceUntil = performance.now() + 5_000;
         // Promote time-to-first-frame to a first-class session-span attribute
         // so cold-start regressions show up as a single Seq column instead of
         // log-line correlation. `firstFrameRecorded` is the one-shot guard —
@@ -1210,6 +1230,9 @@ export class PlaybackController {
     }
     // Seek has resolved — clear the dedup guard so future seeks can proceed.
     this.seekTarget = null;
+    // First frame is on screen — close the post-`play()` decoder-warmup
+    // grace so subsequent mid-playback stalls aren't suppressed.
+    this.firstRenderGraceUntil = null;
     // StallTracker closes its span + clears its debounce timer.
     this.stallTracker.onPlaying();
     // Restore "playing" if the spinner was showing because of a mid-playback stall.

@@ -16,6 +16,13 @@ export interface StallTrackerDeps {
   /** Controller's startup flag — we only debounce-show the spinner for
    *  mid-playback stalls, not for the initial startup loading phase. */
   hasStartedPlayback: () => boolean;
+  /** Open between the moment `tryPlay` calls `videoEl.play()` and the first
+   *  DOM `playing` event. The video element fires `waiting` for the
+   *  decoder-warmup window (hundreds of ms after a seek-resume); without
+   *  this guard the 2 s spinner-debounce can fire and re-show the spinner
+   *  over already-playing video. Self-expires after 5 s so an extreme stall
+   *  still surfaces a spinner. */
+  isInFirstRenderGrace: () => boolean;
   /** Called after BUFFERING_SPINNER_DELAY_MS of continuous stall so the
    *  controller can flip its status to "loading" and show the spinner. */
   onSpinnerShow: () => void;
@@ -52,9 +59,16 @@ export class StallTracker {
   }
 
   /** video `waiting` event — opens a stall span and schedules the debounced
-   *  spinner. Skipped during the startup loading phase. */
+   *  spinner. Skipped during the startup loading phase, and during the
+   *  decoder-warmup window right after `videoEl.play()` is called (the
+   *  video element fires `waiting` until it renders the first frame —
+   *  that's not a user-visible freeze, just normal warmup). */
   onWaiting = (): void => {
     if (!this.deps.hasStartedPlayback()) return;
+    if (this.deps.isInFirstRenderGrace()) {
+      log.info("Skipping spinner-debounce — decoder warming up post-play()");
+      return;
+    }
     const stallStartedAt = Date.now();
 
     if (!this.stallSpan) {
