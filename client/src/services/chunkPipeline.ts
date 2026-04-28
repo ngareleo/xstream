@@ -16,11 +16,11 @@
  */
 import { type Span, SpanStatusCode, trace, type Tracer } from "@opentelemetry/api";
 
+import { clientConfig } from "~/config/appConfig.js";
 import type { ClientLog } from "~/telemetry.js";
 import type { Resolution } from "~/types.js";
 
 import type { BufferManager } from "./bufferManager.js";
-import { CHUNK_DURATION_S, MIN_REAL_CHUNK_BYTES } from "./playbackConfig.js";
 import { getSessionContext } from "./playbackSession.js";
 import { StreamingService } from "./streamingService.js";
 
@@ -28,7 +28,7 @@ import { StreamingService } from "./streamingService.js";
 export type StreamOutcome =
   /** Real content streamed; caller should chain to the next chunk. */
   | "completed"
-  /** ffmpeg produced only a placeholder (<MIN_REAL_CHUNK_BYTES); pipeline already
+  /** ffmpeg produced only a placeholder (<clientConfig.playback.minRealChunkBytes); pipeline already
    *  called buffer.markStreamDone(); caller should not chain another chunk. */
   | "no_real_content";
 
@@ -180,7 +180,7 @@ export class ChunkPipeline {
       // Decide the outcome NOW with the post-drain byte counter — deferring
       // to here is what lets the lookahead-queueing path produce the same
       // outcome as the live foreground path would for the same content.
-      const hasRealContent = slot.totalMediaBytes >= MIN_REAL_CHUNK_BYTES;
+      const hasRealContent = slot.totalMediaBytes >= clientConfig.playback.minRealChunkBytes;
       if (!hasRealContent) {
         slot.span.addEvent("chunk_no_real_content");
       }
@@ -334,7 +334,7 @@ export class ChunkPipeline {
           return;
         }
         // Foreground path: byte counter is accurate, decide outcome inline.
-        const hasRealContent = slot.totalMediaBytes >= MIN_REAL_CHUNK_BYTES;
+        const hasRealContent = slot.totalMediaBytes >= clientConfig.playback.minRealChunkBytes;
         const outcome: StreamOutcome = hasRealContent ? "completed" : "no_real_content";
         if (!hasRealContent) {
           span.addEvent("chunk_no_real_content");
@@ -376,7 +376,9 @@ export class ChunkPipeline {
         {
           attributes: {
             "chunk.job_id": slot.opts.jobId,
-            "chunk.number": Math.floor(slot.opts.chunkStartS / CHUNK_DURATION_S),
+            "chunk.number": Math.floor(
+              slot.opts.chunkStartS / clientConfig.playback.chunkDurationS
+            ),
             "chunk.start_s": slot.opts.chunkStartS,
             "chunk.segment_bytes": segData.byteLength,
             "playback.current_time_s_at_arrival": parseFloat(arrivalCurrentTime.toFixed(2)),

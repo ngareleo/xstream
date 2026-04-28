@@ -13,7 +13,7 @@
  * grouped by `category` and displayed together in the UI.
  */
 
-import { DEFAULT_BUFFER_CONFIG } from "~/services/bufferConfig.js";
+import { clientConfig } from "~/config/appConfig.js";
 
 export type FlagValueType = "boolean" | "number";
 export type FlagValue = boolean | number;
@@ -54,7 +54,7 @@ export const FLAG_REGISTRY: readonly FlagDescriptor[] = [
     key: FLAG_KEYS.experimentalBuffer,
     name: "Experimental buffer tuning",
     description:
-      "When on, the next playback session uses the buffer values below instead of the defaults. Off falls back to DEFAULT_BUFFER_CONFIG.",
+      "When on, the next playback session uses the buffer values below instead of the defaults. Off falls back to clientConfig.buffer.",
     valueType: "boolean",
     defaultValue: false,
     category: "playback",
@@ -64,7 +64,7 @@ export const FLAG_REGISTRY: readonly FlagDescriptor[] = [
     name: "Buffer forward target (s)",
     description: "Pause the stream when bufferedAhead exceeds this many seconds.",
     valueType: "number",
-    defaultValue: DEFAULT_BUFFER_CONFIG.forwardTargetS,
+    defaultValue: clientConfig.buffer.forwardTargetS,
     category: "playback",
     min: 2,
     max: 120,
@@ -76,7 +76,7 @@ export const FLAG_REGISTRY: readonly FlagDescriptor[] = [
     description:
       "Resume the stream when bufferedAhead drops below this. Gap to target is the hysteresis width — narrower gaps cause rapid pause/resume churn.",
     valueType: "number",
-    defaultValue: DEFAULT_BUFFER_CONFIG.forwardResumeS,
+    defaultValue: clientConfig.buffer.forwardResumeS,
     category: "playback",
     min: 0,
     max: 60,
