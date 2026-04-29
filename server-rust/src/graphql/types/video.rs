@@ -1,0 +1,193 @@
+//! `Video` + nested types: `VideoMetadata`, `VideoStreamInfo`,
+//! `AudioStreamInfo`, plus the connection wrappers for paginated queries.
+
+use async_graphql::{Context, Object, SimpleObject, ID};
+
+use super::library::Library;
+use super::node::PageInfo;
+use crate::db::{
+    self, get_library_by_id, get_metadata_by_video_id, get_streams_by_video_id, Db, VideoRow,
+};
+use crate::graphql::scalars::MediaType;
+use crate::relay::to_global_id;
+
+#[derive(Clone)]
+pub struct Video {
+    pub id: ID,
+    pub title: String,
+    pub filename: String,
+    pub duration_seconds: f64,
+    pub file_size_bytes: f64,
+    pub bitrate: i32,
+    pub raw: VideoRow,
+}
+
+impl Video {
+    pub fn from_row(row: &VideoRow) -> Self {
+        Self {
+            id: ID(to_global_id("Video", &row.id)),
+            title: row.title.clone().unwrap_or_else(|| row.filename.clone()),
+            filename: row.filename.clone(),
+            duration_seconds: row.duration_seconds,
+            file_size_bytes: row.file_size_bytes as f64,
+            bitrate: row.bitrate as i32,
+            raw: row.clone(),
+        }
+    }
+}
+
+#[Object]
+impl Video {
+    pub async fn id(&self) -> &ID {
+        &self.id
+    }
+    async fn title(&self) -> &str {
+        &self.title
+    }
+    async fn filename(&self) -> &str {
+        &self.filename
+    }
+    async fn duration_seconds(&self) -> f64 {
+        self.duration_seconds
+    }
+    async fn file_size_bytes(&self) -> f64 {
+        self.file_size_bytes
+    }
+    async fn bitrate(&self) -> i32 {
+        self.bitrate
+    }
+
+    async fn matched(&self, ctx: &Context<'_>) -> async_graphql::Result<bool> {
+        let db = ctx.data_unchecked::<Db>();
+        Ok(db::has_video_metadata(db, &self.raw.id)?)
+    }
+
+    async fn media_type(&self, ctx: &Context<'_>) -> async_graphql::Result<MediaType> {
+        let db = ctx.data_unchecked::<Db>();
+        let lib = get_library_by_id(db, &self.raw.library_id)?;
+        Ok(lib
+            .map(|l| MediaType::from_internal(&l.media_type))
+            .unwrap_or(MediaType::Movies))
+    }
+
+    async fn library(&self, ctx: &Context<'_>) -> async_graphql::Result<Library> {
+        let db = ctx.data_unchecked::<Db>();
+        let row = get_library_by_id(db, &self.raw.library_id)?.ok_or_else(|| {
+            async_graphql::Error::new(format!(
+                "Video {:?} references missing library {}",
+                self.id, self.raw.library_id
+            ))
+        })?;
+        Ok(Library::from_row(&row))
+    }
+
+    async fn metadata(&self, ctx: &Context<'_>) -> async_graphql::Result<Option<VideoMetadata>> {
+        let db = ctx.data_unchecked::<Db>();
+        Ok(get_metadata_by_video_id(db, &self.raw.id)?.map(VideoMetadata::from_row))
+    }
+
+    async fn video_stream(
+        &self,
+        ctx: &Context<'_>,
+    ) -> async_graphql::Result<Option<VideoStreamInfo>> {
+        let db = ctx.data_unchecked::<Db>();
+        let streams = get_streams_by_video_id(db, &self.raw.id)?;
+        let vs = streams.into_iter().find(|s| s.stream_type == "video");
+        let vs = match vs {
+            Some(v) => v,
+            None => return Ok(None),
+        };
+        match (vs.width, vs.height, vs.fps) {
+            (Some(w), Some(h), Some(fps)) => Ok(Some(VideoStreamInfo {
+                codec: vs.codec,
+                width: w as i32,
+                height: h as i32,
+                fps,
+            })),
+            _ => Ok(None),
+        }
+    }
+
+    async fn audio_stream(
+        &self,
+        ctx: &Context<'_>,
+    ) -> async_graphql::Result<Option<AudioStreamInfo>> {
+        let db = ctx.data_unchecked::<Db>();
+        let streams = get_streams_by_video_id(db, &self.raw.id)?;
+        let a = streams.into_iter().find(|s| s.stream_type == "audio");
+        let a = match a {
+            Some(v) => v,
+            None => return Ok(None),
+        };
+        match (a.channels, a.sample_rate) {
+            (Some(ch), Some(sr)) => Ok(Some(AudioStreamInfo {
+                codec: a.codec,
+                channels: ch as i32,
+                sample_rate: sr as i32,
+            })),
+            _ => Ok(None),
+        }
+    }
+}
+
+#[derive(SimpleObject, Clone)]
+pub struct VideoMetadata {
+    pub imdb_id: String,
+    pub title: String,
+    pub year: Option<i32>,
+    pub genre: Option<String>,
+    pub director: Option<String>,
+    pub cast: Vec<String>,
+    pub rating: Option<f64>,
+    pub plot: Option<String>,
+    pub poster_url: Option<String>,
+}
+
+impl VideoMetadata {
+    pub fn from_row(row: crate::db::VideoMetadataRow) -> Self {
+        let cast: Vec<String> = row
+            .cast_list
+            .as_deref()
+            .and_then(|s| serde_json::from_str(s).ok())
+            .unwrap_or_default();
+        Self {
+            imdb_id: row.imdb_id,
+            title: row.title,
+            year: row.year.map(|y| y as i32),
+            genre: row.genre,
+            director: row.director,
+            cast,
+            rating: row.rating,
+            plot: row.plot,
+            poster_url: row.poster_url,
+        }
+    }
+}
+
+#[derive(SimpleObject, Clone)]
+pub struct VideoStreamInfo {
+    pub codec: String,
+    pub width: i32,
+    pub height: i32,
+    pub fps: f64,
+}
+
+#[derive(SimpleObject, Clone)]
+pub struct AudioStreamInfo {
+    pub codec: String,
+    pub channels: i32,
+    pub sample_rate: i32,
+}
+
+#[derive(SimpleObject, Clone)]
+pub struct VideoConnection {
+    pub edges: Vec<VideoEdge>,
+    pub page_info: PageInfo,
+    pub total_count: i32,
+}
+
+#[derive(SimpleObject, Clone)]
+pub struct VideoEdge {
+    pub node: Video,
+    pub cursor: String,
+}

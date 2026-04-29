@@ -4,7 +4,8 @@
   "type": "module",
   "workspaces": [
     "server",
-    "client"
+    "client",
+    "server-rust"
   ],
   "scripts": {
     "dev": "bun run --filter '*' dev",

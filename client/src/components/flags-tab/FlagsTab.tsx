@@ -1,5 +1,5 @@
 import { mergeClasses } from "@griffel/react";
-import { type FC } from "react";
+import { type FC, useState } from "react";
 
 import { useSettingsTabStyles } from "~/components/settings-tabs/SettingsTabs.styles.js";
 import {
@@ -8,7 +8,7 @@ import {
   type FlagDescriptor,
   type FlagValue,
 } from "~/config/flagRegistry.js";
-import { useFeatureFlag } from "~/contexts/FeatureFlagsContext.js";
+import { useFeatureFlag, useFeatureFlagControls } from "~/contexts/FeatureFlagsContext.js";
 
 import { strings } from "./FlagsTab.strings.js";
 import { useFlagsTabStyles } from "./FlagsTab.styles.js";
@@ -38,6 +38,8 @@ export const FlagsTab: FC = () => {
       {grouped.map(({ category, flags }) => (
         <FlagCategorySection key={category} category={category} flags={flags} />
       ))}
+
+      <FlagBulkActions />
     </div>
   );
 };
@@ -127,5 +129,54 @@ const NumberInput: FC<{
         if (Number.isFinite(n)) onChange(n);
       }}
     />
+  );
+};
+
+const FlagBulkActions: FC = () => {
+  const styles = useFlagsTabStyles();
+  const { clearLocalOverrides, resetAllToDefaults } = useFeatureFlagControls();
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
+
+  return (
+    <div className={styles.actionsBlock}>
+      <div className={styles.actionsHeader}>{strings.actionsTitle}</div>
+      <div className={styles.actionsDesc}>{strings.actionsDesc}</div>
+
+      <div className={styles.actionRow}>
+        <div className={styles.actionLabel}>
+          <div className={styles.actionName}>{strings.clearLocalOverrides}</div>
+          <div className={styles.actionHint}>{strings.clearLocalOverridesHint}</div>
+        </div>
+        <button
+          type="button"
+          className={styles.actionButton}
+          onClick={() => {
+            clearLocalOverrides();
+            setStatusMessage(strings.clearedToast);
+          }}
+        >
+          {strings.clearLocalOverrides}
+        </button>
+      </div>
+
+      <div className={styles.actionRow}>
+        <div className={styles.actionLabel}>
+          <div className={styles.actionName}>{strings.resetAllToDefaults}</div>
+          <div className={styles.actionHint}>{strings.resetAllToDefaultsHint}</div>
+        </div>
+        <button
+          type="button"
+          className={styles.actionButton}
+          onClick={() => {
+            resetAllToDefaults();
+            setStatusMessage(null);
+          }}
+        >
+          {strings.resetAllToDefaults}
+        </button>
+      </div>
+
+      {statusMessage !== null && <div className={styles.actionHint}>{statusMessage}</div>}
+    </div>
   );
 };

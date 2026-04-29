@@ -1,39 +1,23 @@
 /**
- * Synchronous source of truth for the `useRustGraphQL` flag — read at
- * Relay-environment init time, BEFORE the FeatureFlagsProvider has hydrated
- * the registry from the server.
+ * Origin selection for the Rust GraphQL server (Step 1 cutover).
  *
- * The flag itself lives in the registry (and is persisted via `setSetting`
- * like every other flag); this module mirrors it to `localStorage` so the
- * value is available synchronously when `relay/environment.ts` constructs
- * the network layer at module load. After toggling in Settings → Flags the
- * user must reload the page for the new origin to take effect.
+ * `featureFlags.ts` populates the in-memory flag cache from `localStorage`
+ * at module load — synchronously, before `relay/environment.ts` runs. So
+ * `getFlag(useRustGraphQL, false)` here is reliable at module-init time.
+ * Toggling the flag in Settings → Flags requires one page reload because
+ * the Relay environment is constructed once at app boot.
  */
 
-const STORAGE_KEY = "flag.useRustGraphQL";
+import { getFlag } from "./featureFlags.js";
+import { FLAG_KEYS } from "./flagRegistry.js";
+
 // Rust binds 3002 in dev so it doesn't collide with Bun on 3001.
 // Tauri (Step 3) collapses both processes so this constant goes away.
 const RUST_HTTP_ORIGIN = "http://localhost:3002";
 const RUST_WS_ORIGIN = "ws://localhost:3002";
 
 export function isRustGraphQLEnabled(): boolean {
-  try {
-    return globalThis.localStorage?.getItem(STORAGE_KEY) === "1";
-  } catch {
-    return false;
-  }
-}
-
-/**
- * Persist the flag value to `localStorage` so the next page load sees it.
- * Called from `useFeatureFlag`'s setter for this specific key.
- */
-export function rememberRustGraphQLFlag(value: boolean): void {
-  try {
-    globalThis.localStorage?.setItem(STORAGE_KEY, value ? "1" : "0");
-  } catch {
-    // Ignore — quota errors / Safari private mode etc. are non-fatal here.
-  }
+  return getFlag<boolean>(FLAG_KEYS.useRustGraphQL, false);
 }
 
 export function graphqlHttpUrl(): string {

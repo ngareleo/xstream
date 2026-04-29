@@ -1,0 +1,9 @@
+{
+  "name": "server-rust",
+  "private": true,
+  "scripts": {
+    "dev": "PATH=\"$HOME/.cargo/bin:$PATH\" DB_PATH=\"${DB_PATH:-$PWD/../tmp/xstream.db}\" cargo run --quiet --manifest-path Cargo.toml",
+    "build": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo build --release",
+    "lint": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo build --quiet"
+  }
+}
