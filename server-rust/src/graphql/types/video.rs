@@ -66,7 +66,18 @@ impl Video {
         let db = ctx.data_unchecked::<Db>();
         let lib = get_library_by_id(db, &self.raw.library_id)?;
         Ok(lib
-            .map(|l| MediaType::from_internal(&l.media_type))
+            .and_then(|l| {
+                let raw = l.media_type;
+                MediaType::from_internal(&raw).or_else(|| {
+                    tracing::warn!(
+                        video_id = %self.raw.id,
+                        library_id = %self.raw.library_id,
+                        raw = %raw,
+                        "libraries.media_type held an unknown value (via Video.media_type) — defaulting to MOVIES"
+                    );
+                    Some(MediaType::Movies)
+                })
+            })
             .unwrap_or(MediaType::Movies))
     }
 

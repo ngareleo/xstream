@@ -48,7 +48,14 @@ impl Library {
             id: ID(to_global_id("Library", &row.id)),
             name: row.name.clone(),
             path: row.path.clone(),
-            media_type: MediaType::from_internal(&row.media_type),
+            media_type: MediaType::from_internal(&row.media_type).unwrap_or_else(|| {
+                tracing::warn!(
+                    library_id = %row.id,
+                    raw = %row.media_type,
+                    "libraries.media_type held an unknown value — defaulting to MOVIES"
+                );
+                MediaType::Movies
+            }),
             video_extensions,
             raw_id: row.id.clone(),
         }

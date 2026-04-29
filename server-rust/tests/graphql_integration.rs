@@ -15,6 +15,7 @@
 use std::path::Path;
 
 use async_graphql::{value, Variables};
+use futures_util::StreamExt;
 use serde_json::Value;
 use xstream_server::db::{create_library, Db};
 use xstream_server::graphql::build_schema;
@@ -152,6 +153,25 @@ async fn unknown_field_returns_a_descriptive_error() {
         "expected error to mention nonexistentField, got: {}",
         response.errors[0].message
     );
+}
+
+#[tokio::test]
+async fn library_scan_updated_emits_initial_state_immediately() {
+    // Mirrors `subscription-scan.test.ts`. The Bun test asserts THREE
+    // payloads (initial + transition-on + transition-off), but the
+    // markScan*() trigger API is part of Step 2's library scanner — not
+    // ported yet. So the Step 1 contract we *can* assert is the
+    // initial-state emission: settings page relies on it to render
+    // "scanning: false" on connect without waiting for a transition.
+    let schema = build_schema(fresh_seeded_db());
+    let mut stream = schema.execute_stream(r#"subscription { libraryScanUpdated { scanning } }"#);
+    let first = tokio::time::timeout(std::time::Duration::from_secs(2), stream.next())
+        .await
+        .expect("first emission arrives within 2s")
+        .expect("stream produces at least one item");
+    assert!(first.errors.is_empty(), "errors: {:?}", first.errors);
+    let json: Value = serde_json::to_value(&first.data).expect("data serialises");
+    assert_eq!(json["libraryScanUpdated"]["scanning"], false);
 }
 
 #[tokio::test]

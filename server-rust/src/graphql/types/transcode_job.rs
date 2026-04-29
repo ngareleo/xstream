@@ -26,8 +26,22 @@ impl TranscodeJob {
     pub fn from_row(row: &TranscodeJobRow) -> Self {
         Self {
             id: ID(to_global_id("TranscodeJob", &row.id)),
-            resolution: Resolution::from_internal(&row.resolution).unwrap_or(Resolution::R1080p),
-            status: JobStatus::from_internal(&row.status),
+            resolution: Resolution::from_internal(&row.resolution).unwrap_or_else(|| {
+                tracing::warn!(
+                    job_id = %row.id,
+                    raw = %row.resolution,
+                    "transcode_jobs.resolution held an unknown value — defaulting to 1080p"
+                );
+                Resolution::R1080p
+            }),
+            status: JobStatus::from_internal(&row.status).unwrap_or_else(|| {
+                tracing::warn!(
+                    job_id = %row.id,
+                    raw = %row.status,
+                    "transcode_jobs.status held an unknown value — defaulting to PENDING"
+                );
+                JobStatus::Pending
+            }),
             total_segments: row.total_segments.map(|n| n as i32),
             completed_segments: row.completed_segments as i32,
             start_time_seconds: row.start_time_seconds,

@@ -125,3 +125,75 @@ pub use queries::watchlist::{
     add_watchlist_item, get_watchlist, get_watchlist_item_by_id, get_watchlist_item_by_video_id,
     remove_watchlist_item, update_watchlist_progress, WatchlistItemRow,
 };
+
+// ── Tests ────────────────────────────────────────────────────────────────────
+//
+// Mirrors `server/src/db/queries/__tests__/pragmas.test.ts`. The two
+// connection-time PRAGMAs are part of the data-correctness contract:
+//
+// - `journal_mode = wal` keeps reads safe against the writer (chunker /
+//   scanner / mutation handlers all hit the same DB; WAL is what prevents
+//   SQLITE_BUSY at the resolver layer).
+// - `foreign_keys = ON` is what makes the cascade-delete chain
+//   (libraries → videos → segments / metadata / watchlist) actually fire.
+//   Without it, deleting a library leaves orphaned rows.
+//
+// The Rust port has to match. These tests are the contract.
+
+#[cfg(test)]
+mod pragma_tests {
+    use super::*;
+
+    fn fresh_db() -> Db {
+        Db::open(Path::new(":memory:")).expect("open in-memory db")
+    }
+
+    #[test]
+    fn journal_mode_is_wal_on_disk_backed_db() {
+        // SQLite refuses to use WAL on `:memory:` DBs (it has no sidecar
+        // file to write the WAL into and silently reports "memory" mode
+        // instead). Production opens a real file path, so the assertion
+        // belongs against a tempfile — same code path the real boot takes.
+        let tmp = tempfile::NamedTempFile::new().expect("tempfile");
+        let db = Db::open(tmp.path()).expect("open file-backed db");
+        let mode: String = db
+            .with(|c| {
+                c.query_row("PRAGMA journal_mode", [], |r| r.get::<_, String>(0))
+                    .map_err(Into::into)
+            })
+            .expect("query journal_mode");
+        assert_eq!(mode.to_lowercase(), "wal");
+    }
+
+    #[test]
+    fn foreign_keys_is_enabled() {
+        let db = fresh_db();
+        let on: i64 = db
+            .with(|c| {
+                c.query_row("PRAGMA foreign_keys", [], |r| r.get::<_, i64>(0))
+                    .map_err(Into::into)
+            })
+            .expect("query foreign_keys");
+        assert_eq!(on, 1);
+    }
+
+    #[test]
+    fn fk_violation_on_video_insert_without_library_returns_error() {
+        // Bun side throws; Rust side surfaces the FK violation as a
+        // DbError::Sqlite. Either way the unhappy path is visible — never
+        // a silent insert that leaves an orphan.
+        let db = fresh_db();
+        let result: DbResult<()> = db.with(|c| {
+            c.execute(
+                "INSERT INTO videos
+                 (id, library_id, path, filename, title, duration_seconds,
+                  file_size_bytes, bitrate, scanned_at, content_fingerprint)
+                 VALUES ('orphan', 'no-such-lib', '/tmp/orphan.mkv', 'orphan.mkv',
+                         NULL, 0.0, 0, 0, '2026-01-01T00:00:00.000Z', 'fp')",
+                [],
+            )?;
+            Ok(())
+        });
+        assert!(result.is_err(), "FK violation must propagate as Err");
+    }
+}

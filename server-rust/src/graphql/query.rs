@@ -149,13 +149,23 @@ impl Query {
         let rows = db::get_playback_history(db, 50)?;
         Ok(rows
             .into_iter()
-            .map(|r| PlaybackSession {
-                id: ID(r.id),
-                trace_id: r.trace_id,
-                video_title: r.video_title,
-                resolution: crate::graphql::scalars::Resolution::from_internal(&r.resolution)
-                    .unwrap_or(crate::graphql::scalars::Resolution::R1080p),
-                started_at: r.started_at,
+            .map(|r| {
+                let resolution = crate::graphql::scalars::Resolution::from_internal(&r.resolution)
+                    .unwrap_or_else(|| {
+                        tracing::warn!(
+                            playback_session_id = %r.id,
+                            raw = %r.resolution,
+                            "playback_history.resolution held an unknown value — defaulting to 1080p"
+                        );
+                        crate::graphql::scalars::Resolution::R1080p
+                    });
+                PlaybackSession {
+                    id: ID(r.id),
+                    trace_id: r.trace_id,
+                    video_title: r.video_title,
+                    resolution,
+                    started_at: r.started_at,
+                }
             })
             .collect())
     }
