@@ -22,7 +22,6 @@ const { upsertVideo } = await import("../../db/queries/videos.js");
 const { toGlobalId } = await import("../relay.js");
 const { killAllJobs } = await import("../../services/ffmpegPool.js");
 const { detectHwAccel } = await import("../../services/hwAccel.js");
-const { resolveFfmpegPaths } = await import("../../services/ffmpegPath.js");
 const { getJob } = await import("../../services/jobStore.js");
 
 const FIXTURES_DIR = resolve(import.meta.dir, "../../test/fixtures");
@@ -58,10 +57,11 @@ beforeAll(async () => {
   getDb();
 
   // Pre-flight detectHwAccel so background runFfmpeg calls don't throw on
-  // getHwAccelConfig(). "off" is a no-op probe that caches { kind: "software" }
-  // and is idempotent if a sibling test already detected.
-  const ffmpegPaths = resolveFfmpegPaths();
-  await detectHwAccel(ffmpegPaths.ffmpeg, "off");
+  // getHwAccelConfig(). "off" mode is a no-op probe that caches
+  // { kind: "software" } without touching the binary, so a sentinel path
+  // is fine — keeps the test green on CI runners that don't ship
+  // jellyfin-ffmpeg at the manifest's pinned location.
+  await detectHwAccel("/dev/null/no-ffmpeg-needed-in-off-mode", "off");
 
   // Seed test data with unique IDs so this file doesn't collide with other test files
   upsertLibrary({

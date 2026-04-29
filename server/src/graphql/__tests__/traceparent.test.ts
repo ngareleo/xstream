@@ -25,7 +25,6 @@ const { upsertVideo } = await import("../../db/queries/videos.js");
 const { insertJob } = await import("../../db/queries/jobs.js");
 const { insertSegment } = await import("../../db/queries/segments.js");
 const { detectHwAccel } = await import("../../services/hwAccel.js");
-const { resolveFfmpegPaths } = await import("../../services/ffmpegPath.js");
 const { killAllJobs } = await import("../../services/ffmpegPool.js");
 const { toGlobalId } = await import("../relay.js");
 const { drainCapturedSpans, resetCapturedSpans } = await import("../../test/traceCapture.js");
@@ -95,8 +94,9 @@ beforeAll(async () => {
     size_bytes: 0,
   });
 
-  const ffmpegPaths = resolveFfmpegPaths();
-  await detectHwAccel(ffmpegPaths.ffmpeg, "off");
+  // "off" mode caches { kind: "software" } without touching the binary;
+  // sentinel path keeps the test green on CI runners without jellyfin-ffmpeg.
+  await detectHwAccel("/dev/null/no-ffmpeg-needed-in-off-mode", "off");
 });
 
 afterAll(async () => {

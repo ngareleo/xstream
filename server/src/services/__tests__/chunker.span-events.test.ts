@@ -38,7 +38,6 @@ import { upsertVideo } from "../../db/queries/videos.js";
 import { drainCapturedSpans, resetCapturedSpans } from "../../test/traceCapture.js";
 import type { Resolution } from "../../types.js";
 import { startTranscodeJob } from "../chunker.js";
-import { resolveFfmpegPaths } from "../ffmpegPath.js";
 import { killAllJobs, snapshotCap, tryReserveSlot } from "../ffmpegPool.js";
 import { detectHwAccel } from "../hwAccel.js";
 
@@ -114,8 +113,9 @@ beforeAll(async () => {
     scanned_at: new Date().toISOString(),
     content_fingerprint: FINGERPRINT,
   });
-  const ffmpegPaths = resolveFfmpegPaths();
-  await detectHwAccel(ffmpegPaths.ffmpeg, "off");
+  // "off" mode caches { kind: "software" } without touching the binary;
+  // sentinel path keeps the test green on CI runners without jellyfin-ffmpeg.
+  await detectHwAccel("/dev/null/no-ffmpeg-needed-in-off-mode", "off");
 });
 
 afterAll(async () => {
