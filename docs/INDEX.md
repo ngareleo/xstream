@@ -36,6 +36,7 @@ Keep rows short (≤ ~120 chars). When adding a new topic file to `docs/`, add i
 | File-handling layer migration (walkdir + notify, ffmpeg manifest pinning, content-addressed cache index, two-DB split) | `docs/migrations/rust-rewrite/06-File-Handling-Layer.md` |
 | Bun → Rust synthesis (runtime model, concurrency primitives, idiom translation, crate picks, migration order) | `docs/migrations/rust-rewrite/07-Bun-To-Rust-Migration.md` |
 | Tauri packaging (bundle layout, embedded server, bundled ffmpeg, Ed25519 self-hosted updates, code-signing, CI matrix) | `docs/migrations/rust-rewrite/08-Tauri-Packaging.md` |
+| Tauri packaging internals (build pipeline, installed-app layout per OS, tauri-plugin-updater mechanics, Electron mental-model corrections) | `docs/migrations/rust-rewrite/09-Tauri-Packaging-Internals.md` |
 | Rust+Tauri release-journey playbook (4-step execution shape, parallel-track callout, out-of-scope list) | `docs/migrations/rust-rewrite/Plan/00-README.md` |
 | Step 1 — Rust GraphQL + Observability cutover (`useRustGraphQL` flag, side-by-side servers, player page known-broken when on) | `docs/migrations/rust-rewrite/Plan/01-GraphQL-And-Observability.md` |
 | Step 2 — Rust streaming cutover (`useRustStreaming` flag, `/stream/:jobId` framing preserved, sharing constraints) | `docs/migrations/rust-rewrite/Plan/02-Streaming.md` |
