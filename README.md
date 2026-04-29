@@ -97,7 +97,7 @@ Open [http://localhost:5173](http://localhost:5173). The Bun server scans your c
 
 ### Fallback / individual processes
 
-If you don't want the TUI (headless terminal, log capture, CI-style runs), use the plain interleaved variant:
+If you don't want the TUI (headless terminal, log capture, scripted contexts), use the plain interleaved variant:
 
 ```bash
 bun run dev:plain   # bun run --filter '*' dev — colored prefixes, no TUI
