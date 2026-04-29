@@ -8,3 +8,47 @@
 | `library.scan` | `scanLibraries` | `library_path`, `library_name`, `files_found` |
 
 Structured log events are emitted for each significant state transition (init ready, transcode complete, scan matched, etc.) with a `component` attribute for easy filtering. When a span event already covers a state transition, do not emit a duplicate log record — prefer `span.addEvent()` over a parallel `log.info()`.
+
+---
+
+## Per-request access log (Bun + Rust — pending PR #39 merge)
+
+> **Status: landed on `feat/rust-step1-graphql`, not yet merged to main.**
+
+Both Bun and Rust emit one structured `info`-level log per HTTP request. Five fields are guaranteed by both runtimes — Seq queries can lock to them:
+
+| Field | Type | Notes |
+|---|---|---|
+| `method` | string | HTTP verb |
+| `path` | string | Request path (no query string) |
+| `status` | integer | HTTP response status code |
+| `duration_ms` | number | Wall-clock request duration in milliseconds |
+| `trace_id` | string | Extracted from inbound `traceparent`; empty string when no traceparent present |
+
+**Message body shape:**
+
+- Bun: `${method} ${path} ${status} — ${ms}ms (trace=${id})` — snake_case field names.
+- Rust: same body text, dotted (OTel-conventional) field names.
+- When no inbound `traceparent` is present: `trace_id` is empty string, body renders `(trace=-)`.
+
+Bun parses `traceparent` directly from the request header. Rust pulls `trace_id` from the `OtelContext` populated by the tracing middleware. The body format is identical so Seq `@Message` filters work across both runtimes without branching.
+
+This is the contract Seq queries lock to. To find the access log for a specific trace: `trace_id = '<id>'` (or grep the body for `trace=<id>`).
+
+---
+
+## `ErrorLogger` async-graphql extension (Rust — pending PR #39 merge)
+
+> **Status: landed on `feat/rust-step1-graphql` (commit b40b989), not yet merged to main.**
+
+A per-request async-graphql extension fires `tracing::error!` for each entry in `response.errors`, executed inside the existing `http.request` span. Because tracing-opentelemetry attaches the inbound `TraceId` to every OTLP export, Seq automatically groups these error events with their originating request.
+
+**Structured fields emitted per error entry:**
+
+| Field | Value |
+|---|---|
+| `graphql.error_message` | The error message string |
+| `graphql.error_path` | The field path where the error occurred |
+| `graphql.error_locations` | Source location(s) from the GraphQL response |
+
+**Effect:** every resolver error → typed `errors[]` response → `tracing::error!` event in Seq, correlated to the request span by `TraceId`. Resolvers added in Step 2 (streaming cutover) do not need to add their own error logging; the extension covers them automatically.

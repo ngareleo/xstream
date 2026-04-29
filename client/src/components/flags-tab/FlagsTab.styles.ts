@@ -100,4 +100,63 @@ export const useFlagsTabStyles = makeStyles({
   toggleThumbOn: {
     transform: "translateX(16px)",
   },
+  actionsBlock: {
+    marginTop: "32px",
+    paddingTop: "20px",
+    borderTop: `1px solid ${tokens.colorBorder}`,
+  },
+  actionsHeader: {
+    fontSize: "10px",
+    fontWeight: "700",
+    letterSpacing: "0.12em",
+    textTransform: "uppercase",
+    color: tokens.colorMuted2,
+    marginBottom: "6px",
+  },
+  actionsDesc: {
+    fontSize: "11px",
+    color: tokens.colorMuted,
+    marginBottom: "14px",
+    lineHeight: "1.5",
+  },
+  actionRow: {
+    display: "flex",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: "16px",
+    padding: "10px 0",
+  },
+  actionLabel: {
+    flex: "1 1 auto",
+    minWidth: "0",
+  },
+  actionName: {
+    fontSize: "13px",
+    fontWeight: "600",
+    color: tokens.colorWhite,
+    marginBottom: "2px",
+  },
+  actionHint: {
+    fontSize: "11px",
+    color: tokens.colorMuted,
+    lineHeight: "1.5",
+  },
+  actionButton: {
+    flex: "0 0 auto",
+    padding: "6px 14px",
+    backgroundColor: tokens.colorSurface2,
+    border: `1px solid ${tokens.colorBorder}`,
+    borderRadius: tokens.radiusSm,
+    color: tokens.colorWhite,
+    fontSize: "12px",
+    fontFamily: tokens.fontBody,
+    fontWeight: "600",
+    cursor: "pointer",
+    transitionProperty: "background, border-color",
+    transitionDuration: tokens.transition,
+    ":hover": {
+      backgroundColor: tokens.colorRed,
+      border: `1px solid ${tokens.colorRed}`,
+    },
+  },
 });

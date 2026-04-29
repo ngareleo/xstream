@@ -59,9 +59,55 @@ Pointer-only — these are detailed in the layer refs. Step 1 must not foreclose
 
 ## Decisions to lock before starting
 
-Bounded open questions the implementing agent must resolve on day one:
+These were open on day one of Step 1; all four are now locked by implementation (PR #39).
 
-1. **Rust port number.** Pick a convention (e.g., Bun on `3000`, Rust on `3001`) and document it. Hard-coding is acceptable for cutover; the Tauri step kills both.
-2. **How the client discovers the alternate origin.** Three plausible options: env var read at build time, a small runtime config endpoint on the Bun server, or hard-coded `localhost:<port>`. Pick one and document — and pick something Step 2 can reuse for `/stream` routing without a second discovery mechanism.
-3. **Flag shape.** One boolean (`useRustGraphQL`) or a richer enum if more transports get added later. Default to one boolean unless there's a specific reason to generalize.
-4. **Scope of the Step 1 PR.** All of the above ships in one PR vs. several smaller ones. The bias is one PR per step (consistent with the layer-doc PRs), but if the diff balloons, a split is acceptable as long as no intermediate state breaks the default-off invariant.
+1. **Rust port number.** Locked: Bun on `3001`, Rust on `3002`. Hard-coded in `server-rust/src/main.rs`; `client/src/config/rustOrigin.ts` hard-codes `localhost:3002`. The Tauri step kills both.
+2. **How the client discovers the alternate origin.** Locked: hard-coded `localhost:3002` in `rustOrigin.ts`. Step 2 reuses the same origin — no second discovery mechanism needed. Flag toggle requires a page reload (localStorage mirror writes synchronously; Relay environment is re-read on next mount).
+3. **Flag shape.** Locked: one boolean (`useRustGraphQL`). `useRustStreaming` is a separate boolean for Step 2 — same pattern.
+4. **Scope of the Step 1 PR.** Locked: one PR (#39) — but scope grew significantly beyond the original spec during review. See "What shipped beyond the spec" below.
+
+## What shipped beyond the spec (PR #39, commits a422976…ec6c90e)
+
+The original Step 1 spec covered the GraphQL/observability shell. The following shipped in the same PR during a review-and-iterate session. Future step implementors should treat these as established patterns.
+
+### Error / panic discipline (commits e5ca445 + b40b989)
+
+`server-rust/src/error.rs` introduces `DbError` (variants: rusqlite, mutex-poison, invariant, malformed-JSON) and `AppError` (top-level with `#[source]` chain). `main()` returns `AppResult<()>`. No `expect`/`unwrap`/silent-discard in production code. Mutex poisoning is a typed error, not a panic. Codified as §14 of `docs/code-style/Invariants/00-Never-Violate.md`. **This is a cross-migration pattern — Step 2 must follow the same discipline, and the chunker / ffmpeg pool are the biggest exposure surface.**
+
+### ErrorLogger async-graphql extension (commit e5ca445)
+
+`server-rust/src/graphql/error_logger.rs` — an `async-graphql` `Extension` that fires `tracing::error!` for each entry in `errors[]`, inside the per-request `http.request` span. Consequence for Step 2: **every resolver added in Step 2 gets error logging for free** via this extension — no per-resolver logging needed.
+
+### localStorage-first flag system (commit 4713116)
+
+`client/src/config/featureFlags.ts` reads every flag from localStorage at module load (synchronous); server hydration fills cache entries only where there is no existing localStorage override — local toggles win. New `useFeatureFlagControls()` hook backs two buttons in FlagsTab: "Clear local overrides" (drops localStorage; reload pulls server values) and "Reset all to defaults" (every flag set to registry default, persisted to localStorage AND server). The `useRustGraphQL`-specific localStorage mirror was subsumed by this general pattern. **Step 2's `useRustStreaming` flag is covered automatically by this mechanism.**
+
+> Note: `docs/client/Feature-Flags/00-Registry.md` still describes the old server-truth model. Architect has been asked to update it after PR #39 merges.
+
+### Mapper Option-shape convention (commit 23ab952)
+
+`MediaType::from_internal` and `JobStatus::from_internal` previously returned silent defaults on unknown input — a §14 violation. Both now return `Option<Self>`. Call sites in `graphql/types/{library,video,transcode_job}.rs` and `graphql/query.rs` log `tracing::warn!` with row id + raw value before degrading. **Step 2 must use the same `Option<Self>` + warn-then-degrade pattern for any new enum conversions.**
+
+### Per-request access log (commit ec6c90e)
+
+Bun's `Bun.serve` fetch handler and Rust's `extract_request_context` middleware each emit one structured `info` event per request: `method`, `path`, `status`, `duration_ms`, `trace_id`. Both shapes are locked to those five fields plus a human-readable message body. Seq queries by `trace_id` work uniformly across both stacks.
+
+### Code-organisation (commit 4713116)
+
+`server-rust/src/db.rs` split into `db/{mod,migrate}.rs` + `db/queries/{libraries,videos,jobs,video_metadata,watchlist,user_settings,playback_history}.rs`, mirroring Bun's `server/src/db/queries/*.ts` layout. `server-rust/src/graphql/types.rs` split into `types/{node,library,video,watchlist,transcode_job,playback_session,omdb,misc}.rs`. Re-exports keep call-site imports flat. **Step 2 adds write functions to the existing `db/queries/*.rs` files — they slot in next to the existing reads.**
+
+### Test discipline (commits ed8c088 + 21e8d84 + 23ab952)
+
+85 tests total (74 unit + 3 cascade integration + 8 GraphQL integration). Every `server-rust/src/db/queries/*.rs` has a `#[cfg(test)] mod tests` block. Every Bun test on main since branch diverged was ported in scope: relay, libraries/jobs/videos, pragmas, cascade, mappers, traceparent extraction, and an initial-state-only subscription scan test. Skipped: subscription-error-atomicity (chunker is Step 2). New cross-migration principle: **tests are the spec; they travel with the port.** See "Cross-migration principles" in `docs/migrations/rust-rewrite/README.md` (pending addition).
+
+### mprocs dev orchestrator (commit 4e6ea6f)
+
+Replaced `bun run --filter '*' dev` with mprocs (TUI per-process panes). New `mprocs.yaml` at repo root. Root `package.json` `dev` script prechecks for the mprocs binary and exits 127 with install instructions if missing; `dev:plain` keeps the old behaviour. `cargo install --locked mprocs` added to README prereqs.
+
+### CI for the Rust workspace (commit 100b213)
+
+New `server-rust` job in `.github/workflows/ci.yml`: `cargo fmt --all -- --check`, `cargo clippy --all-targets -- -D warnings`, `cargo build`, `cargo test`, then SDL parity (boots the Rust binary, runs `scripts/check-sdl-parity.ts`, kills it). Step 2 should extend this job — add the streaming integration test run after `cargo test`.
+
+### server-rust + scripts/ as Bun workspaces (commits 4713116 + 1c379a0)
+
+`server-rust/package.json` is a workspace member with a `dev` script that prepends `~/.cargo/bin` to PATH. `scripts/` became a workspace member with `tsc --noEmit` lint, so `scripts/check-sdl-parity.ts` and sibling scripts are type-checked in CI.

@@ -47,6 +47,15 @@ export const FLAG_KEYS = {
    *  ffmpeg stderr captured. Default OFF; remove once the root cause is
    *  fixed (Phase 5 of the plan). */
   devForceShortChunkAtZero: "flag.devForceShortChunkAtZero",
+  /** Step 1 of the Rust + Tauri migration. When ON, the Relay client
+   *  connects to the Rust GraphQL server at `localhost:3002` instead of the
+   *  Bun server (which stays on `localhost:3001`). Non-player pages
+   *  (Library, Watchlist, Settings) work; the player page is knowingly
+   *  broken because `/stream/:jobId` and the chunker land in Step 2.
+   *  Default OFF; toggle in Settings → Flags then reload the page (env
+   *  initialises before flag hydration, so a reload is required).
+   *  See `docs/migrations/rust-rewrite/Plan/01-GraphQL-And-Observability.md`. */
+  useRustGraphQL: "flag.useRustGraphQL",
 } as const;
 
 export const FLAG_REGISTRY: readonly FlagDescriptor[] = [
@@ -87,6 +96,15 @@ export const FLAG_REGISTRY: readonly FlagDescriptor[] = [
     name: "Dev: force short first chunk at startS=0",
     description:
       "Reproduces the VAAPI HDR 4K silent-failure bug. When ON, cold-start uses FIRST_CHUNK_DURATION_S=30 instead of the safe 300s window, so the failure mode triggers and `transcode_silent_failure` events land in Seq for diagnosis. Leave OFF unless investigating.",
+    valueType: "boolean",
+    defaultValue: false,
+    category: "experimental",
+  },
+  {
+    key: FLAG_KEYS.useRustGraphQL,
+    name: "Use Rust GraphQL server (Step 1 cutover)",
+    description:
+      "Routes Relay to the Rust GraphQL server on localhost:3002 instead of Bun (which stays on 3001). Non-player pages work; PLAYER PAGE IS BROKEN (Step 2 ships /stream and the chunker). Toggle requires page reload — env initialises before flag hydration.",
     valueType: "boolean",
     defaultValue: false,
     category: "experimental",

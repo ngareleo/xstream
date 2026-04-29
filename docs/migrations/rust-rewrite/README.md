@@ -14,6 +14,15 @@ This folder is the authoritative migration plan: a future agent should be able t
 
 Forward design that ships AFTER the rewrite (peer-to-peer sharing) lives at [`docs/architecture/Sharing/00-Peer-Streaming.md`](../../architecture/Sharing/00-Peer-Streaming.md). Forward constraints from that design are inlined in the relevant layer docs here so the rewrite does not foreclose sharing.
 
+## Cross-migration principles
+
+These principles were codified during Step 1 (PR #39) and apply to every subsequent step:
+
+- **Tests are the spec; they travel with the port.** Every Bun test that covers behaviour being ported must have a counterpart in the Rust workspace before the step's PR ships. Skipping a test because "it tests Step N+1 behaviour" is acceptable only when that behaviour is explicitly out of scope for the current step and documented as such in the playbook.
+- **No `expect`/`unwrap`/silent-discard in production code (§14).** All fallible paths return `Result`. Mutex poisoning is a `DbError::MutexPoisoned` variant. See `docs/code-style/Invariants/00-Never-Violate.md` §14.
+- **Mapper Option-shape + warn-then-degrade.** Enum conversions from DB/wire values return `Option<Self>`. Call sites log `tracing::warn!` with the row id and raw value before degrading — never return a silent default.
+- **Per-request access log shape is locked.** Both Bun and Rust emit one structured `info` per request: `method`, `path`, `status`, `duration_ms`, `trace_id`. Do not change the field set without updating both servers.
+
 ## Topic files
 
 | File | Hook |
@@ -28,7 +37,13 @@ Forward design that ships AFTER the rewrite (peer-to-peer sharing) lives at [`do
 | [`07-Bun-To-Rust-Migration.md`](07-Bun-To-Rust-Migration.md) | Synthesis: runtime model, concurrency primitives, idiom translations, locked crates, phased migration order (A→G), post-cutover workspace layout. |
 | [`08-Tauri-Packaging.md`](08-Tauri-Packaging.md) | Tauri shell + bundle layout, embedded server (in-process loopback), bundled jellyfin-ffmpeg, Ed25519 self-hosted updates, code-signing per OS, CI matrix. |
 | [`09-Tauri-Packaging-Internals.md`](09-Tauri-Packaging-Internals.md) | Pedagogical deep-dive on how Tauri produces cross-platform apps — source → cargo build → bundle resources → installer → installed app → `tauri-plugin-updater`. Walks the architect's mental model and corrects what's actually happening (no Chromium ships, no sidecar process, full-bundle updates, Ed25519-not-OS-chain update verification). Companion to `08`. |
+| [`Architecture-Review-2026-04-28.md`](Architecture-Review-2026-04-28.md) | Snapshot of the architecture review held immediately before Step 1 implementation kicked off. Captures open questions, locked decisions, and rationale that fed into the `Plan/` playbook. |
+| [`Plan/`](Plan/00-README.md) | Step-by-step execution playbook: one doc per step (`01-GraphQL-And-Observability.md`, `02-Streaming.md`, `03-Tauri-Packaging.md`, `04-Release.md`) plus an `Open-Questions.md` register. The 01–09 layer references above answer "what must each layer become"; the Plan docs answer "what do I do, in what order, what is in/out of scope for this step." |
 
 ## Status
 
-Documentation set complete (with `09-Tauri-Packaging-Internals.md` added 2026-04-29). Implementation has not started. The plan file at `~/.claude/plans/talk-to-the-architect-squishy-cray.md` captures the original scoping conversation; the docs above supersede it as the working spec.
+Documentation set complete (with `09-Tauri-Packaging-Internals.md` added 2026-04-29).
+
+**Step 1 — GraphQL + Observability** is in review as **PR #39** (`feat/rust-step1-graphql`, commits a422976…ec6c90e). Not yet merged into `main`. The PR scope grew well beyond the original Step 1 spec during a review-and-iterate session; see `Plan/01-GraphQL-And-Observability.md` §"What shipped beyond the spec" for the full inventory.
+
+Steps 2–4 have not started. The plan file at `~/.claude/plans/talk-to-the-architect-squishy-cray.md` captures the original scoping conversation; the docs above supersede it as the working spec.

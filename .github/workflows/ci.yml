@@ -36,6 +36,74 @@ jobs:
       - name: Build
         run: bun run build
 
+  server-rust:
+    name: Rust server — fmt, clippy, build, test, SDL parity
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache cargo registry + target
+        uses: Swatinem/rust-cache@v2
+        with:
+          # Workspace root is the repo root; target dir is at <root>/target.
+          workspaces: . -> target
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install root bun deps (graphql for the SDL-parity script)
+        run: bun install
+
+      - name: Lint scripts/ TS files
+        # `scripts/` is its own Bun workspace with `tsc --noEmit` as its lint.
+        # Type-checks check-sdl-parity.ts, setup-ffmpeg.ts, test-chunking.ts.
+        run: bun run --filter scripts lint
+
+      - name: Format check
+        run: cargo fmt --all -- --check
+
+      - name: Clippy
+        # `--all-targets` covers the test binary in tests/ as well as src/.
+        # `-D warnings` makes any new lint a CI failure — keeps drift out.
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: Build
+        run: cargo build --workspace --all-targets
+
+      - name: Test
+        run: cargo test --workspace
+
+      - name: SDL parity (Rust introspection ↔ Bun typeDefs)
+        # Boots the Rust server, runs `scripts/check-sdl-parity.ts` against
+        # its introspection, and kills it. The script is the Step-1 acceptance
+        # gate — drift here means the Relay client's generated artifacts will
+        # break across the cutover.
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p tmp
+          DB_PATH="$PWD/tmp/ci-xstream.db" cargo run --quiet --bin xstream-server &
+          SERVER_PID=$!
+          trap "kill $SERVER_PID 2>/dev/null || true; wait $SERVER_PID 2>/dev/null || true" EXIT
+
+          for _ in $(seq 1 60); do
+            if curl -fs http://127.0.0.1:3002/healthz >/dev/null 2>&1; then
+              echo "Rust server is up"
+              break
+            fi
+            sleep 0.5
+          done
+          # Hard-fail if the server never came up.
+          curl -fs http://127.0.0.1:3002/healthz >/dev/null
+
+          RUST_GRAPHQL_URL=http://127.0.0.1:3002/graphql bun run scripts/check-sdl-parity.ts
+
   client:
     name: Client — lint, test, relay, build
     runs-on: ubuntu-latest

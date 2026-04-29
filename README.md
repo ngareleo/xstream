@@ -4,7 +4,8 @@ High-resolution web streaming with a full resolution ladder (240p → 4K). The s
 
 ## Stack
 
-- **Server:** Bun, graphql-yoga, SQLite (`bun:sqlite`), fluent-ffmpeg
+- **Server (Bun, today):** Bun, graphql-yoga, SQLite (`bun:sqlite`), fluent-ffmpeg
+- **Server (Rust, Step 1 of the migration):** axum + async-graphql 7 + rusqlite — runs side-by-side with Bun on `localhost:3002`. Toggle the `useRustGraphQL` flag in Settings → Flags to route Relay at it. See [`docs/migrations/rust-rewrite/Plan/01-GraphQL-And-Observability.md`](docs/migrations/rust-rewrite/Plan/01-GraphQL-And-Observability.md).
 - **Client:** React, Relay, Griffel (atomic CSS-in-JS), Rsbuild, React Router
 
 ---
@@ -12,6 +13,12 @@ High-resolution web streaming with a full resolution ladder (240p → 4K). The s
 ## Prerequisites
 
 - [Bun](https://bun.sh) v1.1+
+- [Rust](https://www.rust-lang.org/tools/install) stable (1.75+) via `rustup` — required for the Rust GraphQL server. The `server-rust` workspace's dev script prepends `~/.cargo/bin` to PATH automatically, so once rustup is installed `bun run dev` finds `cargo` even in non-interactive shells.
+- [`mprocs`](https://github.com/pvolok/mprocs) — TUI dev orchestrator. One-time install (~2 min, cached after):
+  ```bash
+  cargo install --locked mprocs
+  ```
+  `bun run dev` exits 127 with the install hint above if `mprocs` isn't on PATH. A fallback `bun run dev:plain` exists for headless contexts where you don't want the TUI.
 - `ffmpeg` accessible via `@ffmpeg-installer/ffmpeg` (installed automatically as a dependency — no system ffmpeg required)
 - [Docker](https://docs.docker.com/get-docker/) (required for Seq log management — optional for basic development)
 
@@ -61,25 +68,67 @@ cd ..
 
 ## Running in Development
 
-Start both the server and client in parallel:
+Start the Bun server, the Rust server, and the client in parallel via the `mprocs` TUI:
 
 ```bash
 bun run dev
 ```
 
-Or start them individually:
+This opens a terminal UI with one pane per workspace:
+
+| Workspace | Port | Purpose |
+|---|---|---|
+| `server` (Bun) | `3001` | Default GraphQL + `/stream/:jobId` (chunker, ffmpeg) |
+| `server-rust` (Rust) | `3002` | Step 1 cutover GraphQL — opt-in via `useRustGraphQL` flag |
+| `client` (Rsbuild) | `5173` | Webview; proxies `/graphql` and `/stream` to Bun |
+
+Each pane has independent scrollback so you can debug one process without losing another's output. Keybindings:
+
+| Key | Action |
+|---|---|
+| `↑` / `↓` | Switch between panes |
+| `r` | Restart the focused process |
+| `x` | Stop the focused process |
+| `s` | Start the focused process (if stopped) |
+| `q` | Quit — gracefully stops everything |
+| `?` | In-app help |
+
+Open [http://localhost:5173](http://localhost:5173). The Bun server scans your configured media libraries on startup; you should see your videos within a few seconds. Large libraries with many files take longer to ffprobe.
+
+### Fallback / individual processes
+
+If you don't want the TUI (headless terminal, log capture, scripted contexts), use the plain interleaved variant:
 
 ```bash
-# Terminal 1 — server on :3001
+bun run dev:plain   # bun run --filter '*' dev — colored prefixes, no TUI
+```
+
+Or start workspaces individually in separate terminals:
+
+```bash
+# Terminal 1 — Bun server on :3001
 cd server && bun run dev
 
-# Terminal 2 — client on :5173
+# Terminal 2 — Rust server on :3002 (skip if you don't need the cutover path)
+cd server-rust && cargo run
+
+# Terminal 3 — client on :5173
 cd client && bun run dev
 ```
 
-Open [http://localhost:5173](http://localhost:5173).
+### Toggling the Rust GraphQL server
 
-The server scans your configured media libraries on startup. You should see your videos in the library view within a few seconds. Large libraries with many files will take longer to ffprobe.
+Navigate to **Settings → Flags → Use Rust GraphQL server (Step 1 cutover)**. When ON, Relay points at `http://localhost:3002/graphql` instead of the proxied Bun route. Library / Watchlist / Settings work; **the player page is knowingly broken** because `/stream/:jobId` and the chunker land in Step 2 of the Rust port. The flag is mirrored to `localStorage` (key `flag.useRustGraphQL`); a page reload is required after toggling because the Relay environment initialises before the GraphQL hydration query runs. The two **Bulk actions** buttons in the same tab let you wipe local overrides (server values become authoritative on next reload) or reset every flag back to its registry default.
+
+### SDL parity check
+
+Whenever the Bun schema (`server/src/graphql/schema.ts`) changes, the Rust server's introspection must keep matching. Run the gate from the worktree root with both servers up:
+
+```bash
+RUST_GRAPHQL_URL=http://127.0.0.1:3002/graphql bun run scripts/check-sdl-parity.ts
+```
+
+It exits 0 on parity and 1 with a structural diff on drift (added / removed types, fields, args, defaults, enum variants, union members).
 
 ---
 
@@ -99,10 +148,15 @@ The server scans your configured media libraries on startup. You should see your
 ```
 xstream/
 ├── server/                # Bun server (GraphQL + streaming)
-├── client/                # Vite + React client
+├── server-rust/           # Rust server — Step 1 of the migration (GraphQL + observability)
+├── client/                # React client (Rsbuild)
+├── scripts/               # tooling — incl. check-sdl-parity.ts (the Step 1 gate)
 ├── docs/                  # architecture documentation
+│   └── migrations/rust-rewrite/  # the Rust port playbook + layer references
+├── Cargo.toml             # Rust workspace root
+├── mprocs.yaml            # dev orchestrator config — one process per workspace
 └── tmp/                   # generated at runtime (gitignored)
-    ├── xstream.db            # SQLite database
+    ├── xstream.db            # SQLite database (shared between Bun and Rust)
     └── segments/          # ffmpeg segment cache
 ```
 

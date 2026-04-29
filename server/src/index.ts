@@ -81,31 +81,42 @@ async function bootstrap(): Promise<void> {
     idleTimeout: 0,
 
     async fetch(req, server) {
+      // Per-request access log — emits one structured info per request
+      // with method/path/status/duration_ms/trace_id. Long-lived
+      // /stream/:jobId responses log time-to-first-byte (when status
+      // goes out), not the full stream lifetime; the chunk.stream span
+      // captures that in OTel.
+      const startedAt = performance.now();
       const url = new URL(req.url);
+      const method = req.method;
+      const path = url.pathname;
+      const traceId = traceIdFromHeader(req.headers.get("traceparent"));
 
-      // Upgrade WebSocket connections for GraphQL subscriptions (graphql-ws protocol).
-      if (url.pathname === "/graphql" && req.headers.get("upgrade") === "websocket") {
-        const protocol = req.headers.get("sec-websocket-protocol") ?? "";
-        if (!handleProtocols(protocol)) {
-          return new Response("Bad Request: unsupported WebSocket subprotocol", { status: 400 });
-        }
-        if (!server.upgrade(req)) {
-          return new Response("WebSocket upgrade failed", { status: 500 });
-        }
-        return new Response();
+      let status = 0;
+      try {
+        const response = await dispatch(req, server, url);
+        status = response.status;
+        return response;
+      } catch (err) {
+        status = 500;
+        log.error(`${method} ${path} 500 — ${(err as Error).message}`, {
+          http_method: method,
+          http_target: path,
+          http_status: 500,
+          trace_id: traceId,
+          error: (err as Error).message,
+        });
+        throw err;
+      } finally {
+        const durationMs = Math.round(performance.now() - startedAt);
+        log.info(`${method} ${path} ${status} — ${durationMs}ms (trace=${traceId || "-"})`, {
+          http_method: method,
+          http_target: path,
+          http_status: status,
+          duration_ms: durationMs,
+          trace_id: traceId,
+        });
       }
-
-      // GraphQL endpoint (GET for introspection, POST for queries/mutations)
-      if (url.pathname === "/graphql" || url.pathname.startsWith("/graphql")) {
-        return yoga.handle(req);
-      }
-
-      // Binary streaming endpoint
-      if (url.pathname.startsWith("/stream/")) {
-        return handleStream(req);
-      }
-
-      return new Response("Not Found", { status: 404 });
     },
 
     // graphql-ws Bun handler manages the per-socket lifecycle.
@@ -113,6 +124,55 @@ async function bootstrap(): Promise<void> {
   });
 
   log.info("Server listening", { port: config.port });
+}
+
+/**
+ * Route dispatcher — split out of the Bun.serve `fetch` callback so the
+ * access-log wrapper there can `await` a Response from a single call site
+ * without nesting.
+ */
+/**
+ * Pull the W3C trace_id out of an inbound `traceparent` header, if any.
+ * Format: `00-<32-hex-trace_id>-<16-hex-span_id>-<2-hex-flags>`. Returns
+ * an empty string when the header is missing or malformed — the caller
+ * logs `trace_id` as empty rather than failing the request, matching the
+ * Rust side's behaviour where an unparseable traceparent yields an
+ * invalid SpanContext (silent for that request, root-span for the
+ * resolver chain that follows).
+ */
+function traceIdFromHeader(header: string | null): string {
+  if (!header) return "";
+  const parts = header.split("-");
+  if (parts.length !== 4) return "";
+  const [, traceId] = parts;
+  if (!traceId || traceId.length !== 32 || !/^[0-9a-f]+$/i.test(traceId)) return "";
+  return traceId;
+}
+
+async function dispatch(req: Request, server: Bun.Server<undefined>, url: URL): Promise<Response> {
+  // Upgrade WebSocket connections for GraphQL subscriptions (graphql-ws protocol).
+  if (url.pathname === "/graphql" && req.headers.get("upgrade") === "websocket") {
+    const protocol = req.headers.get("sec-websocket-protocol") ?? "";
+    if (!handleProtocols(protocol)) {
+      return new Response("Bad Request: unsupported WebSocket subprotocol", { status: 400 });
+    }
+    if (!server.upgrade(req)) {
+      return new Response("WebSocket upgrade failed", { status: 500 });
+    }
+    return new Response();
+  }
+
+  // GraphQL endpoint (GET for introspection, POST for queries/mutations)
+  if (url.pathname === "/graphql" || url.pathname.startsWith("/graphql")) {
+    return yoga.handle(req);
+  }
+
+  // Binary streaming endpoint
+  if (url.pathname.startsWith("/stream/")) {
+    return handleStream(req);
+  }
+
+  return new Response("Not Found", { status: 404 });
 }
 
 async function shutdown(signal: string): Promise<void> {

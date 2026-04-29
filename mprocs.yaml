@@ -1,0 +1,24 @@
+# Dev orchestrator config — invoked by `bun run dev`.
+#
+# One process per workspace. mprocs gives each its own scrollable pane,
+# per-process restart (`r`) / kill (`x`), and surfaces exit codes in the
+# status line when one dies.
+#
+# Why this file is at the repo root: mprocs resolves `cwd` relative to the
+# config file's directory, so keeping it here lets each process point at its
+# workspace with a short relative path.
+#
+# Why `cmd` is array form (no shell): no shell-escaping surprises; the
+# workspace's existing `dev` script handles its own env vars (e.g. the
+# server-rust dev script prepends $HOME/.cargo/bin to PATH internally).
+
+procs:
+  server:
+    cwd: ./server
+    cmd: [bun, run, dev]
+  server-rust:
+    cwd: ./server-rust
+    cmd: [bun, run, dev]
+  client:
+    cwd: ./client
+    cmd: [bun, run, dev]

@@ -33,6 +33,7 @@ Full list: [`code-style/Invariants/00-Never-Violate.md`](code-style/Invariants/0
 7. **One resolver owns each GraphQL field.** `@graphql-tools/schema` merges via `Object.assign`; duplicates silently overwrite.
 8. **Playback-path resolvers return a typed union for known failure modes — never throw a plain `Error`.** `startTranscode` returns `StartTranscodeResult = TranscodeJob | PlaybackError`. Mid-job failures must set `ActiveJob.errorCode` before `notifySubscribers`. See invariant #11 in `code-style/Invariants/00-Never-Violate.md`.
 9. **The network stream is a pull sink, not a push source.** `stream.ts` uses `new ReadableStream({ pull(controller) })` — one segment per pull call, no internal loop. This translates 1:1 to `axum::Body::from_stream` in the Rust rewrite. See invariant #12 in `code-style/Invariants/00-Never-Violate.md`.
+10. **Never swallow errors.** In Rust: no `expect`/`unwrap`/silent-discard in production code; every fallible path returns `Result`; mutex poisoning is a typed error; resolver errors land in Seq with the request TraceId via the `ErrorLogger` async-graphql extension. See invariant #14 in `code-style/Invariants/00-Never-Violate.md`. Mirrored at the migration level by *tests travel with the port* — the unhappy path is part of the spec at compile/test time AND at runtime.
 
 ## Streaming pipeline in one paragraph
 
@@ -60,9 +61,10 @@ The client drives transcoding in **300-second chunks** (steady-state), with a sh
 | Invariants, naming, conventions, anti-patterns | [`code-style/`](code-style/README.md) |
 | UI design spec | [`design/`](design/README.md) |
 | Product spec, customers, roadmap | [`product/`](product/README.md) |
+| Bun → Rust + Tauri rewrite playbook + cross-migration principles | [`migrations/`](migrations/README.md) |
 
 **For anything deeper than this page, ask the `architect` subagent — it owns the knowledge base and maintains this file.** When you modify code or docs, notify architect with a short change summary before closing the task so the tree stays coherent.
 
 ---
 
-_Last regenerated: 2026-04-28 (PR #35 — VAAPI HDR workaround + clientConfig consolidation + fromIndex removal). Owned by the `architect` subagent; regenerated mechanically by the `groom-knowledge-base` skill._
+_Last regenerated: 2026-04-30 (groom-knowledge-base after the PR #39 doc-curation pass — added §14 never-swallow-errors invariant + migrations row + Cross-migration principles + access-log shape + ErrorLogger extension; PR #39 itself in review, not merged). Owned by the `architect` subagent; regenerated mechanically by the `groom-knowledge-base` skill._
