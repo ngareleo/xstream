@@ -13,6 +13,8 @@ import { afterEach, describe, expect, it, mock } from "bun:test";
 import { EventEmitter } from "events";
 import type { FfmpegCommand } from "fluent-ffmpeg";
 
+import { config } from "../../config.js";
+import { installClock } from "../../test/clock.js";
 import {
   getCapLimit,
   hasInflightOrLive,
@@ -285,5 +287,73 @@ describe("ffmpegPool — kill semantics", () => {
       expect(hookList[i].onKilled).toHaveBeenCalledTimes(1);
       expect(hookList[i].onKilled).toHaveBeenCalledWith("server_shutdown");
     }
+  });
+
+  it("SIGKILL escalation: stubborn ffmpeg gets SIGKILL'd after forceKillTimeoutMs", async () => {
+    // Production contract: if a SIGTERM'd ffmpeg doesn't exit within
+    // forceKillTimeoutMs (2 s), the pool escalates to SIGKILL. Without this,
+    // a hung ffmpeg holds its slot in `dyingJobIds` forever and the cap stays
+    // wedged a slot short.
+    //
+    // Use full fake-timers: the escalation is a setTimeout(SIGKILL,
+    // forceKillTimeoutMs) on a clock the test controls; advance that clock
+    // and the pool fires the SIGKILL deterministically.
+    const clock = installClock();
+    try {
+      const fake = newFake();
+      const r = tryReserveSlot("escalation-stubborn");
+      expect(r).not.toBeNull();
+      if (r) spawnProcess(r, fake, noopHooks());
+
+      killJob("escalation-stubborn", "max_encode_timeout");
+      const fakeCmd = fake as unknown as FakeFfmpegCommand;
+      expect(fakeCmd.signals).toEqual(["SIGTERM"]);
+
+      // Just before the escalation timer fires — still no SIGKILL.
+      await clock.tickAsync(config.transcode.forceKillTimeoutMs - 1);
+      expect(fakeCmd.signals).toEqual(["SIGTERM"]);
+
+      // Cross the threshold — pool dispatches SIGKILL.
+      await clock.tickAsync(2);
+      expect(fakeCmd.signals).toEqual(["SIGTERM", "SIGKILL"]);
+
+      // Cleanup: emit end so the slot drains.
+      fakeCmd.emit("end");
+    } finally {
+      clock.uninstall();
+    }
+  });
+
+  it("killAllJobs sweep: stubborn survivors get SIGKILL after the sweep timeout", async () => {
+    // Two jobs: one obedient (emits end on SIGTERM), one stubborn (doesn't).
+    // killAllJobs(sweepTimeoutMs) calls SIGTERM on every live job and races a
+    // sweep timer. When the sweep fires before stubborn exits, the pool
+    // SIGKILLs the survivor and resolves.
+    const obedient = newFake();
+    const stubborn = newFake();
+    const obedientHooks = noopHooks();
+    const stubbornHooks = noopHooks();
+
+    const r1 = tryReserveSlot("sweep-obedient");
+    if (r1) spawnProcess(r1, obedient, obedientHooks);
+    const r2 = tryReserveSlot("sweep-stubborn");
+    if (r2) spawnProcess(r2, stubborn, stubbornHooks);
+
+    // Obedient exits cleanly on SIGTERM.
+    queueMicrotask(() => (obedient as unknown as FakeFfmpegCommand).emit("end"));
+
+    // Use a tight sweep budget; stubborn never emits end → sweep hits SIGKILL.
+    const sweepBudget = 200;
+    await killAllJobs(sweepBudget);
+
+    const obedientCmd = obedient as unknown as FakeFfmpegCommand;
+    const stubbornCmd = stubborn as unknown as FakeFfmpegCommand;
+    expect(obedientCmd.signals).toContain("SIGTERM");
+    expect(stubbornCmd.signals).toContain("SIGTERM");
+    // The sweep timeout SIGKILL'd the survivor — the contract this test pins.
+    expect(stubbornCmd.signals).toContain("SIGKILL");
+
+    // Drain stubborn so the suite cleanup is clean.
+    stubbornCmd.emit("end");
   });
 });
