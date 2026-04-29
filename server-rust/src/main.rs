@@ -48,6 +48,15 @@ async fn run() -> AppResult<()> {
         source,
     })?;
 
+    let restored = xstream_server::services::job_restore::sweep_interrupted(&db)
+        .map_err(|source| AppError::JobRestore { source })?;
+    if restored > 0 {
+        tracing::info!(
+            restored,
+            "Marked {restored} interrupted transcode jobs as errored on startup"
+        );
+    }
+
     let state = AppState::new(db);
     let app = build_router(state)?;
 

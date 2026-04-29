@@ -3,6 +3,7 @@ pub mod error;
 pub mod graphql;
 pub mod relay;
 pub mod request_context;
+pub mod services;
 pub mod telemetry;
 
 use axum::{response::IntoResponse, routing::get, Router};

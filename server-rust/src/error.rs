@@ -67,6 +67,12 @@ pub enum AppError {
         source: DbError,
     },
 
+    #[error("restoring interrupted transcode jobs on startup")]
+    JobRestore {
+        #[source]
+        source: DbError,
+    },
+
     #[error("invalid bind address {addr:?}")]
     InvalidBindAddr {
         addr: String,
