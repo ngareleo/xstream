@@ -56,6 +56,14 @@ export const FLAG_KEYS = {
    *  initialises before flag hydration, so a reload is required).
    *  See `docs/migrations/rust-rewrite/Plan/01-GraphQL-And-Observability.md`. */
   useRustGraphQL: "flag.useRustGraphQL",
+  /** Step 2 of the Rust + Tauri migration. When ON, StreamingService
+   *  fetches `/stream/:jobId` from the Rust server at `localhost:3002`
+   *  instead of the same-origin Bun endpoint. INDEPENDENT of
+   *  `useRustGraphQL`: each can be flipped alone for per-channel A/B and
+   *  regression isolation. Mid-session flip is graceful — the current Bun
+   *  segment finishes, the next request lands on Rust. Default OFF.
+   *  See `docs/migrations/rust-rewrite/Plan/02-Streaming.md`. */
+  useRustStreaming: "flag.useRustStreaming",
 } as const;
 
 export const FLAG_REGISTRY: readonly FlagDescriptor[] = [
@@ -105,6 +113,15 @@ export const FLAG_REGISTRY: readonly FlagDescriptor[] = [
     name: "Use Rust GraphQL server (Step 1 cutover)",
     description:
       "Routes Relay to the Rust GraphQL server on localhost:3002 instead of Bun (which stays on 3001). Non-player pages work; PLAYER PAGE IS BROKEN (Step 2 ships /stream and the chunker). Toggle requires page reload — env initialises before flag hydration.",
+    valueType: "boolean",
+    defaultValue: false,
+    category: "experimental",
+  },
+  {
+    key: FLAG_KEYS.useRustStreaming,
+    name: "Use Rust streaming endpoint (Step 2 cutover)",
+    description:
+      "Routes /stream/:jobId to the Rust server on localhost:3002. Independent of useRustGraphQL — flip either or both. Mid-session flip is graceful: the current segment finishes on Bun, the next request lands on Rust.",
     valueType: "boolean",
     defaultValue: false,
     category: "experimental",

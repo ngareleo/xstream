@@ -1,5 +1,6 @@
 import { type Context, context } from "@opentelemetry/api";
 
+import { streamUrl } from "~/config/rustOrigin.js";
 import { getClientLogger } from "~/telemetry.js";
 
 const log = getClientLogger("streamingService");
@@ -23,7 +24,7 @@ export class StreamingService {
     this.abortController = new AbortController();
     let response: Response;
 
-    const url = `/stream/${jobId}`;
+    const url = streamUrl(jobId);
     log.info(`Fetching ${url}`, { url, job_id: jobId });
 
     try {

@@ -20,6 +20,14 @@ export function isRustGraphQLEnabled(): boolean {
   return getFlag<boolean>(FLAG_KEYS.useRustGraphQL, false);
 }
 
+/** Independent of `isRustGraphQLEnabled` — Step 2 ships its own flag so
+ *  each channel can be flipped alone for per-channel A/B testing and
+ *  regression isolation. Read at fetch-time, NOT at module-init, so a
+ *  mid-session flip lands on the very next chunk. */
+export function isRustStreamingEnabled(): boolean {
+  return getFlag<boolean>(FLAG_KEYS.useRustStreaming, false);
+}
+
 export function graphqlHttpUrl(): string {
   return isRustGraphQLEnabled() ? `${RUST_HTTP_ORIGIN}/graphql` : "/graphql";
 }
@@ -28,4 +36,12 @@ export function graphqlWsUrl(): string {
   if (isRustGraphQLEnabled()) return `${RUST_WS_ORIGIN}/graphql`;
   const proto = globalThis.location?.protocol === "https:" ? "wss:" : "ws:";
   return `${proto}//${globalThis.location?.host ?? "localhost"}/graphql`;
+}
+
+/** `/stream/:jobId` URL for the current flag state. The chunker keeps two
+ *  separate segment-cache directories (Bun: `tmp/segments`, Rust:
+ *  `tmp/segments-rust`) so a mid-session flip can't see a half-encoded
+ *  cache from the other side. */
+export function streamUrl(jobId: string): string {
+  return isRustStreamingEnabled() ? `${RUST_HTTP_ORIGIN}/stream/${jobId}` : `/stream/${jobId}`;
 }

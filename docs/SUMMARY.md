@@ -67,4 +67,14 @@ The client drives transcoding in **300-second chunks** (steady-state), with a sh
 
 ---
 
-_Last regenerated: 2026-04-30 (groom-knowledge-base after the PR #39 doc-curation pass — added §14 never-swallow-errors invariant + migrations row + Cross-migration principles + access-log shape + ErrorLogger extension; PR #39 itself in review, not merged). Owned by the `architect` subagent; regenerated mechanically by the `groom-knowledge-base` skill._
+## Rust migration status (live cursor)
+
+- **Step 1 — GraphQL + Observability**: merged on `main` as PR #39. Behind `useRustGraphQL` flag. Rust binds `localhost:3002`; Bun stays on `3001`.
+- **Step 2 — Streaming**: in progress on `feat/rust-step2-streaming` worktree (`/home/dag/Projects/xstream-rust-step2`). Behind a NEW `useRustStreaming` flag, INDEPENDENT of `useRustGraphQL`. Adds `server-rust/src/services/{chunker,ffmpeg_pool,ffmpeg_path,ffmpeg_file,hw_accel,active_job,job_store,kill_reason,cache_index,job_restore}.rs` and `routes/stream.rs`. Cache key shifted from job-id-only to structural tuple `(video_id, resolution, start_s, end_s)` for forward sharing. Segment dir splits per-server: Bun keeps `tmp/segments/`, Rust uses `tmp/segments-rust/`. `AppContext` bundles all chunker dependencies. The chunker port skips `transcode_progress` periodic events and the `orphan_no_connection` / `max_encode_timeout` watchdog timers — surfaced in the PR for follow-up.
+- **Steps 3 (Tauri packaging) and 4 (release)** are unstarted.
+
+The full layer references and step playbook live at [`migrations/rust-rewrite/`](migrations/rust-rewrite/README.md). The architect should treat the Rust workspace as a peer of the Bun server, not a future state — both run concurrently during the cutover.
+
+---
+
+_Last regenerated: 2026-04-30. Step 2 cursor added during the chunker + /stream port. Owned by the `architect` subagent; regenerated mechanically by the `groom-knowledge-base` skill._
