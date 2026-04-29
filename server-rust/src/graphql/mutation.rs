@@ -10,7 +10,7 @@ use crate::db::{
     update_watchlist_progress, upsert_video_metadata, Db, LibraryUpdate, PlaybackHistoryRow,
     VideoMetadataRow,
 };
-use crate::graphql::scalars::{MediaType, PlaybackErrorCode, Resolution};
+use crate::graphql::scalars::{MediaType, Resolution};
 use crate::graphql::types::{
     Library, PlaybackError, PlaybackSession, StartTranscodeResult, Video, WatchlistItem,
 };
@@ -31,26 +31,40 @@ impl Mutation {
             .collect())
     }
 
-    /// Step 1 stub — always returns an INTERNAL PlaybackError. The chunker /
-    /// ffmpeg pool is out of scope for Step 1; turn the `useRustGraphQL`
-    /// flag OFF on the player page until Step 2 ships.
+    /// Spawn (or reuse) a transcode job for the requested video range.
+    /// Returns either a `TranscodeJob` payload (the job is now in the
+    /// chunker's job_store and segments will arrive via `/stream/:jobId`)
+    /// or a typed `PlaybackError` for the failure modes the client can
+    /// react to (capacity exhausted, video not found, probe failed, etc.).
     async fn start_transcode(
         &self,
-        _video_id: ID,
-        _resolution: Resolution,
-        _start_time_seconds: Option<f64>,
-        _end_time_seconds: Option<f64>,
+        ctx: &Context<'_>,
+        video_id: ID,
+        resolution: Resolution,
+        start_time_seconds: Option<f64>,
+        end_time_seconds: Option<f64>,
     ) -> async_graphql::Result<StartTranscodeResult> {
-        Ok(StartTranscodeResult::PlaybackError(PlaybackError {
-            code: PlaybackErrorCode::Internal,
-            message:
-                "startTranscode is not implemented in the Rust GraphQL server yet (Step 1). Disable \
-                 the `useRustGraphQL` flag in Settings → Flags before playing video — Step 2 wires \
-                 the chunker/ffmpeg pool."
-                    .to_string(),
-            retryable: false,
-            retry_after_ms: None,
-        }))
+        use crate::services::chunker::{start_transcode_job, StartJobResult};
+        use crate::graphql::types::TranscodeJob;
+        let app_ctx = ctx.data_unchecked::<crate::config::AppContext>();
+        let (_, local_id) = from_global_id(&video_id)?;
+        let result =
+            start_transcode_job(app_ctx, &local_id, resolution, start_time_seconds, end_time_seconds)
+                .await;
+        Ok(match result {
+            StartJobResult::Ok(job) => StartTranscodeResult::TranscodeJob(TranscodeJob::from_active(&job)),
+            StartJobResult::Error {
+                code,
+                message,
+                retryable,
+                retry_after_ms,
+            } => StartTranscodeResult::PlaybackError(PlaybackError {
+                code,
+                message,
+                retryable,
+                retry_after_ms: retry_after_ms.map(|n| n as i32),
+            }),
+        })
     }
 
     async fn create_library(

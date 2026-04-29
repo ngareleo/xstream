@@ -3,7 +3,28 @@
 //! (`transcode` and `stream`); other sections (scan interval, OMDb match,
 //! library config) come on as later steps need them.
 
+use std::path::PathBuf;
+use std::sync::Arc;
+
+use dashmap::DashMap;
+
+use crate::db::Db;
 use crate::graphql::scalars::Resolution;
+use crate::services::ffmpeg_file::HwAccelConfig;
+use crate::services::ffmpeg_path::FfmpegPaths;
+use crate::services::ffmpeg_pool::FfmpegPool;
+use crate::services::job_store::JobStore;
+
+/// Per-source VAAPI capability state, learned from prior failures. Mirrors
+/// `vaapiVideoState` in Bun's `chunker.ts:43`. Lives on `AppContext` so the
+/// chunker can read/write across cascade tiers without a module global.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum VaapiVideoState {
+    NeedsSwPad,
+    HwUnsafe,
+}
+
+pub type VaapiVideoStateMap = Arc<DashMap<String, VaapiVideoState>>;
 
 /// Encode-pipeline tunables — concurrency cap, kill grace windows, retry
 /// hints. All fields default-constructible; override via builder pattern
@@ -72,6 +93,82 @@ impl Default for StreamConfig {
         Self {
             connection_idle_timeout_ms: 180_000,
         }
+    }
+}
+
+/// Top-level server config. Currently only the streaming-relevant fields
+/// are populated — `port`, scan interval, OMDb / hw-accel mode are added as
+/// later migration steps need them.
+#[derive(Clone, Debug)]
+pub struct AppConfig {
+    pub segment_dir: PathBuf,
+    pub db_path: PathBuf,
+    pub transcode: TranscodeConfig,
+    pub stream: StreamConfig,
+}
+
+impl AppConfig {
+    /// Default config for tests + dev — Bun's `dev` config writes to
+    /// `tmp/segments` / `tmp/xstream.db`. The Rust port writes to
+    /// `tmp/segments-rust/` / `tmp/xstream-rust.db` (Plan/02-Streaming.md
+    /// §"Decisions to lock" #2).
+    pub fn dev_defaults(project_root: &std::path::Path) -> Self {
+        Self {
+            segment_dir: project_root.join("tmp").join("segments-rust"),
+            db_path: project_root.join("tmp").join("xstream-rust.db"),
+            transcode: TranscodeConfig::default(),
+            stream: StreamConfig::default(),
+        }
+    }
+}
+
+/// Bundle of long-lived state the chunker + stream route both need. The
+/// router clones this for every request — every field is `Arc` / `Clone`.
+#[derive(Clone)]
+pub struct AppContext {
+    pub db: Db,
+    pub config: AppConfig,
+    pub pool: FfmpegPool,
+    pub ffmpeg_paths: Arc<FfmpegPaths>,
+    pub hw_accel: HwAccelConfig,
+    pub vaapi_state: VaapiVideoStateMap,
+    pub job_store: JobStore,
+}
+
+impl AppContext {
+    pub fn new(
+        db: Db,
+        config: AppConfig,
+        ffmpeg_paths: Arc<FfmpegPaths>,
+        hw_accel: HwAccelConfig,
+    ) -> Self {
+        let pool = FfmpegPool::new(config.transcode.clone());
+        Self {
+            db,
+            config,
+            pool,
+            ffmpeg_paths,
+            hw_accel,
+            vaapi_state: Arc::new(DashMap::<String, VaapiVideoState>::new()),
+            job_store: JobStore::new(),
+        }
+    }
+
+    /// Helper for tests + headless boot — supplies a stub `FfmpegPaths`
+    /// pointing at `/bin/true` (probe is gated on actual encode args).
+    pub fn for_tests(db: Db, segment_dir: PathBuf) -> Self {
+        let config = AppConfig {
+            segment_dir,
+            db_path: PathBuf::from(":memory:"),
+            transcode: TranscodeConfig::default(),
+            stream: StreamConfig::default(),
+        };
+        let paths = Arc::new(FfmpegPaths {
+            ffmpeg: PathBuf::from("/bin/true"),
+            ffprobe: PathBuf::from("/bin/true"),
+            version_string: "stub".to_string(),
+        });
+        Self::new(db, config, paths, HwAccelConfig::Software)
     }
 }
 

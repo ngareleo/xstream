@@ -4,26 +4,27 @@ pub mod error;
 pub mod graphql;
 pub mod relay;
 pub mod request_context;
+pub mod routes;
 pub mod services;
 pub mod telemetry;
 
 use axum::{response::IntoResponse, routing::get, Router};
 
-use crate::db::Db;
+use crate::config::AppContext;
 use crate::error::{AppError, AppResult};
 use crate::graphql::{build_schema, XstreamSchema};
 use crate::request_context::extract_request_context;
 
 #[derive(Clone)]
 pub struct AppState {
-    pub db: Db,
+    pub ctx: AppContext,
     pub schema: XstreamSchema,
 }
 
 impl AppState {
-    pub fn new(db: Db) -> Self {
-        let schema = build_schema(db.clone());
-        Self { db, schema }
+    pub fn new(ctx: AppContext) -> Self {
+        let schema = build_schema(ctx.clone());
+        Self { ctx, schema }
     }
 }
 
@@ -42,9 +43,17 @@ pub fn build_router(state: AppState) -> AppResult<Router> {
         .get_service(GraphQLSubscription::new(state.schema.clone()))
         .options(|| async { axum::http::StatusCode::NO_CONTENT });
 
+    let ctx = state.ctx.clone();
     Ok(Router::new()
         .route("/healthz", get(healthz))
         .route("/graphql", graphql_method)
+        .route(
+            "/stream/:job_id",
+            get(routes::stream::stream_handler),
+        )
+        // Pass AppContext via Extension rather than State so we don't have
+        // to thread an `S` type parameter through every router builder.
+        .layer(axum::Extension(ctx))
         // Single outer middleware: extract W3C traceparent, build RequestContext,
         // create a per-request `http.request` span whose parent is the inbound
         // OTel context. Spans created downstream inherit it via Instrument.

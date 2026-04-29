@@ -1,6 +1,11 @@
 use std::net::SocketAddr;
+use std::path::PathBuf;
+use std::sync::Arc;
 
+use xstream_server::config::{AppConfig, AppContext};
 use xstream_server::error::{AppError, AppResult};
+use xstream_server::services::ffmpeg_path::resolve_ffmpeg_paths;
+use xstream_server::services::hw_accel::{resolve_hw_accel, HwAccelMode};
 use xstream_server::{build_router, db::Db, telemetry, AppState};
 
 #[tokio::main]
@@ -57,7 +62,47 @@ async fn run() -> AppResult<()> {
         );
     }
 
-    let state = AppState::new(db);
+    // Resolve the manifest-pinned ffmpeg + ffprobe binaries. Step 2 wires
+    // these into AppContext so the chunker + ffmpeg_pool see them without
+    // a module global.
+    let project_root = std::env::var("XSTREAM_PROJECT_ROOT")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| {
+            // Default: walk up from the running binary to find a sibling
+            // `scripts/ffmpeg-manifest.json`. In dev this is the workspace
+            // root; in Tauri it'll be replaced by app_resource_dir().
+            std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
+        });
+    let manifest_path = project_root.join("scripts").join("ffmpeg-manifest.json");
+    let ffmpeg_paths = resolve_ffmpeg_paths(&project_root, &manifest_path).map_err(|err| {
+        AppError::Telemetry(Box::new(std::io::Error::other(format!(
+            "ffmpeg path resolution failed: {err}"
+        ))))
+    })?;
+    tracing::info!(
+        ffmpeg = %ffmpeg_paths.ffmpeg.display(),
+        ffprobe = %ffmpeg_paths.ffprobe.display(),
+        version = %ffmpeg_paths.version_string,
+        "ffmpeg binaries resolved"
+    );
+
+    let hw_mode = HwAccelMode::from_env();
+    let hw_accel = resolve_hw_accel(&ffmpeg_paths.ffmpeg, hw_mode).await.map_err(|err| {
+        AppError::Telemetry(Box::new(std::io::Error::other(format!(
+            "HW accel resolution failed: {err}"
+        ))))
+    })?;
+    tracing::info!(kind = hw_accel.kind_str(), "Hardware acceleration selected");
+
+    let app_config = AppConfig::dev_defaults(&project_root);
+    // Make sure the segment dir exists before any chunker work.
+    if let Err(err) = tokio::fs::create_dir_all(&app_config.segment_dir).await {
+        tracing::warn!(error = %err, dir = %app_config.segment_dir.display(),
+            "could not create segment dir up-front — chunker will retry per-job");
+    }
+
+    let ctx = AppContext::new(db, app_config, Arc::new(ffmpeg_paths), hw_accel);
+    let state = AppState::new(ctx);
     let app = build_router(state)?;
 
     let addr_str = "127.0.0.1:3002";

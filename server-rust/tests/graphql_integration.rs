@@ -18,7 +18,6 @@ use async_graphql::{value, Variables};
 use futures_util::StreamExt;
 use serde_json::Value;
 use xstream_server::db::{create_library, Db};
-use xstream_server::graphql::build_schema;
 use xstream_server::relay::to_global_id;
 
 fn fresh_seeded_db() -> Db {
@@ -56,7 +55,7 @@ fn seed_test_video(db: &Db, library_id: &str, video_id: &str, title: &str) {
 
 #[tokio::test]
 async fn introspection_responds_with_the_schema() {
-    let schema = build_schema(fresh_seeded_db());
+    let schema = xstream_server::graphql::build_schema_for_tests(fresh_seeded_db());
     let response = schema.execute("{ __schema { queryType { name } } }").await;
     assert!(response.errors.is_empty(), "errors: {:?}", response.errors);
     let json: Value = serde_json::to_value(&response.data).expect("data serialises to JSON");
@@ -65,7 +64,7 @@ async fn introspection_responds_with_the_schema() {
 
 #[tokio::test]
 async fn libraries_query_includes_seeded_library() {
-    let schema = build_schema(fresh_seeded_db());
+    let schema = xstream_server::graphql::build_schema_for_tests(fresh_seeded_db());
     let response = schema.execute("{ libraries { id name } }").await;
     assert!(response.errors.is_empty(), "errors: {:?}", response.errors);
     let json: Value = serde_json::to_value(&response.data).expect("data serialises to JSON");
@@ -81,7 +80,7 @@ async fn libraries_query_includes_seeded_library() {
 #[tokio::test]
 async fn library_id_is_a_valid_relay_global_id() {
     use xstream_server::db::sha1_hex;
-    let schema = build_schema(fresh_seeded_db());
+    let schema = xstream_server::graphql::build_schema_for_tests(fresh_seeded_db());
     let local_id = sha1_hex("/tmp/gql-test-library");
     let global_id = to_global_id("Library", &local_id);
 
@@ -103,7 +102,7 @@ async fn library_id_is_a_valid_relay_global_id() {
 #[tokio::test]
 async fn node_query_resolves_a_library_by_global_id() {
     use xstream_server::db::sha1_hex;
-    let schema = build_schema(fresh_seeded_db());
+    let schema = xstream_server::graphql::build_schema_for_tests(fresh_seeded_db());
     let local_id = sha1_hex("/tmp/gql-test-library");
     let global_id = to_global_id("Library", &local_id);
 
@@ -124,7 +123,7 @@ async fn video_query_returns_a_video_by_global_id() {
     let db = fresh_seeded_db();
     let library_id = sha1_hex("/tmp/gql-test-library");
     seed_test_video(&db, &library_id, "gql-vid1", "Test Movie");
-    let schema = build_schema(db);
+    let schema = xstream_server::graphql::build_schema_for_tests(db);
 
     let global_id = to_global_id("Video", "gql-vid1");
     let query = r#"query ($id: ID!) { video(id: $id) { id title durationSeconds } }"#;
@@ -141,7 +140,7 @@ async fn video_query_returns_a_video_by_global_id() {
 
 #[tokio::test]
 async fn unknown_field_returns_a_descriptive_error() {
-    let schema = build_schema(fresh_seeded_db());
+    let schema = xstream_server::graphql::build_schema_for_tests(fresh_seeded_db());
     let response = schema.execute("{ nonexistentField }").await;
     assert!(!response.errors.is_empty());
     assert!(
@@ -163,7 +162,7 @@ async fn library_scan_updated_emits_initial_state_immediately() {
     // ported yet. So the Step 1 contract we *can* assert is the
     // initial-state emission: settings page relies on it to render
     // "scanning: false" on connect without waiting for a transition.
-    let schema = build_schema(fresh_seeded_db());
+    let schema = xstream_server::graphql::build_schema_for_tests(fresh_seeded_db());
     let mut stream = schema.execute_stream(r#"subscription { libraryScanUpdated { scanning } }"#);
     let first = tokio::time::timeout(std::time::Duration::from_secs(2), stream.next())
         .await
@@ -175,12 +174,12 @@ async fn library_scan_updated_emits_initial_state_immediately() {
 }
 
 #[tokio::test]
-async fn start_transcode_returns_playback_error_for_step1_stub() {
-    // Step 1: the chunker isn't ported. The stub returns
-    // PlaybackError(INTERNAL, retryable=false). When Step 2 lands and the
-    // chunker can actually probe the video, this test should assert
-    // VIDEO_NOT_FOUND for an unknown id (matching the Bun behaviour).
-    let schema = build_schema(fresh_seeded_db());
+async fn start_transcode_returns_video_not_found_for_unknown_id() {
+    // Step 2: the chunker is wired. An unknown video id resolves to a
+    // typed VIDEO_NOT_FOUND PlaybackError. Capacity-exhausted / probe-
+    // failure / encode-failure variants exercise the chunker in the
+    // encode-pipeline integration tests (gated on XSTREAM_TEST_MEDIA_DIR).
+    let schema = xstream_server::graphql::build_schema_for_tests(fresh_seeded_db());
     let fake_global_id = to_global_id("Video", "does-not-exist");
 
     let query = r#"
@@ -212,7 +211,7 @@ async fn start_transcode_returns_playback_error_for_step1_stub() {
     );
     let json: Value = serde_json::to_value(&response.data).expect("data serialises to JSON");
     assert_eq!(json["startTranscode"]["__typename"], "PlaybackError");
-    assert_eq!(json["startTranscode"]["code"], "INTERNAL"); // Step 1 stub
+    assert_eq!(json["startTranscode"]["code"], "VIDEO_NOT_FOUND");
     assert_eq!(json["startTranscode"]["retryable"], false);
     assert!(json["startTranscode"]["retryAfterMs"].is_null());
 }

@@ -6,6 +6,7 @@ use super::video::Video;
 use crate::db::{get_video_by_id, Db, TranscodeJobRow};
 use crate::graphql::scalars::{JobStatus, PlaybackErrorCode, Resolution};
 use crate::relay::to_global_id;
+use crate::services::active_job::ActiveJob;
 
 #[derive(Clone)]
 pub struct TranscodeJob {
@@ -51,6 +52,24 @@ impl TranscodeJob {
             error_code: None,
             raw_video_id: row.video_id.clone(),
         }
+    }
+
+    /// Build directly from an `ActiveJob` — used by the `start_transcode`
+    /// resolver which already has the in-memory handle.
+    pub fn from_active(job: &ActiveJob) -> Self {
+        job.with_inner(|i| Self {
+            id: ID(to_global_id("TranscodeJob", &i.id)),
+            resolution: i.resolution,
+            status: i.status,
+            total_segments: i.total_segments.map(|n| n as i32),
+            completed_segments: i.completed_segments as i32,
+            start_time_seconds: i.start_time_seconds,
+            end_time_seconds: i.end_time_seconds,
+            created_at: i.created_at.clone(),
+            error: i.error.clone(),
+            error_code: i.error_code,
+            raw_video_id: i.video_id.clone(),
+        })
     }
 }
 
