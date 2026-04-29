@@ -9,7 +9,7 @@ license.workspace = true
 [dependencies]
 # Web
 axum = { version = "0.7", features = ["ws", "macros"] }
-tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "signal", "sync", "fs"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "signal", "sync", "fs", "process", "time", "io-util"] }
 tower = "0.5"
 tower-http = { version = "0.6", features = ["cors", "trace"] }
 http = "1"

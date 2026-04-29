@@ -9,5 +9,6 @@
 //!   'running'`) jobs as errored so the next request re-encodes cleanly.
 
 pub mod cache_index;
+pub mod ffmpeg_file;
 pub mod ffmpeg_path;
 pub mod job_restore;

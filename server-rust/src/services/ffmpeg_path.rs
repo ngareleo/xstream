@@ -10,8 +10,8 @@
 //!   1. `FFMPEG_PATH` / `FFPROBE_PATH` env vars (explicit override — bypasses
 //!      the version check; intended for dev experimentation, not production).
 //!   2. Platform-prescribed install location:
-//!        linux-x64 / linux-arm64 → `/usr/lib/jellyfin-ffmpeg/{ffmpeg,ffprobe}`
-//!        darwin-* / win32-x64    → `vendor/ffmpeg/<platform>/{ffmpeg,ffprobe}[.exe]`
+//!      - `linux-x64` / `linux-arm64` → `/usr/lib/jellyfin-ffmpeg/{ffmpeg,ffprobe}`
+//!      - `darwin-*` / `win32-x64`    → `vendor/ffmpeg/<platform>/{ffmpeg,ffprobe}[.exe]`
 //!   3. No fallback. Missing binary → fatal, with a message pointing to
 //!      `bun run setup-ffmpeg`. No system $PATH lookup — we are opinionated
 //!      about the exact version we run against.
