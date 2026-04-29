@@ -74,7 +74,7 @@ mod tests {
     #[test]
     fn global_id_roundtrip() {
         let g = to_global_id("Library", "abc123");
-        let (t, id) = from_global_id(&g).unwrap();
+        let (t, id) = from_global_id(&g).expect("roundtripped global id parses");
         assert_eq!(t, "Library");
         assert_eq!(id, "abc123");
     }
@@ -82,12 +82,34 @@ mod tests {
     #[test]
     fn cursor_roundtrip() {
         let c = encode_cursor(42);
-        assert_eq!(decode_cursor(&c).unwrap(), 42);
+        assert_eq!(decode_cursor(&c).expect("roundtripped cursor parses"), 42);
     }
 
     #[test]
     fn cursor_zero() {
         let c = encode_cursor(0);
-        assert_eq!(decode_cursor(&c).unwrap(), 0);
+        assert_eq!(decode_cursor(&c).expect("offset=0 roundtrips"), 0);
+    }
+
+    #[test]
+    fn from_global_id_rejects_garbage() {
+        // Non-base64 input
+        assert!(from_global_id("not base64!").is_err());
+        // Base64 of a string with no separator
+        let no_colon = STANDARD.encode("noseparator");
+        assert!(from_global_id(&no_colon).is_err());
+        // Empty type
+        let empty_type = STANDARD.encode(":id");
+        assert!(from_global_id(&empty_type).is_err());
+        // Empty id
+        let empty_id = STANDARD.encode("Type:");
+        assert!(from_global_id(&empty_id).is_err());
+    }
+
+    #[test]
+    fn decode_cursor_rejects_garbage() {
+        assert!(decode_cursor("not base64!").is_err());
+        assert!(decode_cursor(&STANDARD.encode("no-prefix")).is_err());
+        assert!(decode_cursor(&STANDARD.encode("offset:not-a-number")).is_err());
     }
 }

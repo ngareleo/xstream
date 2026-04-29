@@ -3,6 +3,7 @@
 use rusqlite::{params, OptionalExtension, Row};
 
 use crate::db::{sha1_hex, Db};
+use crate::error::{DbError, DbResult};
 
 #[derive(Clone, Debug)]
 pub struct WatchlistItemRow {
@@ -25,43 +26,48 @@ impl WatchlistItemRow {
     }
 }
 
-pub fn get_watchlist(db: &Db) -> rusqlite::Result<Vec<WatchlistItemRow>> {
+pub fn get_watchlist(db: &Db) -> DbResult<Vec<WatchlistItemRow>> {
     db.with(|c| {
         let mut stmt = c.prepare("SELECT * FROM watchlist_items ORDER BY added_at DESC")?;
         let rows = stmt.query_map([], WatchlistItemRow::from_row)?;
-        rows.collect()
+        let collected: rusqlite::Result<Vec<_>> = rows.collect();
+        Ok(collected?)
     })
 }
 
-pub fn get_watchlist_item_by_id(db: &Db, id: &str) -> rusqlite::Result<Option<WatchlistItemRow>> {
+pub fn get_watchlist_item_by_id(db: &Db, id: &str) -> DbResult<Option<WatchlistItemRow>> {
     db.with(|c| {
-        c.query_row(
-            "SELECT * FROM watchlist_items WHERE id = ?1",
-            params![id],
-            WatchlistItemRow::from_row,
-        )
-        .optional()
+        let row = c
+            .query_row(
+                "SELECT * FROM watchlist_items WHERE id = ?1",
+                params![id],
+                WatchlistItemRow::from_row,
+            )
+            .optional()?;
+        Ok(row)
     })
 }
 
 pub fn get_watchlist_item_by_video_id(
     db: &Db,
     video_id: &str,
-) -> rusqlite::Result<Option<WatchlistItemRow>> {
+) -> DbResult<Option<WatchlistItemRow>> {
     db.with(|c| {
-        c.query_row(
-            "SELECT * FROM watchlist_items WHERE video_id = ?1",
-            params![video_id],
-            WatchlistItemRow::from_row,
-        )
-        .optional()
+        let row = c
+            .query_row(
+                "SELECT * FROM watchlist_items WHERE video_id = ?1",
+                params![video_id],
+                WatchlistItemRow::from_row,
+            )
+            .optional()?;
+        Ok(row)
     })
 }
 
-pub fn add_watchlist_item(db: &Db, video_id: &str) -> rusqlite::Result<WatchlistItemRow> {
+pub fn add_watchlist_item(db: &Db, video_id: &str) -> DbResult<WatchlistItemRow> {
     let id = sha1_hex(&format!("watchlist:{video_id}"));
     let now = chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
-    db.with(|c| -> rusqlite::Result<()> {
+    db.with(|c| {
         c.execute(
             r#"INSERT INTO watchlist_items (id, video_id, added_at, progress_seconds)
                VALUES (?1, ?2, ?3, 0)
@@ -70,14 +76,15 @@ pub fn add_watchlist_item(db: &Db, video_id: &str) -> rusqlite::Result<Watchlist
         )?;
         Ok(())
     })?;
-    Ok(get_watchlist_item_by_video_id(db, video_id)?
-        .expect("watchlist item just inserted must exist"))
+    get_watchlist_item_by_video_id(db, video_id)?.ok_or(DbError::Invariant(
+        "watchlist_items row missing immediately after INSERT … ON CONFLICT",
+    ))
 }
 
-pub fn remove_watchlist_item(db: &Db, id: &str) -> rusqlite::Result<bool> {
+pub fn remove_watchlist_item(db: &Db, id: &str) -> DbResult<bool> {
     db.with(|c| {
-        c.execute("DELETE FROM watchlist_items WHERE id = ?1", params![id])
-            .map(|n| n > 0)
+        let n = c.execute("DELETE FROM watchlist_items WHERE id = ?1", params![id])?;
+        Ok(n > 0)
     })
 }
 
@@ -85,8 +92,8 @@ pub fn update_watchlist_progress(
     db: &Db,
     video_id: &str,
     progress_seconds: f64,
-) -> rusqlite::Result<Option<WatchlistItemRow>> {
-    db.with(|c| -> rusqlite::Result<()> {
+) -> DbResult<Option<WatchlistItemRow>> {
+    db.with(|c| {
         c.execute(
             "UPDATE watchlist_items SET progress_seconds = ?1 WHERE video_id = ?2",
             params![progress_seconds, video_id],

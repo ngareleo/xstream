@@ -1,4 +1,5 @@
 pub mod db;
+pub mod error;
 pub mod graphql;
 pub mod relay;
 pub mod request_context;
@@ -7,6 +8,7 @@ pub mod telemetry;
 use axum::{response::IntoResponse, routing::get, Router};
 
 use crate::db::Db;
+use crate::error::{AppError, AppResult};
 use crate::graphql::{build_schema, XstreamSchema};
 use crate::request_context::extract_request_context;
 
@@ -23,7 +25,11 @@ impl AppState {
     }
 }
 
-pub fn build_router(state: AppState) -> Router {
+/// Build the axum router. Returns `Err` if any of the static configuration
+/// (CORS origins, header names) is malformed — this can only happen via a
+/// programmer typo, but propagating it through the type system means we
+/// catch it at startup with a clear `AppError::Cors`, not via panic.
+pub fn build_router(state: AppState) -> AppResult<Router> {
     use async_graphql_axum::{GraphQL, GraphQLSubscription};
     use axum::routing::MethodRouter;
 
@@ -34,7 +40,7 @@ pub fn build_router(state: AppState) -> Router {
         .get_service(GraphQLSubscription::new(state.schema.clone()))
         .options(|| async { axum::http::StatusCode::NO_CONTENT });
 
-    Router::new()
+    Ok(Router::new()
         .route("/healthz", get(healthz))
         .route("/graphql", graphql_method)
         // Single outer middleware: extract W3C traceparent, build RequestContext,
@@ -44,33 +50,38 @@ pub fn build_router(state: AppState) -> Router {
         // inherit the W3C-extracted context, which silently breaks distributed
         // tracing across the client → server boundary.
         .layer(axum::middleware::from_fn(extract_request_context))
-        .layer(make_cors())
-        .fallback(|| async { (axum::http::StatusCode::NOT_FOUND, "Not Found") })
+        .layer(make_cors()?)
+        .fallback(|| async { (axum::http::StatusCode::NOT_FOUND, "Not Found") }))
 }
 
-fn make_cors() -> tower_http::cors::CorsLayer {
+fn make_cors() -> AppResult<tower_http::cors::CorsLayer> {
     use http::header::{ACCEPT, AUTHORIZATION, CONTENT_TYPE};
-    use http::Method;
+    use http::{HeaderName, Method};
     use tower_http::cors::{AllowOrigin, CorsLayer};
 
     // Dev-mode CORS — mirrors the Bun config (`server/src/routes/graphql.ts`).
     // Allowing both the Rsbuild dev server origin and the Tauri webview origin
     // (forward constraint, see `04-Web-Server-Layer.md` §4.1).
     let origins = AllowOrigin::list([
-        "http://localhost:5173".parse().expect("static origin"),
-        "tauri://localhost".parse().expect("static origin"),
+        "http://localhost:5173"
+            .parse()
+            .map_err(|_| AppError::Cors("origin literal http://localhost:5173".into()))?,
+        "tauri://localhost"
+            .parse()
+            .map_err(|_| AppError::Cors("origin literal tauri://localhost".into()))?,
     ]);
-    CorsLayer::new()
+    let traceparent: HeaderName = "traceparent"
+        .parse()
+        .map_err(|_| AppError::Cors("header name `traceparent`".into()))?;
+    let tracestate: HeaderName = "tracestate"
+        .parse()
+        .map_err(|_| AppError::Cors("header name `tracestate`".into()))?;
+
+    Ok(CorsLayer::new()
         .allow_origin(origins)
         .allow_credentials(true)
-        .allow_headers([
-            CONTENT_TYPE,
-            ACCEPT,
-            AUTHORIZATION,
-            "traceparent".parse().expect("static header name"),
-            "tracestate".parse().expect("static header name"),
-        ])
-        .allow_methods([Method::GET, Method::POST, Method::OPTIONS])
+        .allow_headers([CONTENT_TYPE, ACCEPT, AUTHORIZATION, traceparent, tracestate])
+        .allow_methods([Method::GET, Method::POST, Method::OPTIONS]))
 }
 
 async fn healthz() -> impl IntoResponse {

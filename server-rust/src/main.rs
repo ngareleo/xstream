@@ -1,22 +1,47 @@
 use std::net::SocketAddr;
 
+use xstream_server::error::{AppError, AppResult};
 use xstream_server::{build_router, db::Db, telemetry, AppState};
 
 #[tokio::main]
-async fn main() {
-    telemetry::init();
+async fn main() -> AppResult<()> {
+    if let Err(err) = run().await {
+        // Log to stderr in structured form so non-tracing consumers (CI logs,
+        // restart scripts) can still read what went wrong.
+        eprintln!("xstream-server fatal: {err}");
+        let mut source = std::error::Error::source(&err);
+        while let Some(s) = source {
+            eprintln!("  caused by: {s}");
+            source = s.source();
+        }
+        return Err(err);
+    }
+    Ok(())
+}
+
+async fn run() -> AppResult<()> {
+    telemetry::init()?;
 
     let db_path = xstream_server::db::default_db_path();
     tracing::info!(?db_path, "opening sqlite database");
-    let db = Db::open(&db_path).expect("open sqlite database");
+    let db = Db::open(&db_path).map_err(|source| AppError::DbOpen {
+        path: db_path.clone(),
+        source,
+    })?;
 
     let state = AppState::new(db);
-    let app = build_router(state);
+    let app = build_router(state)?;
 
-    let addr: SocketAddr = "127.0.0.1:3002".parse().expect("valid bind addr");
+    let addr_str = "127.0.0.1:3002";
+    let addr: SocketAddr = addr_str
+        .parse()
+        .map_err(|source| AppError::InvalidBindAddr {
+            addr: addr_str.to_string(),
+            source,
+        })?;
     let listener = tokio::net::TcpListener::bind(addr)
         .await
-        .expect("bind 127.0.0.1:3002 — port collision with another Rust server? Bun stays on its config.port (3001 in dev).");
+        .map_err(|source| AppError::Bind { addr, source })?;
 
     tracing::info!(%addr, "xstream-server listening");
 
@@ -25,22 +50,46 @@ async fn main() {
         result = serve => {
             if let Err(err) = result {
                 tracing::error!(error = %err, "axum serve loop exited with error");
+                telemetry::shutdown();
+                return Err(AppError::Serve(err));
             }
         }
-        _ = shutdown_signal() => {
-            tracing::info!("shutdown signal received");
+        signal = shutdown_signal() => {
+            match signal {
+                Ok(name) => tracing::info!(signal = name, "shutdown initiated"),
+                Err(err) => {
+                    // We failed to *install* a signal handler. The server is
+                    // still up; surface the failure rather than continuing
+                    // with no graceful-shutdown path.
+                    tracing::error!(error = %err, "signal handler install failed");
+                    telemetry::shutdown();
+                    return Err(err);
+                }
+            }
         }
     }
 
     telemetry::shutdown();
+    Ok(())
 }
 
-async fn shutdown_signal() {
+/// Wait for SIGTERM or SIGINT. Returns the signal name on success, or an
+/// `AppError::SignalHandler` if the OS refused to register a handler (which
+/// would mean the process can't shut down gracefully — a real failure, not
+/// something to swallow).
+async fn shutdown_signal() -> AppResult<&'static str> {
     use tokio::signal::unix::{signal, SignalKind};
-    let mut sigterm = signal(SignalKind::terminate()).expect("install SIGTERM handler");
-    let mut sigint = signal(SignalKind::interrupt()).expect("install SIGINT handler");
+    let mut sigterm =
+        signal(SignalKind::terminate()).map_err(|source| AppError::SignalHandler {
+            signal: "SIGTERM",
+            source,
+        })?;
+    let mut sigint = signal(SignalKind::interrupt()).map_err(|source| AppError::SignalHandler {
+        signal: "SIGINT",
+        source,
+    })?;
     tokio::select! {
-        _ = sigterm.recv() => tracing::info!(signal = "SIGTERM", "shutdown initiated"),
-        _ = sigint.recv()  => tracing::info!(signal = "SIGINT",  "shutdown initiated"),
+        _ = sigterm.recv() => Ok("SIGTERM"),
+        _ = sigint.recv()  => Ok("SIGINT"),
     }
 }

@@ -11,6 +11,9 @@
 //! - Single connection wrapped in `Mutex` — sufficient for Step 1's read-heavy
 //!   profile. A pool (r2d2-sqlite) is the natural next step if contention
 //!   shows up under load.
+//! - **Every query returns [`DbResult`].** Mutex poisoning is encoded as a
+//!   typed error, never a panic. Callers `?`-propagate; resolvers surface
+//!   it as a GraphQL error via `From<DbError>`.
 
 mod migrate;
 pub mod queries;
@@ -21,17 +24,28 @@ use std::sync::{Arc, Mutex};
 use rusqlite::{Connection, OpenFlags};
 use sha1::{Digest, Sha1};
 
+use crate::error::{DbError, DbResult};
+
 #[derive(Clone)]
 pub struct Db {
     conn: Arc<Mutex<Connection>>,
 }
 
 impl Db {
-    pub fn open(path: &Path) -> rusqlite::Result<Self> {
+    pub fn open(path: &Path) -> DbResult<Self> {
         if let Some(parent) = path.parent() {
-            // SQLITE_OPEN_CREATE creates the file but not its parent directories.
-            // Mkdir before open so a fresh checkout with no tmp/ doesn't crash.
-            let _ = std::fs::create_dir_all(parent);
+            // SQLITE_OPEN_CREATE creates the file but not its parent
+            // directories. Mkdir before open so a fresh checkout with no
+            // tmp/ doesn't crash. If mkdir fails we *still* try to open —
+            // the parent might already exist (TOCTOU); SQLite's open will
+            // give a sharper error.
+            if let Err(err) = std::fs::create_dir_all(parent) {
+                tracing::warn!(
+                    parent = %parent.display(),
+                    error = %err,
+                    "create_dir_all failed; continuing — sqlite open will report the real cause if the dir is missing"
+                );
+            }
         }
         let conn = Connection::open_with_flags(
             path,
@@ -47,10 +61,14 @@ impl Db {
         })
     }
 
-    /// Execute `f` against the connection under the mutex. Holds the lock
-    /// for the duration of the closure — keep the closure short.
-    pub fn with<R>(&self, f: impl FnOnce(&Connection) -> R) -> R {
-        let guard = self.conn.lock().expect("db mutex poisoned");
+    /// Execute `f` against the connection under the mutex.
+    ///
+    /// On mutex poisoning (another task panicked while holding the lock),
+    /// returns [`DbError::PoisonedMutex`] rather than re-panicking — the
+    /// poisoning is a real but recoverable signal callers should be free
+    /// to surface or retry.
+    pub fn with<R>(&self, f: impl FnOnce(&Connection) -> DbResult<R>) -> DbResult<R> {
+        let guard = self.conn.lock().map_err(|_| DbError::PoisonedMutex)?;
         f(&guard)
     }
 }
@@ -69,16 +87,14 @@ pub fn default_db_path() -> PathBuf {
 /// SHA-1 of a UTF-8 string, hex-encoded. Used for content-addressed IDs
 /// (library/video/watchlist) — must produce byte-identical output to the
 /// Bun side (`createHash('sha1').update(s).digest('hex')`).
+///
+/// Pure value-in / value-out — no IO, no error path. The implementation
+/// uses `format!`-collect rather than `write!` to avoid an awkward
+/// "infallible Result discard" idiom.
 pub fn sha1_hex(input: &str) -> String {
     let mut h = Sha1::new();
     h.update(input.as_bytes());
-    let bytes = h.finalize();
-    let mut s = String::with_capacity(bytes.len() * 2);
-    for b in bytes.iter() {
-        use std::fmt::Write as _;
-        let _ = write!(s, "{b:02x}");
-    }
-    s
+    h.finalize().iter().map(|b| format!("{b:02x}")).collect()
 }
 
 // ── Re-exports — keep call-site imports stable ───────────────────────────────

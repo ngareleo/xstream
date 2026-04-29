@@ -145,11 +145,21 @@ pub struct VideoMetadata {
 
 impl VideoMetadata {
     pub fn from_row(row: crate::db::VideoMetadataRow) -> Self {
-        let cast: Vec<String> = row
-            .cast_list
-            .as_deref()
-            .and_then(|s| serde_json::from_str(s).ok())
-            .unwrap_or_default();
+        let cast: Vec<String> = match row.cast_list.as_deref() {
+            None => Vec::new(),
+            Some(raw) => match serde_json::from_str(raw) {
+                Ok(v) => v,
+                Err(err) => {
+                    tracing::warn!(
+                        video_id = %row.video_id,
+                        raw = %raw,
+                        error = %err,
+                        "video_metadata.cast_list held malformed JSON — rendering empty cast"
+                    );
+                    Vec::new()
+                }
+            },
+        };
         Self {
             imdb_id: row.imdb_id,
             title: row.title,

@@ -60,12 +60,13 @@ xstream/
 
 ## Engineering principles
 
-Two non-negotiables that govern how bugs and unknowns are approached:
+Three non-negotiables that govern how bugs, unknowns, and error paths are approached:
 
 - **Fix root causes, not symptoms.** When a bug's cause is unknown, the plan starts with *find the cause* — usually by adding the diagnostic instrumentation that's currently missing. Do not propose a behavioural workaround in the same plan. If a workaround already exists in production, the plan to address the underlying bug must include removing it, not leave it indefinitely. Reject patterns like *bump the constant past the failing threshold*, *force the fallback path that's worse*, *add a special-case branch that sidesteps the broken code* — each wins time-to-recovery at the cost of permanent debt. "If we don't know, we investigate" is the default.
 - **Don't weaken safety timeouts as a bug fix.** Safety timeouts encode intent; if a legit case looks like an abandonment, fix the structural reason — don't bump the timer. Same shape as the rule above, narrower domain.
+- **Never swallow errors. Both happy and unhappy paths are part of the design.** In Rust, that means **no `expect`, no `unwrap`, no `let _ = fallible_call()`** in production code (`#[cfg(test)]` blocks may use `.expect("clear message")`). Every fallible operation propagates via `Result<T, E>`; `main()` returns `AppResult<()>`; mutex poisoning becomes a typed error, not a panic; silent JSON-parse fallbacks on data that was supposed to be well-formed log a warning with the row id. Picking Rust is picking the type system as the safety net — `expect` opts out of it. Full rationale + the matching JS/TS rule lives in [`docs/code-style/Invariants/00-Never-Violate.md`](docs/code-style/Invariants/00-Never-Violate.md) §14.
 
-Both rules pair with the existing `docs/code-style/Anti-Patterns/00-What-Not-To-Do.md` list. When a plan or PR seems to violate either, surface that fact before shipping.
+All three rules pair with the existing `docs/code-style/Anti-Patterns/00-What-Not-To-Do.md` list. When a plan or PR seems to violate any of them, surface that fact before shipping.
 
 ## Code style and invariants
 

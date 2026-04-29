@@ -4,6 +4,7 @@
 use rusqlite::{params, Row};
 
 use crate::db::Db;
+use crate::error::DbResult;
 
 #[derive(Clone, Debug)]
 pub struct PlaybackHistoryRow {
@@ -28,7 +29,7 @@ impl PlaybackHistoryRow {
     }
 }
 
-pub fn insert_playback_session(db: &Db, row: &PlaybackHistoryRow) -> rusqlite::Result<()> {
+pub fn insert_playback_session(db: &Db, row: &PlaybackHistoryRow) -> DbResult<()> {
     db.with(|c| {
         c.execute(
             r#"INSERT INTO playback_history
@@ -47,13 +48,14 @@ pub fn insert_playback_session(db: &Db, row: &PlaybackHistoryRow) -> rusqlite::R
     })
 }
 
-pub fn get_playback_history(db: &Db, limit: i64) -> rusqlite::Result<Vec<PlaybackHistoryRow>> {
+pub fn get_playback_history(db: &Db, limit: i64) -> DbResult<Vec<PlaybackHistoryRow>> {
     db.with(|c| {
         let mut stmt = c.prepare(
             r#"SELECT id, trace_id, video_id, video_title, resolution, started_at
                FROM playback_history ORDER BY started_at DESC LIMIT ?1"#,
         )?;
         let rows = stmt.query_map(params![limit], PlaybackHistoryRow::from_row)?;
-        rows.collect()
+        let collected: rusqlite::Result<Vec<_>> = rows.collect();
+        Ok(collected?)
     })
 }

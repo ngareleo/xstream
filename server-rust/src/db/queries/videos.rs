@@ -4,6 +4,7 @@
 use rusqlite::{params, params_from_iter, OptionalExtension, Row, ToSql};
 
 use crate::db::Db;
+use crate::error::DbResult;
 
 #[derive(Clone, Debug)]
 pub struct VideoRow {
@@ -79,18 +80,20 @@ pub struct VideosFilter {
     pub media_type: Option<String>,
 }
 
-pub fn get_video_by_id(db: &Db, id: &str) -> rusqlite::Result<Option<VideoRow>> {
+pub fn get_video_by_id(db: &Db, id: &str) -> DbResult<Option<VideoRow>> {
     db.with(|c| {
-        c.query_row(
-            "SELECT * FROM videos WHERE id = ?1",
-            params![id],
-            VideoRow::from_row,
-        )
-        .optional()
+        let row = c
+            .query_row(
+                "SELECT * FROM videos WHERE id = ?1",
+                params![id],
+                VideoRow::from_row,
+            )
+            .optional()?;
+        Ok(row)
     })
 }
 
-pub fn get_videos(db: &Db, limit: i64, filter: VideosFilter) -> rusqlite::Result<Vec<VideoRow>> {
+pub fn get_videos(db: &Db, limit: i64, filter: VideosFilter) -> DbResult<Vec<VideoRow>> {
     let mut sql = String::from("SELECT v.* FROM videos v");
     let mut clauses: Vec<String> = Vec::new();
     let mut vals: Vec<Box<dyn ToSql>> = Vec::new();
@@ -122,7 +125,8 @@ pub fn get_videos(db: &Db, limit: i64, filter: VideosFilter) -> rusqlite::Result
         let refs: Vec<&dyn ToSql> = vals.iter().map(|b| b.as_ref()).collect();
         let mut stmt = c.prepare(&sql)?;
         let rows = stmt.query_map(params_from_iter(refs), VideoRow::from_row)?;
-        rows.collect()
+        let collected: rusqlite::Result<Vec<_>> = rows.collect();
+        Ok(collected?)
     })
 }
 
@@ -132,7 +136,7 @@ pub fn get_videos_by_library(
     limit: i64,
     offset: i64,
     filter: VideoFilter,
-) -> rusqlite::Result<Vec<VideoRow>> {
+) -> DbResult<Vec<VideoRow>> {
     let mut sql = String::from("SELECT v.* FROM videos v WHERE v.library_id = ?1");
     let mut vals: Vec<Box<dyn ToSql>> = vec![Box::new(library_id.to_string())];
     if let Some(s) = filter.search {
@@ -157,15 +161,12 @@ pub fn get_videos_by_library(
         let refs: Vec<&dyn ToSql> = vals.iter().map(|b| b.as_ref()).collect();
         let mut stmt = c.prepare(&sql)?;
         let rows = stmt.query_map(params_from_iter(refs), VideoRow::from_row)?;
-        rows.collect()
+        let collected: rusqlite::Result<Vec<_>> = rows.collect();
+        Ok(collected?)
     })
 }
 
-pub fn count_videos_by_library(
-    db: &Db,
-    library_id: &str,
-    filter: VideoFilter,
-) -> rusqlite::Result<i64> {
+pub fn count_videos_by_library(db: &Db, library_id: &str, filter: VideoFilter) -> DbResult<i64> {
     let mut sql = String::from("SELECT COUNT(*) AS c FROM videos v WHERE v.library_id = ?1");
     let mut vals: Vec<Box<dyn ToSql>> = vec![Box::new(library_id.to_string())];
     if let Some(s) = filter.search {
@@ -181,24 +182,27 @@ pub fn count_videos_by_library(
     }
     db.with(|c| {
         let refs: Vec<&dyn ToSql> = vals.iter().map(|b| b.as_ref()).collect();
-        c.query_row(&sql, params_from_iter(refs), |r| r.get::<_, i64>(0))
+        let count = c.query_row(&sql, params_from_iter(refs), |r| r.get::<_, i64>(0))?;
+        Ok(count)
     })
 }
 
-pub fn sum_file_size_by_library(db: &Db, library_id: &str) -> rusqlite::Result<i64> {
+pub fn sum_file_size_by_library(db: &Db, library_id: &str) -> DbResult<i64> {
     db.with(|c| {
-        c.query_row(
+        let total = c.query_row(
             "SELECT COALESCE(SUM(file_size_bytes), 0) FROM videos WHERE library_id = ?1",
             params![library_id],
             |r| r.get::<_, i64>(0),
-        )
+        )?;
+        Ok(total)
     })
 }
 
-pub fn get_streams_by_video_id(db: &Db, video_id: &str) -> rusqlite::Result<Vec<VideoStreamRow>> {
+pub fn get_streams_by_video_id(db: &Db, video_id: &str) -> DbResult<Vec<VideoStreamRow>> {
     db.with(|c| {
         let mut stmt = c.prepare("SELECT * FROM video_streams WHERE video_id = ?1")?;
         let rows = stmt.query_map(params![video_id], VideoStreamRow::from_row)?;
-        rows.collect()
+        let collected: rusqlite::Result<Vec<_>> = rows.collect();
+        Ok(collected?)
     })
 }

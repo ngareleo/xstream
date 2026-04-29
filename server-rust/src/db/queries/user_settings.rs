@@ -4,19 +4,22 @@
 use rusqlite::{params, OptionalExtension};
 
 use crate::db::Db;
+use crate::error::DbResult;
 
-pub fn get_setting(db: &Db, key: &str) -> rusqlite::Result<Option<String>> {
+pub fn get_setting(db: &Db, key: &str) -> DbResult<Option<String>> {
     db.with(|c| {
-        c.query_row(
-            "SELECT value FROM user_settings WHERE key = ?1",
-            params![key],
-            |r| r.get::<_, String>(0),
-        )
-        .optional()
+        let row = c
+            .query_row(
+                "SELECT value FROM user_settings WHERE key = ?1",
+                params![key],
+                |r| r.get::<_, String>(0),
+            )
+            .optional()?;
+        Ok(row)
     })
 }
 
-pub fn set_setting(db: &Db, key: &str, value: &str) -> rusqlite::Result<()> {
+pub fn set_setting(db: &Db, key: &str, value: &str) -> DbResult<()> {
     db.with(|c| {
         c.execute(
             r#"INSERT INTO user_settings (key, value) VALUES (?1, ?2)

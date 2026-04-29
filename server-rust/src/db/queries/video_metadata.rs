@@ -3,6 +3,7 @@
 use rusqlite::{params, OptionalExtension, Row};
 
 use crate::db::Db;
+use crate::error::DbResult;
 
 #[derive(Clone, Debug)]
 pub struct VideoMetadataRow {
@@ -37,21 +38,20 @@ impl VideoMetadataRow {
     }
 }
 
-pub fn get_metadata_by_video_id(
-    db: &Db,
-    video_id: &str,
-) -> rusqlite::Result<Option<VideoMetadataRow>> {
+pub fn get_metadata_by_video_id(db: &Db, video_id: &str) -> DbResult<Option<VideoMetadataRow>> {
     db.with(|c| {
-        c.query_row(
-            "SELECT * FROM video_metadata WHERE video_id = ?1",
-            params![video_id],
-            VideoMetadataRow::from_row,
-        )
-        .optional()
+        let row = c
+            .query_row(
+                "SELECT * FROM video_metadata WHERE video_id = ?1",
+                params![video_id],
+                VideoMetadataRow::from_row,
+            )
+            .optional()?;
+        Ok(row)
     })
 }
 
-pub fn has_video_metadata(db: &Db, video_id: &str) -> rusqlite::Result<bool> {
+pub fn has_video_metadata(db: &Db, video_id: &str) -> DbResult<bool> {
     db.with(|c| {
         let exists: Option<i64> = c
             .query_row(
@@ -64,20 +64,21 @@ pub fn has_video_metadata(db: &Db, video_id: &str) -> rusqlite::Result<bool> {
     })
 }
 
-pub fn count_matched_by_library(db: &Db, library_id: &str) -> rusqlite::Result<(i64, i64)> {
+pub fn count_matched_by_library(db: &Db, library_id: &str) -> DbResult<(i64, i64)> {
     db.with(|c| {
-        c.query_row(
+        let pair = c.query_row(
             r#"SELECT COUNT(m.video_id) AS matched,
                       COUNT(v.id) - COUNT(m.video_id) AS unmatched
                FROM videos v LEFT JOIN video_metadata m ON v.id = m.video_id
                WHERE v.library_id = ?1"#,
             params![library_id],
-            |r| Ok((r.get(0)?, r.get(1)?)),
-        )
+            |r| Ok((r.get::<_, i64>(0)?, r.get::<_, i64>(1)?)),
+        )?;
+        Ok(pair)
     })
 }
 
-pub fn upsert_video_metadata(db: &Db, row: &VideoMetadataRow) -> rusqlite::Result<()> {
+pub fn upsert_video_metadata(db: &Db, row: &VideoMetadataRow) -> DbResult<()> {
     db.with(|c| {
         c.execute(
             r#"INSERT INTO video_metadata
@@ -113,7 +114,7 @@ pub fn upsert_video_metadata(db: &Db, row: &VideoMetadataRow) -> rusqlite::Resul
     })
 }
 
-pub fn delete_video_metadata(db: &Db, video_id: &str) -> rusqlite::Result<()> {
+pub fn delete_video_metadata(db: &Db, video_id: &str) -> DbResult<()> {
     db.with(|c| {
         c.execute(
             "DELETE FROM video_metadata WHERE video_id = ?1",

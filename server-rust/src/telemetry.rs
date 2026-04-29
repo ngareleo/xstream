@@ -6,6 +6,9 @@
 //!   `http://localhost:5341/ingest/otlp` (Seq in dev)
 //! - W3C TraceContext propagator registered globally so the
 //!   `RequestContext` middleware can extract `traceparent` from any peer.
+//!
+//! `init` returns `AppResult<()>`. The caller (`main`) propagates failures
+//! out of the process via `Result<(), AppError>` instead of panicking.
 
 use std::time::Duration;
 
@@ -16,15 +19,15 @@ use opentelemetry_sdk::{
 };
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
+use crate::error::{AppError, AppResult};
+
 const SERVICE_NAME: &str = "xstream-server-rust";
 const DEFAULT_ENDPOINT: &str = "http://localhost:5341/ingest/otlp";
 
 /// Initialise tracing + OTLP exporter. Call exactly once at process start.
-///
-/// Panics if the exporter pipeline cannot be built — this is fail-fast by
-/// design (matches the Bun server's behaviour where missing telemetry
-/// is surfaced loudly rather than silently dropped).
-pub fn init() {
+/// Returns `Err` if the exporter pipeline can't be built — the caller
+/// decides whether that's fatal (today: yes; main exits non-zero).
+pub fn init() -> AppResult<()> {
     global::set_text_map_propagator(TraceContextPropagator::new());
 
     let endpoint =
@@ -37,7 +40,7 @@ pub fn init() {
         .with_endpoint(traces_endpoint)
         .with_timeout(Duration::from_secs(10))
         .build()
-        .expect("build OTLP span exporter");
+        .map_err(|err| AppError::Telemetry(Box::new(err)))?;
 
     let provider = TracerProvider::builder()
         .with_batch_exporter(exporter, runtime::Tokio)
@@ -52,6 +55,11 @@ pub fn init() {
 
     let otel_layer = tracing_opentelemetry::layer().with_tracer(tracer);
 
+    // `EnvFilter::try_from_default_env` returns Err only when RUST_LOG is set
+    // to something unparseable — in dev, "unset" is normal so we fall back to
+    // a sensible default. This is *not* error swallowing: there is no real
+    // failure we'd want the operator to see; an unset env var is a valid
+    // state with a documented default.
     let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| {
         EnvFilter::new("info,xstream_server=debug,tower_http=debug,axum=debug")
     });
@@ -61,10 +69,13 @@ pub fn init() {
         .with(tracing_subscriber::fmt::layer().with_target(true).compact())
         .with(otel_layer)
         .init();
+
+    Ok(())
 }
 
-/// Flush in-flight spans and shut the exporter down. Call from the SIGTERM
-/// path before `process::exit`.
+/// Flush in-flight spans and shut the exporter down. Called from the
+/// SIGTERM path before `process::exit`. Best-effort — if the OTel SDK
+/// can't reach the exporter we still want to exit cleanly.
 pub fn shutdown() {
     global::shutdown_tracer_provider();
 }

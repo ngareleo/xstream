@@ -5,6 +5,7 @@
 use rusqlite::{params, OptionalExtension, Row};
 
 use crate::db::Db;
+use crate::error::DbResult;
 
 #[derive(Clone, Debug)]
 pub struct TranscodeJobRow {
@@ -41,13 +42,15 @@ impl TranscodeJobRow {
     }
 }
 
-pub fn get_job_by_id(db: &Db, id: &str) -> rusqlite::Result<Option<TranscodeJobRow>> {
+pub fn get_job_by_id(db: &Db, id: &str) -> DbResult<Option<TranscodeJobRow>> {
     db.with(|c| {
-        c.query_row(
-            "SELECT * FROM transcode_jobs WHERE id = ?1",
-            params![id],
-            TranscodeJobRow::from_row,
-        )
-        .optional()
+        let row = c
+            .query_row(
+                "SELECT * FROM transcode_jobs WHERE id = ?1",
+                params![id],
+                TranscodeJobRow::from_row,
+            )
+            .optional()?;
+        Ok(row)
     })
 }

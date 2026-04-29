@@ -27,8 +27,23 @@ pub struct Library {
 
 impl Library {
     pub fn from_row(row: &LibraryRow) -> Self {
-        let video_extensions: Vec<String> =
-            serde_json::from_str(&row.video_extensions).unwrap_or_default();
+        // `video_extensions` is a TEXT column the writer always serialises as
+        // a JSON string array. If a row holds malformed JSON (DB corruption,
+        // schema-version mismatch, an external writer), surface the failure
+        // visibly via tracing::warn — *don't* silently render an empty list,
+        // which would make the row look like it has no extensions at all.
+        let video_extensions: Vec<String> = match serde_json::from_str(&row.video_extensions) {
+            Ok(v) => v,
+            Err(err) => {
+                tracing::warn!(
+                    library_id = %row.id,
+                    raw = %row.video_extensions,
+                    error = %err,
+                    "libraries.video_extensions held malformed JSON — rendering as empty"
+                );
+                Vec::new()
+            }
+        };
         Self {
             id: ID(to_global_id("Library", &row.id)),
             name: row.name.clone(),
