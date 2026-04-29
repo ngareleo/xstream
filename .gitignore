@@ -32,3 +32,8 @@ docs/.obsidian/
 
 # architect subagent's per-machine retrieval cache
 .claude/agents/architect-cache/
+
+# Cargo build output (Rust workspace under server-rust/)
+target/
+**/target/
+Cargo.lock.bak

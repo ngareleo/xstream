@@ -9,7 +9,8 @@ import {
   setFlagLocal,
   subscribeFlags,
 } from "~/config/featureFlags.js";
-import { FLAG_REGISTRY, type FlagValue } from "~/config/flagRegistry.js";
+import { FLAG_KEYS, FLAG_REGISTRY, type FlagValue } from "~/config/flagRegistry.js";
+import { rememberRustGraphQLFlag } from "~/config/rustOrigin.js";
 import type { FeatureFlagsContextQuery } from "~/relay/__generated__/FeatureFlagsContextQuery.graphql.js";
 import type { FeatureFlagsContextSetMutation } from "~/relay/__generated__/FeatureFlagsContextSetMutation.graphql.js";
 
@@ -44,6 +45,12 @@ export const FeatureFlagsProvider: FC<{ children: ReactNode }> = ({ children }) 
 
   useEffect(() => {
     hydrateFlags(data.settings);
+    // Mirror the Rust GraphQL flag to localStorage so the next page load
+    // picks the right origin synchronously in `relay/environment.ts`.
+    const rust = data.settings.find((s) => s.key === FLAG_KEYS.useRustGraphQL);
+    if (rust?.value != null) {
+      rememberRustGraphQLFlag(rust.value === "1" || rust.value === "true");
+    }
   }, [data]);
 
   return <>{children}</>;
@@ -61,6 +68,9 @@ export function useFeatureFlag<T extends FlagValue>(
   const setValue = useCallback(
     (v: T): void => {
       setFlagLocal(key, v);
+      if (key === FLAG_KEYS.useRustGraphQL) {
+        rememberRustGraphQLFlag(Boolean(v));
+      }
       save({ variables: { key, value: serializeValue(v) } });
     },
     [key, save]
