@@ -497,4 +497,5 @@ These are **build-time only** — nothing the user installs. The bundled AppImag
 - [`05-Database-Layer.md`](05-Database-Layer.md) — `app_cache_dir()` vs. `app_data_dir()` two-DB split.
 - [`06-File-Handling-Layer.md`](06-File-Handling-Layer.md) — ffmpeg manifest and resource-dir resolution.
 - [`07-Bun-To-Rust-Migration.md`](07-Bun-To-Rust-Migration.md) — phase F is this doc.
+- [`09-Tauri-Packaging-Internals.md`](09-Tauri-Packaging-Internals.md) — the pedagogical deep-dive companion to this spec; walks the build pipeline, installed-app layout per OS, and update mechanics with the Electron-derived mental-model corrections.
 - [`docs/server/Hardware-Acceleration/00-Overview.md`](../../server/Hardware-Acceleration/00-Overview.md) — VAAPI Linux fallback motivations.

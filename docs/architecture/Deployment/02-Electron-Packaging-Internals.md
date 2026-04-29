@@ -319,3 +319,4 @@ This means a compromised cert is the worst-case. Rotating requires shipping a no
 - [`01-Decisions.md`](01-Decisions.md) — Bun packaging strategy (`bun build --compile`), update signing keys, channel rollout.
 - [`03-Shipping-FFmpeg.md`](03-Shipping-FFmpeg.md) — the manifest, portable binaries, runtime path resolution.
 - [`08-Tauri-Packaging.md`](../../migrations/rust-rewrite/08-Tauri-Packaging.md) — the Rust + Tauri packaging spec; many of the same patterns reappear there with a different shell.
+- [`09-Tauri-Packaging-Internals.md`](../../migrations/rust-rewrite/09-Tauri-Packaging-Internals.md) — the **direct parallel** to this doc, but for the Tauri target. Mirrors §§3–8 here with Tauri-specific mechanics: no bundled Chromium (OS WebView instead), no sidecar (in-process Rust server), no bsdiff/zsync (full-bundle updates), Ed25519 update keys instead of the OS code-sign chain.
