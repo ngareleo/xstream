@@ -32,7 +32,13 @@
  *     wait we pay (~100 ms) is the cost of integration with real-fs
  *     behavior the chunker relies on.
  */
-import FakeTimers, { type InstalledClock as SinonInstalledClock } from "@sinonjs/fake-timers";
+import FakeTimers from "@sinonjs/fake-timers";
+
+// `@sinonjs/fake-timers` ships its own bundled types alongside the
+// DefinitelyTyped @types/sinonjs__fake-timers package; the bundled types
+// take precedence and don't export `InstalledClock`. Derive the install-
+// return type so we work regardless of which type-source resolves.
+type SinonInstalledClock = ReturnType<typeof FakeTimers.install>;
 
 export interface InstalledClock {
   /** Advance both `Date.now()` and any pending `setTimeout`/`setInterval`/`Bun.sleep` callbacks. */

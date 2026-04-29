@@ -64,8 +64,26 @@ describe("cascade deletes", () => {
       content_fingerprint: `cascade-fp-${suffix}`,
     });
     replaceVideoStreams(videoId, [
-      { video_id: videoId, stream_type: "video", codec: "h264", width: 1920, height: 1080 },
-      { video_id: videoId, stream_type: "audio", codec: "aac", channels: 2, sample_rate: 48000 },
+      {
+        video_id: videoId,
+        stream_type: "video",
+        codec: "h264",
+        width: 1920,
+        height: 1080,
+        fps: 24,
+        channels: null,
+        sample_rate: null,
+      },
+      {
+        video_id: videoId,
+        stream_type: "audio",
+        codec: "aac",
+        width: null,
+        height: null,
+        fps: null,
+        channels: 2,
+        sample_rate: 48000,
+      },
     ]);
     insertJob({
       id: jobId,

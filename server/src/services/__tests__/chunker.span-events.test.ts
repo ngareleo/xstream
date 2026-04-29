@@ -226,7 +226,12 @@ describe("job.resolve span — exactly one terminal event per call", () => {
 // failure event explicitly.)
 const HAVE_MEDIA_FIXTURES = !!process.env.XSTREAM_TEST_MEDIA_DIR;
 describe.skipIf(!HAVE_MEDIA_FIXTURES)("transcode_silent_failure event (real ffmpeg)", () => {
-  test.todo(
-    "request a chunk past EOF on a real fixture, drain spans, assert transcode_silent_failure event present + span status ERROR"
-  );
+  // TODO(real-fixture): request a chunk past EOF on a real fixture, drain
+  // spans, assert transcode_silent_failure event present + span status
+  // ERROR. bun-types' test.todo signature requires a function in this
+  // version, so the placeholder lives here as a comment until the real
+  // assertion lands alongside an XSTREAM_TEST_MEDIA_DIR fixture.
+  test.skip("transcode_silent_failure on a chunk past EOF — see TODO above", () => {
+    /* placeholder */
+  });
 });

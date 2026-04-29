@@ -128,11 +128,17 @@ describe.skipIf(!HAVE_FIXTURES)("transcode.job span — telemetry contract", () 
     ).toBe(true);
   });
 
-  test.todo(
-    "transcode_silent_failure: chunk-past-EOF on real fixture → segment_count=0 clean exit + span status ERROR"
-  );
+  // TODO(real-fixture): transcode_silent_failure — chunk-past-EOF on a
+  // real fixture should produce segment_count=0 clean exit + span status
+  // ERROR. Lands when the encodeHarness gains a past-EOF fixture entry.
+  test.skip("transcode_silent_failure on chunk-past-EOF — see TODO above", () => {
+    /* placeholder */
+  });
 
-  test.todo(
-    "transcode_fallback_to_*: VAAPI cascade tiers covered by chunker.encode.test.ts; ensure event names stay stable"
-  );
+  // TODO(stability): transcode_fallback_to_* — VAAPI cascade tiers are
+  // covered by chunker.encode.test.ts; this slot exists so adding a new
+  // cascade event name is a deliberate cross-file change.
+  test.skip("transcode_fallback_to_* event names stay stable — see TODO above", () => {
+    /* placeholder */
+  });
 });

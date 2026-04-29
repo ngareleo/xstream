@@ -140,7 +140,7 @@ async function readFrames(
 ): Promise<Uint8Array[]> {
   const reader = body.getReader();
   const frames: Uint8Array[] = [];
-  let buffer = new Uint8Array(0);
+  let buffer: Uint8Array<ArrayBufferLike> = new Uint8Array(0);
   const deadline = Date.now() + budgetMs;
   try {
     while (frames.length < frameCount && Date.now() < deadline) {
@@ -165,7 +165,15 @@ async function readFrames(
   }
 }
 
-function concat(a: Uint8Array, b: Uint8Array): Uint8Array {
+// Widen to ArrayBufferLike on both sides so the helper accepts both the
+// Uint8Array<ArrayBuffer> chunks we allocate locally AND the
+// Uint8Array<ArrayBufferLike> chunks the ReadableStream reader hands us.
+// (TypeScript 5.7+ split the two for SharedArrayBuffer safety; CI's tsc
+// is strict, Bun's local typecheck happens to be lenient.)
+function concat(
+  a: Uint8Array<ArrayBufferLike>,
+  b: Uint8Array<ArrayBufferLike>
+): Uint8Array<ArrayBufferLike> {
   const out = new Uint8Array(a.length + b.length);
   out.set(a, 0);
   out.set(b, a.length);
@@ -375,7 +383,7 @@ describe("stream.request — kill paths", () => {
 async function readFrame(
   reader: ReadableStreamDefaultReader<Uint8Array>
 ): Promise<Uint8Array | null> {
-  let buffer = new Uint8Array(0);
+  let buffer: Uint8Array<ArrayBufferLike> = new Uint8Array(0);
   while (buffer.length < 4) {
     const { value, done } = await reader.read();
     if (done) return null;
