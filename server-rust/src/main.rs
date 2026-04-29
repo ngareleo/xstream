@@ -6,8 +6,16 @@ use xstream_server::{build_router, db::Db, telemetry, AppState};
 #[tokio::main]
 async fn main() -> AppResult<()> {
     if let Err(err) = run().await {
-        // Log to stderr in structured form so non-tracing consumers (CI logs,
-        // restart scripts) can still read what went wrong.
+        // Two channels because they have different audiences:
+        //   1. tracing::error! → OTLP → Seq, where it joins the broader
+        //      trace stream (no TraceId since this is outside any request,
+        //      but it still appears under service.name=xstream-server-rust).
+        //   2. eprintln! → stderr, where systemd/CI/restart-scripts can
+        //      read it without a working OTel pipeline.
+        // The full `#[source]` chain is rendered inline so an operator
+        // diagnosing a startup failure doesn't need RUST_BACKTRACE.
+        let chain = error_chain(&err);
+        tracing::error!(error = %err, chain = %chain, "xstream-server fatal");
         eprintln!("xstream-server fatal: {err}");
         let mut source = std::error::Error::source(&err);
         while let Some(s) = source {
@@ -17,6 +25,17 @@ async fn main() -> AppResult<()> {
         return Err(err);
     }
     Ok(())
+}
+
+fn error_chain(err: &dyn std::error::Error) -> String {
+    let mut out = err.to_string();
+    let mut source = err.source();
+    while let Some(s) = source {
+        out.push_str(" → ");
+        out.push_str(&s.to_string());
+        source = s.source();
+    }
+    out
 }
 
 async fn run() -> AppResult<()> {
