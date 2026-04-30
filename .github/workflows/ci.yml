@@ -79,6 +79,14 @@ jobs:
       - name: Test
         run: cargo test --workspace
 
+      - name: Install ffmpeg (apt, for SDL parity boot)
+        # The SDL parity step boots the Rust server, which probes for ffmpeg
+        # at startup before serving /healthz. We don't need jellyfin-ffmpeg
+        # here (the encode path isn't exercised); ubuntu's stock ffmpeg
+        # satisfies the boot dependency and the env-var override below
+        # skips the manifest version check.
+        run: sudo apt-get update -y && sudo apt-get install -y ffmpeg
+
       - name: SDL parity (Rust introspection ↔ Bun typeDefs)
         # Boots the Rust server, runs `scripts/check-sdl-parity.ts` against
         # its introspection, and kills it. The script is the Step-1 acceptance
