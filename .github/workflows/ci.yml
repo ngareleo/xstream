@@ -84,6 +84,20 @@ jobs:
         # its introspection, and kills it. The script is the Step-1 acceptance
         # gate — drift here means the Relay client's generated artifacts will
         # break across the cutover.
+        #
+        # Env shape:
+        #   FFMPEG_PATH / FFPROBE_PATH — env-var override at
+        #     `services/ffmpeg_path.rs:resolve_ffmpeg_paths` skips the manifest
+        #     version check (CI doesn't install jellyfin-ffmpeg; ubuntu's
+        #     stock ffmpeg at /usr/bin satisfies the boot dependency without
+        #     a 50 MB .deb download per run).
+        #   HW_ACCEL=off — skips the VAAPI probe (no /dev/dri on CI runners).
+        #     The SDL parity check only exercises GraphQL introspection, so
+        #     the encode path isn't touched.
+        env:
+          FFMPEG_PATH: /usr/bin/ffmpeg
+          FFPROBE_PATH: /usr/bin/ffprobe
+          HW_ACCEL: "off"
         shell: bash
         run: |
           set -euo pipefail
