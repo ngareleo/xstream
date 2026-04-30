@@ -421,7 +421,7 @@ _Move resolved entries here with the date and chosen path._
 
 ### 10.5 Mid-session flag-flip behaviour — Resolved 2026-04-30
 
-**Chosen path:** `streamUrl(jobId)` reads the flag at fetch-time, so an in-flight Bun segment drains naturally and the next client `fetch` lands on the Rust endpoint. **However,** the flag was consolidated to `useRustBackend` (which also gates GraphQL routing, read at module-init) — so a flag flip in practice requires a page reload to swing GraphQL too. The streaming-side fetch-time read remains; the user-visible behaviour is "reload to flip." See **10.3** for the consolidation rationale.
+**Chosen path:** Single module-init snapshot in `rustOrigin.ts` — `getFlag(useRustBackend, false)` is read exactly once at module load and cached in `RUST_BACKEND_ENABLED`. Both `graphqlHttpUrl()` and `streamUrl(jobId)` consult the cached value. A mid-session toggle is invisible to both channels until the next page reload — matching the flag description's "Reload required after toggle." Earlier iteration tried a per-call read for `streamUrl`; that produced a 404 split-brain when a user toggled mid-session (Bun-frozen GraphQL created the job, Rust-live /stream couldn't find it). The single-snapshot rule keeps the two channels in lockstep. See **10.3** for the consolidation rationale.
 
 ### 10.6 Rust ffmpeg subprocess wrapper — Resolved 2026-04-30
 
