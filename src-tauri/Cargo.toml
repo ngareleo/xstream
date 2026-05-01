@@ -1,0 +1,31 @@
+[package]
+name = "xstream-tauri"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+license.workspace = true
+
+[lib]
+# Tauri v2 expects the app code in a library; the binary entry under
+# `src/main.rs` is a thin wrapper that calls `xstream_tauri::run()`.
+# This shape is required for mobile targets and for keeping the entry
+# point stable across `tauri-cli` updates.
+name = "xstream_tauri_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+path = "src/lib.rs"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "sync"] }
+tracing = "0.1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+
+# Embedded server — runs in-process on a free 127.0.0.1 port. See
+# docs/migrations/rust-rewrite/08-Tauri-Packaging.md §3.
+xstream-server = { path = "../server-rust" }

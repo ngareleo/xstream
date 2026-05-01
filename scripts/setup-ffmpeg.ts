@@ -20,9 +20,14 @@
  *       / QSV / NVENC / AMF are provided by Windows + GPU drivers.
  *
  * Usage:
- *   bun run setup-ffmpeg          # idempotent; skips install if the pinned
- *                                 # version is already the active install
- *   bun run setup-ffmpeg --force  # re-download and re-install
+ *   bun run setup-ffmpeg                       # default: install for dev
+ *                                              # (deb on Linux; portable elsewhere)
+ *   bun run setup-ffmpeg --force               # re-download and re-install
+ *   bun run setup-ffmpeg --target=tauri-bundle # stage portable build into
+ *                                              # src-tauri/resources/ffmpeg/<platform>/
+ *                                              # for the Tauri bundler. Forces
+ *                                              # the `*-portable` manifest entry
+ *                                              # on Linux instead of `deb-install`.
  */
 
 import { createHash } from "node:crypto";
@@ -34,9 +39,12 @@ import { dirname, join, resolve } from "node:path";
 const ROOT = resolve(import.meta.dir, "..");
 const MANIFEST_PATH = join(ROOT, "scripts", "ffmpeg-manifest.json");
 const VENDOR_ROOT = join(ROOT, "vendor", "ffmpeg");
+const TAURI_RESOURCES_ROOT = join(ROOT, "src-tauri", "resources", "ffmpeg");
 const DOWNLOAD_DIR = join(ROOT, "tmp");
 
 const FORCE = process.argv.includes("--force");
+const TARGET_FLAG = process.argv.find((a) => a.startsWith("--target="));
+const TARGET: "default" | "tauri-bundle" = TARGET_FLAG === "--target=tauri-bundle" ? "tauri-bundle" : "default";
 
 interface PlatformEntry {
   asset: string;
@@ -69,6 +77,32 @@ function detectPlatform(): Platform {
     default:
       throw new Error(`Unsupported platform: ${key}. Supported: linux-x64, linux-arm64, darwin-x64, darwin-arm64, win32-x64.`);
   }
+}
+
+/**
+ * Pick the manifest key for this run.
+ *
+ * - Default target: returns the platform key as-is. Linux uses the
+ *   `deb-install` strategy that places binaries under
+ *   `/usr/lib/jellyfin-ffmpeg/`; Mac/Windows use the portable strategies.
+ * - Tauri-bundle target: on Linux, prefers a `<platform>-portable` entry so
+ *   the Tauri bundler ships a self-contained binary (the deb path needs
+ *   `dpkg -i` on the user's machine, which defeats the bundle). On
+ *   Mac/Windows the manifest entry is already portable, so the platform
+ *   key is reused.
+ */
+function manifestKey(platform: Platform, manifest: FfmpegManifest): string {
+  if (TARGET === "tauri-bundle") {
+    const portableKey = `${platform}-portable`;
+    if (manifest.ffmpeg.platforms[portableKey]) return portableKey;
+    if (manifest.ffmpeg.platforms[platform]?.strategy === "deb-install") {
+      throw new Error(
+        `--target=tauri-bundle: manifest has no '${portableKey}' entry but '${platform}' uses deb-install. ` +
+          `A bundled .deb cannot ship inside a Tauri AppImage. Add a '${portableKey}' entry to scripts/ffmpeg-manifest.json.`
+      );
+    }
+  }
+  return platform;
 }
 
 function loadManifest(): FfmpegManifest {
@@ -205,7 +239,14 @@ function relocateBinaries(searchDir: string, targetDir: string): void {
 }
 
 async function installPortable(entry: PlatformEntry, manifest: FfmpegManifest, platform: Platform): Promise<void> {
-  const vendorDir = join(VENDOR_ROOT, platform);
+  // Default target stages binaries under `vendor/ffmpeg/<platform>/` so the
+  // Rust resolver picks them up via `installed_path` (server-rust's
+  // ffmpeg_path.rs). Tauri-bundle target stages under
+  // `src-tauri/resources/ffmpeg/<platform>/` so `tauri build` copies the
+  // tree into the installed app payload.
+  const vendorDir = TARGET === "tauri-bundle"
+    ? join(TAURI_RESOURCES_ROOT, platform)
+    : join(VENDOR_ROOT, platform);
   const ffmpegPath = join(vendorDir, binName("ffmpeg"));
   const ffprobePath = join(vendorDir, binName("ffprobe"));
 
@@ -263,12 +304,21 @@ async function installPortable(entry: PlatformEntry, manifest: FfmpegManifest, p
 async function main(): Promise<void> {
   const manifest = loadManifest();
   const platform = detectPlatform();
-  const entry = manifest.ffmpeg.platforms[platform];
+  const key = manifestKey(platform, manifest);
+  const entry = manifest.ffmpeg.platforms[key];
   if (!entry) {
-    throw new Error(`No manifest entry for platform ${platform}. Supported: ${Object.keys(manifest.ffmpeg.platforms).join(", ")}`);
+    throw new Error(`No manifest entry for key '${key}' (platform=${platform}, target=${TARGET}). Supported: ${Object.keys(manifest.ffmpeg.platforms).join(", ")}`);
+  }
+
+  if (TARGET === "tauri-bundle" && entry.strategy === "deb-install") {
+    // Defensive — `manifestKey` already throws above. Keep the runtime
+    // assertion so a future manifest edit can't silently bundle a .deb.
+    throw new Error(`--target=tauri-bundle cannot use the deb-install strategy. Manifest entry '${key}' is misconfigured.`);
   }
 
   console.log(`Platform:         ${platform}`);
+  console.log(`Manifest key:     ${key}`);
+  console.log(`Target:           ${TARGET}`);
   console.log(`Distribution:     ${manifest.ffmpeg.distribution}`);
   console.log(`Pinned version:   ${manifest.ffmpeg.version} (${manifest.ffmpeg.versionString})`);
   console.log(`Install strategy: ${entry.strategy}`);

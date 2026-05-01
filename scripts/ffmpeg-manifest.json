@@ -18,6 +18,16 @@
         "strategy": "deb-install",
         "installedPrefix": "/usr/lib/jellyfin-ffmpeg"
       },
+      "linux-x64-portable": {
+        "asset": "jellyfin-ffmpeg_7.1.3-5_portable_linux64-gpl.tar.xz",
+        "sha256": "767271fdb384f802159e19b059d6f382a64749980e7c0890a733e13a33f5c5bc",
+        "strategy": "portable-tarball"
+      },
+      "linux-arm64-portable": {
+        "asset": "jellyfin-ffmpeg_7.1.3-5_portable_linuxarm64-gpl.tar.xz",
+        "sha256": "6932651fa3cfaa17c1619aa1bee94520e11f827a9054fd35fae9844ecafea0d9",
+        "strategy": "portable-tarball"
+      },
       "darwin-x64": {
         "asset": "jellyfin-ffmpeg_7.1.3-5_portable_mac64-gpl.tar.xz",
         "sha256": "f3ac6beb0ea27497ed88378b700a66d71d340c8f6ab3233427f12f2b64de3db6",

@@ -18,6 +18,8 @@
     "stop": "bash scripts/stop.sh",
     "check-env": "bash scripts/check-env.sh",
     "setup-ffmpeg": "bun scripts/setup-ffmpeg.ts",
+    "tauri:dev": "command -v cargo-tauri >/dev/null 2>&1 || { echo 'cargo-tauri not found — install once with: cargo install tauri-cli --version ^2 --locked'; exit 127; } && cd src-tauri && cargo tauri dev",
+    "tauri:build": "command -v cargo-tauri >/dev/null 2>&1 || { echo 'cargo-tauri not found — install once with: cargo install tauri-cli --version ^2 --locked'; exit 127; } && cd src-tauri && cargo tauri build --bundles deb,appimage",
     "test-chunking": "bun scripts/test-chunking.ts",
     "clean": "bash scripts/clean.sh",
     "clean:db": "bash scripts/clean.sh --db",

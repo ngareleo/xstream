@@ -1,0 +1,40 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "xstream",
+  "version": "0.0.0",
+  "identifier": "com.example.xstream",
+  "build": {
+    "beforeDevCommand": "bun run --filter client dev",
+    "beforeBuildCommand": "bun run --filter client build && bun run setup-ffmpeg --target=tauri-bundle",
+    "frontendDist": "../client/dist",
+    "devUrl": "http://localhost:5173"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "xstream",
+        "width": 1280,
+        "height": 800,
+        "resizable": true,
+        "fullscreen": false
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["appimage", "deb"],
+    "icon": ["icons/icon.png"],
+    "resources": ["resources/ffmpeg/**/*"],
+    "linux": {
+      "deb": {
+        "depends": []
+      },
+      "appimage": {
+        "bundleMediaFramework": false
+      }
+    }
+  }
+}
