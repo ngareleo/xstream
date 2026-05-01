@@ -110,7 +110,26 @@ Read `docs/INDEX.md`. Extract each row. For each file path:
 - If the file doesn't exist → remove the row (log to report).
 - For each topic file actually present in `docs/` that has no row → report as "consider adding to index" (don't auto-add; architect decides based on question likelihood).
 
-### 7. Print the groom report
+### 7. Size audit (report-only)
+
+Detect docs that have outgrown their container. Report-only — splitting is judgement work the architect handles, not the skill.
+
+```sh
+# files over 200 lines (excluding diagrams/)
+find docs -name '*.md' -not -path 'docs/diagrams/*' -exec wc -l {} \; \
+  | awk '$1 > 200 { print $0 }'
+
+# topic-folders with > 8 sibling *.md files (excluding README.md)
+find docs -mindepth 2 -type d -not -path 'docs/diagrams*' \
+  | while read d; do
+      n=$(find "$d" -maxdepth 1 -name '*.md' -not -name 'README.md' | wc -l)
+      [ "$n" -gt 8 ] && echo "$d ($n files)"
+    done
+```
+
+Both lists feed the report's **Split candidates (architect)** section. Thresholds match the architect's reactive split rule (200 lines / 8 files); below those, the file/folder is fine.
+
+### 8. Print the groom report
 
 One consolidated stdout block:
 
@@ -129,6 +148,11 @@ One consolidated stdout block:
 - Possibly undocumented symbol: `<name>` in `<source-file>`
 - Stale path with ambiguous fix: `<path>` — zero or multiple candidates
 - Prose/conceptual mismatch candidates: <list>
+
+## Split candidates (architect)
+- Oversized file: `<path>` (`<N>` lines, > 200) — architect decides where the natural seam is
+- Overcrowded folder: `<path>` (`<N>` files, > 8) — architect decides the theme split
+- Note: `docs/migrations/**` is owned by `migrations-lead`; do NOT route those candidates to architect
 
 ## Summary
 - N files edited
