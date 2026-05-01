@@ -23,6 +23,11 @@ const FILMS: FilmSeed[] = [
   { id: "barbie", title: "Barbie", year: 2023 },
   { id: "nosferatu", title: "Nosferatu", year: 2024 },
   { id: "civilwar", title: "Civil War", year: 2024 },
+  { id: "furiosa", title: "Furiosa: A Mad Max Saga", year: 2024 },
+  { id: "madmax", title: "Mad Max: Fury Road", year: 2015 },
+  { id: "f1", title: "F1", year: 2025 },
+  { id: "superman", title: "Superman", year: 2025 },
+  { id: "justiceleague", title: "Zack Snyder's Justice League", year: 2021 },
 ];
 
 interface OmdbResponse {
