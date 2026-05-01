@@ -9,14 +9,18 @@ export const useLibraryStyles = makeStyles({
     overflowX: "hidden",
     overflowY: "auto",
     backgroundColor: tokens.colorBg0,
+    paddingLeft: "40px",
+    paddingRight: "40px",
   },
 
-  // Hero — full-bleed, starts at viewport top so the glass header overlays it
+  // Hero — inset from page edges, starts at viewport y=0 so the glass header
+  // still overlays the top
   hero: {
     flexShrink: 0,
-    height: "420px",
+    height: "300px",
     position: "relative",
     overflow: "hidden",
+    borderRadius: "6px",
   },
   heroSlides: {
     position: "absolute",
@@ -72,9 +76,9 @@ export const useLibraryStyles = makeStyles({
     position: "absolute",
     inset: "0",
     paddingTop: `calc(${tokens.headerHeight} + 32px)`,
-    paddingBottom: "24px",
-    paddingLeft: "56px",
-    paddingRight: "56px",
+    paddingBottom: "20px",
+    paddingLeft: "44px",
+    paddingRight: "44px",
     display: "flex",
     flexDirection: "column",
     rowGap: "20px",
@@ -262,13 +266,11 @@ export const useLibraryStyles = makeStyles({
     rowGap: "24px",
   },
 
-  // Rows below the hero
+  // Rows below the hero — page provides the horizontal inset now.
   rowsScroll: {
     flexGrow: 1,
-    paddingTop: "16px",
+    paddingTop: "20px",
     paddingBottom: "60px",
-    paddingLeft: "32px",
-    paddingRight: "32px",
     display: "flex",
     flexDirection: "column",
     rowGap: "28px",
