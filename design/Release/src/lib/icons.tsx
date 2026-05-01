@@ -1,6 +1,23 @@
 import { type FC, type SVGProps } from "react";
+import { makeStyles } from "@griffel/react";
+import { tokens } from "../styles/tokens.js";
 
 type IconProps = SVGProps<SVGSVGElement>;
+
+const useImdbBadgeStyles = makeStyles({
+  badge: {
+    backgroundColor: tokens.colorYellow,
+    color: "#000",
+    paddingTop: "1px",
+    paddingBottom: "1px",
+    paddingLeft: "4px",
+    paddingRight: "4px",
+    fontSize: "9px",
+    fontWeight: 800,
+    letterSpacing: "0.06em",
+    borderRadius: "2px",
+  },
+});
 
 export const IconPlay: FC<IconProps> = (p) => (
   <svg width="14" height="14" viewBox="0 0 16 16" {...p}>
@@ -93,18 +110,7 @@ export const IconWarn: FC<IconProps> = (p) => (
   </svg>
 );
 
-export const ImdbBadge: FC = () => (
-  <span
-    style={{
-      background: "var(--yellow)",
-      color: "#000",
-      padding: "1px 4px",
-      fontSize: 9,
-      fontWeight: 800,
-      letterSpacing: "0.06em",
-      borderRadius: 2,
-    }}
-  >
-    IMDb
-  </span>
-);
+export const ImdbBadge: FC = () => {
+  const styles = useImdbBadgeStyles();
+  return <span className={styles.badge}>IMDb</span>;
+};

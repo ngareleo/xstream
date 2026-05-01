@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { ImdbBadge, IconClose } from "../../lib/icons.js";
 import { type Film } from "../../data/mock.js";
 import { Poster } from "../Poster/Poster.js";
+import { useDetailPaneStyles } from "./DetailPane.styles.js";
 
 interface DetailPaneProps {
   film: Film;
@@ -14,127 +15,40 @@ interface DetailPaneProps {
  * Visual treatment ported from `app-mockups.jsx` DetailPane.
  */
 export const DetailPane: FC<DetailPaneProps> = ({ film, onClose }) => {
+  const styles = useDetailPaneStyles();
   const hdrLabel = film.hdr && film.hdr !== "—" ? film.hdr.toUpperCase() : null;
   return (
-    <div
-      style={{
-        borderLeft: "1px solid var(--border)",
-        display: "flex",
-        flexDirection: "column",
-        background: "var(--bg-1)",
-        overflow: "hidden",
-        height: "100%",
-      }}
-    >
-      <div style={{ height: 220, position: "relative", flexShrink: 0 }}>
+    <div className={styles.pane}>
+      <div className={styles.posterFrame}>
         <Poster
           url={film.posterUrl}
           alt={film.title ?? film.filename}
-          style={{ width: "100%", height: "100%", objectFit: "cover" }}
+          className={styles.posterImage}
         />
-        <div
-          style={{
-            position: "absolute",
-            inset: 0,
-            background:
-              "linear-gradient(180deg, transparent 50%, var(--bg-1))",
-          }}
-        />
+        <div className={styles.posterFade} />
         <button
           onClick={onClose}
           aria-label="Close detail pane"
-          style={{
-            position: "absolute",
-            top: 12,
-            right: 12,
-            width: 26,
-            height: 26,
-            border: "1px solid var(--border)",
-            background: "rgba(0,0,0,0.6)",
-            color: "var(--text-dim)",
-            borderRadius: 3,
-            display: "inline-flex",
-            alignItems: "center",
-            justifyContent: "center",
-          }}
+          className={styles.closeBtn}
         >
           <IconClose />
         </button>
       </div>
 
-      <div style={{ padding: "16px 22px", flex: 1, overflowY: "auto" }}>
-        <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-          <Link
-            to={`/player/${film.id}`}
-            style={{
-              flex: 1,
-              padding: "10px",
-              background: "var(--green)",
-              color: "var(--green-ink)",
-              border: 0,
-              fontFamily: "var(--font-mono)",
-              fontSize: 11,
-              letterSpacing: "0.18em",
-              textTransform: "uppercase",
-              fontWeight: 700,
-              borderRadius: 2,
-              textAlign: "center",
-              textDecoration: "none",
-            }}
-          >
+      <div className={styles.body}>
+        <div className={styles.actionRow}>
+          <Link to={`/player/${film.id}`} className={styles.playBtn}>
             ▶ Play in {film.resolution}
           </Link>
-          <button
-            style={{
-              padding: "10px 14px",
-              background: "transparent",
-              border: "1px solid var(--border)",
-              color: "var(--text-dim)",
-              fontFamily: "var(--font-mono)",
-              fontSize: 11,
-              letterSpacing: "0.18em",
-              textTransform: "uppercase",
-              borderRadius: 2,
-            }}
-          >
-            RE-LINK
-          </button>
+          <button className={styles.reLinkBtn}>RE-LINK</button>
         </div>
 
-        <div
-          style={{
-            fontFamily: "var(--font-head)",
-            fontSize: 32,
-            lineHeight: 1,
-            color: "var(--text)",
-            letterSpacing: "-0.01em",
-            marginBottom: 4,
-            textTransform: "uppercase",
-          }}
-        >
-          {film.title ?? "Unmatched file"}
-        </div>
-        <div
-          style={{
-            fontSize: 11,
-            color: "var(--text-muted)",
-            fontFamily: "var(--font-mono)",
-            letterSpacing: "0.1em",
-            marginBottom: 14,
-            textTransform: "uppercase",
-          }}
-        >
+        <div className={styles.title}>{film.title ?? "Unmatched file"}</div>
+        <div className={styles.subhead}>
           {[film.year, film.genre, film.duration].filter(Boolean).join(" · ")}
         </div>
 
-        <div
-          style={{
-            display: "flex",
-            gap: 6,
-            flexWrap: "wrap",
-            marginBottom: 14,
-          }}
-        >
+        <div className={styles.techChips}>
           <span className="chip green">{film.resolution} UHD</span>
           {hdrLabel && <span className="chip">{hdrLabel}</span>}
           <span className="chip">{film.codec}</span>
@@ -143,64 +57,25 @@ export const DetailPane: FC<DetailPaneProps> = ({ film, onClose }) => {
           </span>
         </div>
 
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 8,
-            marginBottom: 14,
-            fontFamily: "var(--font-mono)",
-            fontSize: 11,
-            color: "var(--text-dim)",
-          }}
-        >
+        <div className={styles.ratingRow}>
           {film.rating !== null && (
             <>
               <ImdbBadge />
-              <span style={{ color: "var(--yellow)" }}>{film.rating}</span>
-              <span style={{ color: "var(--text-faint)" }}>·</span>
+              <span className={styles.ratingValue}>{film.rating}</span>
+              <span className={styles.divider}>·</span>
             </>
           )}
           <span>{film.duration}</span>
-          <span style={{ color: "var(--text-faint)" }}>·</span>
-          <span style={{ color: "var(--green)" }}>● ON DISK</span>
+          <span className={styles.divider}>·</span>
+          <span className={styles.status}>● ON DISK</span>
         </div>
 
-        {film.plot && (
-          <div
-            style={{
-              fontSize: 12,
-              color: "var(--text-dim)",
-              lineHeight: 1.55,
-              marginBottom: 14,
-            }}
-          >
-            {film.plot}
-          </div>
-        )}
+        {film.plot && <div className={styles.plot}>{film.plot}</div>}
 
         {film.cast.length > 0 && (
           <>
-            <div
-              style={{
-                fontFamily: "var(--font-mono)",
-                fontSize: 9,
-                letterSpacing: "0.22em",
-                color: "var(--text-faint)",
-                marginBottom: 8,
-                textTransform: "uppercase",
-              }}
-            >
-              CAST
-            </div>
-            <div
-              style={{
-                display: "flex",
-                flexWrap: "wrap",
-                gap: 6,
-                marginBottom: 14,
-              }}
-            >
+            <div className={styles.sectionLabel}>CAST</div>
+            <div className={styles.castChips}>
               {film.cast.map((c) => (
                 <span key={c} className="chip">
                   {c}
@@ -210,39 +85,10 @@ export const DetailPane: FC<DetailPaneProps> = ({ film, onClose }) => {
           </>
         )}
 
-        <div
-          style={{
-            fontFamily: "var(--font-mono)",
-            fontSize: 9,
-            letterSpacing: "0.22em",
-            color: "var(--text-faint)",
-            marginBottom: 8,
-            textTransform: "uppercase",
-          }}
-        >
-          FILE
-        </div>
-        <div
-          style={{
-            background: "var(--surface)",
-            border: "1px solid var(--border-soft)",
-            padding: 12,
-            fontSize: 10,
-            fontFamily: "var(--font-mono)",
-            color: "var(--text-dim)",
-            lineHeight: 1.7,
-          }}
-        >
+        <div className={styles.sectionLabel}>FILE</div>
+        <div className={styles.fileBlock}>
           <div>{film.filename}</div>
-          <div
-            style={{
-              display: "flex",
-              gap: 12,
-              marginTop: 6,
-              color: "var(--text-muted)",
-              flexWrap: "wrap",
-            }}
-          >
+          <div className={styles.fileMeta}>
             <span>{film.size}</span>
             <span>·</span>
             <span>{film.bitrate}</span>

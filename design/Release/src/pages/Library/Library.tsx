@@ -11,6 +11,7 @@ import { ImdbBadge, IconSearch, IconWarn } from "../../lib/icons.js";
 import { Poster } from "../../components/Poster/Poster.js";
 import { DetailPane } from "../../components/DetailPane/DetailPane.js";
 import { useSplitResize } from "../../hooks/useSplitResize.js";
+import { useLibraryStyles } from "./Library.styles.js";
 
 type ViewMode = "grid" | "list";
 
@@ -25,6 +26,8 @@ export const Library: FC = () => {
 
   const [search, setSearch] = useState("");
   const [view, setView] = useState<ViewMode>("grid");
+
+  const styles = useLibraryStyles();
 
   const visible = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -58,98 +61,38 @@ export const Library: FC = () => {
 
   const closePane = (): void => setParams(buildParams({ film: null }));
 
+  // Grid template depends on a runtime pane width — kept inline because Griffel
+  // cannot compose dynamic numeric values into the columns track string.
+  const containerStyle = paneOpen
+    ? { gridTemplateColumns: `1fr 4px ${paneWidth}px` }
+    : { gridTemplateColumns: "1fr 0px 0px" };
+
   return (
-    <div
-      ref={containerRef}
-      style={
-        paneOpen
-          ? {
-              display: "grid",
-              gridTemplateColumns: `1fr 4px ${paneWidth}px`,
-              height: "100%",
-              transition: "grid-template-columns 0.25s ease",
-            }
-          : {
-              display: "grid",
-              gridTemplateColumns: "1fr 0px 0px",
-              height: "100%",
-              transition: "grid-template-columns 0.25s ease",
-            }
-      }
-    >
-      <div
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          height: "100%",
-          overflow: "hidden",
-        }}
-      >
+    <div ref={containerRef} className={styles.container} style={containerStyle}>
+      <div className={styles.mainColumn}>
         {/* Filter bar */}
-        <div
-          style={{
-            padding: "16px 28px",
-            borderBottom: "1px solid var(--border)",
-            display: "flex",
-            alignItems: "center",
-            gap: 16,
-          }}
-        >
-          <div
-            style={{
-              flex: 1,
-              display: "flex",
-              alignItems: "center",
-              gap: 10,
-              background: "var(--surface-2)",
-              border: "1px solid var(--border)",
-              padding: "8px 12px",
-              borderRadius: 3,
-            }}
-          >
-            <IconSearch style={{ color: "var(--text-muted)" }} />
+        <div className={styles.filterBar}>
+          <div className={styles.searchBox}>
+            <IconSearch className={styles.searchIcon} />
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search title, filename, genre…"
-              style={{
-                flex: 1,
-                background: "transparent",
-                border: 0,
-                outline: "none",
-                color: "var(--text)",
-                fontSize: 12,
-              }}
+              className={styles.searchInput}
             />
-            <span
-              style={{
-                fontFamily: "var(--font-mono)",
-                fontSize: 10,
-                color: "var(--text-faint)",
-                letterSpacing: "0.1em",
-              }}
-            >
-              ⌘K
-            </span>
+            <span className={styles.kbdHint}>⌘K</span>
           </div>
-          <div style={{ display: "flex", gap: 4 }}>
+          <div className={styles.viewToggleGroup}>
             {(["grid", "list"] as const).map((m) => {
               const active = view === m;
               return (
                 <button
                   key={m}
                   onClick={() => setView(m)}
-                  style={{
-                    padding: "8px 14px",
-                    border: "1px solid var(--border)",
-                    background: active ? "var(--green-soft)" : "transparent",
-                    color: active ? "var(--green)" : "var(--text-dim)",
-                    fontFamily: "var(--font-mono)",
-                    fontSize: 10,
-                    letterSpacing: "0.18em",
-                    borderRadius: 2,
-                    textTransform: "uppercase",
-                  }}
+                  className={mergeClasses(
+                    styles.viewToggleBtn,
+                    active && styles.viewToggleBtnActive,
+                  )}
                 >
                   {m}
                 </button>
@@ -159,15 +102,7 @@ export const Library: FC = () => {
         </div>
 
         {/* Profile chips */}
-        <div
-          style={{
-            padding: "12px 28px",
-            display: "flex",
-            gap: 8,
-            borderBottom: "1px solid var(--border-soft)",
-            alignItems: "center",
-          }}
-        >
+        <div className={styles.profileChipsBar}>
           <ProfileChip
             label="All profiles"
             count={films.length}
@@ -186,20 +121,14 @@ export const Library: FC = () => {
               }
             />
           ))}
-          <div style={{ flex: 1 }} />
+          <div className={styles.spacer} />
           <span className="eyebrow">SORT · RECENTLY ADDED</span>
         </div>
 
         {/* Body */}
-        <div style={{ flex: 1, overflow: "auto", padding: "20px 28px" }}>
+        <div className={styles.body}>
           {view === "grid" ? (
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))",
-                gap: 18,
-              }}
-            >
+            <div className={styles.gridLayout}>
               {visible.map((f) => (
                 <PosterCard
                   key={f.id}
@@ -210,7 +139,7 @@ export const Library: FC = () => {
               ))}
             </div>
           ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
+            <div className={styles.listLayout}>
               {visible.map((f) => (
                 <ListRow
                   key={f.id}
@@ -222,17 +151,7 @@ export const Library: FC = () => {
             </div>
           )}
           {visible.length === 0 && (
-            <div
-              style={{
-                padding: "60px 0",
-                textAlign: "center",
-                color: "var(--text-muted)",
-                fontFamily: "var(--font-mono)",
-                fontSize: 12,
-                letterSpacing: "0.18em",
-                textTransform: "uppercase",
-              }}
-            >
+            <div className={styles.emptyState}>
               No films match the current filter.
             </div>
           )}
@@ -241,13 +160,7 @@ export const Library: FC = () => {
 
       {paneOpen && (
         <>
-          <div
-            onMouseDown={onResizeMouseDown}
-            style={{
-              backgroundColor: "var(--border)",
-              cursor: "col-resize",
-            }}
-          />
+          <div onMouseDown={onResizeMouseDown} className={styles.splitter} />
           {selectedFilm && (
             <DetailPane film={selectedFilm} onClose={closePane} />
           )}
@@ -263,138 +176,60 @@ const ProfileChip: FC<{
   active: boolean;
   warn?: boolean;
   onClick: () => void;
-}> = ({ label, count, active, warn, onClick }) => (
-  <button
-    onClick={onClick}
-    style={{
-      padding: "6px 12px",
-      background: active ? "var(--green-soft)" : "var(--surface-2)",
-      border: `1px solid ${active ? "var(--green-deep)" : "var(--border)"}`,
-      color: active ? "var(--green)" : "var(--text-dim)",
-      borderRadius: 999,
-      fontSize: 11,
-      display: "flex",
-      alignItems: "center",
-      gap: 8,
-    }}
-  >
-    {warn && <IconWarn />}
-    <span>{label}</span>
-    <span
-      style={{
-        color: "var(--text-faint)",
-        fontFamily: "var(--font-mono)",
-        fontSize: 10,
-      }}
+}> = ({ label, count, active, warn, onClick }) => {
+  const styles = useLibraryStyles();
+  return (
+    <button
+      onClick={onClick}
+      className={mergeClasses(styles.chip, active && styles.chipActive)}
     >
-      {count}
-    </span>
-  </button>
-);
+      {warn && <IconWarn />}
+      <span>{label}</span>
+      <span className={styles.chipCount}>{count}</span>
+    </button>
+  );
+};
 
 const PosterCard: FC<{
   film: Film;
   selected: boolean;
   onClick: () => void;
 }> = ({ film, selected, onClick }) => {
+  const styles = useLibraryStyles();
   const showHdrChip = film.resolution === "4K" && film.hdr && film.hdr !== "—";
   return (
-    <div
-      onClick={onClick}
-      style={{
-        position: "relative",
-        cursor: "pointer",
-      }}
-    >
+    <div onClick={onClick} className={styles.posterCard}>
       <div
-        style={{
-          aspectRatio: "2/3",
-          overflow: "hidden",
-          border: selected
-            ? "1px solid var(--green)"
-            : "1px solid var(--border)",
-          background: "var(--surface)",
-          position: "relative",
-          boxShadow: selected ? "0 0 0 3px var(--green-soft)" : "none",
-          transition: "box-shadow 0.15s, border-color 0.15s",
-        }}
+        className={mergeClasses(
+          styles.posterFrame,
+          selected && styles.posterFrameSelected,
+        )}
       >
         <Poster
           url={film.posterUrl}
           alt={film.title ?? film.filename}
-          style={{ width: "100%", height: "100%", objectFit: "cover" }}
+          className={styles.posterImage}
         />
         {showHdrChip && (
-          <span
-            style={{
-              position: "absolute",
-              top: 8,
-              right: 8,
-              background: "var(--green)",
-              color: "var(--green-ink)",
-              fontFamily: "var(--font-mono)",
-              fontSize: 9,
-              fontWeight: 700,
-              padding: "2px 6px",
-              borderRadius: 2,
-              letterSpacing: "0.1em",
-            }}
-          >
+          <span className={styles.hdrBadge}>
             4K · {film.hdr}
           </span>
         )}
         {film.rating !== null && (
-          <div
-            style={{
-              position: "absolute",
-              bottom: 6,
-              right: 6,
-              background: "rgba(0,0,0,0.7)",
-              color: "var(--yellow)",
-              fontFamily: "var(--font-mono)",
-              fontSize: 10,
-              padding: "2px 6px",
-              display: "flex",
-              alignItems: "center",
-              gap: 4,
-              borderRadius: 2,
-            }}
-          >
+          <div className={styles.ratingBadge}>
             <ImdbBadge />
             {film.rating}
           </div>
         )}
         {!film.matched && (
-          <div
-            style={{
-              position: "absolute",
-              inset: 0,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              background: "rgba(0,0,0,0.4)",
-              color: "var(--yellow)",
-              fontFamily: "var(--font-mono)",
-              fontSize: 38,
-            }}
-          >
-            ?
-          </div>
+          <div className={styles.unmatchedOverlay}>?</div>
         )}
       </div>
-      <div style={{ marginTop: 8 }}>
-        <div style={{ fontSize: 12, color: "var(--text)" }}>
+      <div className={styles.posterCardMeta}>
+        <div className={styles.posterCardTitle}>
           {film.title ?? film.filename}
         </div>
-        <div
-          style={{
-            fontSize: 10,
-            color: "var(--text-muted)",
-            fontFamily: "var(--font-mono)",
-            letterSpacing: "0.06em",
-            marginTop: 2,
-          }}
-        >
+        <div className={styles.posterCardSubtitle}>
           {[film.year, film.duration].filter(Boolean).join(" · ")}
         </div>
       </div>
@@ -407,48 +242,30 @@ const ListRow: FC<{
   selected: boolean;
   onClick: () => void;
 }> = ({ film, selected, onClick }) => {
+  const styles = useLibraryStyles();
   const profileName = profiles.find((p) => p.id === film.profile)?.name ?? "";
   return (
     <div
       onClick={onClick}
-      style={{
-        display: "grid",
-        gridTemplateColumns: "48px 2fr 1fr 0.6fr 0.6fr 0.4fr",
-        alignItems: "center",
-        gap: 14,
-        padding: "8px 14px",
-        background: selected ? "var(--green-soft)" : "transparent",
-        borderLeft: selected
-          ? "2px solid var(--green)"
-          : "2px solid transparent",
-        cursor: "pointer",
-        borderBottom: "1px solid var(--border-soft)",
-      }}
+      className={mergeClasses(styles.listRow, selected && styles.listRowSelected)}
     >
       <Poster
         url={film.posterUrl}
         alt={film.title ?? film.filename}
-        style={{ width: 48, height: 68, objectFit: "cover" }}
+        className={styles.listRowPoster}
       />
       <div>
-        <div style={{ fontSize: 12, color: "var(--text)" }}>
+        <div className={styles.listRowTitle}>
           {film.title ?? film.filename}
           {film.year && (
-            <span style={{ color: "var(--text-muted)" }}> · {film.year}</span>
+            <span className={styles.listRowYear}> · {film.year}</span>
           )}
         </div>
-        <div
-          style={{
-            fontSize: 10,
-            color: "var(--text-muted)",
-            fontFamily: "var(--font-mono)",
-            marginTop: 2,
-          }}
-        >
+        <div className={styles.listRowMeta}>
           {(film.genre ?? "UNMATCHED").toUpperCase()} · {profileName}
         </div>
       </div>
-      <div style={{ display: "flex", gap: 4 }}>
+      <div className={styles.listRowChips}>
         <span className={`chip ${film.resolution === "4K" ? "green" : ""}`}>
           {film.resolution}
         </span>
@@ -456,16 +273,7 @@ const ListRow: FC<{
           <span className="chip">{film.hdr}</span>
         )}
       </div>
-      <div
-        style={{
-          fontFamily: "var(--font-mono)",
-          fontSize: 10,
-          color: "var(--yellow)",
-          display: "flex",
-          alignItems: "center",
-          gap: 4,
-        }}
-      >
+      <div className={styles.listRowRating}>
         {film.rating !== null && (
           <>
             <ImdbBadge />
@@ -473,25 +281,8 @@ const ListRow: FC<{
           </>
         )}
       </div>
-      <div
-        style={{
-          fontFamily: "var(--font-mono)",
-          fontSize: 10,
-          color: "var(--text-dim)",
-        }}
-      >
-        {film.duration}
-      </div>
-      <div
-        style={{
-          fontFamily: "var(--font-mono)",
-          fontSize: 10,
-          color: "var(--text-dim)",
-          textAlign: "right",
-        }}
-      >
-        {film.size}
-      </div>
+      <div className={styles.listRowDuration}>{film.duration}</div>
+      <div className={styles.listRowSize}>{film.size}</div>
     </div>
   );
 };
