@@ -11,7 +11,7 @@ import {
   watchlist,
 } from "../../data/mock.js";
 import { Poster } from "../../components/Poster/Poster.js";
-import { ImdbBadge, IconClose, IconPlay, IconSearch } from "../../lib/icons.js";
+import { ImdbBadge, IconBack, IconClose, IconPlay, IconSearch } from "../../lib/icons.js";
 import { useLibraryStyles } from "./Library.styles.js";
 
 const HERO_FILM_IDS = ["oppenheimer", "barbie", "nosferatu", "civilwar"] as const;
@@ -408,6 +408,15 @@ const FilmDetailsOverlay: FC<FilmDetailsOverlayProps> = ({ film, onClose }) => {
       />
       <div className={styles.overlayGradient} />
       <div className="grain-layer" />
+      <button
+        type="button"
+        onClick={onClose}
+        aria-label="Back to home"
+        className={styles.overlayBack}
+      >
+        <IconBack />
+        <span>Back</span>
+      </button>
       <button
         type="button"
         onClick={onClose}
