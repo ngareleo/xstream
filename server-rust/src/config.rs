@@ -113,11 +113,21 @@ impl AppConfig {
     /// Default config for tests + dev. Per-process isolation during the
     /// cutover (`Plan/02-Streaming.md` §"Decisions to lock" #2): segment
     /// cache at `tmp/segments-rust/`, SQLite DB at `tmp/xstream-rust.db`.
-    /// Both paths collapse onto the production app-data dir at Step 3.
     pub fn dev_defaults(project_root: &std::path::Path) -> Self {
+        Self::with_paths(
+            project_root.join("tmp").join("segments-rust"),
+            project_root.join("tmp").join("xstream-rust.db"),
+        )
+    }
+
+    /// Build an `AppConfig` from explicit paths. The Tauri shell uses this
+    /// with `app_cache_dir/segments` and `app_local_data_dir/xstream.db` so
+    /// per-OS conventions are honoured. Dev uses `dev_defaults`, which
+    /// composes onto this.
+    pub fn with_paths(segment_dir: PathBuf, db_path: PathBuf) -> Self {
         Self {
-            segment_dir: project_root.join("tmp").join("segments-rust"),
-            db_path: project_root.join("tmp").join("xstream-rust.db"),
+            segment_dir,
+            db_path,
             transcode: TranscodeConfig::default(),
             stream: StreamConfig::default(),
         }
