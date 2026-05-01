@@ -75,12 +75,8 @@ pub fn spawn_server(
 }
 
 fn pick_free_port() -> Result<u16, SpawnError> {
-    let listener =
-        std::net::TcpListener::bind("127.0.0.1:0").map_err(SpawnError::PickPort)?;
-    let port = listener
-        .local_addr()
-        .map_err(SpawnError::LocalAddr)?
-        .port();
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").map_err(SpawnError::PickPort)?;
+    let port = listener.local_addr().map_err(SpawnError::LocalAddr)?.port();
     drop(listener);
     Ok(port)
 }

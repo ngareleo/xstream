@@ -36,10 +36,7 @@ pub fn run() {
             //    user state) and segment cache under `app_cache_dir`
             //    (regenerable, OS may evict). See
             //    `08-Tauri-Packaging.md` §3 + `05-Database-Layer.md`.
-            let db_path = app_handle
-                .path()
-                .app_local_data_dir()?
-                .join("xstream.db");
+            let db_path = app_handle.path().app_local_data_dir()?.join("xstream.db");
             let segment_dir = app_handle.path().app_cache_dir()?.join("segments");
             let resource_dir = app_handle.path().resource_dir()?;
 
@@ -52,12 +49,7 @@ pub fn run() {
             })?;
 
             // 3. Pick a free port, spawn the embedded server.
-            let handle = spawn_server(
-                db_path,
-                segment_dir,
-                resource_dir,
-                ffmpeg_paths,
-            )?;
+            let handle = spawn_server(db_path, segment_dir, resource_dir, ffmpeg_paths)?;
             let port = handle.port;
             app.manage(handle);
 
@@ -67,8 +59,7 @@ pub fn run() {
             //    evaluates because `eval` runs in the renderer at load
             //    time, ahead of `frontendDist`'s `index.html` execution.
             for (_label, webview_window) in app.webview_windows() {
-                webview_window
-                    .eval(&format!("window.__XSTREAM_SERVER_PORT__ = {port};"))?;
+                webview_window.eval(&format!("window.__XSTREAM_SERVER_PORT__ = {port};"))?;
             }
 
             Ok(())

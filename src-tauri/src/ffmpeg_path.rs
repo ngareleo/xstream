@@ -27,10 +27,7 @@ pub enum BundledFfmpegError {
          Expected layout: <resource_dir>/resources/ffmpeg/<platform>/{{ffmpeg,ffprobe}}.\n\
          Did `bun run setup-ffmpeg --target=tauri-bundle` run during the Tauri build?"
     )]
-    Missing {
-        platform: String,
-        dir: PathBuf,
-    },
+    Missing { platform: String, dir: PathBuf },
 }
 
 pub fn resolve(resource_dir: &Path) -> Result<FfmpegPaths, BundledFfmpegError> {

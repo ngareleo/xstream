@@ -196,13 +196,12 @@ pub async fn run(config: ServerConfig) -> AppResult<()> {
     let state = AppState::new(ctx);
     let app = build_router(state)?;
 
-    let listener =
-        tokio::net::TcpListener::bind(config.bind_addr)
-            .await
-            .map_err(|source| AppError::Bind {
-                addr: config.bind_addr,
-                source,
-            })?;
+    let listener = tokio::net::TcpListener::bind(config.bind_addr)
+        .await
+        .map_err(|source| AppError::Bind {
+            addr: config.bind_addr,
+            source,
+        })?;
 
     tracing::info!(addr = %config.bind_addr, "xstream-server listening");
 
