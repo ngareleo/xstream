@@ -14,10 +14,10 @@ export const useLibraryStyles = makeStyles({
   },
 
   // Hero — inset from page edges, starts at viewport y=0 so the glass header
-  // still overlays the top
+  // still overlays the top. Sized to 75vh for a cinematic backdrop.
   hero: {
     flexShrink: 0,
-    height: "300px",
+    height: "75vh",
     position: "relative",
     overflow: "hidden",
     borderRadius: "6px",
@@ -302,8 +302,7 @@ export const useLibraryStyles = makeStyles({
     columnGap: "16px",
     overflowX: "auto",
     overflowY: "hidden",
-    scrollBehavior: "smooth",
-    scrollSnapType: "x mandatory",
+    scrollSnapType: "x proximity",
     "::-webkit-scrollbar": { display: "none" },
     msOverflowStyle: "none",
     scrollbarWidth: "none",

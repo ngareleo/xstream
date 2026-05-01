@@ -17,6 +17,25 @@ import { useLibraryStyles } from "./Library.styles.js";
 const HERO_FILM_IDS = ["oppenheimer", "barbie", "nosferatu", "civilwar"] as const;
 const HERO_INTERVAL_MS = 7000;
 const HERO_FADE_MS = 700;
+const TILE_WIDTH = 200;
+const TILE_GAP = 16;
+const TILE_STRIDE = TILE_WIDTH + TILE_GAP;
+const ROW_SCROLL_DURATION_MS = 720;
+
+const easeInOutCubic = (t: number): number =>
+  t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+
+function smoothScrollBy(el: HTMLElement, dx: number, duration: number): void {
+  const start = el.scrollLeft;
+  const startTime = performance.now();
+  const step = (now: number): void => {
+    const elapsed = now - startTime;
+    const t = Math.min(elapsed / duration, 1);
+    el.scrollLeft = start + dx * easeInOutCubic(t);
+    if (t < 1) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+}
 
 interface RowEntry {
   item: WatchlistItem;
@@ -355,21 +374,23 @@ const Row: FC<RowProps> = ({ title, children }) => {
   const pageSize = (): number => {
     const el = trackRef.current;
     if (el === null) return 0;
-    // Advance by visible width minus a tile-edge so the next page lands
-    // with the previously-last tile on the left for context.
-    return Math.max(el.clientWidth - 80, 200);
+    // Page = whole tiles that fit in the visible track width. Aligning the
+    // step to a tile-stride means the snap-to-tile boundary has nothing to
+    // adjust at rest, so the easing stays clean.
+    const tilesPerPage = Math.max(1, Math.floor(el.clientWidth / TILE_STRIDE));
+    return tilesPerPage * TILE_STRIDE;
   };
 
   const goPrev = (): void => {
     const el = trackRef.current;
     if (el === null) return;
-    el.scrollBy({ left: -pageSize(), behavior: "smooth" });
+    smoothScrollBy(el, -pageSize(), ROW_SCROLL_DURATION_MS);
   };
 
   const goNext = (): void => {
     const el = trackRef.current;
     if (el === null) return;
-    el.scrollBy({ left: pageSize(), behavior: "smooth" });
+    smoothScrollBy(el, pageSize(), ROW_SCROLL_DURATION_MS);
   };
 
   return (
