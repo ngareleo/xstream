@@ -1,6 +1,6 @@
 # Watchlist (page)
 
-> Status: **baseline** (Spec) · **not started** (Production) · last design change **2026-05-01** (PR #46 commit 5301df6)
+> Status: **done** (Spec) · **not started** (Production) · last design change **2026-05-01** (PR #46 commit 5301df6, audited 2026-05-01)
 
 ## Files
 
@@ -61,9 +61,14 @@ Each tile is a `<Link to="/?film={id}">` — clicking deep-links to the Library/
 - The Library page reads `?film=<id>` on mount and opens the `FilmDetailsOverlay` for that film immediately.
 - This is a page navigation (not a modal), so the browser's back button returns to `/watchlist`.
 
+### Tile subtitle
+
+Subtitle line renders `{item.year} · {item.duration} · {item.resolution}` — fields from `WatchlistItem`, not the `Film` object directly.
+
 ### Data source
 
-- In the lab: derived from the `films` mock array in `src/data/mock.ts` — all films with no `progress` property are treated as watchlist items (same split as Library's "Watchlist" row), plus mock `addedAt` timestamps.
+- In the lab: iterates the full `watchlist` array from `mock.ts` — all **13 entries** (`wl-1` through `wl-13`). Each entry is resolved to its `Film` via `getFilmById(item.filmId)`; entries without a matching film are filtered. **All 13 items are shown, including those with `progress`** — the Watchlist page is a complete queue view. This is distinct from the Library "Watchlist" row which shows only items with `progress === undefined`.
+- The subtitle text is resolved: `"Saved across sessions. Click a poster to play."`.
 - Production: replace with a Relay query / backend watchlist relation that provides `filmId`, `addedAt`, and optionally `progress`.
 
 ## Subcomponents
@@ -72,7 +77,6 @@ None promoted — the tile is an inline element within the page. Promote to a se
 
 ## TODO(redesign)
 
-- Confirm subtitle copy (copy placeholder is `"Films you've saved to watch."` or similar).
 - Production: decide whether `progress` on a watchlist item means the film is in both "Continue watching" (on Library) and the Watchlist simultaneously, or whether a film transitions out of the Watchlist once it has any progress.
 
 ## Porting checklist (`client/src/pages/Watchlist/`)
@@ -106,11 +110,13 @@ None promoted — the tile is an inline element within the page. Promote to a se
 
 ### Data + backend
 
+- [ ] Data source is the full `watchlist` array (all 13 entries including those with `progress`) — NOT a filter of films-without-progress
+- [ ] Subtitle copy: `"Saved across sessions. Click a poster to play."` (Mono 12px / `colorTextMuted`)
 - [ ] Derive watchlist items from backend query (filmId, addedAt, optional progress)
 - [ ] Replace mock derivation with Relay query
 - [ ] Clarify overlap rule with Library "Continue watching" row when `progress` is present
 
 ## Status
 
-- [x] Designed in `design/Release` lab (2026-05-01, PR #46 commit 787f136). Page gains `paddingTop: calc(headerHeight + 60px)` for positioned-shell header clearance; tile and badge specs pinned from source (2026-05-01, PR #46 commit 5301df6). PR #46 on `feat/release-design-omdb-griffel`, not yet merged to main.
+- [x] Designed in `design/Release` lab (2026-05-01, PR #46 commit 787f136). Page gains `paddingTop: calc(headerHeight + 60px)` for positioned-shell header clearance; tile and badge specs pinned from source (2026-05-01, PR #46 commit 5301df6). Data derivation corrected: full `watchlist` array (not films-without-progress); subtitle copy resolved (2026-05-01, PR #46 audit). PR #46 on `feat/release-design-omdb-griffel`, not yet merged to main.
 - [ ] Production implementation

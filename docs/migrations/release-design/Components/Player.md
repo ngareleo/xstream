@@ -1,7 +1,7 @@
 # Player (page)
 
-> Status: **baseline** (Spec) · **not started** (Production)
-> Spec updated: 2026-05-01 (PR #46, commit 73a9cca) — `.backdrop` gains `viewTransitionName: "film-backdrop"`; back navigation wrapped in `goBackWithTransition` using `document.startViewTransition`; cross-cutting View Transitions contract noted.
+> Status: **done** (Spec) · **not started** (Production)
+> Spec updated: 2026-05-01 (PR #46 audit) — shell grid corrected to two Griffel classes (`shell` / `shellChromeHidden`); SidePanel UP NEXT source corrected (same-profile films, not watchlist); "FROM YOUR WATCHLIST" section documented; footer (VLC + BACK) documented. Prior update (73a9cca): `.backdrop` gains `viewTransitionName: "film-backdrop"`; back navigation wrapped in `goBackWithTransition` using `document.startViewTransition`; cross-cutting View Transitions contract noted.
 
 ## Files
 
@@ -15,10 +15,12 @@ Full-screen mock playback (`/player/:filmId`). **Bypasses [`AppShell`](AppShell.
 
 ## Visual
 
-### Outer wrapper
-- `width: 100vw`, `height: 100vh`, `background: #000`, `position: relative`, `overflow: hidden`.
-- 2-column grid: `gridTemplateColumns: chromeHidden ? "1fr 0px" : "1fr 290px"`, `transition: grid-template-columns 0.3s ease`.
-- `cursor: chromeHidden ? "none" : "default"`.
+### Outer wrapper (`.shell` / `.shellChromeHidden`)
+- `width: 100vw`, `height: 100vh`, `backgroundColor: #000`, `position: relative`, `overflowX: hidden`, `overflowY: hidden`.
+- 2-column grid via two Griffel classes:
+  - `.shell`: `gridTemplateColumns: "1fr 290px"`, `transitionProperty: grid-template-columns`, `transitionDuration: 0.3s`, `transitionTimingFunction: ease`, `cursor: default`.
+  - `.shellChromeHidden`: `gridTemplateColumns: "1fr 0px"`, `cursor: none`.
+- Applied as `mergeClasses(styles.shell, chromeHidden && styles.shellChromeHidden)` — NOT inline style.
 
 ### Layout
 - Left column: `<VideoArea>`. Right column: `<SidePanel>` (290px, hidden when chrome is hidden).
@@ -76,9 +78,14 @@ The shared name makes the View Transitions API treat the two poster elements as 
 
 ### `SidePanel`
 - 290px wide, `background: var(--bg-1)`, `border-left: 1px solid var(--border)`.
-- **Header**: NOW PLAYING eyebrow + title.
-- **UP NEXT list**: items from `watchlist`. Each item: poster thumb + title + on-disk status (green dot / muted dot toggle).
-- Fades + slides off when `chromeHidden`.
+- Fades + slides off when `chromeHidden` (`sidePanelHidden` class).
+- **Header (`sidePanelHeader`)**: `"● NOW PLAYING"` eyebrow + title (`sideTitle`) + meta (`sideMeta`: year · first genre segment · duration) + plot paragraph (when present).
+- **Body (`sideBody`)**:
+  - `"UP NEXT"` eyebrow.
+  - Up to 3 films from `films` where `film.profile === currentFilm.profile && film.id !== currentFilm.id`. Each `upNextRow`: poster thumb (`upNextPoster`) + title + genre; a `<Link to="/player/{id}" replace>` play button on the right.
+  - `"FROM YOUR WATCHLIST"` eyebrow.
+  - First 3 entries from `watchlist`. Each `watchlistRow`: title + `"● ON DISK"` (green) / `"○ NOT ON DISK YET"` (muted) based on whether a matching film exists in `films`. A `<Link to="/player/{filmId}" replace>` play link shown only if on disk.
+- **Footer (`footerRow`)**: `"OPEN IN VLC"` button + `"← BACK"` button (calls `onBack` → `goBackWithTransition`).
 
 ## TODO(redesign)
 
@@ -91,7 +98,7 @@ The shared name makes the View Transitions API treat the two poster elements as 
 ## Porting checklist (`client/src/pages/Player/`)
 
 - [ ] Bypass AppShell — full-viewport `100vw × 100vh` black background
-- [ ] 2-column grid: `1fr ${chromeHidden ? 0 : 290}px`, with `transition: 0.3s ease`
+- [ ] 2-column grid: `.shell` = `1fr 290px`; `.shellChromeHidden` = `1fr 0px`; both use Griffel classes (not inline style); `transitionProperty: grid-template-columns`, `0.3s ease`
 - [ ] State machine: `idle → loading → playing`, with 600ms loading-to-playing simulation **replaced by real `canplay`**
 - [ ] Chrome auto-hide: 3000ms inactivity timer; wakes on mousemove / click / keydown; only armed while `playing`
 - [ ] Cursor `none` when chromeHidden
@@ -103,12 +110,12 @@ The shared name makes the View Transitions API treat the two poster elements as 
 - [ ] Bottom title: Anton 64px with text-shadow
 - [ ] Progress bar: 3px tall, green fill with green-glow shadow
 - [ ] Control row: −10s / play-pause / +10s / volume / resolution chip / fullscreen
-- [ ] SidePanel 290px: NOW PLAYING + UP NEXT (watchlist) with on-disk dots
+- [ ] SidePanel 290px: header (NOW PLAYING eyebrow + title + meta + plot) + body (UP NEXT from same-profile films, up to 3) + watchlist section (FROM YOUR WATCHLIST, first 3 watchlist entries with on-disk indicator) + footer (VLC + BACK)
 - [ ] All controls wired to actual playback API
 - [ ] Back: `goBackWithTransition()` shared helper on both VideoArea topbar and SidePanel back buttons — wraps `navigate(-1)` in `document.startViewTransition` with plain `navigate(-1)` fallback
 - [ ] Unknown film ID fallback message
 
 ## Status
 
-- [x] Designed in `design/Release` lab (baseline reflects current state). `.backdrop` gains `viewTransitionName: "film-backdrop"`; back navigation wrapped in `goBackWithTransition` at both callsites (VideoArea topbar + SidePanel); cross-cutting View Transitions contract documented (2026-05-01, PR #46 commit 73a9cca). PR #46 on `feat/release-design-omdb-griffel`, not yet merged to main.
+- [x] Designed in `design/Release` lab (baseline reflects current state). `.backdrop` gains `viewTransitionName: "film-backdrop"`; back navigation wrapped in `goBackWithTransition` at both callsites (VideoArea topbar + SidePanel); cross-cutting View Transitions contract documented (2026-05-01, PR #46 commit 73a9cca). Shell grid, SidePanel sections (UP NEXT + FROM YOUR WATCHLIST + footer) corrected to match source (2026-05-01, PR #46 audit). PR #46 on `feat/release-design-omdb-griffel`, not yet merged to main.
 - [ ] Production implementation

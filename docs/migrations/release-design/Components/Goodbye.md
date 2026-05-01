@@ -4,7 +4,8 @@
 
 ## Files
 
-- `design/Release/src/pages/Goodbye/Goodbye.tsx` (no `.styles.ts` — inline)
+- `design/Release/src/pages/Goodbye/Goodbye.tsx`
+- `design/Release/src/pages/Goodbye/Goodbye.styles.ts`
 - Prerelease behavioural reference: `design/Prerelease/src/pages/Goodbye/`
 
 ## Purpose

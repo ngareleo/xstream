@@ -15,9 +15,9 @@ Inline subcomponents (ProfileRow, FilmRow, ProfileChip, PosterCard, ListRow, Vid
 | [Poster](Poster.md) | `components/Poster/Poster.tsx` | baseline | not started |
 | [Logo](Logo.md) | `components/Logo/{Logo01..Logo07,index}.tsx` | baseline | not started |
 | [Profiles page](Profiles.md) | `pages/Profiles/Profiles.{tsx,styles.ts}` | baseline | not started |
-| [Library page](Library.md) | `pages/Library/Library.{tsx,styles.ts}` | baseline | not started |
-| [Watchlist page](Watchlist.md) | `pages/Watchlist/Watchlist.{tsx,styles.ts}` | baseline | not started |
-| [Player page](Player.md) | `pages/Player/Player.tsx` | baseline | not started |
+| [Library page](Library.md) | `pages/Library/Library.{tsx,styles.ts}` | done | not started |
+| [Watchlist page](Watchlist.md) | `pages/Watchlist/Watchlist.{tsx,styles.ts}` | done | not started |
+| [Player page](Player.md) | `pages/Player/Player.tsx` | done | not started |
 | [Settings page](Settings.md) | `pages/Settings/Settings.tsx` | baseline | not started |
 | [DesignSystem page](DesignSystem.md) | `pages/DesignSystem/DesignSystem.tsx` | baseline | n/a — lab only |
 | [Goodbye page](Goodbye.md) | `pages/Goodbye/Goodbye.tsx` | baseline | not started |

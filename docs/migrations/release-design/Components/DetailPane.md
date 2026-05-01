@@ -4,7 +4,8 @@
 
 ## Files
 
-- `design/Release/src/components/DetailPane/DetailPane.tsx` (no `.styles.ts` — inline `CSSProperties`)
+- `design/Release/src/components/DetailPane/DetailPane.tsx`
+- `design/Release/src/components/DetailPane/DetailPane.styles.ts`
 - Prerelease behavioural reference: `design/Prerelease/src/components/DetailPane/`
 
 ## Purpose
@@ -77,7 +78,6 @@ None.
 
 ## TODO(redesign)
 
-- Inline styles only — no Griffel `makeStyles`. Migrate to a `.styles.ts` for parity with AppHeader, AppShell, Sidebar, Profiles.
 - "Re-link" button has no handler; production should open a search-OMDb dialog.
 - The `● ON DISK` indicator is hard-coded green; should reflect actual file presence via the `Film` model.
 

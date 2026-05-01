@@ -4,7 +4,8 @@
 
 ## Files
 
-- `design/Release/src/components/Poster/Poster.tsx` (no `.styles.ts` — inline `CSSProperties`)
+- `design/Release/src/components/Poster/Poster.tsx`
+- `design/Release/src/components/Poster/Poster.styles.ts`
 - Prerelease behavioural reference: `design/Prerelease/src/components/Poster/`
 
 ## Purpose
@@ -15,13 +16,15 @@ Image wrapper that renders an OMDb (or other CDN) poster URL with a graceful fal
 
 ### Image (default path)
 - `<img src={url} alt={alt} className={className}>`.
-- Inline style: `objectFit: cover`, `display: block`, then `...style` (caller can override).
+- `objectFit: cover` and `display: block` are baked into the Griffel class; no inline `style` prop.
 
 ### Fallback (no `url` OR `errored`)
-- `<div>` with `linear-gradient(160deg, var(--surface-2), var(--bg-0))` background.
+- `<div className={className}>` with `linear-gradient(160deg, var(--surface-2), var(--bg-0))` background via Griffel.
 - `display: flex`, centred.
 - Label: the `alt` text (or literal `"poster"`) in JetBrains Mono 10px / 0.2em letter-spacing / uppercase / `color: var(--text-faint)`.
-- Spreads `...style` last so callers can resize.
+
+### Public API — geometry is the caller's responsibility
+- `Poster` accepts only `className` (no `style` prop). Callers supply geometry (width, height, `objectFit` overrides) via their own Griffel classes passed as `className`. This matches the `mergeClasses` convention used by the rest of the lab.
 
 ## Behaviour
 
@@ -44,10 +47,10 @@ None.
 - [ ] `<img>` with onError fallback to gradient placeholder
 - [ ] Fallback gradient: `linear-gradient(160deg, surface-2, bg-0)`
 - [ ] Fallback label: alt text in Mono 10px uppercase / 0.2em / `text-faint`
-- [ ] `objectFit: cover`, `display: block` defaults; caller `style` overrides
+- [ ] `objectFit: cover` + `display: block` baked in Griffel; **no `style` prop** — callers supply geometry via `className`
 - [ ] **Reset `errored` state on URL change** (fix the TODO at port time)
 - [ ] Add `loading="lazy"` for grid usage
-- [ ] Forward `className` through both branches
+- [ ] Forward `className` through both `<img>` and fallback `<div>` branches
 
 ## Status
 
