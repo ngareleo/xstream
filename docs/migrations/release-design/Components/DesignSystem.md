@@ -17,8 +17,9 @@ Live single-page showcase (`/design-system`) of the Xstream visual language: col
 
 ## Visual
 
-### Outer container
-- `height: 100%`, `overflow: auto`, `padding: 32px 40px 80px`.
+### Outer container (`.shell`)
+- `height: 100%`, `overflowY: auto`, `boxSizing: border-box`.
+- **`paddingTop: calc(${tokens.headerHeight} + 32px)`**, `paddingBottom: 80px`, `paddingLeft: 40px`, `paddingRight: 40px` — the page is responsible for its own header clearance (32px gap below the header).
 
 ### Header
 - Eyebrow: `DESIGN SYSTEM · /design-system` in green.
@@ -62,5 +63,5 @@ If a future agent decides part of this should ship (e.g. as an internal docs pag
 
 ## Status
 
-- [ ] Designed in `design/Release` lab (baseline reflects current state)
+- [x] Designed in `design/Release` lab — baseline reflects prior state; `.shell` gains `paddingTop: calc(headerHeight + 32px), boxSizing: border-box` for positioned-shell header clearance (2026-05-01, PR #46 commit 5301df6, `feat/release-design-omdb-griffel`, not yet merged to main)
 - [ ] Production implementation — **n/a, lab only**

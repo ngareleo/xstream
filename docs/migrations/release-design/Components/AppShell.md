@@ -1,6 +1,6 @@
 # AppShell
 
-> Status: **done** (Spec) · **not started** (Production) · last design change **2026-05-01** (PR #46 commit 787f136)
+> Status: **done** (Spec) · **not started** (Production) · last design change **2026-05-01** (PR #46 commit 5301df6)
 
 ## Files
 
@@ -10,50 +10,48 @@
 
 ## Purpose
 
-The two-row shell that hosts the header and routed page content. Wraps every shelled page (Home/Library, Profiles, Watchlist, Settings, DesignSystem, NotFound). The Player and Goodbye pages bypass it. **The sidebar has been removed; the shell is now a single-column layout.**
+Full-viewport shell that hosts the header and routed page content. Wraps every shelled page (Home/Library, Profiles, Watchlist, Settings, DesignSystem, NotFound). The Player and Goodbye pages bypass it. **The header is now `position: absolute` over the main content — there is no grid.** Every page sits at viewport y=0 by default; each page is responsible for its own header-clearance padding.
 
 ## Visual
 
-- Grid:
-  - `gridTemplateColumns: 1fr` (single column — sidebar dropped)
-  - `gridTemplateRows: ${tokens.headerHeight} 1fr` (52px header + flexible main)
-  - `gridTemplateAreas: '"head" "main"'` (header row, then main row)
-- Dimensions: `width: 100vw`, `height: 100vh`, `overflow: hidden`.
-- `backgroundColor: tokens.colorBg0` (`#050706`).
-- `color: tokens.colorText` (`#e8eee8`).
-- `position: relative` (so descendant absolutes anchor here).
+- `.shell`: `position: relative`, `width: 100vw`, `height: 100vh`, `overflowX: hidden`, `overflowY: hidden`. No grid.
+  - `backgroundColor: tokens.colorBg0` (`#050706`).
+  - `color: tokens.colorText` (`#e8eee8`).
+- `.main`: `position: absolute`, `top: 0`, `left: 0`, `right: 0`, `bottom: 0`, `overflow: hidden`.
+
+The header (see [`AppHeader.md`](AppHeader.md)) is also `position: absolute`, layered over `.main`. Because both occupy the same absolute inset, the page content begins at viewport y=0 and extends behind the header's backdrop-filter blur.
 
 ## Behaviour
 
 - Composition only — renders `<AppHeader>` then `<main className={s.main}>{children}</main>`.
-- `main` has `gridArea: main`, `overflow: hidden`, `position: relative` so pages can manage their own scroll/overlay positioning.
+- `<AppHeader>` and `<main>` both sit at `inset: 0`; the header is on top via `zIndex: 10`.
 - `<Sidebar>` is no longer rendered here. Navigation lives in `<AppHeader>`.
+- Each page inside `<main>` is responsible for clearing the header by adding `paddingTop: tokens.headerHeight` (or `calc(${tokens.headerHeight} + N)`) to its outermost container. No shared padding is applied by the shell.
 
 ## Subcomponents
 
 None.
 
-## What changed from the prior spec (787f136)
+## What changed from the prior spec (787f136 → 5301df6)
 
-The prior AppShell spec described a two-column layout:
-- `gridTemplateColumns: ${tokens.sidebarWidth} 1fr` (220px sidebar + flexible main)
-- `gridTemplateAreas: "head head" "side main"` (header spanning both columns, sidebar in left rail)
-- Composition included `<AppHeader>`, `<Sidebar>`, `<main>`.
+The prior spec (787f136) described a single-column grid:
+- `gridTemplateColumns: 1fr`
+- `gridTemplateRows: ${tokens.headerHeight} 1fr`
+- `gridTemplateAreas: '"head" "main"'`
+- `main` had `gridArea: main`
 
-All of that is superseded. The sidebar directory (`design/Release/src/components/Sidebar/`) has been deleted. Navigation now lives in the header. See [`AppHeader.md`](AppHeader.md) for the three-link nav and [`Sidebar.md`](Sidebar.md) for the tombstone record.
+All of that is superseded. The shell is now a positioned-layer model: shell `position: relative`, `main` `position: absolute inset: 0`, header `position: absolute inset: top/left/right`. The Library hero is the primary beneficiary — it now renders edge-to-edge from viewport y=0, with the glass header blurring whatever content appears behind it ("poster behind glass").
 
-The `TODO(redesign)` about overlay-glass (drop the head row and absolute-position the header) is still valid if a future iteration wants true glass — the new single-column grid has the same constraint.
+The prior note about `TODO(redesign)` overlay-glass is now resolved — this commit is that iteration.
 
 ## Porting checklist (`client/src/components/Layout/AppShell/`)
 
-- [ ] Grid template: `gridTemplateColumns: 1fr`, `gridTemplateRows: ${tokens.headerHeight} 1fr`, `gridTemplateAreas: '"head" "main"'`
-- [ ] Full-viewport (100vw × 100vh), `overflow: hidden`
-- [ ] `colorBg0` background, `colorText` foreground
-- [ ] `position: relative` on the shell so descendants can `position: absolute`
-- [ ] Composition: `<AppHeader>` + `<main>` slot only (no `<Sidebar>`)
-- [ ] `main` gets `gridArea: main`, `overflow: hidden`, `position: relative` (each page handles its own scroll)
+- [ ] `.shell`: `position: relative`, full-viewport (100vw × 100vh), `overflow: hidden`, `colorBg0` bg, `colorText` color. No grid.
+- [ ] `.main`: `position: absolute`, `top: 0`, `left: 0`, `right: 0`, `bottom: 0`, `overflow: hidden`
+- [ ] Composition: `<AppHeader>` (absolute, z=10) + `<main>` slot (absolute, inset 0). No `<Sidebar>`.
+- [ ] No header-clearance padding on the shell. Each page manages its own `paddingTop`.
 
 ## Status
 
-- [x] Designed in `design/Release` lab — sidebar removed, single-column grid (2026-05-01, PR #46 commit 787f136, `feat/release-design-omdb-griffel`, not yet merged to main)
+- [x] Designed in `design/Release` lab — sidebar removed, single-column grid (2026-05-01, PR #46 commit 787f136). Grid replaced with positioned-layer model — shell `relative`, main `absolute inset:0`, header `absolute top/left/right` (2026-05-01, PR #46 commit 5301df6). PR #46 on `feat/release-design-omdb-griffel`, not yet merged to main.
 - [ ] Production implementation

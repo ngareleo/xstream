@@ -4,7 +4,8 @@
 
 ## Files
 
-- `design/Release/src/pages/NotFound/NotFound.tsx` (no `.styles.ts` — inline)
+- `design/Release/src/pages/NotFound/NotFound.tsx`
+- `design/Release/src/pages/NotFound/NotFound.styles.ts`
 - Prerelease behavioural reference: `design/Prerelease/src/pages/NotFound/`
 
 ## Purpose
@@ -13,9 +14,10 @@
 
 ## Visual
 
-### Outer container
-- `height: 100%`, `position: relative`, `overflow: hidden`, `background: var(--bg-0)`.
+### Outer container (`.shell`)
+- `height: 100%`, `position: relative`, `overflow: hidden`, `backgroundColor: colorBg0`.
 - `display: flex`, centred (both axes).
+- **`paddingTop: tokens.headerHeight`, `boxSizing: border-box`** — the page is responsible for its own header clearance, so the centred 404 content stays roughly mid-viewport (not hidden behind the header).
 
 ### Layered atmosphere (bottom to top)
 1. `.grain-layer` utility, `opacity: 0.2`.
@@ -47,6 +49,7 @@ None.
 ## Porting checklist (`client/src/pages/NotFound/`)
 
 - [ ] Renders inside AppShell (not full viewport like Goodbye)
+- [ ] `.shell`: `paddingTop: tokens.headerHeight`, `boxSizing: border-box` (page manages header clearance so the 404 stays mid-viewport)
 - [ ] Grain layer at 0.2 opacity
 - [ ] Radial green-soft glow centred
 - [ ] Ghost "404" at 32vw / 0.04 opacity / Anton
@@ -59,5 +62,5 @@ None.
 
 ## Status
 
-- [ ] Designed in `design/Release` lab (baseline reflects current state)
+- [x] Designed in `design/Release` lab — baseline reflects prior state; `.shell` gains `paddingTop: tokens.headerHeight, boxSizing: border-box` for positioned-shell header clearance (2026-05-01, PR #46 commit 5301df6, `feat/release-design-omdb-griffel`, not yet merged to main)
 - [ ] Production implementation

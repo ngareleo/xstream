@@ -4,7 +4,8 @@
 
 ## Files
 
-- `design/Release/src/pages/Settings/Settings.tsx` (no `.styles.ts` — inline)
+- `design/Release/src/pages/Settings/Settings.tsx`
+- `design/Release/src/pages/Settings/Settings.styles.ts`
 - Prerelease behavioural reference: `design/Prerelease/src/pages/Settings/`
 
 ## Purpose
@@ -13,8 +14,9 @@ App settings (`/settings`). Two-pane layout: left nav (220px) + right content. S
 
 ## Visual
 
-### Outer container
+### Outer container (`.shell`)
 - `height: 100%`, `display: grid`, `gridTemplateColumns: "220px 1fr"`, `overflow: hidden`.
+- **`paddingTop: tokens.headerHeight`, `boxSizing: border-box`** — the page is responsible for its own header clearance.
 
 ### Left nav
 - `border-right: 1px solid var(--border)`, `background: var(--bg-1)`, `padding: 20px`, `display: flex; flex-direction: column; gap: 4px`.
@@ -53,13 +55,12 @@ App settings (`/settings`). Two-pane layout: left nav (220px) + right content. S
 
 ## TODO(redesign)
 
-- Inline styles only — migrate to Griffel + a `.styles.ts`.
 - All settings controls are decorative — no state wires through to backend.
 - Subcomponents (`SettingsRow`, `Toggle`, `Selector`) need to be extracted as named exports so the spec can pin exact dimensions / animations.
 
 ## Porting checklist (`client/src/pages/Settings/`)
 
-- [ ] 220px nav + 1fr content, full-height grid
+- [ ] 220px nav + 1fr content, full-height grid; `paddingTop: tokens.headerHeight`, `boxSizing: border-box` (page manages header clearance)
 - [ ] Nav: bg-1 background, right border, eyebrow `SETTINGS` at top
 - [ ] Nav buttons: green-soft + green text + 2px green left border when active
 - [ ] Content: Anton 40px uppercase title, eyebrow above
@@ -73,5 +74,5 @@ App settings (`/settings`). Two-pane layout: left nav (220px) + right content. S
 
 ## Status
 
-- [ ] Designed in `design/Release` lab (baseline reflects current state)
+- [x] Designed in `design/Release` lab — baseline reflects prior state; `.shell` gains `paddingTop: tokens.headerHeight, boxSizing: border-box` for positioned-shell header clearance (2026-05-01, PR #46 commit 5301df6, `feat/release-design-omdb-griffel`, not yet merged to main)
 - [ ] Production implementation

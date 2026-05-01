@@ -1,6 +1,6 @@
 # AppHeader
 
-> Status: **done** (Spec) · **not started** (Production) · last design change **2026-05-01** (PR #46 commit 787f136)
+> Status: **done** (Spec) · **not started** (Production) · last design change **2026-05-01** (PR #46 commit 5301df6)
 
 ## Files
 
@@ -10,13 +10,13 @@
 
 ## Purpose
 
-Top header strip — brand wordmark on the left, three centred navigation links, and a right cluster (icon-only scan button + avatar). Lives inside [`AppShell`](AppShell.md), spans the single grid column. **The search form that previously lived here has moved to the Library/home page.**
+Top header strip — brand wordmark on the left, three centred navigation links, and a right cluster (icon-only scan button + avatar). Floats over the page content as a `position: absolute` layer inside [`AppShell`](AppShell.md). **The search form that previously lived here has moved to the Library/home page.** Because the header is absolute over whatever the page renders, the backdrop-filter blur now acts on real page content — most notably the Library hero's poster image ("poster behind glass").
 
 ## Visual
 
 ### Header shell
 
-- `gridArea: head`, `position: relative`, `zIndex: 10`.
+- **`position: absolute`, `top: 0`, `left: 0`, `right: 0`**, `height: tokens.headerHeight`, `zIndex: 10`.
 - **Three-column grid:** `gridTemplateColumns: 1fr auto 1fr` — brand cell on the left (`1fr`), centred nav links (`auto`), right cluster (`1fr`).
 - **Glass treatment:**
   - `backgroundImage: linear-gradient(180deg, rgba(20,28,24,0.55) 0%, rgba(8,11,10,0.78) 100%)`
@@ -24,7 +24,7 @@ Top header strip — brand wordmark on the left, three centred navigation links,
   - `backdropFilter: blur(20px) saturate(1.6)` (+ `-webkit-` prefix)
   - `borderBottom: 1px solid rgba(37,48,42,0.45)` — soft division from main
   - `boxShadow: inset 0 1px 0 rgba(255,255,255,0.05), inset 0 -1px 0 rgba(0,0,0,0.18), 0 6px 22px rgba(0,0,0,0.42)` — top sheen + bottom shadow
-- The header is a sibling row in the AppShell grid (not absolute over main); `backdrop-filter` is therefore cosmetic only.
+- The header is no longer a grid row — it is `position: absolute` layered over the shell's `<main>`. The `backdrop-filter` blurs whatever the page has painted behind the header at y=0.
 
 ### Brand cell (left column)
 
@@ -96,6 +96,7 @@ Top header strip — brand wordmark on the left, three centred navigation links,
 
 ## Porting checklist (`client/src/components/AppHeader/`)
 
+- [ ] `position: absolute`, `top: 0`, `left: 0`, `right: 0`, `height: tokens.headerHeight`, `zIndex: 10`
 - [ ] Three-column grid: `1fr auto 1fr`
 - [ ] Glass treatment: gradient + backdrop-filter + inner highlight + drop shadow (same values as prior spec)
 - [ ] Brand cell left-aligned, `paddingLeft: 24px`, Bytesized 34px font
@@ -103,30 +104,27 @@ Top header strip — brand wordmark on the left, three centred navigation links,
 - [ ] Three `<NavLink>` centred: Home `/` (with `end`), Profiles `/profiles`, Watchlist `/watchlist`
 - [ ] Nav font: Jersey 25, 26px
 - [ ] Nav active: `color: var(--green)` + `::after` pseudo-element underline (not `text-decoration`)
-- [ ] Nav `::after` anchored by `position: relative` on the link container
+- [ ] Nav `::after` anchored by `position: relative` on the link container; `bottom: -2px`
 - [ ] `tokens.fontDisplay` (`'Bytesized'`) and `tokens.fontNav` (`'Jersey 25'`) registered in token file
 - [ ] Both Google Fonts loaded in HTML `<head>` (Bytesized + Jersey 25)
-- [ ] Right cluster: `justifySelf: end`, flex row, gap 12px
-- [ ] Scan button: 22×22 `<IconRefresh>`, icon-only (no text label), transparent bg, no border
+- [ ] Right cluster: `justifySelf: end`, flex row, `columnGap: 14px`, `paddingRight: 24px`
+- [ ] Scan button: 38×38 hit target wrapping 22×22 `<IconRefresh>`, icon-only, transparent bg, no border
 - [ ] Scan icon spins (~2s) on click while `scanning`; `aria-busy` toggled
 - [ ] Scan button wired to `scanLibraries` mutation (replaces 2s mock timer)
-- [ ] Avatar: 34×34 button, `border-radius: 4px`, green-deep→green gradient, green-ink initials
+- [ ] Avatar: 34×34 button, `border-radius: 4px`, green-deep→green gradient, green-ink initials (Mono 700 12px)
 - [ ] No search form in the header (search moved to Library/home page)
 
-## What changed from the prior spec (787f136)
+## What changed from the prior spec (787f136 → 5301df6)
 
-The prior AppHeader spec described the search-centric layout: a three-column grid keyed to `${tokens.sidebarWidth} 1fr auto`, a full search form with suggestions dropdown, caret animation, and mirror span, and a text-label scan button. All of that is superseded:
+In 787f136 the header was a **grid row** in AppShell (`gridArea: head`, `position: relative`). In 5301df6:
 
-- **Grid** changed from `${tokens.sidebarWidth} 1fr auto` to `1fr auto 1fr`.
-- **Search form, suggestions dropdown, custom caret, mirror span** — deleted from the header; now live on the Library/home page in a simpler form.
-- **Scan trigger** — was a text button (`"Scan"` / `"Scanning…"` in JetBrains Mono); now an icon-only button (22×22 `<IconRefresh>`).
-- **Brand** — was Anton 26px with `X` in green; now Bytesized 34px single wordmark.
-- **Nav links** — were absent from the header (navigation was in the Sidebar); now three centred Jersey 25 links with `::after` underline for active state.
-- **Avatar** — was in the Sidebar user-row; now in the header right cluster (34×34 instead of 30×30).
+- **`position` changed from `relative` to `absolute`**; `top: 0`, `left: 0`, `right: 0`, `height: tokens.headerHeight` — the header now floats over the page.
+- **`gridArea: head` dropped** — AppShell no longer has a grid; the header is not a cell.
+- The backdrop-filter now blurs real page content at y=0, not just the shell's background color. On the Library page, this produces the "poster behind glass" effect.
 
-The glass treatment, scan spin animation, and `aria-busy` pattern are unchanged.
+All other values (three-column grid, glass treatment, nav font/links, scan button, avatar) are unchanged from 787f136.
 
 ## Status
 
-- [x] Designed in `design/Release` lab — full rewrite (2026-05-01, PR #46 commit 787f136, `feat/release-design-omdb-griffel`, not yet merged to main)
+- [x] Designed in `design/Release` lab — full rewrite (2026-05-01, PR #46 commit 787f136). Converted from grid-row to `position: absolute` floating over page content (2026-05-01, PR #46 commit 5301df6). PR #46 on `feat/release-design-omdb-griffel`, not yet merged to main.
 - [ ] Production implementation

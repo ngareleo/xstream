@@ -18,6 +18,7 @@ Profile-tree directory (`/profiles`). Each library expands to reveal its films; 
 - Closed: `gridTemplateColumns: "1fr 0px 0px"`.
 - Open: `gridTemplateColumns: \`1fr 4px ${paneWidth}px\`` (overridden inline so the `useSplitResize`-driven width animates smoothly).
 - `height: 100%`, `transition: grid-template-columns ${transitionSlow}` (0.25s ease).
+- **`paddingTop: tokens.headerHeight`, `boxSizing: border-box`** — the page is responsible for its own header clearance (AppShell no longer reserves a header row). The split-body starts below the header.
 - `isResizing` adds `transitionProperty: none` so the drag is jank-free.
 
 ### Left column (`leftCol`)
@@ -89,7 +90,7 @@ Flex column, `overflow: hidden`, `position: relative`.
 
 ## Porting checklist (`client/src/pages/Profiles/`)
 
-- [ ] Split-body grid: `1fr 0px 0px` closed, `1fr 4px <paneWidth>px` open, with `transitionSlow` ease
+- [ ] Split-body grid: `1fr 0px 0px` closed, `1fr 4px <paneWidth>px` open, with `transitionSlow` ease; `paddingTop: tokens.headerHeight`, `boxSizing: border-box` (page manages header clearance)
 - [ ] `useSplitResize` for drag-resize handle + `isResizing` no-transition state
 - [ ] Breadcrumb path with scanning indicator (page opens here — no hero above it)
 - [ ] 5-column ProfileRow: chevron / name+path / match-bar / size / actions
@@ -103,5 +104,5 @@ Flex column, `overflow: hidden`, `position: relative`.
 
 ## Status
 
-- [x] Designed in `design/Release` lab — hero cycling + Ken Burns + animated edge fade landed 2026-05-01, PR #46 commit e088fb5; hero then removed in same PR commit 04ea22b (page now opens at breadcrumb). Remaining `TODO(redesign)` items: `+ NEW PROFILE` handler, EDIT/rescan actions.
+- [x] Designed in `design/Release` lab — hero cycling + Ken Burns + animated edge fade landed 2026-05-01, PR #46 commit e088fb5; hero then removed in same PR commit 04ea22b (page now opens at breadcrumb). `splitBody` gains `paddingTop: tokens.headerHeight, boxSizing: border-box` for positioned-shell header clearance (2026-05-01, PR #46 commit 5301df6). Remaining `TODO(redesign)` items: `+ NEW PROFILE` handler, EDIT/rescan actions.
 - [ ] Production implementation
