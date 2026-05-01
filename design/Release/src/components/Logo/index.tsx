@@ -1,4 +1,5 @@
 import { type FC, type ReactNode } from "react";
+import { mergeClasses } from "@griffel/react";
 import { Logo01 } from "./Logo01.js";
 import { Logo02 } from "./Logo02.js";
 import { Logo03 } from "./Logo03.js";
@@ -6,6 +7,7 @@ import { Logo04 } from "./Logo04.js";
 import { Logo05 } from "./Logo05.js";
 import { Logo06 } from "./Logo06.js";
 import { Logo07 } from "./Logo07.js";
+import { useLogoCardStyles } from "./LogoCard.styles.js";
 
 export { Logo01, Logo02, Logo03, Logo04, Logo05, Logo06, Logo07 };
 
@@ -74,95 +76,19 @@ interface LogoCardProps {
   highlighted?: boolean;
 }
 
-export const LogoCard: FC<LogoCardProps> = ({ entry, highlighted }) => (
-  <div
-    style={{
-      background: "var(--surface)",
-      border: highlighted
-        ? "1px solid var(--green)"
-        : "1px solid var(--border)",
-      boxShadow: highlighted ? "0 0 0 3px var(--green-soft)" : "none",
-      borderRadius: 4,
-      padding: "32px 28px 22px",
-      display: "flex",
-      flexDirection: "column",
-      minHeight: 360,
-      position: "relative",
-      overflow: "hidden",
-    }}
-  >
-    <div
-      style={{
-        position: "absolute",
-        top: 12,
-        left: 14,
-        fontFamily: "var(--font-mono)",
-        fontSize: 10,
-        letterSpacing: "0.18em",
-        textTransform: "uppercase",
-        color: "var(--text-faint)",
-      }}
-    >
-      {entry.code}
-    </div>
-    {highlighted && (
-      <div
-        style={{
-          position: "absolute",
-          top: 12,
-          right: 14,
-          fontFamily: "var(--font-mono)",
-          fontSize: 9,
-          letterSpacing: "0.2em",
-          color: "var(--green)",
-        }}
-      >
-        ● DEFAULT
-      </div>
-    )}
-    <div
-      style={{
-        flex: 1,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: "28px 0",
-      }}
-    >
-      {entry.render()}
-    </div>
-    <div
-      style={{
-        borderTop: "1px solid var(--border-soft)",
-        paddingTop: 12,
-        marginTop: 12,
-        display: "flex",
-        justifyContent: "space-between",
-        alignItems: "baseline",
-        gap: 16,
-      }}
-    >
-      <div
-        style={{
-          fontFamily: "var(--font-mono)",
-          fontSize: 11,
-          color: "var(--text-dim)",
-          letterSpacing: "0.06em",
-        }}
-      >
-        {entry.num} / {entry.title}
-      </div>
-      <div
-        style={{
-          fontSize: 10,
-          color: "var(--text-muted)",
-          textAlign: "right",
-          maxWidth: "60%",
-          lineHeight: 1.4,
-        }}
-      >
-        {entry.notes}
+export const LogoCard: FC<LogoCardProps> = ({ entry, highlighted }) => {
+  const styles = useLogoCardStyles();
+  return (
+    <div className={mergeClasses(styles.card, highlighted && styles.cardHighlighted)}>
+      <div className={styles.code}>{entry.code}</div>
+      {highlighted && <div className={styles.defaultBadge}>● DEFAULT</div>}
+      <div className={styles.stage}>{entry.render()}</div>
+      <div className={styles.meta}>
+        <div className={styles.metaLabel}>
+          {entry.num} / {entry.title}
+        </div>
+        <div className={styles.metaNotes}>{entry.notes}</div>
       </div>
     </div>
-  </div>
-);
+  );
+};
