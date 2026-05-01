@@ -1,10 +1,12 @@
 # Player (page)
 
 > Status: **baseline** (Spec) · **not started** (Production)
+> Spec updated: 2026-05-01 (PR #46, commit 73a9cca) — `.backdrop` gains `viewTransitionName: "film-backdrop"`; back navigation wrapped in `goBackWithTransition` using `document.startViewTransition`; cross-cutting View Transitions contract noted.
 
 ## Files
 
-- `design/Release/src/pages/Player/Player.tsx` (no `.styles.ts` — inline)
+- `design/Release/src/pages/Player/Player.tsx`
+- `design/Release/src/pages/Player/Player.styles.ts`
 - Prerelease behavioural reference: `design/Prerelease/src/pages/Player/`
 
 ## Purpose
@@ -43,14 +45,20 @@ Full-screen mock playback (`/player/:filmId`). **Bypasses [`AppShell`](AppShell.
   - From `playing` → `setState("idle")` (manual pause).
 
 ### Navigation
-- `navigate(-1)` on Back (preserves origin pane state per Prerelease contract).
-- `<Link to={\`/player/\${film.id}\`}>` is the only entry path (from FilmRow / DetailPane play buttons).
+- **Back:** `goBackWithTransition()` wraps `navigate(-1)` inside `document.startViewTransition(...)` when the API is available, falling back to `navigate(-1)` directly. Both the `VideoArea` topbar Back button and the `SidePanel` Back button call this helper (replaces the previous inline `() => navigate(-1)` lambdas at both callsites). Preserves origin pane state per Prerelease contract.
+- **Forward entry:** `<Link to={\`/player/\${film.id}\`}>` is superseded by Library's `playWithTransition` button — navigating programmatically is required so the transition can wrap the route change. No Player-side change is needed for the entry path.
+
+## View Transitions contract
+
+**Both `Player.backdrop` and `Library.overlayPoster` MUST carry `viewTransitionName: "film-backdrop"`** (the same value). If the two values diverge, the poster morph silently degrades to a plain cross-fade.
+
+The shared name makes the View Transitions API treat the two poster elements as the same logical element across routes, producing a smooth morph when either direction of navigation is wrapped in `document.startViewTransition`. Fallback on unsupported browsers (Safari < 18): plain `navigate(...)` — no morph, no error.
 
 ## Subcomponents
 
 ### `VideoArea`
 - `position: relative`, `overflow: hidden`.
-- **Background**: `<Poster>` filled `inset: 0, object-fit: cover`, `filter: brightness(0.85) contrast(1.05)`.
+- **Background**: `<Poster>` filled `inset: 0, object-fit: cover`, `filter: brightness(0.85) contrast(1.05)`. The `.backdrop` Griffel class carries **`viewTransitionName: "film-backdrop"`** — must stay in sync with Library's `.overlayPoster` (see [View Transitions contract](#view-transitions-contract-1) below).
 - **Grain layer**: `.grain-layer` utility, `opacity: 0.18`, `mix-blend-mode: overlay`.
 - **Letterbox gradients** (fade out with `chromeHidden`):
   - Top: 80px tall, `linear-gradient(180deg, rgba(0,0,0,0.85), transparent)`.
@@ -74,7 +82,6 @@ Full-screen mock playback (`/player/:filmId`). **Bypasses [`AppShell`](AppShell.
 
 ## TODO(redesign)
 
-- Inline styles only — migrate to Griffel + a `.styles.ts`.
 - All controls (−10s, +10s, volume, fullscreen) are decorative — no handlers wired.
 - Progress bar is hard-coded to `01:14:22` — needs to bind to actual playback time.
 - "● PLAYING" / "○ PAUSED" status text vs the actual `<button>` toggling between play/pause icon — visual states are split; consolidate.
@@ -88,7 +95,7 @@ Full-screen mock playback (`/player/:filmId`). **Bypasses [`AppShell`](AppShell.
 - [ ] State machine: `idle → loading → playing`, with 600ms loading-to-playing simulation **replaced by real `canplay`**
 - [ ] Chrome auto-hide: 3000ms inactivity timer; wakes on mousemove / click / keydown; only armed while `playing`
 - [ ] Cursor `none` when chromeHidden
-- [ ] VideoArea background: Poster, brightness 0.85 contrast 1.05, grain overlay
+- [ ] VideoArea background: Poster, brightness 0.85 contrast 1.05, grain overlay; `.backdrop` carries `viewTransitionName: "film-backdrop"` (must match Library `.overlayPoster`)
 - [ ] Letterbox gradients: top 80px, bottom 220px, fade with chrome
 - [ ] Idle overlay: 80×80 green circle play button with green-glow shadow
 - [ ] Loading overlay: 56×56 circular spinner with green arc
@@ -98,10 +105,10 @@ Full-screen mock playback (`/player/:filmId`). **Bypasses [`AppShell`](AppShell.
 - [ ] Control row: −10s / play-pause / +10s / volume / resolution chip / fullscreen
 - [ ] SidePanel 290px: NOW PLAYING + UP NEXT (watchlist) with on-disk dots
 - [ ] All controls wired to actual playback API
-- [ ] Back navigates `navigate(-1)` (preserves origin pane state)
+- [ ] Back: `goBackWithTransition()` shared helper on both VideoArea topbar and SidePanel back buttons — wraps `navigate(-1)` in `document.startViewTransition` with plain `navigate(-1)` fallback
 - [ ] Unknown film ID fallback message
 
 ## Status
 
-- [ ] Designed in `design/Release` lab (baseline reflects current state)
+- [x] Designed in `design/Release` lab (baseline reflects current state). `.backdrop` gains `viewTransitionName: "film-backdrop"`; back navigation wrapped in `goBackWithTransition` at both callsites (VideoArea topbar + SidePanel); cross-cutting View Transitions contract documented (2026-05-01, PR #46 commit 73a9cca). PR #46 on `feat/release-design-omdb-griffel`, not yet merged to main.
 - [ ] Production implementation

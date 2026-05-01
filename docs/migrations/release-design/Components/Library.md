@@ -1,7 +1,7 @@
 # Library (page)
 
 > Status: **baseline** (Spec) · **not started** (Production)
-> Spec updated: 2026-05-01 (PR #46, commit 6fd44e4) — search bar moves inside hero (top-right, absolute), gradient strip replaces bordered card, custom pulsing green caret + mirror span, `caretColor: transparent`. Prior update (773681e) hero grows to 300px; heroBody paddingTop calc(headerHeight + 32px), paddingBottom 24, paddingLeft/Right 56, rowGap 20; search bar becomes centered pill (width min(420px, 90%), tighter paddings, smaller font). Prior update (45d1097) hero shrinks to 280px and heroBody stacks greeting + dots with `rowGap: 18px` (no more flex space-between). Prior update (5301df6) made hero full-bleed (no border/radius). Prior update (9cc6d48) added page padding + 340px bordered card. Prior update (787f136) added search bar. Prior update (04ea22b) replaced grid/filter/DetailPane with hero+rows+overlay.
+> Spec updated: 2026-05-01 (PR #46, commit 73a9cca) — hero height 300 → 420px; greeting marginTop 12 → 28px; search results replaced by vertical CSS grid; `.overlayPoster` gains `viewTransitionName: "film-backdrop"`; Play CTA changed from `<Link>` to `<button onClick={playWithTransition}>` wrapping `document.startViewTransition`. Prior update (6fd44e4) search bar moves inside hero (top-right, absolute), gradient strip replaces bordered card, custom pulsing green caret + mirror span, `caretColor: transparent`. Prior update (773681e) hero grows to 300px; heroBody paddingTop calc(headerHeight + 32px), paddingBottom 24, paddingLeft/Right 56, rowGap 20; search bar becomes centered pill (width min(420px, 90%), tighter paddings, smaller font). Prior update (45d1097) hero shrinks to 280px and heroBody stacks greeting + dots with `rowGap: 18px` (no more flex space-between). Prior update (5301df6) made hero full-bleed (no border/radius). Prior update (9cc6d48) added page padding + 340px bordered card. Prior update (787f136) added search bar. Prior update (04ea22b) replaced grid/filter/DetailPane with hero+rows+overlay.
 
 ## Files
 
@@ -23,7 +23,7 @@ The search bar (see below) filters in-page via local state only — it does not 
 
 ## Visual — dash view
 
-### Hero (300px tall, full-bleed)
+### Hero (420px tall, full-bleed)
 
 Same pattern as the Profiles hero, tuned larger. The hero is now **full-bleed** — no border, no border-radius, no page-level horizontal padding. It starts at viewport y=0 and extends edge-to-edge so the floating glass header blurs the poster image behind it ("poster behind glass"). `.page` has no `paddingTop`, `paddingLeft`, or `paddingRight`.
 
@@ -34,7 +34,7 @@ Same pattern as the Profiles hero, tuned larger. The hero is now **full-bleed** 
 - **Bottom-fade overlay (`heroBottomFade`).** `position: absolute` overlay that blends the hero into the rows section below. Two-gradient: bottom dark fade (`transparent 50%`, `rgba(5,7,6,0.8) 88%`, `colorBg0 100%`) + left dark fade (`colorBg0 0%`, `rgba(5,7,6,0.85) 22%`, `transparent 55%`). Hero has no visible hard bottom edge.
 - **Grain layer.** Shared `.grain-layer` utility class.
 - **Hero body (`heroBody`).** Absolute, inset 0, **`paddingTop: calc(${tokens.headerHeight} + 32px)`** (greeting text 32px below the header's bottom edge — 84px computed at the 52px header height), `paddingBottom: 24px`, `paddingLeft: 56px`, `paddingRight: 56px`, flex column with **`rowGap: 20px`** (greeting block stacks above dots — no `justify-content: space-between`, so dots sit right under the title rather than pinned to the hero bottom), `z-index: 2`:
-  - **Greeting text:** `"Tonight's library."` Anton 64px / `colorText` / `lineHeight: 0.92` / `marginTop: 12px`.
+  - **Greeting text:** `"Tonight's library."` Anton 64px / `colorText` / `lineHeight: 0.92` / `marginTop: 28px`.
   - **Slide dots:** 4 `<button type="button">` in the bottom-left of the hero body. Active: 26×3px, `colorGreen`. Inactive: 8×3px, `colorTextFaint`. `width` + `background-color` transition at `transitionSlow`. Each button: `aria-label="Show <film.title>"`.
 - **Cycle timing:** `HERO_INTERVAL_MS` = 7 000ms, `HERO_FADE_MS` = 700ms (vs. Profiles' 6 000ms / 600ms).
 - **Canonical poster order:** `["oppenheimer", "barbie", "nosferatu", "civilwar"]`. Falls back to `films.slice(0, 4)` if any id is absent.
@@ -51,7 +51,7 @@ Lifted into the hero block, rendered between `grain-layer` and `heroBody`. Prese
 - **Custom caret span (`searchCaret`):** rendered inside `searchInputWrap` only when `searchFocused` is true. `position: absolute`, `top: 50%`, `7×14px`, green fill, `boxShadow: 0 0 6px green, 0 0 14px greenGlow`. Pulsing keyframe: opacity + scaleY alternate at 1.05s ease-in-out infinite.
 - **Clear button:** `✕` icon button, shown when query is non-empty. Clicking clears the query and resets to the two-row view.
 - **Empty state:** when query is empty → show the two default rows (Continue Watching + Watchlist).
-- **Results state:** when query is non-empty → replace both rows with a single `"Results · {N}"` row filtered against `title`, `filename`, `director`, and `genre` across all `films`. Label is JetBrains Mono 9px / faint (same as section labels).
+- **Results state:** when query is non-empty → replace both rows with a vertical `<div>` containing the row header (`"Results · {N}"`, JetBrains Mono 9px / faint) and a `searchGrid` below it. `searchGrid` is a CSS grid: `gridTemplateColumns: repeat(auto-fill, 180px)`, `justifyContent: start`, `columnGap: 16px`, `rowGap: 24px`. The existing `.tile` (180px wide) is reused. Filtered against `title`, `filename`, `director`, and `genre` across all `films`. The container (`searchResults`) is a flex column with `rowGap: 16px` between the header and the grid.
 - **No-match state:** when query is non-empty but zero results → `"No films match"` empty-state message.
 - All filtering is client-side against the in-memory `films` array. Production: replace with a backend search query (Relay refetch or subscription).
 
@@ -86,7 +86,7 @@ Two horizontal-scroll rows (shown when search query is empty). `rowsScroll`: `pa
 
 ### Background
 
-- Full-color (not grayscale) poster fills the overlay background (`object-fit: cover`, `position: absolute, inset: 0`).
+- Full-color (not grayscale) poster fills the overlay background (`object-fit: cover`, `position: absolute, inset: 0`). The `.overlayPoster` rule carries **`viewTransitionName: "film-backdrop"`** — this value must stay in sync with Player's `.backdrop` rule (see [cross-cutting View Transitions note](#view-transitions-contract) below).
 - Slow Ken Burns animation on the background image: 26s, ease-in-out, alternate, infinite.
 - **Two-stack gradient overlay** (on top of the poster, below the content):
   - Vertical bottom-fade: `transparent` at 25–38%, `rgba(dark, 1)` from 72%, into page background color at 100%.
@@ -108,7 +108,7 @@ From top to bottom:
 3. **Meta line:** `{year} · {genre} · {duration}` in JetBrains Mono, muted.
 4. **Director line:** `"Directed by {director}"` — same Mono muted style.
 5. **Plot paragraph:** Inter / `colorTextDim` / `font-size: 14px` / `line-height: 1.6` / `max-width: 560px`.
-6. **Play CTA:** `<Link to="/player/:id">` styled as a green filled button.
+6. **Play CTA:** `<button onClick={playWithTransition}>` styled as a green filled button. `playWithTransition` calls `document.startViewTransition(() => navigate(\`/player/${film.id}\`))` when the View Transitions API is available, falling back to `navigate(...)` directly. The `<Link>` previously used here is replaced — navigation happens programmatically so the transition wraps the route change.
 7. **Filename:** JetBrains Mono, `colorTextFaint`, `font-size: 10px`.
 
 ## Behaviour
@@ -137,6 +137,16 @@ Same state machine as Profiles:
 - Props: `film: FilmShape`, `onClose: () => void`.
 - Renders the full-bleed overlay described in the overlay view section above.
 
+## View Transitions contract
+
+**Both `Library.overlayPoster` and `Player.backdrop` MUST carry `viewTransitionName: "film-backdrop"`** (the same value). The View Transitions API uses this shared name to auto-morph the poster element across routes when navigation is wrapped in `document.startViewTransition`. If the two values diverge, the morph silently degrades to a cross-fade without any element continuity.
+
+The contract applies in both directions:
+- **Forward (Play):** `FilmDetailsOverlay`'s `playWithTransition` calls `document.startViewTransition(() => navigate(\`/player/${film.id}\`))`.
+- **Reverse (Back):** Player's `goBackWithTransition` wraps `navigate(-1)` identically.
+
+Fallback on browsers without View Transitions support (e.g., Safari < 18): plain `navigate(...)` — no morph, no error.
+
 ## TODO(redesign)
 
 - `?q=<query>` URL param is not yet wired in the lab — the search bar filters in local state only. Production should write `?q=` to the URL so the filtered view is shareable/bookmarkable. When wired, the Library page should also read an incoming `?q=` on mount and pre-populate the input.
@@ -158,14 +168,14 @@ Same state machine as Profiles:
 - [ ] `searchCaret` span: rendered only when `searchFocused`; `position: absolute`, 7×14px, green fill, pulsing opacity+scaleY keyframe at 1.05s ease-in-out infinite; `boxShadow: 0 0 6px green, 0 0 14px greenGlow`
 - [ ] Clear (✕) button appears when query is non-empty; click resets to two-row view
 - [ ] Empty query → two default rows (Continue Watching + Watchlist)
-- [ ] Non-empty query → single `"Results · {N}"` row filtered by title / filename / director / genre
+- [ ] Non-empty query → vertical layout: `searchResults` flex column (`rowGap: 16px`) containing row header (`"Results · {N}"`, Mono 9px / faint) + `searchGrid` CSS grid (`gridTemplateColumns: repeat(auto-fill, 180px)`, `justifyContent: start`, `columnGap: 16px`, `rowGap: 24px`), filtered by title / filename / director / genre
 - [ ] "No films match" empty state when query non-empty and zero results
 - [ ] Production: replace client-side filter with backend search query / Relay refetch
 
 ### Dash view — hero
 
 - [ ] `.page`: no padding (full-bleed — page starts at viewport y=0)
-- [ ] Hero 300px tall, `overflow: hidden`, no border, no border-radius (full-bleed)
+- [ ] Hero 420px tall, `overflow: hidden`, no border, no border-radius (full-bleed)
 - [ ] `heroSlides` absolute container; all four canonical posters rendered simultaneously
 - [ ] Active slide `opacity: 1`; fading slide `heroImgFading` brings to `opacity: 0`; `transition: opacity 0.9s ease`
 - [ ] Ken Burns: `scale(1.06) translate(-0.8%, -0.6%)` → `scale(1.06) translate(0.8%, 0.6%)` over 20s, ease-in-out, alternate, infinite
@@ -173,7 +183,7 @@ Same state machine as Profiles:
 - [ ] `heroBottomFade` overlay — gradient to page bg at bottom edge, no hard seam into rows
 - [ ] `heroBody`: `paddingTop: calc(${tokens.headerHeight} + 32px)` (84px), `paddingBottom: 24px`, `paddingLeft: 56px`, `paddingRight: 56px`, flex column `rowGap: 20px` (no space-between)
 - [ ] Grain layer
-- [ ] Greeting text `"Tonight's library."` in Anton 64px, `lineHeight: 0.92`, `marginTop: 12px`
+- [ ] Greeting text `"Tonight's library."` in Anton 64px, `lineHeight: 0.92`, `marginTop: 28px`
 - [ ] 4 slide dots bottom-left: active 26×3px green / inactive 8×3px faint, `width`+`color` transitioning
 - [ ] `useEffect` interval (7 000ms) + inner timeout (700ms); both refs cleaned up on unmount
 - [ ] `goToHero(idx)` — half-duration (350ms) manual crossfade; no-op if already active
@@ -193,7 +203,7 @@ Same state machine as Profiles:
 ### Overlay view
 
 - [ ] `FilmDetailsOverlay`: `position: absolute, inset: 0` (page-scoped, not shell-scoped)
-- [ ] Full-color background poster with 26s Ken Burns, alternate, infinite
+- [ ] Full-color background poster with 26s Ken Burns, alternate, infinite; `.overlayPoster` carries `viewTransitionName: "film-backdrop"` (must match Player `.backdrop`)
 - [ ] Vertical bottom-fade gradient: transparent 25–38%, opaque dark 72–100%
 - [ ] Horizontal left-fade gradient: dark left to transparent at 35%
 - [ ] Close button: 40×40 circle, top-right, `<IconClose>`, `aria-label="Close details"`, clears `?film`
@@ -203,7 +213,7 @@ Same state machine as Profiles:
 - [ ] Meta line: `{year} · {genre} · {duration}` in Mono muted
 - [ ] Director line in Mono muted
 - [ ] Plot paragraph: Inter 14px / `line-height: 1.6` / `colorTextDim` / `max-width: 560px`
-- [ ] Play CTA: green filled `<Link to="/player/:id">`
+- [ ] Play CTA: green filled `<button onClick={playWithTransition}>` — wraps `document.startViewTransition(() => navigate(...))` with plain `navigate` fallback; NOT a `<Link>`
 - [ ] Filename: Mono 10px / `colorTextFaint`
 
 ### Data + backend
@@ -215,5 +225,5 @@ Same state machine as Profiles:
 
 ## Status
 
-- [x] Designed in `design/Release` lab — hero+rows+overlay layout (2026-05-01, PR #46 commit 04ea22b). Search bar between hero and rows added (2026-05-01, PR #46 commit 787f136). Page-level padding + hero downsized to 340px card + body/greeting/search/row spacing tightened (2026-05-01, PR #46 commit 9cc6d48). Hero made full-bleed (no border/radius), 340px→380px, heroBody paddingTop `calc(headerHeight + 4px)`, searchBar marginLeft/Right 32px, rowsScroll paddingLeft/Right 32px, page padding removed (2026-05-01, PR #46 commit 5301df6). Hero shrunk to 280px and dots stacked under greeting via rowGap (no space-between) so first carousel fills the gap (2026-05-01, PR #46 commit 45d1097). Hero grown to 300px, heroBody paddingTop calc(headerHeight+32px), paddingLeft/Right 56px, paddingBottom 24px, rowGap 20px; search bar became centered pill (width min(420px,90%), tighter paddings, smaller font) (2026-05-01, PR #46 commit 773681e). Search bar moved inside hero top-right (position: absolute, top: calc(headerHeight+24px), right: 32px, width: 320px); bordered-card style replaced by horizontal gradient strip with focused alpha bump; native caret hidden (`caretColor: transparent`), custom pulsing green caret block + hidden mirror span for caret-X measurement introduced (2026-05-01, PR #46 commit 6fd44e4). Grid/filter/DetailPane layout superseded. PR #46 on `feat/release-design-omdb-griffel`, not yet merged to main.
+- [x] Designed in `design/Release` lab — hero+rows+overlay layout (2026-05-01, PR #46 commit 04ea22b). Search bar between hero and rows added (2026-05-01, PR #46 commit 787f136). Page-level padding + hero downsized to 340px card + body/greeting/search/row spacing tightened (2026-05-01, PR #46 commit 9cc6d48). Hero made full-bleed (no border/radius), 340px→380px, heroBody paddingTop `calc(headerHeight + 4px)`, searchBar marginLeft/Right 32px, rowsScroll paddingLeft/Right 32px, page padding removed (2026-05-01, PR #46 commit 5301df6). Hero shrunk to 280px and dots stacked under greeting via rowGap (no space-between) so first carousel fills the gap (2026-05-01, PR #46 commit 45d1097). Hero grown to 300px, heroBody paddingTop calc(headerHeight+32px), paddingLeft/Right 56px, paddingBottom 24px, rowGap 20px; search bar became centered pill (width min(420px,90%), tighter paddings, smaller font) (2026-05-01, PR #46 commit 773681e). Search bar moved inside hero top-right (position: absolute, top: calc(headerHeight+24px), right: 32px, width: 320px); bordered-card style replaced by horizontal gradient strip with focused alpha bump; native caret hidden (`caretColor: transparent`), custom pulsing green caret block + hidden mirror span for caret-X measurement introduced (2026-05-01, PR #46 commit 6fd44e4). Hero height 300→420px; greeting marginTop 12→28px; search results restructured as vertical CSS grid (searchResults flex column + searchGrid); `.overlayPoster` gains `viewTransitionName: "film-backdrop"`; Play CTA changed from `<Link>` to `<button onClick={playWithTransition}>` with startViewTransition wrapping; `goBackWithTransition` symmetric path introduced on Player side (2026-05-01, PR #46 commit 73a9cca). Grid/filter/DetailPane layout superseded. PR #46 on `feat/release-design-omdb-griffel`, not yet merged to main.
 - [ ] Production implementation
