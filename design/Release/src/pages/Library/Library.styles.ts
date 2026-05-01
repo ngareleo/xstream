@@ -14,7 +14,7 @@ export const useLibraryStyles = makeStyles({
   // Hero — full-bleed, starts at viewport top so the glass header overlays it
   hero: {
     flexShrink: 0,
-    height: "380px",
+    height: "280px",
     position: "relative",
     overflow: "hidden",
   },
@@ -72,12 +72,12 @@ export const useLibraryStyles = makeStyles({
     position: "absolute",
     inset: "0",
     paddingTop: `calc(${tokens.headerHeight} + 4px)`,
-    paddingBottom: "32px",
+    paddingBottom: "20px",
     paddingLeft: "44px",
     paddingRight: "44px",
     display: "flex",
     flexDirection: "column",
-    justifyContent: "space-between",
+    rowGap: "18px",
     zIndex: 2,
   },
   greetingEyebrow: {
