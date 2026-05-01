@@ -1,28 +1,55 @@
 ---
 name: implement-design
-description: Port a page or component from the design lab (design/) into the production client (client/src/). Use when implementing a new page, matching a design spec, or porting UI from the design sandbox.
+description: Port a page or component from the design lab (design/Release/) into the production client (client/src/). Use when implementing a new page, matching a design spec, or porting UI from the design sandbox.
 allowed-tools: Bash(bun *) Bash(cd *)
 ---
 
 # Implement Design Spec
 
-Use this skill when porting a page or component from the design lab (`design/`)
-into the production client (`client/src/`).
+Use this skill when porting a page or component from the design lab into the
+production client (`client/src/`).
 
-## Where to look
+The design lab is split into two eras:
+
+- **`design/Release/`** — the **active** Xstream identity (green +
+  Anton/Inter/JetBrains Mono). All new ports source from here.
+- **`design/Prerelease/`** — the **frozen** Moran identity (red + Bebas Neue).
+  Used for behavior reference when the Release JSX is structurally similar but
+  not yet documented for that specific UX flow.
+
+## Where to look (Release — primary source)
 
 | Design lab | Production equivalent |
 |---|---|
-| `design/src/pages/Dashboard/Dashboard.tsx` | `client/src/pages/ProfilesPage.tsx` + `ProfilesPageContent.tsx` |
-| `design/src/pages/Library/Library.tsx` | `client/src/pages/LibraryPage.tsx` + `LibraryPageContent.tsx` |
-| `design/src/pages/Player/Player.tsx` | `client/src/pages/PlayerPage.tsx` + component tree |
-| `design/src/data/mock.ts` | GraphQL schema + Relay fragments |
-| `design/src/styles/shared.css` | Chakra UI theme tokens + global CSS |
-| `design/README.md` | Authoritative UI spec |
-| `docs/design/UI-Design-Spec/00-Tokens-And-Layout.md` | Concise implementation reference |
+| `design/Release/src/pages/Profiles/Profiles.tsx` | `client/src/pages/ProfilesPage.tsx` + `ProfilesPageContent.tsx` |
+| `design/Release/src/pages/Library/Library.tsx` | `client/src/pages/LibraryPage.tsx` + `LibraryPageContent.tsx` |
+| `design/Release/src/pages/Player/Player.tsx` | `client/src/pages/PlayerPage.tsx` + component tree |
+| `design/Release/src/pages/Settings/Settings.tsx` | `client/src/pages/SettingsPage.tsx` |
+| `design/Release/src/pages/DesignSystem/DesignSystem.tsx` | (no prod equivalent — review-only) |
+| `design/Release/src/components/DetailPane/DetailPane.tsx` | `VideoDetailsPanel` + `VideoDetailsPanelAsync` |
+| `design/Release/src/components/Logo/` | `client/src/components/brand/` (after final logo selection) |
+| `design/Release/src/data/mock.ts` | GraphQL schema + Relay fragments |
+| `design/Release/src/styles/tokens.ts` + `shared.css` | Production Griffel tokens + global CSS |
+| `design/Release/README.md` | Authoritative UI spec for the Xstream identity |
+| `docs/design/UI-Design-Spec/01-Release-Tokens-And-Layout.md` | Concise implementation reference (active) |
 
-Always read the design file **and** `design/README.md` before writing production code.
-The README documents invariants and subtle UX flows that are not obvious from the code.
+## Where to look (Prerelease — behavior reference)
+
+When the Release spec is silent on a UX invariant (e.g. RE-LINK mode, scan
+subscriptions, exact pane param keys), fall back to the Prerelease spec —
+the contract ports verbatim:
+
+| Design lab | Use for |
+|---|---|
+| `design/Prerelease/src/pages/Dashboard/Dashboard.tsx` | Profiles deep-link auto-expand logic, RE-LINK mode |
+| `design/Prerelease/src/pages/Library/Library.tsx` | Scroll-fade overlay implementation |
+| `design/Prerelease/src/pages/Player/Player.tsx` | Pre-play overlay state machine prose |
+| `design/Prerelease/README.md` | Long-form description of every page (Profiles section is the most thorough) |
+| `docs/design/UI-Design-Spec/00-Prerelease-Tokens-And-Layout.md` | Original tokens + behavior contract (frozen) |
+
+Always read the relevant Release file **and** `design/Release/README.md`
+before writing production code. Cross-check against Prerelease when a
+specific behavior is missing from Release.
 
 ---
 
@@ -98,7 +125,8 @@ Design lab uses `useSearchParams` for pane state. In production, same pattern ap
 
 ### Profiles page
 
-1. Read `design/src/pages/Dashboard/Dashboard.tsx`.
+1. Read `design/Release/src/pages/Profiles/Profiles.tsx` (visual treatment) AND
+   `design/Prerelease/src/pages/Dashboard/Dashboard.tsx` (full behavior prose).
 2. `ProfilesPage.tsx` → Suspense shell only (no logic).
 3. `ProfilesPageContent.tsx`:
    - `useLazyLoadQuery` for the profiles + viewer query.
@@ -119,7 +147,9 @@ Check that:
 
 ### Library page
 
-1. Read `design/src/pages/Library/Library.tsx`.
+1. Read `design/Release/src/pages/Library/Library.tsx` (visual + chips +
+   grid/list treatment) AND `design/Prerelease/src/pages/Library/Library.tsx`
+   (scroll-fade implementation).
 2. `LibraryPage.tsx` → Suspense shell.
 3. `LibraryPageContent.tsx`:
    - `useLazyLoadQuery` for libraries + videos.
@@ -137,7 +167,9 @@ Check that:
 
 ### Player page
 
-1. Read `design/src/pages/Player/Player.tsx` — the state machine comments are essential.
+1. Read `design/Release/src/pages/Player/Player.tsx` AND
+   `design/Prerelease/src/pages/Player/Player.tsx` — the state-machine
+   comments in the Prerelease file are still essential reference.
 2. `PlayerPage.tsx` → loads video metadata, renders `VideoPlayer` + `PlayerSidebarAsync`.
 3. Player state machine maps to `useVideoPlayback` hook states:
    - Design `"idle"` → `status === "idle"`

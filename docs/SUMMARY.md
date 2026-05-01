@@ -59,7 +59,7 @@ The client drives transcoding in **300-second chunks** (steady-state), with a sh
 | Server config, ladder, schema, DB, HW-accel | [`server/`](server/README.md) |
 | Client feature flags, debugging playbooks | [`client/`](client/README.md) |
 | Invariants, naming, conventions, anti-patterns | [`code-style/`](code-style/README.md) |
-| UI design spec | [`design/`](design/README.md) |
+| UI design spec | [`design/`](design/README.md) — split: Prerelease (Moran, frozen) and Release (Xstream, active) |
 | Product spec, customers, roadmap | [`product/`](product/README.md) |
 | Bun → Rust + Tauri rewrite playbook + cross-migration principles | [`migrations/`](migrations/README.md) |
 

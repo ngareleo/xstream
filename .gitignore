@@ -34,6 +34,18 @@ docs/.obsidian/
 # architect subagent's per-machine retrieval cache
 .claude/agents/architect-cache/
 
+# migrations-lead subagent's per-machine retrieval cache
+.claude/agents/migrations-lead-cache/
+
+# subagent worktree state
+.claude/worktrees/
+
+# subagent screenshot logs (PNGs already covered by *.png above)
+.claude/screenshots/*.log
+
+# TypeScript incremental build artifacts
+*.tsbuildinfo
+
 # Cargo build output (Rust workspace under server-rust/)
 target/
 **/target/

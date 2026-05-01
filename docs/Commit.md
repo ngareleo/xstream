@@ -15,6 +15,28 @@ Entry shape (each entry ends with the divider line described above):
 
 <!-- ENTRIES BELOW — newest first; each ends with a bare `---` line. The architect's next invocation will treat the no-entries state as the first-run case and prepend a bootstrap entry at HEAD. -->
 
+## ae702ab — 2026-05-01 (release-design migration INDEX rows)
+
+**Files:** `docs/INDEX.md`
+**Why:** added two retrieval rows for the release-design migration sub-tree (README + AppHeader spec) forwarded from migrations-lead — no SUMMARY.md update needed per migrations-lead sign-off
+
+---
+
+## ae702ab — 2026-05-01 (design-lab mprocs + port assignment)
+
+**Files:** `design/mprocs.yaml` (new), `design/Prerelease/vite.config.ts`, `design/Release/vite.config.ts`, `design/Prerelease/README.md`, `design/Release/README.md`, `docs/design/UI-Design-Spec/01-Release-Tokens-And-Layout.md`, `docs/design/UI-Design-Spec/README.md`
+**Why:** mprocs added to `design/` so both labs boot together; ports assigned from 5000 up (Prerelease 5000, Release 5001); doc port references updated to match — no structural doc additions needed
+
+---
+
+## ae702ab — 2026-05-01
+
+**Files:** `docs/design/UI-Design-Spec/00-Prerelease-Tokens-And-Layout.md`, `docs/design/UI-Design-Spec/01-Release-Tokens-And-Layout.md`, `docs/design/UI-Design-Spec/README.md`, `docs/SUMMARY.md`, `docs/INDEX.md`, `.claude/skills/implement-design/SKILL.md`
+**Why:** design-lab split — `design/` restructured into `design/Prerelease/` (frozen Moran) and `design/Release/` (active Xstream); doc era index + retrieval rows updated accordingly
+**Source commits scanned:** `8534bc2..ae702ab`
+
+---
+
 ## 8534bc2 — 2026-05-01
 
 **Files:** `docs/Commit.md` (new file — bootstrap entry, preamble-only prior to this session)

@@ -146,8 +146,8 @@ Before marking **any task that modified code or docs** as complete, spawn the re
 
 Routing:
 
-- Edits inside `docs/migrations/**` → notify `migrations-lead`. It curates the migration tree and loops `architect` in if a cross-cutting INDEX row needs adding.
-- Everything else (server / client code, other `docs/` subtrees, `.claude/`, `CLAUDE.md`, `README.md`) → notify `architect`.
+- Edits inside `docs/migrations/**` OR `design/Release/**` → notify `migrations-lead`. It curates the migration tree (incl. `release-design/Components/<Name>.md` per-component specs that travel with the Prerelease → Release port) and loops `architect` in if a cross-cutting INDEX row needs adding.
+- Everything else (server / client code, other `docs/` subtrees, `design/Prerelease/**` (frozen), `.claude/`, `CLAUDE.md`, `README.md`) → notify `architect`.
 
 The curator decides whether `docs/`, `SUMMARY.md`, or the cross-cutting index needs updating, and does so directly (architect-only for `INDEX.md` and `SUMMARY.md`). This keeps the RAG coherent without requiring the caller to know what to update.
 

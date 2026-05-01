@@ -1,0 +1,29 @@
+# Dev orchestrator for the design labs. Two equivalent ways to run:
+#
+#   bun run design          # from repo root (preferred — script handles the cd)
+#   cd design && mprocs     # from this directory
+#
+# IMPORTANT: mprocs resolves the `cwd:` paths below relative to its OWN
+# working directory, NOT the config file's directory. So `mprocs --config
+# design/mprocs.yaml` from the repo root would look for `./Prerelease/` at
+# the root and silently fail. Always invoke from inside `design/` (the
+# `bun run design` script does this for you).
+#
+# Boots both labs side-by-side so user flows can be compared across the
+# Prerelease (Moran) and Release (Xstream) eras without juggling terminals.
+# Each Vite config pins its port so collisions can't shuffle them around.
+#
+#   Prerelease (Moran   — red + Bebas Neue)         http://localhost:5000
+#   Release    (Xstream — green + Anton)            http://localhost:5001
+#
+# Ports start at 5000 and ascend; add new design eras with port 5002, 5003…
+# This file is sibling to the root mprocs.yaml so the two are independent —
+# the design labs are not part of the production dev orchestration.
+
+procs:
+  prerelease:
+    cwd: ./Prerelease
+    cmd: [bun, run, dev]
+  release:
+    cwd: ./Release
+    cmd: [bun, run, dev]

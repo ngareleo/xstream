@@ -1,11 +1,18 @@
-# Moran — UI Design Lab
+# Moran — UI Design Lab (Prerelease)
 
-A pixel-faithful React prototype of the Moran streaming client. Built to validate
-every interaction pattern before implementing against the real GraphQL/MSE data layer.
+A pixel-faithful React prototype of the **Moran** streaming client (the
+prerelease look — red `#CE1126` accent, Bebas Neue display). Frozen as a
+historical reference. The active design lab is now `design/Release/`
+(Xstream identity).
 
 Run with:
 ```bash
-cd design && bun dev   # http://localhost:5173
+cd design/Prerelease && bun dev   # http://localhost:5000
+```
+
+Or boot both labs together from the repo root:
+```bash
+bun run design                    # Prerelease :5000 · Release :5001
 ```
 
 ---

@@ -1,9 +1,16 @@
-# UI Design Specification
+# UI Design Specification — Prerelease (Moran identity)
+
+> **Era status:** frozen. This is the historical snapshot of the **Moran**
+> identity (red `#CE1126` accent, Bebas Neue display). The active design
+> reference for new work is the **Release** spec —
+> [`01-Release-Tokens-And-Layout.md`](01-Release-Tokens-And-Layout.md) — which
+> ports these flows into the new **Xstream** identity (green +
+> Anton/Inter/JetBrains Mono).
 
 This document describes the intended UI design of the Moran client — its pages,
-interactions, URL patterns, and the subtle UX flows that must be preserved during
-implementation. The canonical design reference is the React prototype at
-`design/` (run with `cd design && bun dev`).
+interactions, URL patterns, and the subtle UX flows that must be preserved
+during implementation. The canonical design reference is the React prototype
+at `design/Prerelease/` (run with `cd design/Prerelease && bun dev`).
 
 ---
 

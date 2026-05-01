@@ -27,6 +27,7 @@ If `docs/migrations/rust-rewrite/Plan/00-README.md` is missing or materially sta
 - `docs/migrations/rust-rewrite/01-Streaming-Layer.md` through `08-Tauri-Packaging.md` — layer references. Each follows the shape: current Bun implementation, stable contracts, Rust target, open questions.
 - `docs/migrations/rust-rewrite/Plan/00-README.md` and `01-04-*.md` — release-journey execution playbook. Per-step scope, contracts, cutover mechanism, decisions to lock day-one.
 - `docs/migrations/rust-rewrite/README.md` — the folder index for the migration tree.
+- `docs/migrations/release-design/README.md` + `Components/README.md` + `Components/<Name>.md` — Prerelease (Moran) → Release (Xstream) client redesign. Migration index + per-component portable spec + porting checklist. Visuals are authoritative in `design/Release/`; this folder is the **portable spec** for the port to `client/src/`.
 
 **I read but do not curate** (Read only — these belong to `architect`):
 
@@ -79,12 +80,32 @@ For changes inside `docs/migrations/**`, callers notify *me* (not `architect`) b
    - Bun runtime / Bun.serve change → `04-Web-Server-Layer.md`.
    - DB schema / `bun:sqlite` usage change → `05-Database-Layer.md`.
    - Library scanner / file watcher / ffmpeg manifest change → `06-File-Handling-Layer.md`.
+   - **`design/Release/**` change → `release-design/Components/<MatchingName>.md`.** Locate the spec file whose component matches the changed path (e.g. `design/Release/src/components/AppHeader/...` → `Components/AppHeader.md`; `design/Release/src/pages/Library/...` → `Components/Library.md`). If a brand-new component appears in the lab without a corresponding spec, add a new file using the skeleton documented in `Components/README.md`. Inline subcomponents (ProfileRow, FilmRow, ProfileChip, etc.) are sections within the parent's file — don't promote them to separate files unless the lab has extracted them into their own `.tsx`. Compare the change against the existing spec; update the section that no longer matches; if filling in a `TODO(redesign)` placeholder, drop the marker and date the section. **If the change broke a documented behaviour the user previously requested**, surface it back to the caller before silently rewriting the spec.
 2. **Decide if the migration knowledge base needs to update.** Many changes (bug fixes that don't affect contracts, internal refactors, doc-only edits in other subtrees) don't. When in doubt: if the change contradicts anything the migration docs currently claim, it needs an update.
 3. If an update is needed, apply the **Curation procedure** above.
 4. Log a cache entry: `## <date> — change: <description>` with files touched and what (if anything) I updated. Even "no update needed" is worth logging.
 5. Respond to the caller with: (a) what I updated or why nothing needed updating, (b) the paths of any doc I edited, (c) any `INDEX.md` row addition I asked `architect` to apply.
 
 If the change summary is too vague to act on, ask the caller for specifics — don't guess.
+
+## Release-design migration
+
+The `release-design/` migration captures the Prerelease (Moran) → Release (Xstream) client redesign. The pattern differs from `rust-rewrite/`:
+
+- **Catalog, not layered.** No layer references; instead, one spec file per UI element under `Components/`. The catalog is in `Components/README.md` (status table). Files are bare component-name `.md` (no `NN-` prefix) — the catalog provides ordering.
+- **Lab is authoritative for visuals; spec is authoritative for the contract.** `design/Release/` is the prototype. The spec is what travels with the port to `client/src/`. When the two disagree, the lab wins for visuals — and the spec gets updated.
+- **Baselines + done.** A spec file marked `baseline` reflects today's lab state with `TODO(redesign)` placeholders where values are not yet pinned. A redesign session fills those in and bumps status to `done`.
+- **One model file.** `Components/AppHeader.md` is the fully-fleshed reference shape — every detail inlined. New `done`-status specs should match its rigour (concrete tokens, animation timings, ARIA, porting checklist).
+- **Inline subcomponents stay inline.** ProfileRow, FilmRow, ProfileChip, PosterCard, ListRow, VideoArea, SidePanel, SettingsRow, Toggle live as sections within their parent's spec. Promote one to its own file only when the lab extracts it into its own `.tsx`.
+- **DesignSystem is lab-only.** Its production status is `n/a — lab only`. Don't pretend it's portable.
+
+When responding to questions about the redesign:
+- "What does the AppHeader look like?" → `Components/AppHeader.md`.
+- "What's the porting checklist for X?" → the matching `Components/<X>.md`.
+- "What's left to spec?" → `Components/README.md` status table (rows marked `baseline` are the work).
+- "Does Prerelease's Y still apply?" → check the matching Release spec; if not re-stated, the Prerelease spec at `design/Prerelease/` is the behavioural reference (per the migration README).
+
+`design/Prerelease/` is **not** in this migration — Prerelease is frozen and edits there route to `architect`.
 
 ## Cache protocol
 

@@ -27,3 +27,4 @@ This pairs with `code-style/Invariants/00-Never-Violate.md` §14 (no swallowed e
 | Folder | Hook |
 |---|---|
 | [`rust-rewrite/`](rust-rewrite/README.md) | Bun → Rust + Tauri desktop port. Layer-by-layer deep-dives, stable contracts, phased migration order, packaging + signing. |
+| [`release-design/`](release-design/README.md) | Prerelease (Moran) → Release (Xstream) client redesign. Per-component spec + porting checklist; visuals live in `design/Release/`, this folder is the portable spec. |
