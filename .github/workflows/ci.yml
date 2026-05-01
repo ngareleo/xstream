@@ -114,7 +114,13 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p tmp
-          DB_PATH="$PWD/tmp/ci-xstream.db" cargo run --quiet --bin xstream-server &
+          # Build the binary first, then exec — separates compile time from
+          # server-up time. With `cargo run`, a cold workspace cache (e.g. on
+          # the first run after Cargo.lock changes) eats into the healthcheck
+          # window and the for-loop times out before the server has even
+          # finished compiling.
+          cargo build --bin xstream-server
+          DB_PATH="$PWD/tmp/ci-xstream.db" target/debug/xstream-server &
           SERVER_PID=$!
           trap "kill $SERVER_PID 2>/dev/null || true; wait $SERVER_PID 2>/dev/null || true" EXIT
 
