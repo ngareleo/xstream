@@ -1,7 +1,7 @@
 # Library (page)
 
 > Status: **baseline** (Spec) · **not started** (Production)
-> Spec updated: 2026-05-01 (PR #46, commit 45d1097) — hero shrinks to 280px and heroBody stacks greeting + dots with `rowGap: 18px` (no more flex space-between); first carousel tile now starts ~y=385 on 1920×1200. Prior update (5301df6) made hero full-bleed (no border/radius). Prior update (9cc6d48) added page padding + 340px bordered card. Prior update (787f136) added search bar. Prior update (04ea22b) replaced grid/filter/DetailPane with hero+rows+overlay.
+> Spec updated: 2026-05-01 (PR #46, commit 6fd44e4) — search bar moves inside hero (top-right, absolute), gradient strip replaces bordered card, custom pulsing green caret + mirror span, `caretColor: transparent`. Prior update (773681e) hero grows to 300px; heroBody paddingTop calc(headerHeight + 32px), paddingBottom 24, paddingLeft/Right 56, rowGap 20; search bar becomes centered pill (width min(420px, 90%), tighter paddings, smaller font). Prior update (45d1097) hero shrinks to 280px and heroBody stacks greeting + dots with `rowGap: 18px` (no more flex space-between). Prior update (5301df6) made hero full-bleed (no border/radius). Prior update (9cc6d48) added page padding + 340px bordered card. Prior update (787f136) added search bar. Prior update (04ea22b) replaced grid/filter/DetailPane with hero+rows+overlay.
 
 ## Files
 
@@ -23,7 +23,7 @@ The search bar (see below) filters in-page via local state only — it does not 
 
 ## Visual — dash view
 
-### Hero (280px tall, full-bleed)
+### Hero (300px tall, full-bleed)
 
 Same pattern as the Profiles hero, tuned larger. The hero is now **full-bleed** — no border, no border-radius, no page-level horizontal padding. It starts at viewport y=0 and extends edge-to-edge so the floating glass header blurs the poster image behind it ("poster behind glass"). `.page` has no `paddingTop`, `paddingLeft`, or `paddingRight`.
 
@@ -33,19 +33,22 @@ Same pattern as the Profiles hero, tuned larger. The hero is now **full-bleed** 
 - **Edge-fade overlay (`heroEdgeFade`).** Same two-gradient pattern as Profiles (top+bottom + right dark edges), with `backgroundSize: 100% 115%, 115% 100%`. Drift animation cycles `backgroundPosition` over 22s (ease-in-out, infinite): `0% 0%, 0% 0%` → `0% 100%, 100% 0%` → back.
 - **Bottom-fade overlay (`heroBottomFade`).** `position: absolute` overlay that blends the hero into the rows section below. Two-gradient: bottom dark fade (`transparent 50%`, `rgba(5,7,6,0.8) 88%`, `colorBg0 100%`) + left dark fade (`colorBg0 0%`, `rgba(5,7,6,0.85) 22%`, `transparent 55%`). Hero has no visible hard bottom edge.
 - **Grain layer.** Shared `.grain-layer` utility class.
-- **Hero body (`heroBody`).** Absolute, inset 0, **`paddingTop: calc(${tokens.headerHeight} + 4px)`** (greeting text 4px below the header's bottom edge), `paddingBottom: 20px`, `paddingLeft: 44px`, `paddingRight: 44px`, flex column with **`rowGap: 18px`** (greeting block stacks above dots — no `justify-content: space-between`, so dots sit right under the title rather than pinned to the hero bottom), `z-index: 2`:
+- **Hero body (`heroBody`).** Absolute, inset 0, **`paddingTop: calc(${tokens.headerHeight} + 32px)`** (greeting text 32px below the header's bottom edge — 84px computed at the 52px header height), `paddingBottom: 24px`, `paddingLeft: 56px`, `paddingRight: 56px`, flex column with **`rowGap: 20px`** (greeting block stacks above dots — no `justify-content: space-between`, so dots sit right under the title rather than pinned to the hero bottom), `z-index: 2`:
   - **Greeting text:** `"Tonight's library."` Anton 64px / `colorText` / `lineHeight: 0.92` / `marginTop: 12px`.
   - **Slide dots:** 4 `<button type="button">` in the bottom-left of the hero body. Active: 26×3px, `colorGreen`. Inactive: 8×3px, `colorTextFaint`. `width` + `background-color` transition at `transitionSlow`. Each button: `aria-label="Show <film.title>"`.
 - **Cycle timing:** `HERO_INTERVAL_MS` = 7 000ms, `HERO_FADE_MS` = 700ms (vs. Profiles' 6 000ms / 600ms).
 - **Canonical poster order:** `["oppenheimer", "barbie", "nosferatu", "civilwar"]`. Falls back to `films.slice(0, 4)` if any id is absent.
 
-### Search bar (between hero and rows)
+### Search bar (inside hero, top-right)
 
-Rendered between the hero and the row section. Present in the dash view only (hidden when the overlay is open). `marginTop: 20px`; **`marginLeft: 32px`, `marginRight: 32px`** (page no longer has horizontal padding; the search bar carries its own horizontal inset).
+Lifted into the hero block, rendered between `grain-layer` and `heroBody`. Present in the dash view only (hidden when the overlay is open). Position: **`position: absolute`, `top: calc(${tokens.headerHeight} + 24px)`, `right: 32px`, `zIndex: 3`, `width: 320px`** — opposite corner from the bottom-left greeting.
 
-- **Input container (`searchBar`):** bordered card (`1px solid colorBorder`, `borderRadius: 4px`, `backgroundColor: colorSurface`, `padding: 10px 16px`). On `:focus-within`: all four border sides switch to `colorGreen` and a `0 0 0 3px colorGreenSoft` box-shadow ring appears.
-- **Input:** JetBrains Mono, `color: var(--text)`, `backgroundColor: transparent` (or a subtle dark fill — see lab source).
-- **Focus ring:** green ring on focus — `outline: 2px solid var(--green)` or equivalent `box-shadow` ring.
+- **Input container (`searchBar`):** no border, no border-radius, no solid background. Instead a horizontal gradient strip: `backgroundImage: linear-gradient(90deg, rgba(20,28,24,0) 0%, rgba(20,28,24,0.42) 22%, rgba(20,28,24,0.42) 78%, rgba(20,28,24,0) 100%)`. `transition: background-image 0.15s`.
+- **Focused state (`searchBarFocused`):** bumps gradient mid-stop alpha to 0.7. Applied on `:focus-within` via JS state (`searchFocused`).
+- **Input wrap (`searchInputWrap`):** relative container, `flex: 1`, `height: 20px`. Houses the real input, the hidden mirror span, and the custom caret span.
+- **Input (`searchInput`):** `caretColor: transparent` (hides the native browser caret). JetBrains Mono `fontSize: 12px`, `letterSpacing: 0.06em`. Placeholder: `fontSize: 10px`, `letterSpacing: 0.14em`, `textTransform: uppercase`. `paddingRight: 12px` (leaves room for the clear button).
+- **Mirror span (`searchMirror`):** `position: absolute`, `visibility: hidden`, Mono 12px, `letterSpacing: 0.06em`, `whiteSpace: pre`. Receives the same text as the input. Used only to measure caret X via `mirrorRef.current.offsetWidth`. A `useEffect` recomputes `searchCaretX` from `mirrorRef.current.offsetWidth` whenever `search` or `searchFocused` changes.
+- **Custom caret span (`searchCaret`):** rendered inside `searchInputWrap` only when `searchFocused` is true. `position: absolute`, `top: 50%`, `7×14px`, green fill, `boxShadow: 0 0 6px green, 0 0 14px greenGlow`. Pulsing keyframe: opacity + scaleY alternate at 1.05s ease-in-out infinite.
 - **Clear button:** `✕` icon button, shown when query is non-empty. Clicking clears the query and resets to the two-row view.
 - **Empty state:** when query is empty → show the two default rows (Continue Watching + Watchlist).
 - **Results state:** when query is non-empty → replace both rows with a single `"Results · {N}"` row filtered against `title`, `filename`, `director`, and `genre` across all `films`. Label is JetBrains Mono 9px / faint (same as section labels).
@@ -145,9 +148,14 @@ Same state machine as Profiles:
 
 ### Search bar
 
-- [ ] Mono input rendered between hero and rows; `marginTop: 20px`, `marginLeft: 32px`, `marginRight: 32px` (page has no horizontal padding; search bar carries its own inset)
-- [ ] Bordered card container: 1px `solid colorBorder`, `borderRadius: 4px`, `backgroundColor: colorSurface`, `padding: 10px 16px`
-- [ ] `:focus-within` — all four border sides → `colorGreen`, `box-shadow: 0 0 0 3px colorGreenSoft`
+- [ ] Search container is **inside the hero block** (between `grain-layer` and `heroBody`), not between hero and rows
+- [ ] `searchBar`: `position: absolute`, `top: calc(${tokens.headerHeight} + 24px)`, `right: 32px`, `zIndex: 3`, `width: 320px` — no border, no border-radius, no solid background
+- [ ] `searchBar` background: horizontal gradient strip `linear-gradient(90deg, rgba(20,28,24,0) 0%, rgba(20,28,24,0.42) 22%, rgba(20,28,24,0.42) 78%, rgba(20,28,24,0) 100%)`, `transition: background-image 0.15s`
+- [ ] `searchBarFocused` state bumps gradient mid-stop alpha to 0.7 (applied via JS `searchFocused` state, not pure CSS `:focus-within`)
+- [ ] `searchInputWrap`: relative, `flex: 1`, `height: 20px` — contains input + mirror span + caret span
+- [ ] `searchInput`: `caretColor: transparent`, Mono 12px, `letterSpacing: 0.06em`, `paddingRight: 12px`; placeholder 10px, `letterSpacing: 0.14em`, uppercase
+- [ ] `searchMirror` span: `position: absolute`, `visibility: hidden`, Mono 12px, `letterSpacing: 0.06em`, `whiteSpace: pre`; `useEffect` reads `mirrorRef.current.offsetWidth` to set `searchCaretX` whenever `search` or `searchFocused` changes
+- [ ] `searchCaret` span: rendered only when `searchFocused`; `position: absolute`, 7×14px, green fill, pulsing opacity+scaleY keyframe at 1.05s ease-in-out infinite; `boxShadow: 0 0 6px green, 0 0 14px greenGlow`
 - [ ] Clear (✕) button appears when query is non-empty; click resets to two-row view
 - [ ] Empty query → two default rows (Continue Watching + Watchlist)
 - [ ] Non-empty query → single `"Results · {N}"` row filtered by title / filename / director / genre
@@ -157,13 +165,13 @@ Same state machine as Profiles:
 ### Dash view — hero
 
 - [ ] `.page`: no padding (full-bleed — page starts at viewport y=0)
-- [ ] Hero 280px tall, `overflow: hidden`, no border, no border-radius (full-bleed)
+- [ ] Hero 300px tall, `overflow: hidden`, no border, no border-radius (full-bleed)
 - [ ] `heroSlides` absolute container; all four canonical posters rendered simultaneously
 - [ ] Active slide `opacity: 1`; fading slide `heroImgFading` brings to `opacity: 0`; `transition: opacity 0.9s ease`
 - [ ] Ken Burns: `scale(1.06) translate(-0.8%, -0.6%)` → `scale(1.06) translate(0.8%, 0.6%)` over 20s, ease-in-out, alternate, infinite
 - [ ] `heroEdgeFade` two-gradient overlay with 22s drift cycle on `backgroundPosition`
 - [ ] `heroBottomFade` overlay — gradient to page bg at bottom edge, no hard seam into rows
-- [ ] `heroBody`: `paddingTop: calc(${tokens.headerHeight} + 4px)`, `paddingBottom: 20px`, `paddingLeft: 44px`, `paddingRight: 44px`, flex column `rowGap: 18px` (no space-between)
+- [ ] `heroBody`: `paddingTop: calc(${tokens.headerHeight} + 32px)` (84px), `paddingBottom: 24px`, `paddingLeft: 56px`, `paddingRight: 56px`, flex column `rowGap: 20px` (no space-between)
 - [ ] Grain layer
 - [ ] Greeting text `"Tonight's library."` in Anton 64px, `lineHeight: 0.92`, `marginTop: 12px`
 - [ ] 4 slide dots bottom-left: active 26×3px green / inactive 8×3px faint, `width`+`color` transitioning
@@ -207,5 +215,5 @@ Same state machine as Profiles:
 
 ## Status
 
-- [x] Designed in `design/Release` lab — hero+rows+overlay layout (2026-05-01, PR #46 commit 04ea22b). Search bar between hero and rows added (2026-05-01, PR #46 commit 787f136). Page-level padding + hero downsized to 340px card + body/greeting/search/row spacing tightened (2026-05-01, PR #46 commit 9cc6d48). Hero made full-bleed (no border/radius), 340px→380px, heroBody paddingTop `calc(headerHeight + 4px)`, searchBar marginLeft/Right 32px, rowsScroll paddingLeft/Right 32px, page padding removed (2026-05-01, PR #46 commit 5301df6). Hero shrunk to 280px and dots stacked under greeting via rowGap (no space-between) so first carousel fills the gap (2026-05-01, PR #46 commit 45d1097). Grid/filter/DetailPane layout superseded. PR #46 on `feat/release-design-omdb-griffel`, not yet merged to main.
+- [x] Designed in `design/Release` lab — hero+rows+overlay layout (2026-05-01, PR #46 commit 04ea22b). Search bar between hero and rows added (2026-05-01, PR #46 commit 787f136). Page-level padding + hero downsized to 340px card + body/greeting/search/row spacing tightened (2026-05-01, PR #46 commit 9cc6d48). Hero made full-bleed (no border/radius), 340px→380px, heroBody paddingTop `calc(headerHeight + 4px)`, searchBar marginLeft/Right 32px, rowsScroll paddingLeft/Right 32px, page padding removed (2026-05-01, PR #46 commit 5301df6). Hero shrunk to 280px and dots stacked under greeting via rowGap (no space-between) so first carousel fills the gap (2026-05-01, PR #46 commit 45d1097). Hero grown to 300px, heroBody paddingTop calc(headerHeight+32px), paddingLeft/Right 56px, paddingBottom 24px, rowGap 20px; search bar became centered pill (width min(420px,90%), tighter paddings, smaller font) (2026-05-01, PR #46 commit 773681e). Search bar moved inside hero top-right (position: absolute, top: calc(headerHeight+24px), right: 32px, width: 320px); bordered-card style replaced by horizontal gradient strip with focused alpha bump; native caret hidden (`caretColor: transparent`), custom pulsing green caret block + hidden mirror span for caret-X measurement introduced (2026-05-01, PR #46 commit 6fd44e4). Grid/filter/DetailPane layout superseded. PR #46 on `feat/release-design-omdb-griffel`, not yet merged to main.
 - [ ] Production implementation
