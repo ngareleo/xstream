@@ -1,4 +1,4 @@
-import { type FC, useEffect, useRef, useState } from "react";
+import { type FC, type MouseEvent, useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { mergeClasses } from "@griffel/react";
 import {
@@ -15,6 +15,7 @@ import {
   IconVolume,
 } from "../../lib/icons.js";
 import { Poster } from "../../components/Poster/Poster.js";
+import { EdgeHandle } from "../../components/EdgeHandle/EdgeHandle.js";
 import { usePlayerStyles } from "./Player.styles.js";
 
 type PlayState = "idle" | "loading" | "playing";
@@ -28,6 +29,11 @@ export const Player: FC = () => {
 
   const [state, setState] = useState<PlayState>("idle");
   const [chromeHidden, setChromeHidden] = useState(false);
+  const [panelOpen, setPanelOpen] = useState(false);
+  const [cursor, setCursor] = useState<{ x: number; y: number }>(() => ({
+    x: typeof window === "undefined" ? 0 : window.innerWidth,
+    y: typeof window === "undefined" ? 0 : window.innerHeight / 2,
+  }));
   const inactivityRef = useRef<number | null>(null);
 
   const styles = usePlayerStyles();
@@ -42,6 +48,11 @@ export const Player: FC = () => {
   const wakeChrome = (): void => {
     setChromeHidden(false);
     if (state === "playing") armInactivity();
+  };
+
+  const handleMouseMove = (e: MouseEvent): void => {
+    wakeChrome();
+    setCursor({ x: e.clientX, y: e.clientY });
   };
 
   useEffect(() => {
@@ -83,9 +94,11 @@ export const Player: FC = () => {
     );
   }
 
+  const handleEligible = !panelOpen && !chromeHidden;
+
   return (
     <div
-      onMouseMove={wakeChrome}
+      onMouseMove={handleMouseMove}
       onClick={wakeChrome}
       onKeyDown={wakeChrome}
       className={mergeClasses(styles.shell, chromeHidden && styles.shellChromeHidden)}
@@ -98,9 +111,30 @@ export const Player: FC = () => {
         onTogglePlay={togglePlay}
         onBack={goBackWithTransition}
       />
+
+      {handleEligible && (
+        <EdgeHandle
+          cursorX={cursor.x}
+          cursorY={cursor.y}
+          onActivate={() => setPanelOpen(true)}
+        />
+      )}
+
+      {panelOpen && !chromeHidden && (
+        <div
+          aria-hidden="true"
+          className={styles.panelScrim}
+          onClick={(e) => {
+            e.stopPropagation();
+            setPanelOpen(false);
+          }}
+        />
+      )}
+
       <SidePanel
         film={film}
-        chromeHidden={chromeHidden}
+        open={panelOpen && !chromeHidden}
+        onClose={() => setPanelOpen(false)}
         onBack={goBackWithTransition}
       />
     </div>
@@ -158,8 +192,12 @@ const VideoArea: FC<VideoAreaProps> = ({
       )}
 
       <div className={mergeClasses(styles.topbar, fadeClass)}>
-        <button onClick={onBack} className={styles.topbarBtn}>
-          <IconBack /> BACK
+        <button
+          onClick={onBack}
+          aria-label="Back"
+          className={styles.topbarBtn}
+        >
+          <IconBack />
         </button>
         <div className={styles.flexFill} />
         <div className={mergeClasses("eyebrow", styles.topbarStatus)}>
@@ -218,9 +256,10 @@ const VideoArea: FC<VideoAreaProps> = ({
 
 const SidePanel: FC<{
   film: Film;
-  chromeHidden: boolean;
+  open: boolean;
+  onClose: () => void;
   onBack: () => void;
-}> = ({ film, chromeHidden, onBack }) => {
+}> = ({ film, open, onClose, onBack }) => {
   const styles = usePlayerStyles();
   const upNext = films
     .filter((f) => f.profile === film.profile && f.id !== film.id)
@@ -228,11 +267,20 @@ const SidePanel: FC<{
 
   return (
     <aside
+      aria-hidden={!open}
       className={mergeClasses(
         styles.sidePanel,
-        chromeHidden && styles.sidePanelHidden,
+        !open && styles.sidePanelHidden,
       )}
     >
+      <button
+        type="button"
+        aria-label="Close side panel"
+        className={styles.panelCloseBtn}
+        onClick={onClose}
+      >
+        ×
+      </button>
       <div className={styles.sidePanelHeader}>
         <div className={mergeClasses("eyebrow", styles.nowPlayingEyebrow)}>
           ● NOW PLAYING

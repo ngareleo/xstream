@@ -1,6 +1,7 @@
 # DetailPane
 
 > Status: **baseline** (Spec) · **not started** (Production)
+> Spec updated: 2026-05-02 — Play button restyled as a glass pill (translucent white bg, `backdrop-filter: blur(20px) saturate(180%)`, `border-radius: 999px`, beveled-light borders, inset highlights + drop shadow + on-hover lift). iOS-26 Liquid Glass inspired. Replaces the previous solid green / 2px-radius styling.
 
 ## Files
 
@@ -29,7 +30,7 @@ Right-rail film detail card. Identical structure on the Profiles and Library pag
 - `padding: 16px 22px`, `flex: 1`, `overflow-y: auto`.
 
 #### Action row (top of body)
-- `<Link to={\`/player/\${film.id}\`}>` Play button — fills `flex: 1`, `padding: 10px`, `background: var(--green)`, `color: var(--green-ink)`, JetBrains Mono 11px / 0.18em / uppercase / 700, `borderRadius: 2px`, `text-align: center`.
+- `<Link to={\`/player/\${film.id}\`}>` Play button — fills `flex: 1`, `padding: 12px 18px`, **glass effect**: `backgroundColor: rgba(255,255,255,0.10)`, `color: #fff`, `borderRadius: 999px` (full pill), `backdropFilter: blur(20px) saturate(180%)`, beveled-light borders (top brighter than bottom), `boxShadow: inset 0 1px 0 rgba(255,255,255,0.30), inset 0 -1px 0 rgba(0,0,0,0.20), 0 8px 24px rgba(0,0,0,0.35)`. JetBrains Mono 11px / 0.18em / uppercase / 600. On hover: bg lifts to `rgba(255,255,255,0.16)` + amplified shadow + subtle white halo. On `:active`: `transform: scale(0.98)`.
   - Label: `▶ Play in {film.resolution}`.
 - Re-link button (mock — no handler) — `padding: 10px 14px`, transparent bg, `border: 1px solid var(--border)`, `color: var(--text-dim)`, same Mono treatment.
 

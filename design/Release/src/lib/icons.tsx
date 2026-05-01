@@ -21,7 +21,14 @@ const useImdbBadgeStyles = makeStyles({
 
 export const IconPlay: FC<IconProps> = (p) => (
   <svg width="14" height="14" viewBox="0 0 16 16" {...p}>
-    <path d="M3 2 L13 8 L3 14 Z" fill="currentColor" />
+    <path
+      d="M5 2 L14 8 L5 14 Z"
+      fill="currentColor"
+      stroke="currentColor"
+      strokeWidth="1.4"
+      strokeLinejoin="round"
+      strokeLinecap="round"
+    />
   </svg>
 );
 
