@@ -529,6 +529,20 @@ export const watchlist: WatchlistItem[] = [
   },
 ];
 
+/* ---------- Curated home-page collections ---------- */
+
+/**
+ * IDs surfaced in the "New releases" row on the home page. Order is
+ * preserved as-is when rendered.
+ */
+export const newReleaseIds: readonly string[] = [
+  "f1",
+  "superman",
+  "furiosa",
+  "justiceleague",
+  "madmax",
+];
+
 /* ---------- User ---------- */
 
 export const user = {

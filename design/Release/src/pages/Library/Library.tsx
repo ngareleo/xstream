@@ -6,6 +6,7 @@ import {
   type WatchlistItem,
   films,
   getFilmById,
+  newReleaseIds,
   user,
   watchlist,
 } from "../../data/mock.js";
@@ -90,6 +91,14 @@ export const Library: FC = () => {
     () => rowEntries(watchlist.filter((w) => w.progress === undefined)),
     [],
   );
+  const newReleases = useMemo<Film[]>(() => {
+    const out: Film[] = [];
+    for (const id of newReleaseIds) {
+      const film = getFilmById(id);
+      if (film !== undefined) out.push(film);
+    }
+    return out;
+  }, []);
 
   const [search, setSearch] = useState("");
   const [searchFocused, setSearchFocused] = useState(false);
@@ -278,6 +287,18 @@ export const Library: FC = () => {
                     key={item.id}
                     film={film}
                     progress={item.progress}
+                    onClick={() => openFilm(film.id)}
+                  />
+                ))}
+              </Row>
+            )}
+
+            {newReleases.length > 0 && (
+              <Row title="New releases">
+                {newReleases.map((film) => (
+                  <FilmTile
+                    key={film.id}
+                    film={film}
                     onClick={() => openFilm(film.id)}
                   />
                 ))}
