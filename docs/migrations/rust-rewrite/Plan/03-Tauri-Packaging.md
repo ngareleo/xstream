@@ -1,5 +1,34 @@
 # Step 3 — Tauri Packaging
 
+## Status — in flight on `feat/rust-step3-tauri` (PR #43)
+
+**Branch state as of 2026-05-01:** MVP running on Linux. Three commit groups landed.
+
+**What is done:**
+
+- `ServerConfig` struct + `pub async fn run(ServerConfig)` extracted out of `main()` in `server-rust/`. `main.rs` now reads env vars (`DB_PATH`, `XSTREAM_PROJECT_ROOT`, `FFMPEG_PATH`, `FFPROBE_PATH`, `XSTREAM_BIND_ADDR`) and delegates to `xstream_server::run`.
+- `AppConfig::with_paths(segment_dir, db_path)` added so the Tauri shell can pass explicit OS data/cache dirs without going through `dev_defaults`.
+- `src-tauri/` crate is a workspace member. On startup it picks a free `127.0.0.1:<port>` and spawns `xstream_server::run` on the Tauri async runtime with `app_local_data_dir/xstream.db` and `app_cache_dir/segments`. Port injected into the webview via `webview.eval("window.__XSTREAM_SERVER_PORT__ = N")`.
+- `client/src/config/rustOrigin.ts` reads `window.__XSTREAM_SERVER_PORT__` at module init; when set, this overrides both `useRustBackend` and the `localhost:3002` dev-time literal. Module-init snapshot pattern preserved.
+- **No Tauri IPC in the request path.** `/graphql` and `/stream/*` stay HTTP — the length-prefixed binary stream contract is preserved end-to-end.
+- Bundled jellyfin-ffmpeg under `src-tauri/resources/ffmpeg/<platform>/`. New `linux-x64-portable` + `linux-arm64-portable` entries in `scripts/ffmpeg-manifest.json` (deb-install can't ship inside an AppImage). `setup-ffmpeg --target=tauri-bundle` flag added.
+- `bun run tauri:dev` and `bun run tauri:build` (Linux: `appimage,deb`) in root `package.json`.
+- `install.sh` extended: Linux system libs (pkg-config, libgtk-3-dev, libwebkit2gtk-4.1-dev, libayatana-appindicator3-dev, librsvg2-dev) + Rust toolchain + tauri-cli.
+- Smoke test green: `xstream-server listening addr=127.0.0.1:38511`, `Hardware acceleration selected kind="software"`, `POST /graphql 200 — 3ms`, `GET /graphql 101`.
+
+**Still open within this step (must land before PR closes):**
+
+1. HW-accel probe softening — `HW_ACCEL=off` is hard-coded in `src-tauri/src/lib.rs` as a temporary stand-in. Proper Tauri-mode soft-fallback + one-time toast (per §5 below) is the follow-up subtask.
+2. Library picker UX — no folder picker UI yet; libraries still populated only via `createLibrary` mutation. Step 3 is incomplete for a normal user until this lands.
+3. `useRustBackend` flag-removal sweep — the flag is kept alive for the browser-mode dev workflow; the sweep (`flagRegistry.ts` + `rustOrigin.ts` call sites + Bun server entry) is the final commit for this step.
+4. macOS / Windows bundling — portable manifest entries are already added and `setup-ffmpeg --target=tauri-bundle` reuses them; bundler steps remain.
+5. Segment cache eviction — `app_cache_dir/segments` grows unbounded; eviction policy is unwired.
+6. OTLP endpoint — stays at `localhost:5341/ingest/otlp`; user-facing telemetry settings are a Step 4 deliverable.
+
+**Technical note — `<resource_dir>/resources/ffmpeg/<platform>/` double prefix:** Tauri preserves the `resources/` glob prefix from the source tree in the packaged output (`target/debug/resources/` in dev; OS-specific resource root in prod). The source path is `src-tauri/resources/ffmpeg/<platform>/`, so at runtime the binary sits at `<resource_dir>/resources/ffmpeg/<platform>/`. The `ffmpeg_path.rs` resolver in the Tauri crate has been updated to account for this double prefix.
+
+---
+
 ## Where this step sits
 
 Third step. Predecessors: [Step 1](01-GraphQL-And-Observability.md) and [Step 2](02-Streaming.md), both reachable via the `useRustBackend` flag and exercised end-to-end. Successor: [Step 4 — Release](04-Release.md).
