@@ -71,13 +71,17 @@ jobs:
       - name: Clippy
         # `--all-targets` covers the test binary in tests/ as well as src/.
         # `-D warnings` makes any new lint a CI failure — keeps drift out.
-        run: cargo clippy --all-targets -- -D warnings
+        # `--exclude xstream-tauri` skips the Tauri shell crate — it depends
+        # on `webkit2gtk-4.1-dev` etc. which this job does not apt-install
+        # (the dedicated `tauri-build` job below does). Linting xstream-tauri
+        # belongs there, not here.
+        run: cargo clippy --workspace --exclude xstream-tauri --all-targets -- -D warnings
 
       - name: Build
-        run: cargo build --workspace --all-targets
+        run: cargo build --workspace --exclude xstream-tauri --all-targets
 
       - name: Test
-        run: cargo test --workspace
+        run: cargo test --workspace --exclude xstream-tauri
 
       - name: Install ffmpeg (apt, for SDL parity boot)
         # The SDL parity step boots the Rust server, which probes for ffmpeg
@@ -206,12 +210,17 @@ jobs:
         # Reviewers can download the .AppImage / .deb from a green CI run to
         # smoke-test PR #43 without building locally. Retention 7 days is
         # enough for a review cycle and saves Actions storage.
+        #
+        # Bundle output lives at the workspace-root `target/` because
+        # `src-tauri` is a workspace member, not a standalone crate —
+        # cargo writes to the shared workspace target dir regardless of
+        # where the build was invoked from.
         uses: actions/upload-artifact@v4
         with:
           name: xstream-tauri-linux-x86_64
           path: |
-            src-tauri/target/release/bundle/deb/*.deb
-            src-tauri/target/release/bundle/appimage/*.AppImage
+            target/release/bundle/deb/*.deb
+            target/release/bundle/appimage/*.AppImage
           retention-days: 7
           if-no-files-found: error
 
