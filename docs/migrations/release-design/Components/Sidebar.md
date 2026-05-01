@@ -10,7 +10,7 @@
 
 ## Purpose
 
-Left-rail navigation: top section is `NAVIGATION` (route links — Profiles, Library, Settings, Design system); below that `LIBRARIES` (live status of each scanned profile); footer is the user identity card.
+Left-rail navigation: top section is `NAVIGATION` (route links — Library, Profiles, Settings, Design system); below that `LIBRARIES` (live status of each scanned profile); footer is the user identity card.
 
 ## Visual
 
@@ -38,12 +38,14 @@ Left-rail navigation: top section is `NAVIGATION` (route links — Profiles, Lib
 `NAV_ITEMS` array (in `Sidebar.tsx`):
 ```ts
 [
-  { to: "/", label: "Profiles", icon: <IconFolder />, end: true },
-  { to: "/library", label: "Library", icon: <IconFilm /> },
+  { to: "/", label: "Library", icon: <IconFilm />, end: true },
+  { to: "/profiles", label: "Profiles", icon: <IconFolder /> },
   { to: "/settings", label: "Settings", icon: <IconCog /> },
   { to: "/design-system", label: "Design system", icon: <IconFilm /> },
 ]
 ```
+
+`/` mounts `Library` (with `end: true` so it does not stay active on `/profiles`). `/profiles` mounts `Profiles`. Order within the `NAVIGATION` section: Library → Profiles → Settings → Design system.
 
 ### Library row (`libraryRow`)
 - One row per profile in the mock `profiles` array.
@@ -65,7 +67,7 @@ Left-rail navigation: top section is `NAVIGATION` (route links — Profiles, Lib
 
 ## Behaviour
 
-- `<NavLink end={true}>` for `/` so it doesn't stay active on `/library`.
+- `<NavLink end={true}>` for `/` (Library) so it does not stay active on `/profiles`.
 - No animations beyond the `tokens.transition` colour transitions on nav items.
 - No URL params, no internal state.
 
@@ -93,5 +95,5 @@ None.
 
 ## Status
 
-- [ ] Designed in `design/Release` lab (baseline reflects current state)
+- [x] Designed in `design/Release` lab — `NAV_ITEMS` order + icon assignment updated 2026-05-01, PR #46 commit 04ea22b (Library/`IconFilm` at `/` with `end: true`; Profiles/`IconFolder` at `/profiles`).
 - [ ] Production implementation
