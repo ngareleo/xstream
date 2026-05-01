@@ -36,6 +36,22 @@ const OMDB_BASE = "http://www.omdbapi.com/";
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 const OUT_DIR = resolve(SCRIPT_DIR, "..", "public", "posters");
 
+/**
+ * OMDb returns the Amazon CDN URL with whatever size modifier was previously
+ * cached (typically `_SX300` or `_SX600`, 300–380px wide). Amazon's image
+ * service accepts `_SX<N>` modifiers up to roughly the master-image width;
+ * rewriting `_V1_<modifiers>.jpg` to `_V1_SX1500.jpg` gives us ~1500×2250
+ * HD posters at <300 KB per file. The `_V1_` prefix is universal in OMDb's
+ * poster URLs.
+ */
+const POSTER_TARGET_WIDTH = 1500;
+const POSTER_URL_RE = /\._V1_[^.]*\.jpg$/;
+
+function upscalePosterUrl(url: string): string {
+  if (!POSTER_URL_RE.test(url)) return url;
+  return url.replace(POSTER_URL_RE, `._V1_SX${POSTER_TARGET_WIDTH}.jpg`);
+}
+
 async function fetchPoster(apiKey: string, film: FilmSeed): Promise<string> {
   const params = new URLSearchParams({
     t: film.title,
@@ -52,7 +68,7 @@ async function fetchPoster(apiKey: string, film: FilmSeed): Promise<string> {
   if (!data.Poster || data.Poster === "N/A") {
     throw new Error(`OMDb ${film.id}: poster unavailable`);
   }
-  return data.Poster;
+  return upscalePosterUrl(data.Poster);
 }
 
 async function downloadPoster(url: string, destPath: string): Promise<void> {
