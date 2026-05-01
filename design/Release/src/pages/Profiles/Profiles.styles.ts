@@ -47,7 +47,7 @@ export const useProfilesStyles = makeStyles({
     width: "100%",
     height: "100%",
     objectFit: "cover",
-    filter: "brightness(0.55)",
+    filter: "grayscale(1) brightness(0.55)",
     opacity: "0",
     transitionProperty: "opacity",
     transitionDuration: "0.8s",
