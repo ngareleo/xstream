@@ -11,15 +11,12 @@ import {
   watchlist,
 } from "../../data/mock.js";
 import { Poster } from "../../components/Poster/Poster.js";
-import { ImdbBadge, IconBack, IconClose, IconPlay, IconSearch } from "../../lib/icons.js";
+import { ImdbBadge, IconBack, IconChevron, IconClose, IconPlay, IconSearch } from "../../lib/icons.js";
 import { useLibraryStyles } from "./Library.styles.js";
 
 const HERO_FILM_IDS = ["oppenheimer", "barbie", "nosferatu", "civilwar"] as const;
 const HERO_INTERVAL_MS = 7000;
 const HERO_FADE_MS = 700;
-const ROW_PEEK_DELAY_MS = 700;
-const ROW_PEEK_DURATION_MS = 1500;
-const ROW_PEEK_DISTANCE_PX = 240;
 
 interface RowEntry {
   item: WatchlistItem;
@@ -129,23 +126,6 @@ export const Library: FC = () => {
       );
     });
   }, [trimmedQuery]);
-
-  const continueRowRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (selectedFilm || continueWatching.length === 0) return;
-    const el = continueRowRef.current;
-    if (el === null) return;
-    const peekTimer = setTimeout(() => {
-      el.scrollTo({ left: ROW_PEEK_DISTANCE_PX, behavior: "smooth" });
-    }, ROW_PEEK_DELAY_MS);
-    const returnTimer = setTimeout(() => {
-      el.scrollTo({ left: 0, behavior: "smooth" });
-    }, ROW_PEEK_DELAY_MS + ROW_PEEK_DURATION_MS);
-    return () => {
-      clearTimeout(peekTimer);
-      clearTimeout(returnTimer);
-    };
-  }, [selectedFilm, continueWatching.length]);
 
   const openFilm = (id: string): void => {
     const next = new URLSearchParams(params);
@@ -302,7 +282,7 @@ export const Library: FC = () => {
         ) : (
           <>
             {continueWatching.length > 0 && (
-              <Row title="Continue watching" rowRef={continueRowRef}>
+              <Row title="Continue watching">
                 {continueWatching.map(({ item, film }) => (
                   <FilmTile
                     key={item.id}
@@ -346,17 +326,79 @@ export const Library: FC = () => {
 
 interface RowProps {
   title: string;
-  rowRef?: React.RefObject<HTMLDivElement>;
   children: React.ReactNode;
 }
 
-const Row: FC<RowProps> = ({ title, rowRef, children }) => {
+const Row: FC<RowProps> = ({ title, children }) => {
   const styles = useLibraryStyles();
+  const trackRef = useRef<HTMLDivElement>(null);
+  const [hasPrev, setHasPrev] = useState(false);
+  const [hasNext, setHasNext] = useState(false);
+
+  useEffect(() => {
+    const el = trackRef.current;
+    if (el === null) return;
+    const updateBounds = (): void => {
+      setHasPrev(el.scrollLeft > 4);
+      setHasNext(el.scrollLeft + el.clientWidth < el.scrollWidth - 4);
+    };
+    updateBounds();
+    el.addEventListener("scroll", updateBounds, { passive: true });
+    const ro = new ResizeObserver(updateBounds);
+    ro.observe(el);
+    return () => {
+      el.removeEventListener("scroll", updateBounds);
+      ro.disconnect();
+    };
+  }, [children]);
+
+  const pageSize = (): number => {
+    const el = trackRef.current;
+    if (el === null) return 0;
+    // Advance by visible width minus a tile-edge so the next page lands
+    // with the previously-last tile on the left for context.
+    return Math.max(el.clientWidth - 80, 200);
+  };
+
+  const goPrev = (): void => {
+    const el = trackRef.current;
+    if (el === null) return;
+    el.scrollBy({ left: -pageSize(), behavior: "smooth" });
+  };
+
+  const goNext = (): void => {
+    const el = trackRef.current;
+    if (el === null) return;
+    el.scrollBy({ left: pageSize(), behavior: "smooth" });
+  };
+
   return (
     <div className={styles.row}>
       <div className={styles.rowHeader}>{title}</div>
-      <div ref={rowRef} className={styles.rowTrack}>
-        {children}
+      <div className={styles.rowFrame}>
+        <div ref={trackRef} className={styles.rowTrack}>
+          {children}
+        </div>
+        {hasPrev && (
+          <button
+            type="button"
+            onClick={goPrev}
+            aria-label="Previous"
+            className={mergeClasses(styles.rowArrow, styles.rowArrowLeft)}
+          >
+            <IconBack />
+          </button>
+        )}
+        {hasNext && (
+          <button
+            type="button"
+            onClick={goNext}
+            aria-label="Next"
+            className={mergeClasses(styles.rowArrow, styles.rowArrowRight)}
+          >
+            <IconChevron />
+          </button>
+        )}
       </div>
     </div>
   );
