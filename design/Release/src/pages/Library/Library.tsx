@@ -1,288 +1,317 @@
-import { type FC, useMemo, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { type FC, useEffect, useMemo, useRef, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import { mergeClasses } from "@griffel/react";
 import {
   type Film,
-  films,
+  type WatchlistItem,
   getFilmById,
-  profiles,
+  user,
+  watchlist,
 } from "../../data/mock.js";
-import { ImdbBadge, IconSearch, IconWarn } from "../../lib/icons.js";
 import { Poster } from "../../components/Poster/Poster.js";
-import { DetailPane } from "../../components/DetailPane/DetailPane.js";
-import { useSplitResize } from "../../hooks/useSplitResize.js";
+import { ImdbBadge, IconClose, IconPlay } from "../../lib/icons.js";
 import { useLibraryStyles } from "./Library.styles.js";
 
-type ViewMode = "grid" | "list";
+const HERO_FILM_IDS = ["oppenheimer", "barbie", "nosferatu", "civilwar"] as const;
+const HERO_INTERVAL_MS = 7000;
+const HERO_FADE_MS = 700;
+const ROW_PEEK_DELAY_MS = 700;
+const ROW_PEEK_DURATION_MS = 1500;
+const ROW_PEEK_DISTANCE_PX = 240;
+
+interface RowEntry {
+  item: WatchlistItem;
+  film: Film;
+}
+
+function greeting(): string {
+  const h = new Date().getHours();
+  if (h < 12) return "Good morning";
+  if (h < 18) return "Good afternoon";
+  return "Good evening";
+}
+
+function rowEntries(items: WatchlistItem[]): RowEntry[] {
+  const out: RowEntry[] = [];
+  for (const item of items) {
+    const film = getFilmById(item.filmId);
+    if (film !== undefined) out.push({ item, film });
+  }
+  return out;
+}
 
 export const Library: FC = () => {
+  const styles = useLibraryStyles();
   const [params, setParams] = useSearchParams();
   const filmId = params.get("film");
-  const profileFilter = params.get("profile");
   const selectedFilm = filmId ? getFilmById(filmId) : undefined;
-  const paneOpen = Boolean(selectedFilm);
 
-  const { paneWidth, containerRef, onResizeMouseDown } = useSplitResize();
+  const heroFilms = useMemo<Film[]>(() => {
+    const list = HERO_FILM_IDS.map((id) => getFilmById(id)).filter(
+      (f): f is Film => f !== undefined,
+    );
+    return list;
+  }, []);
 
-  const [search, setSearch] = useState("");
-  const [view, setView] = useState<ViewMode>("grid");
+  const [heroIndex, setHeroIndex] = useState(0);
+  const [heroFading, setHeroFading] = useState(false);
+  const heroFadeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const styles = useLibraryStyles();
+  useEffect(() => {
+    if (selectedFilm) return;
+    const interval = setInterval(() => {
+      setHeroFading(true);
+      heroFadeTimerRef.current = setTimeout(() => {
+        setHeroIndex((i) => (i + 1) % heroFilms.length);
+        setHeroFading(false);
+      }, HERO_FADE_MS);
+    }, HERO_INTERVAL_MS);
+    return () => {
+      clearInterval(interval);
+      if (heroFadeTimerRef.current !== null) clearTimeout(heroFadeTimerRef.current);
+    };
+  }, [heroFilms.length, selectedFilm]);
 
-  const visible = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return films.filter((f) => {
-      if (profileFilter && f.profile !== profileFilter) return false;
-      if (!q) return true;
-      const hay = [f.title, f.filename, f.genre]
-        .filter(Boolean)
-        .map((s) => (s as string).toLowerCase());
-      return hay.some((s) => s.includes(q));
-    });
-  }, [search, profileFilter]);
-
-  const buildParams = (next: Record<string, string | null>): URLSearchParams => {
-    const out = new URLSearchParams(params);
-    for (const [k, v] of Object.entries(next)) {
-      if (v === null) out.delete(k);
-      else out.set(k, v);
-    }
-    return out;
+  const goToHero = (idx: number): void => {
+    if (idx === heroIndex) return;
+    setHeroFading(true);
+    setTimeout(() => {
+      setHeroIndex(idx);
+      setHeroFading(false);
+    }, HERO_FADE_MS / 2);
   };
 
-  const setProfileFilter = (id: string | null): void => {
-    setParams(buildParams({ profile: id }));
-  };
+  const continueWatching = useMemo<RowEntry[]>(
+    () => rowEntries(watchlist.filter((w) => w.progress !== undefined)),
+    [],
+  );
+  const watchlistRest = useMemo<RowEntry[]>(
+    () => rowEntries(watchlist.filter((w) => w.progress === undefined)),
+    [],
+  );
+
+  const continueRowRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (selectedFilm || continueWatching.length === 0) return;
+    const el = continueRowRef.current;
+    if (el === null) return;
+    const peekTimer = setTimeout(() => {
+      el.scrollTo({ left: ROW_PEEK_DISTANCE_PX, behavior: "smooth" });
+    }, ROW_PEEK_DELAY_MS);
+    const returnTimer = setTimeout(() => {
+      el.scrollTo({ left: 0, behavior: "smooth" });
+    }, ROW_PEEK_DELAY_MS + ROW_PEEK_DURATION_MS);
+    return () => {
+      clearTimeout(peekTimer);
+      clearTimeout(returnTimer);
+    };
+  }, [selectedFilm, continueWatching.length]);
 
   const openFilm = (id: string): void => {
-    if (filmId === id) setParams(buildParams({ film: null }));
-    else setParams(buildParams({ film: id }));
+    const next = new URLSearchParams(params);
+    next.set("film", id);
+    setParams(next);
   };
 
-  const closePane = (): void => setParams(buildParams({ film: null }));
+  const closeFilm = (): void => {
+    const next = new URLSearchParams(params);
+    next.delete("film");
+    setParams(next);
+  };
 
-  // Grid template depends on a runtime pane width — kept inline because Griffel
-  // cannot compose dynamic numeric values into the columns track string.
-  const containerStyle = paneOpen
-    ? { gridTemplateColumns: `1fr 4px ${paneWidth}px` }
-    : { gridTemplateColumns: "1fr 0px 0px" };
+  if (selectedFilm) {
+    return <FilmDetailsOverlay film={selectedFilm} onClose={closeFilm} />;
+  }
 
   return (
-    <div ref={containerRef} className={styles.container} style={containerStyle}>
-      <div className={styles.mainColumn}>
-        {/* Filter bar */}
-        <div className={styles.filterBar}>
-          <div className={styles.searchBox}>
-            <IconSearch className={styles.searchIcon} />
-            <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search title, filename, genre…"
-              className={styles.searchInput}
-            />
-            <span className={styles.kbdHint}>⌘K</span>
-          </div>
-          <div className={styles.viewToggleGroup}>
-            {(["grid", "list"] as const).map((m) => {
-              const active = view === m;
-              return (
-                <button
-                  key={m}
-                  onClick={() => setView(m)}
-                  className={mergeClasses(
-                    styles.viewToggleBtn,
-                    active && styles.viewToggleBtnActive,
-                  )}
-                >
-                  {m}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Profile chips */}
-        <div className={styles.profileChipsBar}>
-          <ProfileChip
-            label="All profiles"
-            count={films.length}
-            active={!profileFilter}
-            onClick={() => setProfileFilter(null)}
-          />
-          {profiles.map((p) => (
-            <ProfileChip
-              key={p.id}
-              label={p.name}
-              count={p.filmCount ?? p.episodeCount ?? 0}
-              active={profileFilter === p.id}
-              warn={p.unmatched > 0}
-              onClick={() =>
-                setProfileFilter(profileFilter === p.id ? null : p.id)
-              }
+    <div className={styles.page}>
+      <div className={styles.hero}>
+        <div className={styles.heroSlides}>
+          {heroFilms.map((film, i) => (
+            <Poster
+              key={film.id}
+              url={film.posterUrl}
+              alt={film.title ?? film.filename}
+              className={mergeClasses(
+                styles.heroImg,
+                i === heroIndex && styles.heroImgActive,
+                i === heroIndex && heroFading && styles.heroImgFading,
+              )}
             />
           ))}
-          <div className={styles.spacer} />
-          <span className="eyebrow">SORT · RECENTLY ADDED</span>
         </div>
-
-        {/* Body */}
-        <div className={styles.body}>
-          {view === "grid" ? (
-            <div className={styles.gridLayout}>
-              {visible.map((f) => (
-                <PosterCard
-                  key={f.id}
-                  film={f}
-                  selected={filmId === f.id}
-                  onClick={() => openFilm(f.id)}
-                />
-              ))}
+        <div className={styles.heroEdgeFade} />
+        <div className={styles.heroBottomFade} />
+        <div className="grain-layer" />
+        <div className={styles.heroBody}>
+          <div>
+            <div className={styles.greetingEyebrow}>
+              · {greeting()}, {user.name.toUpperCase()}
             </div>
-          ) : (
-            <div className={styles.listLayout}>
-              {visible.map((f) => (
-                <ListRow
-                  key={f.id}
-                  film={f}
-                  selected={filmId === f.id}
-                  onClick={() => openFilm(f.id)}
-                />
-              ))}
+            <div className={styles.greeting}>
+              Tonight&apos;s
+              <br />
+              library.
             </div>
-          )}
-          {visible.length === 0 && (
-            <div className={styles.emptyState}>
-              No films match the current filter.
-            </div>
-          )}
+          </div>
+          <div className={styles.slideDots}>
+            {heroFilms.map((film, i) => (
+              <button
+                key={film.id}
+                type="button"
+                onClick={() => goToHero(i)}
+                aria-label={`Show ${film.title ?? film.filename}`}
+                className={mergeClasses(
+                  styles.slideDot,
+                  i === heroIndex ? styles.slideDotActive : styles.slideDotInactive,
+                )}
+              />
+            ))}
+          </div>
         </div>
       </div>
 
-      {paneOpen && (
-        <>
-          <div onMouseDown={onResizeMouseDown} className={styles.splitter} />
-          {selectedFilm && (
-            <DetailPane film={selectedFilm} onClose={closePane} />
-          )}
-        </>
-      )}
+      <div className={styles.rowsScroll}>
+        {continueWatching.length > 0 && (
+          <Row title="Continue watching" rowRef={continueRowRef}>
+            {continueWatching.map(({ item, film }) => (
+              <FilmTile
+                key={item.id}
+                film={film}
+                progress={item.progress}
+                onClick={() => openFilm(film.id)}
+              />
+            ))}
+          </Row>
+        )}
+
+        {watchlistRest.length > 0 && (
+          <Row title="Watchlist">
+            {watchlistRest.map(({ item, film }) => (
+              <FilmTile
+                key={item.id}
+                film={film}
+                onClick={() => openFilm(film.id)}
+              />
+            ))}
+          </Row>
+        )}
+      </div>
     </div>
   );
 };
 
-const ProfileChip: FC<{
-  label: string;
-  count: number;
-  active: boolean;
-  warn?: boolean;
-  onClick: () => void;
-}> = ({ label, count, active, warn, onClick }) => {
+interface RowProps {
+  title: string;
+  rowRef?: React.RefObject<HTMLDivElement>;
+  children: React.ReactNode;
+}
+
+const Row: FC<RowProps> = ({ title, rowRef, children }) => {
   const styles = useLibraryStyles();
   return (
-    <button
-      onClick={onClick}
-      className={mergeClasses(styles.chip, active && styles.chipActive)}
-    >
-      {warn && <IconWarn />}
-      <span>{label}</span>
-      <span className={styles.chipCount}>{count}</span>
+    <div className={styles.row}>
+      <div className={styles.rowHeader}>{title}</div>
+      <div ref={rowRef} className={styles.rowTrack}>
+        {children}
+      </div>
+    </div>
+  );
+};
+
+interface FilmTileProps {
+  film: Film;
+  progress?: number;
+  onClick: () => void;
+}
+
+const FilmTile: FC<FilmTileProps> = ({ film, progress, onClick }) => {
+  const styles = useLibraryStyles();
+  return (
+    <button type="button" onClick={onClick} className={styles.tile}>
+      <div className={styles.tileFrame}>
+        <Poster
+          url={film.posterUrl}
+          alt={film.title ?? film.filename}
+          className={styles.tileImage}
+        />
+        {progress !== undefined && (
+          <div className={styles.progressTrack}>
+            <div
+              className={styles.progressFill}
+              style={{ width: `${progress}%` }}
+            />
+          </div>
+        )}
+      </div>
+      <div className={styles.tileMeta}>
+        <div className={styles.tileTitle}>{film.title ?? film.filename}</div>
+        <div className={styles.tileSubtitle}>
+          {[film.year, film.duration].filter(Boolean).join(" · ")}
+        </div>
+      </div>
     </button>
   );
 };
 
-const PosterCard: FC<{
+interface FilmDetailsOverlayProps {
   film: Film;
-  selected: boolean;
-  onClick: () => void;
-}> = ({ film, selected, onClick }) => {
-  const styles = useLibraryStyles();
-  const showHdrChip = film.resolution === "4K" && film.hdr && film.hdr !== "—";
-  return (
-    <div onClick={onClick} className={styles.posterCard}>
-      <div
-        className={mergeClasses(
-          styles.posterFrame,
-          selected && styles.posterFrameSelected,
-        )}
-      >
-        <Poster
-          url={film.posterUrl}
-          alt={film.title ?? film.filename}
-          className={styles.posterImage}
-        />
-        {showHdrChip && (
-          <span className={styles.hdrBadge}>
-            4K · {film.hdr}
-          </span>
-        )}
-        {film.rating !== null && (
-          <div className={styles.ratingBadge}>
-            <ImdbBadge />
-            {film.rating}
-          </div>
-        )}
-        {!film.matched && (
-          <div className={styles.unmatchedOverlay}>?</div>
-        )}
-      </div>
-      <div className={styles.posterCardMeta}>
-        <div className={styles.posterCardTitle}>
-          {film.title ?? film.filename}
-        </div>
-        <div className={styles.posterCardSubtitle}>
-          {[film.year, film.duration].filter(Boolean).join(" · ")}
-        </div>
-      </div>
-    </div>
-  );
-};
+  onClose: () => void;
+}
 
-const ListRow: FC<{
-  film: Film;
-  selected: boolean;
-  onClick: () => void;
-}> = ({ film, selected, onClick }) => {
+const FilmDetailsOverlay: FC<FilmDetailsOverlayProps> = ({ film, onClose }) => {
   const styles = useLibraryStyles();
-  const profileName = profiles.find((p) => p.id === film.profile)?.name ?? "";
   return (
-    <div
-      onClick={onClick}
-      className={mergeClasses(styles.listRow, selected && styles.listRowSelected)}
-    >
+    <div className={styles.overlay}>
       <Poster
         url={film.posterUrl}
         alt={film.title ?? film.filename}
-        className={styles.listRowPoster}
+        className={styles.overlayPoster}
       />
-      <div>
-        <div className={styles.listRowTitle}>
-          {film.title ?? film.filename}
-          {film.year && (
-            <span className={styles.listRowYear}> · {film.year}</span>
+      <div className={styles.overlayGradient} />
+      <div className="grain-layer" />
+      <button
+        type="button"
+        onClick={onClose}
+        aria-label="Close details"
+        className={styles.overlayClose}
+      >
+        <IconClose />
+      </button>
+      <div className={styles.overlayContent}>
+        <div className={styles.overlayChips}>
+          <span className={mergeClasses("chip", "green")}>{film.resolution}</span>
+          {film.hdr && film.hdr !== "—" && (
+            <span className="chip">{film.hdr}</span>
+          )}
+          {film.codec && <span className="chip">{film.codec}</span>}
+          {film.rating !== null && (
+            <span className={styles.overlayRating}>
+              <ImdbBadge />
+              {film.rating}
+            </span>
           )}
         </div>
-        <div className={styles.listRowMeta}>
-          {(film.genre ?? "UNMATCHED").toUpperCase()} · {profileName}
+        <div className={styles.overlayTitle}>{film.title ?? film.filename}</div>
+        <div className={styles.overlayMetaRow}>
+          {[film.year, film.genre, film.duration]
+            .filter((v): v is string | number => v !== null && v !== undefined)
+            .join(" · ")}
+        </div>
+        {film.director && (
+          <div className={styles.overlayDirector}>
+            Directed by <span className={styles.overlayDirectorName}>{film.director}</span>
+          </div>
+        )}
+        {film.plot && <div className={styles.overlayPlot}>{film.plot}</div>}
+        <div className={styles.overlayActions}>
+          <Link to={`/player/${film.id}`} className={styles.playCta}>
+            <IconPlay />
+            <span>Play</span>
+          </Link>
+          <span className={styles.overlayFilename}>{film.filename}</span>
         </div>
       </div>
-      <div className={styles.listRowChips}>
-        <span className={`chip ${film.resolution === "4K" ? "green" : ""}`}>
-          {film.resolution}
-        </span>
-        {film.hdr && film.hdr !== "—" && (
-          <span className="chip">{film.hdr}</span>
-        )}
-      </div>
-      <div className={styles.listRowRating}>
-        {film.rating !== null && (
-          <>
-            <ImdbBadge />
-            {film.rating}
-          </>
-        )}
-      </div>
-      <div className={styles.listRowDuration}>{film.duration}</div>
-      <div className={styles.listRowSize}>{film.size}</div>
     </div>
   );
 };

@@ -379,6 +379,7 @@ export const watchlist: WatchlistItem[] = [
     duration: "2h 12m",
     resolution: "4K",
     addedAt: "1 week ago",
+    progress: 73,
   },
   {
     id: "wl-3",
@@ -389,6 +390,7 @@ export const watchlist: WatchlistItem[] = [
     duration: "1h 49m",
     resolution: "1080p",
     addedAt: "1 week ago",
+    progress: 18,
   },
   {
     id: "wl-4",

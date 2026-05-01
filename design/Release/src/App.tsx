@@ -22,8 +22,8 @@ export const App: FC = () => {
         element={
           <AppShell>
             <Routes>
-              <Route path="/" element={<Profiles />} />
-              <Route path="/library" element={<Library />} />
+              <Route path="/" element={<Library />} />
+              <Route path="/profiles" element={<Profiles />} />
               <Route path="/settings" element={<Settings />} />
               <Route path="/design-system" element={<DesignSystem />} />
               <Route path="*" element={<NotFound />} />

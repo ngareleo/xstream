@@ -18,8 +18,8 @@ interface NavItemDef {
 }
 
 const NAV_ITEMS: NavItemDef[] = [
-  { to: "/", label: "Profiles", icon: <IconFolder />, end: true },
-  { to: "/library", label: "Library", icon: <IconFilm /> },
+  { to: "/", label: "Library", icon: <IconFilm />, end: true },
+  { to: "/profiles", label: "Profiles", icon: <IconFolder /> },
   { to: "/settings", label: "Settings", icon: <IconCog /> },
   { to: "/design-system", label: "Design system", icon: <IconFilm /> },
 ];

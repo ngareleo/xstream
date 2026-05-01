@@ -1,31 +1,18 @@
-import { type FC, useEffect, useMemo, useRef, useState } from "react";
+import { type FC, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { mergeClasses } from "@griffel/react";
 import {
   type Film,
   type Profile,
-  films,
   getFilmById,
   getFilmsForProfile,
   profiles,
-  user,
 } from "../../data/mock.js";
-
-const HERO_FILM_IDS = ["oppenheimer", "barbie", "nosferatu", "civilwar"] as const;
-const HERO_INTERVAL_MS = 6000;
-const HERO_FADE_MS = 600;
 import { ImdbBadge, IconChevron } from "../../lib/icons.js";
 import { Poster } from "../../components/Poster/Poster.js";
 import { DetailPane } from "../../components/DetailPane/DetailPane.js";
 import { useSplitResize } from "../../hooks/useSplitResize.js";
 import { useProfilesStyles } from "./Profiles.styles.js";
-
-function greeting(): string {
-  const h = new Date().getHours();
-  if (h < 12) return "Good morning";
-  if (h < 18) return "Good afternoon";
-  return "Good evening";
-}
 
 export const Profiles: FC = () => {
   const s = useProfilesStyles();
@@ -64,40 +51,6 @@ export const Profiles: FC = () => {
   const totalUnmatched = profiles.reduce((acc, p) => acc + p.unmatched, 0);
   const scanningCount = profiles.filter((p) => p.scanning).length;
 
-  const heroFilms = useMemo<Film[]>(() => {
-    const list = HERO_FILM_IDS.map((id) => getFilmById(id)).filter(
-      (f): f is Film => f !== undefined,
-    );
-    return list.length > 0 ? list : films.slice(0, 4);
-  }, []);
-
-  const [heroIndex, setHeroIndex] = useState(0);
-  const [heroFading, setHeroFading] = useState(false);
-  const heroFadeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setHeroFading(true);
-      heroFadeTimerRef.current = setTimeout(() => {
-        setHeroIndex((i) => (i + 1) % heroFilms.length);
-        setHeroFading(false);
-      }, HERO_FADE_MS);
-    }, HERO_INTERVAL_MS);
-    return () => {
-      clearInterval(interval);
-      if (heroFadeTimerRef.current !== null) clearTimeout(heroFadeTimerRef.current);
-    };
-  }, [heroFilms.length]);
-
-  const goToHero = (idx: number): void => {
-    if (idx === heroIndex) return;
-    setHeroFading(true);
-    setTimeout(() => {
-      setHeroIndex(idx);
-      setHeroFading(false);
-    }, HERO_FADE_MS / 2);
-  };
-
   return (
     <div
       ref={containerRef}
@@ -109,52 +62,6 @@ export const Profiles: FC = () => {
       }
     >
       <div className={s.leftCol}>
-        <div className={s.hero}>
-          <div className={s.heroSlides}>
-            {heroFilms.map((film, i) => (
-              <Poster
-                key={film.id}
-                url={film.posterUrl}
-                alt={film.title ?? film.filename}
-                className={mergeClasses(
-                  s.heroImg,
-                  i === heroIndex && s.heroImgActive,
-                  i === heroIndex && heroFading && s.heroImgFading,
-                )}
-              />
-            ))}
-          </div>
-          <div className={s.heroEdgeFade} />
-          <div className={s.heroGradient} />
-          <div className="grain-layer" />
-          <div className={s.heroBody}>
-            <div>
-              <div className={s.greetingEyebrow}>
-                · {greeting()}, {user.name.toUpperCase()}
-              </div>
-              <div className={s.greeting}>
-                {totalFilms} films,
-                <br />
-                quietly indexed.
-              </div>
-            </div>
-            <div className={s.slideDots}>
-              {heroFilms.map((film, i) => (
-                <button
-                  key={film.id}
-                  type="button"
-                  onClick={() => goToHero(i)}
-                  aria-label={`Show ${film.title ?? film.filename}`}
-                  className={mergeClasses(
-                    s.slideDot,
-                    i === heroIndex ? s.slideDotActive : s.slideDotInactive,
-                  )}
-                />
-              ))}
-            </div>
-          </div>
-        </div>
-
         <div className={s.breadcrumb}>
           <span className={s.crumbDim}>~</span>
           <span>/</span>
