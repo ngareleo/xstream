@@ -1,7 +1,7 @@
 ---
 name: browser
-description: Drive a browser with Playwright MCP — navigate, click, fill, snapshot, inspect console, verify UI. Use whenever a task needs a real browser (verifying UI changes, debugging playback, checking OMDb responses). For reading Seq logs/traces use the `seq` skill (HTTP API) instead — only fall back to driving Seq in a browser if the user explicitly asks to see the live UI. The "Known Quirks" section is self-maintained — when a new page-specific gotcha is discovered this session, append it before finishing.
-allowed-tools: mcp__playwright__browser_navigate, mcp__playwright__browser_snapshot, mcp__playwright__browser_click, mcp__playwright__browser_fill_form, mcp__playwright__browser_type, mcp__playwright__browser_press_key, mcp__playwright__browser_take_screenshot, mcp__playwright__browser_evaluate, mcp__playwright__browser_console_messages, mcp__playwright__browser_network_requests, mcp__playwright__browser_wait_for, mcp__playwright__browser_resize, mcp__playwright__browser_close, mcp__playwright__browser_hover, mcp__playwright__browser_tabs, mcp__playwright__browser_select_option, mcp__playwright__browser_handle_dialog, Bash(lsof *), Read, Edit
+description: Drive a browser with Playwright MCP — navigate, click, fill, snapshot, inspect console, verify UI. Also covers Tauri-mode debugging via the Rsbuild dev URL (`:5173`) while `bun run tauri:dev` runs, plus native-window screenshots when the Tauri shell itself needs visual verification. For reading Seq logs/traces use the `seq` skill (HTTP API) instead — only fall back to driving Seq in a browser if the user explicitly asks to see the live UI. The "Known Quirks" section is self-maintained — when a new page-specific gotcha is discovered this session, append it before finishing.
+allowed-tools: mcp__playwright__browser_navigate, mcp__playwright__browser_snapshot, mcp__playwright__browser_click, mcp__playwright__browser_fill_form, mcp__playwright__browser_type, mcp__playwright__browser_press_key, mcp__playwright__browser_take_screenshot, mcp__playwright__browser_evaluate, mcp__playwright__browser_console_messages, mcp__playwright__browser_network_requests, mcp__playwright__browser_wait_for, mcp__playwright__browser_resize, mcp__playwright__browser_close, mcp__playwright__browser_hover, mcp__playwright__browser_tabs, mcp__playwright__browser_select_option, mcp__playwright__browser_handle_dialog, Bash(lsof *), Bash(pgrep *), Bash(ps *), Bash(grim *), Bash(scrot *), Bash(xdotool *), Bash(import *), Bash(wmctrl *), Read, Edit
 ---
 
 # Browser
@@ -30,6 +30,36 @@ lsof -i :5177   # stale instance — kill before proceeding
 ```
 
 Always test at `http://localhost:5173`. Always confirm the server is up at `http://localhost:3001` before starting playback checks (`lsof -i :3001 | grep LISTEN`).
+
+The **Rust** server (browser-mode dev under the `useRustBackend` flag) listens on `:3002`. The **Tauri-embedded** Rust server picks a free `127.0.0.1:<port>` per-launch — find it via `pgrep -af xstream-tauri` then `lsof -p <pid>` to read the listening port, OR grep the dev log for `xstream-server listening`.
+
+## Tauri-mode debugging
+
+`bun run tauri:dev` opens a native desktop window — Playwright MCP **cannot** drive it directly. Tauri-on-Linux's webview is WebKit2GTK, which speaks the WebKit Inspector Protocol; Playwright speaks Chrome DevTools Protocol. The two are not interchangeable. The official end-to-end path (`tauri-driver` + WebDriver) is documented in `docs/migrations/rust-rewrite/Plan/03-Tauri-Packaging.md` but **not wired up yet** — it's a Step 3 follow-up.
+
+What the agent can do today:
+
+| Goal | How |
+|---|---|
+| Verify the React UI / Rust backend behaviour | `browser_navigate http://localhost:5173/` while `bun run tauri:dev` runs. The same React/Relay client + Rust server are reachable; only the Tauri shell wrapper is missing. The `useRustBackend` flag drives origin (toggle in Settings to test the Rust server). |
+| Verify the Tauri-injected port specifically | Open DevTools in the Tauri window manually (right-click → Inspect — Tauri 2 dev mode enables this). Or check the dev log: `grep '__XSTREAM_SERVER_PORT__\|xstream-server listening' /tmp/tauri-dev.log`. |
+| Visual evidence of the native window (layout, chrome) | Screenshot via `grim -t png .claude/screenshots/NN-tauri-window.png` (Wayland) or `scrot -u .claude/screenshots/NN-tauri-window.png` (X11). Then `Read` the file. |
+| Verify the embedded server is reachable | `curl -sS http://127.0.0.1:<injected-port>/healthz` — port from the dev log. |
+| Verify Tauri-mode forces `useRustBackend` on | Read `client/src/config/rustOrigin.ts` — `TAURI_PORT !== null` short-circuits the flag. The browser MCP at `:5173` won't show this code path because `window.__XSTREAM_SERVER_PORT__` is unset there. |
+
+Heuristic: if the bug is in the React app or any GraphQL/stream resolver, drive `:5173` with browser MCP. If the bug is in the Tauri shell itself (port injection, native dialogs, window chrome, Tauri's `app.path()` usage, code-signed updates), screenshot the native window or wait for the `tauri-driver` follow-up.
+
+```sh
+# Snapshot the running Tauri window (X11)
+WIN=$(xdotool search --name '^xstream$' | head -1)
+import -window "$WIN" .claude/screenshots/01-tauri-main.png
+
+# Snapshot on Wayland
+grim .claude/screenshots/01-tauri-main.png
+
+# Find the injected port
+grep -oE 'xstream-server listening addr=127.0.0.1:[0-9]+' /tmp/tauri-dev.log | tail -1
+```
 
 ## Playwright MCP cheatsheet
 
@@ -130,3 +160,6 @@ When a subscription isn't delivering events:
 - **`MediaSource sourceended` with `stream_done: True` is legitimate, not a BSF failure** (observed 2026-04-27). When Seq shows `MediaSource sourceended fired` with `stream_done: True`, this is our own `endOfStream()` call triggered because the chunk pipeline determined the source had no real content. A CHUNK_DEMUXER_ERROR would show `stream_done: False`. In the BSF-fix verification session, ALL `sourceended` events had `stream_done: True` — confirming the BSF is preventing Chromium-internal decoder errors.
 - **Seek slider `click` event does trigger seek path but MSE sealed at 49s clamps video.currentTime** (observed 2026-04-27). When `v.duration = 49` (MediaSource sealed by legitimate endOfStream after a short chunk), a `click` event on the seek slider fires the seek handler (confirmed by Seq: `Seek to 2402.6s → flushing buffer, requesting [2402.6, 2700)`) but `video.currentTime` does NOT advance to 2402 — it clamps to 49. The chunk is requested and transcoded but `current_time_s_at_arrival` stays at 49.05. The buffer rebuild path needs to succeed for the actual currentTime to update.
 - **`flag.devForceShortChunkAtZero` forces 30s first chunk but chunk 0 VAAPI succeeds for Furiosa 4K** (observed 2026-04-28). The flag produces a (0→30s) first chunk for cold-start. Furiosa 4K DV HEVC encodes chunk 0 successfully in ~10–14s (15 segments). The silent failure only occurs on non-zero seek chunks for DV sources — chunk 0 is NOT affected. To reproduce `transcode_silent_failure` reliably, a seek to a mid-movie position must be issued on the Furiosa source while 4K is selected; the flag alone at cold-start is insufficient for Furiosa. Mad Max Fury Road (non-DV H.264) also cold-starts fine. The DB can retain stale silent-failure records (`total_segments=0, completed_segments=0, status=complete`) from prior sessions — delete them with `DELETE FROM transcode_jobs WHERE id='...'` and wipe `tmp/segments/<id>/` before re-testing.
+- **Tauri-on-Linux uses WebKit2GTK; Playwright MCP cannot drive the native window** (observed 2026-05-01). Tauri's webview speaks the WebKit Inspector Protocol; Playwright MCP speaks the Chrome DevTools Protocol. There is no shim. The pragmatic path is to drive `http://localhost:5173/` while `bun run tauri:dev` runs — the React app + Rust backend are reachable, the Tauri shell wrapper is not. For Tauri-shell-specific verification (port injection, native menus, dialogs), screenshot the native window via `grim` (Wayland) / `scrot` / `xdotool` (X11), or wait for the `tauri-driver` follow-up subtask in Step 3.
+- **`bun run tauri:dev` log lives at `/tmp/tauri-dev.log` by smoke-test convention** (observed 2026-05-01). The Step 3 smoke-test pattern launches dev mode as `nohup bun run tauri:dev > /tmp/tauri-dev.log 2>&1 &`. To find the injected port for a curl probe: `grep -oE 'xstream-server listening addr=127.0.0.1:[0-9]+' /tmp/tauri-dev.log | tail -1`. The port changes per launch (free-port pick at startup).
+- **Tauri shell forces `HW_ACCEL=off` until probe softening lands** (observed 2026-05-01). `src-tauri/src/lib.rs` sets `HW_ACCEL=off` unless the env is already set. So in Tauri-mode, transcoding is software-only regardless of host VAAPI availability; this is a deliberate temporary stand-in for the deferred HW-accel probe softening. When debugging encode performance under Tauri, this is expected. To override for local testing: launch with `HW_ACCEL=vaapi bun run tauri:dev`.
