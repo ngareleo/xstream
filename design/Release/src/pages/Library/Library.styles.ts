@@ -273,9 +273,15 @@ export const useLibraryStyles = makeStyles({
     rowGap: "24px",
   },
 
-  // Rows below the hero — page provides the horizontal inset now.
+  // Rows ride on top of the hero's bottom — negative marginTop pulls them
+  // back up so the first carousel sits where it used to be on a 1200px
+  // viewport. The hero's heroBottomFade gradient already feathers the
+  // poster into the page bg so the overlap reads as a smooth seam.
   rowsScroll: {
     flexGrow: 1,
+    marginTop: "-32vh",
+    position: "relative",
+    zIndex: 2,
     paddingTop: "20px",
     paddingBottom: "60px",
     display: "flex",

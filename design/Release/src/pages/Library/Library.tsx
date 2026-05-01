@@ -20,10 +20,9 @@ const HERO_FADE_MS = 700;
 const TILE_WIDTH = 200;
 const TILE_GAP = 16;
 const TILE_STRIDE = TILE_WIDTH + TILE_GAP;
-const ROW_SCROLL_DURATION_MS = 720;
+const ROW_SCROLL_DURATION_MS = 1100;
 
-const easeInOutCubic = (t: number): number =>
-  t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+const easeOutQuint = (t: number): number => 1 - Math.pow(1 - t, 5);
 
 function smoothScrollBy(el: HTMLElement, dx: number, duration: number): void {
   const start = el.scrollLeft;
@@ -31,7 +30,7 @@ function smoothScrollBy(el: HTMLElement, dx: number, duration: number): void {
   const step = (now: number): void => {
     const elapsed = now - startTime;
     const t = Math.min(elapsed / duration, 1);
-    el.scrollLeft = start + dx * easeInOutCubic(t);
+    el.scrollLeft = start + dx * easeOutQuint(t);
     if (t < 1) requestAnimationFrame(step);
   };
   requestAnimationFrame(step);

@@ -7,7 +7,9 @@ export const useAppHeaderStyles = makeStyles({
     top: 0,
     left: 0,
     right: 0,
-    height: tokens.headerHeight,
+    height: `calc(${tokens.headerHeight} + 32px)`,
+    paddingBottom: "32px",
+    boxSizing: "border-box",
     zIndex: 10,
     display: "grid",
     gridTemplateColumns: "1fr auto 1fr",
@@ -17,11 +19,12 @@ export const useAppHeaderStyles = makeStyles({
     backgroundColor: "rgba(8,11,10,0.62)",
     backdropFilter: "blur(20px) saturate(1.6)",
     WebkitBackdropFilter: "blur(20px) saturate(1.6)",
-    borderBottomWidth: "1px",
-    borderBottomStyle: "solid",
-    borderBottomColor: "rgba(37,48,42,0.45)",
     boxShadow:
-      "inset 0 1px 0 rgba(255,255,255,0.05), inset 0 -1px 0 rgba(0,0,0,0.18), 0 6px 22px rgba(0,0,0,0.42)",
+      "inset 0 1px 0 rgba(255,255,255,0.05), 0 6px 22px rgba(0,0,0,0.42)",
+    maskImage:
+      "linear-gradient(to bottom, #000 0%, #000 60%, transparent 100%)",
+    WebkitMaskImage:
+      "linear-gradient(to bottom, #000 0%, #000 60%, transparent 100%)",
   },
 
   brandCell: {
