@@ -4,8 +4,8 @@
   "version": "0.0.0",
   "identifier": "com.example.xstream",
   "build": {
-    "beforeDevCommand": "bun run --filter client dev",
-    "beforeBuildCommand": "bun run --filter client build && bun run setup-ffmpeg --target=tauri-bundle",
+    "beforeDevCommand": "bun run setup-ffmpeg --target=tauri-bundle && bun run --filter client dev",
+    "beforeBuildCommand": "bun run setup-ffmpeg --target=tauri-bundle && bun run --filter client build",
     "frontendDist": "../client/dist",
     "devUrl": "http://localhost:5173"
   },

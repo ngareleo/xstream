@@ -3,8 +3,13 @@
 //! In packaged Tauri builds, `bun run setup-ffmpeg --target=tauri-bundle`
 //! stages the portable jellyfin-ffmpeg binaries under
 //! `src-tauri/resources/ffmpeg/<platform>/` at build time; Tauri's bundler
-//! then copies the directory into the installed app's resource tree so
-//! `app.path().resource_dir()` resolves to a parent of `ffmpeg/`.
+//! preserves the source-relative path of every `bundle.resources` entry
+//! when copying into the installed app, so the runtime layout is
+//! `<resource_dir>/resources/ffmpeg/<platform>/{ffmpeg,ffprobe}`. The
+//! double `resources/` segment looks awkward but it's load-bearing — it
+//! keeps `tauri dev` (resources copied under `target/debug/resources/`)
+//! and `tauri build` (resources installed under the OS-specific resource
+//! root) symmetric, so the dev/prod path resolution is the same code.
 //!
 //! Platform key uses the same Node-style aliases as
 //! `xstream_server::services::ffmpeg_path::platform_key` (`linux-x64`,
@@ -19,7 +24,7 @@ use xstream_server::services::ffmpeg_path::FfmpegPaths;
 pub enum BundledFfmpegError {
     #[error(
         "bundled ffmpeg binaries are missing under {dir} (platform: {platform}). \n\
-         Expected layout: <resource_dir>/ffmpeg/<platform>/{{ffmpeg,ffprobe}}.\n\
+         Expected layout: <resource_dir>/resources/ffmpeg/<platform>/{{ffmpeg,ffprobe}}.\n\
          Did `bun run setup-ffmpeg --target=tauri-bundle` run during the Tauri build?"
     )]
     Missing {
@@ -30,7 +35,10 @@ pub enum BundledFfmpegError {
 
 pub fn resolve(resource_dir: &Path) -> Result<FfmpegPaths, BundledFfmpegError> {
     let platform = platform_key();
-    let dir = resource_dir.join("ffmpeg").join(&platform);
+    let dir = resource_dir
+        .join("resources")
+        .join("ffmpeg")
+        .join(&platform);
     let bin_suffix = if cfg!(windows) { ".exe" } else { "" };
     let ffmpeg = dir.join(format!("ffmpeg{bin_suffix}"));
     let ffprobe = dir.join(format!("ffprobe{bin_suffix}"));

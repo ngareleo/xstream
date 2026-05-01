@@ -17,6 +17,16 @@ use tauri::Manager;
 use crate::server_supervisor::spawn_server;
 
 pub fn run() {
+    // HW-accel probe softening is a deferred follow-up (Plan/03 §Out, item 3
+    // and 08-Tauri-Packaging.md §5). The current `resolve_hw_accel` is fatal
+    // on probe failure; the bundled portable ffmpeg cannot reliably probe
+    // VAAPI across user machines (libva availability + render-node perms).
+    // For the MVP shell we force software encoding; the soft-fallback +
+    // user-visible toast lands as a follow-up subtask within Step 3.
+    if std::env::var_os("HW_ACCEL").is_none() {
+        std::env::set_var("HW_ACCEL", "off");
+    }
+
     tauri::Builder::default()
         .setup(|app| {
             let app_handle = app.handle().clone();

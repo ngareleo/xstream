@@ -2,9 +2,8 @@
 //!
 //! `spawn_server` picks a free port on `127.0.0.1`, then spawns
 //! `xstream_server::run` on the Tauri async runtime. The returned
-//! `ServerHandle` carries the port (so the lib.rs setup can inject it
-//! into the webview via `window.__XSTREAM_SERVER_PORT__`) and the
-//! `JoinHandle` (so a future graceful-quit hook can await the task).
+//! `ServerHandle` carries the port so the lib.rs setup can inject it
+//! into the webview via `window.__XSTREAM_SERVER_PORT__`.
 //!
 //! The brief race between picking and re-binding the port is acceptable
 //! for the single-user-loopback case prescribed by `08-Tauri-Packaging.md`
@@ -12,8 +11,6 @@
 
 use std::net::SocketAddr;
 use std::path::PathBuf;
-
-use tauri::async_runtime::JoinHandle;
 
 use xstream_server::services::ffmpeg_path::FfmpegPaths;
 use xstream_server::ServerConfig;
@@ -29,7 +26,6 @@ pub enum SpawnError {
 
 pub struct ServerHandle {
     pub port: u16,
-    pub task: JoinHandle<()>,
 }
 
 pub fn spawn_server(
@@ -58,17 +54,24 @@ pub fn spawn_server(
         ffmpeg_override: Some(ffmpeg_paths),
     };
 
-    let task = tauri::async_runtime::spawn(async move {
+    tauri::async_runtime::spawn(async move {
         if let Err(err) = xstream_server::run(config).await {
             // The Tauri shell can keep running with a broken backend
             // (the webview still loads) but the user won't be able to
-            // do anything useful. Surface the failure and let the
-            // window stay open so the user can read the error.
-            tracing::error!(error = %err, "embedded xstream server exited with error");
+            // do anything useful. Surface the failure with the full
+            // `#[source]` chain so the operator doesn't need a backtrace.
+            let mut chain = err.to_string();
+            let mut source = std::error::Error::source(&err);
+            while let Some(s) = source {
+                chain.push_str(" → ");
+                chain.push_str(&s.to_string());
+                source = s.source();
+            }
+            tracing::error!(error = %err, chain = %chain, "embedded xstream server exited with error");
         }
     });
 
-    Ok(ServerHandle { port, task })
+    Ok(ServerHandle { port })
 }
 
 fn pick_free_port() -> Result<u16, SpawnError> {
