@@ -1,4 +1,4 @@
-import { type FC, useMemo, useState } from "react";
+import { type FC, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { mergeClasses } from "@griffel/react";
 import {
@@ -10,6 +10,10 @@ import {
   profiles,
   user,
 } from "../../data/mock.js";
+
+const HERO_FILM_IDS = ["oppenheimer", "barbie", "nosferatu", "civilwar"] as const;
+const HERO_INTERVAL_MS = 6000;
+const HERO_FADE_MS = 600;
 import { ImdbBadge, IconChevron } from "../../lib/icons.js";
 import { Poster } from "../../components/Poster/Poster.js";
 import { DetailPane } from "../../components/DetailPane/DetailPane.js";
@@ -59,7 +63,40 @@ export const Profiles: FC = () => {
   const totalFilms = profiles.reduce((acc, p) => acc + (p.filmCount ?? 0), 0);
   const totalUnmatched = profiles.reduce((acc, p) => acc + p.unmatched, 0);
   const scanningCount = profiles.filter((p) => p.scanning).length;
-  const heroFilm = films.find((f) => f.id === "oppenheimer") ?? films[0];
+
+  const heroFilms = useMemo<Film[]>(() => {
+    const list = HERO_FILM_IDS.map((id) => getFilmById(id)).filter(
+      (f): f is Film => f !== undefined,
+    );
+    return list.length > 0 ? list : films.slice(0, 4);
+  }, []);
+
+  const [heroIndex, setHeroIndex] = useState(0);
+  const [heroFading, setHeroFading] = useState(false);
+  const heroFadeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setHeroFading(true);
+      heroFadeTimerRef.current = setTimeout(() => {
+        setHeroIndex((i) => (i + 1) % heroFilms.length);
+        setHeroFading(false);
+      }, HERO_FADE_MS);
+    }, HERO_INTERVAL_MS);
+    return () => {
+      clearInterval(interval);
+      if (heroFadeTimerRef.current !== null) clearTimeout(heroFadeTimerRef.current);
+    };
+  }, [heroFilms.length]);
+
+  const goToHero = (idx: number): void => {
+    if (idx === heroIndex) return;
+    setHeroFading(true);
+    setTimeout(() => {
+      setHeroIndex(idx);
+      setHeroFading(false);
+    }, HERO_FADE_MS / 2);
+  };
 
   return (
     <div
@@ -73,7 +110,21 @@ export const Profiles: FC = () => {
     >
       <div className={s.leftCol}>
         <div className={s.hero}>
-          <Poster url={heroFilm.posterUrl} alt="hero" className={s.heroImg} />
+          <div className={s.heroSlides}>
+            {heroFilms.map((film, i) => (
+              <Poster
+                key={film.id}
+                url={film.posterUrl}
+                alt={film.title ?? film.filename}
+                className={mergeClasses(
+                  s.heroImg,
+                  i === heroIndex && s.heroImgActive,
+                  i === heroIndex && heroFading && s.heroImgFading,
+                )}
+              />
+            ))}
+          </div>
+          <div className={s.heroEdgeFade} />
           <div className={s.heroGradient} />
           <div className="grain-layer" />
           <div className={s.heroBody}>
@@ -88,12 +139,15 @@ export const Profiles: FC = () => {
               </div>
             </div>
             <div className={s.slideDots}>
-              {[0, 1, 2, 3].map((i) => (
-                <span
-                  key={i}
+              {heroFilms.map((film, i) => (
+                <button
+                  key={film.id}
+                  type="button"
+                  onClick={() => goToHero(i)}
+                  aria-label={`Show ${film.title ?? film.filename}`}
                   className={mergeClasses(
                     s.slideDot,
-                    i === 0 ? s.slideDotActive : s.slideDotInactive,
+                    i === heroIndex ? s.slideDotActive : s.slideDotInactive,
                   )}
                 />
               ))}
