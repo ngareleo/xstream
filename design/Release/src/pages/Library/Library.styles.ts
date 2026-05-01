@@ -9,17 +9,30 @@ export const useLibraryStyles = makeStyles({
     overflowX: "hidden",
     overflowY: "auto",
     backgroundColor: tokens.colorBg0,
+    paddingTop: "24px",
+    paddingLeft: "32px",
+    paddingRight: "32px",
   },
 
-  // Hero (~420px tall — mirrors Profiles' 220px hero pattern at home-page scale)
+  // Hero — sized so the first row clears the fold on 1920x1200
   hero: {
     flexShrink: 0,
-    height: "420px",
+    height: "340px",
     position: "relative",
     overflow: "hidden",
+    borderRadius: "6px",
+    borderTopWidth: "1px",
+    borderRightWidth: "1px",
     borderBottomWidth: "1px",
+    borderLeftWidth: "1px",
+    borderTopStyle: "solid",
+    borderRightStyle: "solid",
     borderBottomStyle: "solid",
+    borderLeftStyle: "solid",
+    borderTopColor: tokens.colorBorder,
+    borderRightColor: tokens.colorBorder,
     borderBottomColor: tokens.colorBorder,
+    borderLeftColor: tokens.colorBorder,
   },
   heroSlides: {
     position: "absolute",
@@ -74,10 +87,10 @@ export const useLibraryStyles = makeStyles({
   heroBody: {
     position: "absolute",
     inset: "0",
-    paddingTop: "50px",
-    paddingBottom: "60px",
-    paddingLeft: "48px",
-    paddingRight: "48px",
+    paddingTop: "36px",
+    paddingBottom: "40px",
+    paddingLeft: "44px",
+    paddingRight: "44px",
     display: "flex",
     flexDirection: "column",
     justifyContent: "space-between",
@@ -92,10 +105,10 @@ export const useLibraryStyles = makeStyles({
   },
   greeting: {
     fontFamily: tokens.fontHead,
-    fontSize: "84px",
+    fontSize: "64px",
     lineHeight: "0.92",
     color: tokens.colorText,
-    marginTop: "16px",
+    marginTop: "12px",
     letterSpacing: "-0.02em",
   },
   slideDots: {
@@ -128,9 +141,9 @@ export const useLibraryStyles = makeStyles({
 
   // Search bar (above the rows)
   searchBar: {
-    marginTop: "32px",
-    marginLeft: "48px",
-    marginRight: "48px",
+    marginTop: "20px",
+    marginLeft: "0",
+    marginRight: "0",
     display: "flex",
     alignItems: "center",
     columnGap: "12px",
@@ -211,8 +224,6 @@ export const useLibraryStyles = makeStyles({
   noResults: {
     paddingTop: "40px",
     paddingBottom: "40px",
-    paddingLeft: "48px",
-    paddingRight: "48px",
     fontFamily: tokens.fontMono,
     fontSize: "12px",
     letterSpacing: "0.18em",
@@ -224,20 +235,18 @@ export const useLibraryStyles = makeStyles({
   // Rows below the hero
   rowsScroll: {
     flexGrow: 1,
-    paddingTop: "32px",
+    paddingTop: "16px",
     paddingBottom: "60px",
     display: "flex",
     flexDirection: "column",
-    rowGap: "44px",
+    rowGap: "28px",
   },
   row: {
     display: "flex",
     flexDirection: "column",
-    rowGap: "14px",
+    rowGap: "12px",
   },
   rowHeader: {
-    paddingLeft: "48px",
-    paddingRight: "48px",
     fontFamily: tokens.fontMono,
     fontSize: "11px",
     letterSpacing: "0.22em",
@@ -247,8 +256,6 @@ export const useLibraryStyles = makeStyles({
   rowTrack: {
     display: "flex",
     columnGap: "16px",
-    paddingLeft: "48px",
-    paddingRight: "48px",
     overflowX: "auto",
     overflowY: "hidden",
     scrollBehavior: "smooth",
