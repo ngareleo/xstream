@@ -59,6 +59,36 @@ pub fn get_library_by_id(db: &Db, id: &str) -> DbResult<Option<LibraryRow>> {
     })
 }
 
+/// Insert-or-update a library row keyed by `path`. The scanner calls
+/// this from inside `scan_libraries` for every library before walking
+/// it, so a row already created via `create_library` survives unchanged
+/// while still letting the scanner refresh `name`/`media_type`/`env`/
+/// `video_extensions` if a config update happened. Mirrors
+/// `server/src/db/queries/libraries.ts:upsertLibrary`.
+pub fn upsert_library(db: &Db, row: &LibraryRow) -> DbResult<()> {
+    db.with(|c| {
+        c.execute(
+            r#"INSERT INTO libraries
+                 (id, name, path, media_type, env, video_extensions)
+               VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+               ON CONFLICT(path) DO UPDATE SET
+                 name             = excluded.name,
+                 media_type       = excluded.media_type,
+                 env              = excluded.env,
+                 video_extensions = excluded.video_extensions"#,
+            params![
+                row.id,
+                row.name,
+                row.path,
+                row.media_type,
+                row.env,
+                row.video_extensions,
+            ],
+        )?;
+        Ok(())
+    })
+}
+
 pub fn create_library(
     db: &Db,
     name: &str,

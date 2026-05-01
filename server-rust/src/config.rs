@@ -14,6 +14,7 @@ use crate::services::ffmpeg_file::HwAccelConfig;
 use crate::services::ffmpeg_path::FfmpegPaths;
 use crate::services::ffmpeg_pool::FfmpegPool;
 use crate::services::job_store::JobStore;
+use crate::services::scan_state::ScanState;
 
 /// Per-source VAAPI capability state, learned from prior failures. Lives on
 /// `AppContext` so the chunker can read/write across cascade tiers without
@@ -98,15 +99,38 @@ impl Default for StreamConfig {
     }
 }
 
-/// Top-level server config. Currently only the streaming-relevant fields
-/// are populated — `port`, scan interval, OMDb / hw-accel mode are added as
-/// later migration steps need them.
+/// Top-level server config. `port`, OMDb settings, and other late-step
+/// fields land as their respective subsystems are ported.
 #[derive(Clone, Debug)]
 pub struct AppConfig {
     pub segment_dir: PathBuf,
     pub db_path: PathBuf,
     pub transcode: TranscodeConfig,
     pub stream: StreamConfig,
+    pub scan: ScanConfig,
+}
+
+/// Library-scanner tunables. Mirrors `server/src/config.ts` `scanIntervalMs`
+/// and `SCAN_CONCURRENCY` from `server/src/services/libraryScanner.ts:33`.
+#[derive(Clone, Debug)]
+pub struct ScanConfig {
+    /// Period of the background re-scan loop. Bun default is 30 s. Env
+    /// override (`SCAN_INTERVAL_MS`) lands with the broader env-loading
+    /// migration; today this is a constant.
+    pub interval_ms: u64,
+    /// Maximum number of files probed/fingerprinted simultaneously per
+    /// library. Bounded so `ffprobe` fan-out and FD pressure stay sane on
+    /// large libraries — Bun uses 4 (`SCAN_CONCURRENCY`).
+    pub concurrency: usize,
+}
+
+impl Default for ScanConfig {
+    fn default() -> Self {
+        Self {
+            interval_ms: 30_000,
+            concurrency: 4,
+        }
+    }
 }
 
 impl AppConfig {
@@ -130,6 +154,7 @@ impl AppConfig {
             db_path,
             transcode: TranscodeConfig::default(),
             stream: StreamConfig::default(),
+            scan: ScanConfig::default(),
         }
     }
 }
@@ -145,6 +170,7 @@ pub struct AppContext {
     pub hw_accel: HwAccelConfig,
     pub vaapi_state: VaapiVideoStateMap,
     pub job_store: JobStore,
+    pub scan_state: ScanState,
 }
 
 impl AppContext {
@@ -163,6 +189,7 @@ impl AppContext {
             hw_accel,
             vaapi_state: Arc::new(DashMap::<String, VaapiVideoState>::new()),
             job_store: JobStore::new(),
+            scan_state: ScanState::new(),
         }
     }
 
@@ -174,6 +201,7 @@ impl AppContext {
             db_path: PathBuf::from(":memory:"),
             transcode: TranscodeConfig::default(),
             stream: StreamConfig::default(),
+            scan: ScanConfig::default(),
         };
         let paths = Arc::new(FfmpegPaths {
             ffmpeg: PathBuf::from("/bin/true"),

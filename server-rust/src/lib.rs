@@ -193,6 +193,13 @@ pub async fn run(config: ServerConfig) -> AppResult<()> {
     }
 
     let ctx = AppContext::new(db, app_config, Arc::new(ffmpeg_paths), hw_accel);
+
+    // Background re-scan loop. Mirrors Bun's 30 s `setInterval` at
+    // `server/src/index.ts:63-74`. Re-entry is guarded inside
+    // `scan_libraries` via `ScanState::mark_started`, so two ticks that
+    // overlap a long scan don't double-walk.
+    services::library_scanner::spawn_periodic_scan(ctx.clone());
+
     let state = AppState::new(ctx);
     let app = build_router(state)?;
 

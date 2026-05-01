@@ -40,6 +40,10 @@ dashmap = "6"
 # File watcher — chunker segment notifications
 notify = "7"
 
+# Library scanner — recursive directory walk
+walkdir = "2"
+hex = "0.4"
+
 # POSIX signals — chunker SIGTERM/SIGKILL escalation on Unix
 [target.'cfg(unix)'.dependencies]
 nix = { version = "0.29", features = ["signal"] }

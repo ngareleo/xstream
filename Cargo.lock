@@ -5951,6 +5951,7 @@ dependencies = [
  "chrono",
  "dashmap",
  "futures-util",
+ "hex",
  "http",
  "nix",
  "notify",
@@ -5972,6 +5973,7 @@ dependencies = [
  "tracing-opentelemetry",
  "tracing-subscriber",
  "uuid",
+ "walkdir",
 ]
 
 [[package]]

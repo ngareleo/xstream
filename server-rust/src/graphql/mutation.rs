@@ -1,6 +1,6 @@
 //! Root Mutation. CRUD for libraries, video metadata, watchlist, settings,
-//! playback-session writes work fully. Background-scan and transcode-start
-//! are stubbed (those depend on the chunker / scanner — Step 2).
+//! playback-session writes work fully. `scan_libraries` and `create_library`
+//! both spawn the background scanner; transcode-start spawns the chunker.
 
 use async_graphql::{Context, Object, ID};
 
@@ -21,11 +21,19 @@ pub struct Mutation;
 
 #[Object]
 impl Mutation {
-    /// Step 1 stub — returns the current library list without running a real
-    /// scan. The scanner ships in Step 2 alongside the chunker.
+    /// Spawn a fire-and-forget background scan, then return the current
+    /// library list immediately. Progress flows through the
+    /// `library_scan_progress` subscription; the mutation contract is
+    /// "kicked off, here are the current libraries" — same shape as Bun.
+    /// `ScanState::mark_started` inside `scan_libraries` is the dedup
+    /// guard, so two concurrent callers won't both walk the filesystem.
     async fn scan_libraries(&self, ctx: &Context<'_>) -> async_graphql::Result<Vec<Library>> {
-        let db = ctx.data_unchecked::<Db>();
-        Ok(db::get_all_libraries(db)?
+        let app_ctx = ctx.data_unchecked::<crate::config::AppContext>();
+        let spawn_ctx = app_ctx.clone();
+        tokio::spawn(async move {
+            crate::services::library_scanner::scan_libraries(&spawn_ctx).await;
+        });
+        Ok(db::get_all_libraries(&app_ctx.db)?
             .iter()
             .map(Library::from_row)
             .collect())
@@ -82,8 +90,21 @@ impl Mutation {
         media_type: MediaType,
         extensions: Vec<String>,
     ) -> async_graphql::Result<Library> {
-        let db = ctx.data_unchecked::<Db>();
-        let row = create_library(db, &name, &path, media_type.to_internal(), &extensions)?;
+        let app_ctx = ctx.data_unchecked::<crate::config::AppContext>();
+        let row = create_library(
+            &app_ctx.db,
+            &name,
+            &path,
+            media_type.to_internal(),
+            &extensions,
+        )?;
+        // Fire-and-forget background scan so a freshly-added profile gets
+        // indexed without the user having to click "Scan All" — Bun
+        // parity at `server/src/graphql/resolvers/mutation.ts:115-118`.
+        let spawn_ctx = app_ctx.clone();
+        tokio::spawn(async move {
+            crate::services::library_scanner::scan_libraries(&spawn_ctx).await;
+        });
         Ok(Library::from_row(&row))
     }
 

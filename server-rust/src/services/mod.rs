@@ -18,3 +18,5 @@ pub mod hw_accel;
 pub mod job_restore;
 pub mod job_store;
 pub mod kill_reason;
+pub mod library_scanner;
+pub mod scan_state;

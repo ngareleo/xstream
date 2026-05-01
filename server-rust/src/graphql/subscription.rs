@@ -1,12 +1,19 @@
-//! Root Subscription — Step 1 stubs. The transcode-job and library-scan
-//! event sources land in Step 2 along with the chunker and library scanner.
-//! For now the streams emit an initial state and then close, which is enough
-//! for the Relay client to wire up the subscription path without crashing.
+//! Root Subscription. The `transcode_job_updated` event source still ships
+//! with the chunker work; both `library_scan_*` subscriptions are wired
+//! to the process-wide [`crate::services::scan_state::ScanState`] — they
+//! emit the current snapshot immediately, then forward every broadcast.
+//!
+//! Lagged subscribers (slower than the broadcast channel can buffer) get
+//! `Lagged` events skipped silently — the next live snapshot brings them
+//! back in sync, and the dashboard's UI is idempotent in `done`/`total`.
 
 use async_graphql::{Context, Subscription, ID};
 use futures_util::stream::{self, BoxStream, StreamExt};
+use tokio_stream::wrappers::BroadcastStream;
 
+use crate::config::AppContext;
 use crate::graphql::types::{LibraryScanProgress, LibraryScanUpdate, TranscodeJob};
+use crate::services::scan_state::ScanSnapshot;
 
 pub struct Subscription;
 
@@ -23,31 +30,33 @@ impl Subscription {
         _ctx: &Context<'_>,
         _job_id: ID,
     ) -> BoxStream<'static, TranscodeJob> {
-        // No event source in Step 1 — emit nothing and stay open.
+        // No event source yet — emit nothing and stay open.
         stream::pending::<TranscodeJob>().boxed()
     }
 
     async fn library_scan_updated(
         &self,
-        _ctx: &Context<'_>,
+        ctx: &Context<'_>,
     ) -> BoxStream<'static, LibraryScanUpdate> {
-        // Emit an initial "not scanning" state immediately and then stay open.
-        stream::iter(vec![LibraryScanUpdate { scanning: false }])
-            .chain(stream::pending())
-            .boxed()
+        let scan_state = ctx.data_unchecked::<AppContext>().scan_state.clone();
+        let initial = LibraryScanUpdate::from(&scan_state.current());
+        let live = BroadcastStream::new(scan_state.subscribe()).filter_map(|res| async move {
+            res.ok()
+                .map(|snap: ScanSnapshot| LibraryScanUpdate::from(&snap))
+        });
+        stream::iter(vec![initial]).chain(live).boxed()
     }
 
     async fn library_scan_progress(
         &self,
-        _ctx: &Context<'_>,
+        ctx: &Context<'_>,
     ) -> BoxStream<'static, LibraryScanProgress> {
-        stream::iter(vec![LibraryScanProgress {
-            scanning: false,
-            library_id: None,
-            done: None,
-            total: None,
-        }])
-        .chain(stream::pending())
-        .boxed()
+        let scan_state = ctx.data_unchecked::<AppContext>().scan_state.clone();
+        let initial = LibraryScanProgress::from(&scan_state.current());
+        let live = BroadcastStream::new(scan_state.subscribe()).filter_map(|res| async move {
+            res.ok()
+                .map(|snap: ScanSnapshot| LibraryScanProgress::from(&snap))
+        });
+        stream::iter(vec![initial]).chain(live).boxed()
     }
 }

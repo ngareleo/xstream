@@ -80,6 +80,90 @@ pub struct VideosFilter {
     pub media_type: Option<String>,
 }
 
+/// Stream row shape for the scanner's `replace_video_streams`. The
+/// `id` column is auto-assigned by SQLite on insert, so the new-row
+/// shape omits it. Mirrors `Omit<VideoStreamRow, "id">` on the Bun side
+/// at `server/src/db/queries/videos.ts:34`.
+#[derive(Clone, Debug)]
+pub struct NewVideoStream {
+    pub video_id: String,
+    pub stream_type: String,
+    pub codec: String,
+    pub width: Option<i64>,
+    pub height: Option<i64>,
+    pub fps: Option<f64>,
+    pub channels: Option<i64>,
+    pub sample_rate: Option<i64>,
+}
+
+/// Insert-or-update a video row keyed by `path`. The library scanner
+/// calls this once per discovered file. Mirrors
+/// `server/src/db/queries/videos.ts:upsertVideo`.
+pub fn upsert_video(db: &Db, row: &VideoRow) -> DbResult<()> {
+    db.with(|c| {
+        c.execute(
+            r#"INSERT INTO videos
+                 (id, library_id, path, filename, title, duration_seconds,
+                  file_size_bytes, bitrate, scanned_at, content_fingerprint)
+               VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
+               ON CONFLICT(path) DO UPDATE SET
+                 library_id          = excluded.library_id,
+                 filename            = excluded.filename,
+                 title               = excluded.title,
+                 duration_seconds    = excluded.duration_seconds,
+                 file_size_bytes     = excluded.file_size_bytes,
+                 bitrate             = excluded.bitrate,
+                 scanned_at          = excluded.scanned_at,
+                 content_fingerprint = excluded.content_fingerprint"#,
+            params![
+                row.id,
+                row.library_id,
+                row.path,
+                row.filename,
+                row.title,
+                row.duration_seconds,
+                row.file_size_bytes,
+                row.bitrate,
+                row.scanned_at,
+                row.content_fingerprint,
+            ],
+        )?;
+        Ok(())
+    })
+}
+
+/// Replace every stream row for `video_id` with the supplied list. The
+/// scanner calls this once per file after a successful ffprobe — Bun
+/// does the same delete-then-insert, so a re-probe overwrites stale
+/// streams cleanly. Mirrors `server/src/db/queries/videos.ts:replaceVideoStreams`.
+pub fn replace_video_streams(db: &Db, video_id: &str, streams: &[NewVideoStream]) -> DbResult<()> {
+    db.with(|c| {
+        c.execute(
+            "DELETE FROM video_streams WHERE video_id = ?1",
+            params![video_id],
+        )?;
+        for s in streams {
+            c.execute(
+                r#"INSERT INTO video_streams
+                     (video_id, stream_type, codec, width, height, fps,
+                      channels, sample_rate)
+                   VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)"#,
+                params![
+                    s.video_id,
+                    s.stream_type,
+                    s.codec,
+                    s.width,
+                    s.height,
+                    s.fps,
+                    s.channels,
+                    s.sample_rate,
+                ],
+            )?;
+        }
+        Ok(())
+    })
+}
+
 pub fn get_video_by_id(db: &Db, id: &str) -> DbResult<Option<VideoRow>> {
     db.with(|c| {
         let row = c
@@ -209,9 +293,8 @@ pub fn get_streams_by_video_id(db: &Db, video_id: &str) -> DbResult<Vec<VideoStr
 
 // ── Tests ────────────────────────────────────────────────────────────────────
 //
-// Read-only coverage — the Rust port doesn't yet write videos (the library
-// scanner lands in a later step). Add write tests alongside the matching
-// upsert / replace-streams functions when those land.
+// Read-only coverage of the get/count helpers, plus write coverage for the
+// scanner's upsert + replace-streams helpers.
 
 #[cfg(test)]
 mod tests {
@@ -423,5 +506,128 @@ mod tests {
         seed_video(&db, "lib1", "vid-no-streams", Some("Streamless"));
         let streams = get_streams_by_video_id(&db, "vid-no-streams").expect("query");
         assert!(streams.is_empty());
+    }
+
+    fn fixture_video(library_id: &str, video_id: &str, path: &str) -> VideoRow {
+        VideoRow {
+            id: video_id.to_string(),
+            library_id: library_id.to_string(),
+            path: path.to_string(),
+            filename: "fixture.mkv".to_string(),
+            title: Some("Fixture".to_string()),
+            duration_seconds: 60.0,
+            file_size_bytes: 1_000,
+            bitrate: 100_000,
+            scanned_at: "2026-01-01T00:00:00.000Z".to_string(),
+            content_fingerprint: "1000:abc".to_string(),
+        }
+    }
+
+    #[test]
+    fn upsert_video_inserts_a_new_row() {
+        let db = fresh_db();
+        seed_library(&db, "lib1");
+        let row = fixture_video("lib1", "vid-new", "/v/new.mkv");
+        upsert_video(&db, &row).expect("upsert");
+        let fetched = get_video_by_id(&db, "vid-new")
+            .expect("query")
+            .expect("row exists");
+        assert_eq!(fetched.path, "/v/new.mkv");
+        assert_eq!(fetched.title.as_deref(), Some("Fixture"));
+        assert_eq!(fetched.file_size_bytes, 1_000);
+    }
+
+    #[test]
+    fn upsert_video_on_path_conflict_updates_mutable_fields() {
+        let db = fresh_db();
+        seed_library(&db, "lib1");
+        let mut first = fixture_video("lib1", "vid-A", "/v/same.mkv");
+        first.title = Some("Original".to_string());
+        upsert_video(&db, &first).expect("first insert");
+
+        // Same path, different id and title — ON CONFLICT(path) wins.
+        let mut second = fixture_video("lib1", "vid-A", "/v/same.mkv");
+        second.title = Some("Updated".to_string());
+        second.file_size_bytes = 9_999;
+        upsert_video(&db, &second).expect("conflict update");
+
+        let fetched = get_video_by_id(&db, "vid-A")
+            .expect("query")
+            .expect("row exists");
+        assert_eq!(fetched.title.as_deref(), Some("Updated"));
+        assert_eq!(fetched.file_size_bytes, 9_999);
+    }
+
+    #[test]
+    fn upsert_video_propagates_fk_violation_when_library_missing() {
+        // FK protection: scanner must not create orphaned video rows.
+        let db = fresh_db();
+        let row = fixture_video("no-such-lib", "vid-orphan", "/v/orphan.mkv");
+        let result = upsert_video(&db, &row);
+        assert!(
+            result.is_err(),
+            "FK violation must propagate when library_id is missing"
+        );
+    }
+
+    fn new_stream(video_id: &str, kind: &str, codec: &str) -> NewVideoStream {
+        NewVideoStream {
+            video_id: video_id.to_string(),
+            stream_type: kind.to_string(),
+            codec: codec.to_string(),
+            width: if kind == "video" { Some(1920) } else { None },
+            height: if kind == "video" { Some(1080) } else { None },
+            fps: if kind == "video" { Some(24.0) } else { None },
+            channels: if kind == "audio" { Some(2) } else { None },
+            sample_rate: if kind == "audio" { Some(48000) } else { None },
+        }
+    }
+
+    #[test]
+    fn replace_video_streams_inserts_each_stream() {
+        let db = fresh_db();
+        seed_library(&db, "lib1");
+        seed_video(&db, "lib1", "vid-streams", Some("Streamy"));
+        replace_video_streams(
+            &db,
+            "vid-streams",
+            &[
+                new_stream("vid-streams", "video", "hevc"),
+                new_stream("vid-streams", "audio", "aac"),
+            ],
+        )
+        .expect("replace");
+        let streams = get_streams_by_video_id(&db, "vid-streams").expect("query");
+        assert_eq!(streams.len(), 2);
+    }
+
+    #[test]
+    fn replace_video_streams_drops_old_rows_before_inserting() {
+        let db = fresh_db();
+        seed_library(&db, "lib1");
+        seed_video(&db, "lib1", "vid-x", Some("X"));
+        // Initial: two streams via the seed helper.
+        seed_streams(&db, "vid-x");
+        assert_eq!(get_streams_by_video_id(&db, "vid-x").expect("q").len(), 2);
+
+        // Replace with a single stream — old rows must be gone, only the
+        // new one survives.
+        replace_video_streams(&db, "vid-x", &[new_stream("vid-x", "video", "av1")])
+            .expect("replace");
+        let streams = get_streams_by_video_id(&db, "vid-x").expect("query");
+        assert_eq!(streams.len(), 1);
+        assert_eq!(streams[0].codec, "av1");
+    }
+
+    #[test]
+    fn replace_video_streams_with_empty_slice_clears_existing_rows() {
+        let db = fresh_db();
+        seed_library(&db, "lib1");
+        seed_video(&db, "lib1", "vid-empty", Some("Empty"));
+        seed_streams(&db, "vid-empty");
+        replace_video_streams(&db, "vid-empty", &[]).expect("clear");
+        assert!(get_streams_by_video_id(&db, "vid-empty")
+            .expect("query")
+            .is_empty());
     }
 }
