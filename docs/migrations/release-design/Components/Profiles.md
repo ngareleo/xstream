@@ -24,14 +24,23 @@ Landing page (`/`). Profile-tree directory: each library expands to reveal its f
 Flex column, `overflow: hidden`, `position: relative`.
 
 ### Hero (220px tall)
-- Full-bleed `<Poster>` (`Profiles.styles.ts`: `heroImg` — `position: absolute, inset: 0, object-fit: cover, filter: brightness(0.55)`).
-- Gradient overlay: `linear-gradient(90deg, ${colorBg0} 0%, rgba(5,7,6,0.85) 30%, transparent 65%)` — darkens the left side for legibility.
-- Grain layer (shared `.grain-layer` utility).
-- Body block (`heroBody`) absolutely positioned with `padding: 30px 36px`:
-  - `greetingEyebrow`: time-of-day greeting + uppercased user name (e.g. `· Good evening, ALEX`)
-  - `greeting`: large display title (`{totalFilms} films, quietly indexed.`)
-  - `slideDots`: 4 dots in a row; active dot wider (`slideDotActive` vs `slideDotInactive`).
-- Hero film picker: prefers `films.find(f => f.id === "oppenheimer")`, falls back to `films[0]`.
+
+**Slide deck (`heroSlides`).** All four canonical poster images are rendered simultaneously inside an absolute-inset `heroSlides` container. Each `<Poster>` carries the `heroImg` class (`position: absolute, inset: 0, object-fit: cover, filter: grayscale(1) brightness(0.55), opacity: 0, transition: opacity 0.8s ease`). The active slide gets `heroImgActive` (`opacity: 1`); when a transition is in flight the active slide gets `heroImgFading` (`opacity: 0`) so the outgoing image fades while the incoming one fades in simultaneously.
+
+**Ken Burns pan/scale.** Every `heroImg` carries a looping CSS animation (16s, ease-in-out, alternate, infinite) that drifts between `scale(1.06) translate(-0.8%, -0.6%)` and `scale(1.06) translate(0.8%, 0.6%)`. Each slide is always slightly zoomed and drifting; the crossfade gives the impression of a live panorama.
+
+**Edge-fade overlay (`heroEdgeFade`).** A `pointer-events: none` overlay using two `background-image` gradients — top + bottom dark edge (`rgba(5,7,6,0.55)` top, `rgba(5,7,6,0.78)` bottom) and a right-side dark edge (`rgba(5,7,6,0.55)`). `backgroundSize` is `100% 115%, 115% 100%` (slightly oversized so the animated drift doesn't reveal a gap). The `backgroundPosition` loops on an 18s cycle (ease-in-out, infinite): `0% 0%, 0% 0%` → `0% 100%, 100% 0%` → back, giving the vignette a subtle breathing drift.
+
+**Left-side gradient (`heroGradient`).** `linear-gradient(90deg, ${colorBg0} 0%, rgba(5,7,6,0.85) 30%, transparent 65%)` — hard-darkens the left column for text legibility, independent of the animated edge fade.
+
+**Grain layer.** Shared `.grain-layer` utility class.
+
+**Body block (`heroBody`).** Absolute, inset 0, `padding: 30px 36px`, flex column with `justify-content: space-between`, `z-index: 2`:
+  - `greetingEyebrow`: time-of-day greeting + uppercased user name (e.g. `· Good evening, ALEX`). Mono 11px / `colorGreen` / 0.18em.
+  - `greeting`: `{totalFilms} films,` line break `quietly indexed.` Anton 56px / `lineHeight: 0.92` / `colorText` / −0.01em.
+  - `slideDots`: 4 `<button type="button">` elements. Active: 22×3px, `colorGreen`. Inactive: 6×3px, `colorTextFaint`. Transition on `width` + `background-color` at `transitionSlow`. Each button carries `aria-label="Show <film.title>"`. Click calls `goToHero(i)`.
+
+**Canonical poster order:** `["oppenheimer", "barbie", "nosferatu", "civilwar"]`. Falls back to `films.slice(0, 4)` if any id is absent from mock data.
 
 ### Breadcrumb
 - Path-style breadcrumb: `~ / media / films` with the leaf in `var(--text)`, others muted.
@@ -50,6 +59,22 @@ Flex column, `overflow: hidden`, `position: relative`.
 - Visible only when `paneOpen`. `<div onMouseDown={onResizeMouseDown}>` with `backgroundColor: tokens.colorBorder`, `cursor: col-resize`, `:hover` flips to `tokens.colorGreen`.
 
 ## Behaviour
+
+### Hero cycling
+
+`heroFilms` is a stable `useMemo` array built from `HERO_FILM_IDS` (`["oppenheimer", "barbie", "nosferatu", "civilwar"]`).
+
+State: `heroIndex: number` (current active slide, 0-based) + `heroFading: boolean` (crossfade in flight).
+
+**Auto-advance interval.** `setInterval` every `HERO_INTERVAL_MS` (6 000ms). On tick:
+1. `setHeroFading(true)` — active slide begins fading out (opacity transition: 0.8s).
+2. After `HERO_FADE_MS` (600ms): `setHeroIndex(i => (i + 1) % heroFilms.length)`, `setHeroFading(false)`.
+Cleanup clears both the `setInterval` and the inner `setTimeout` ref (`heroFadeTimerRef`). Effect dependency is `[heroFilms.length]`.
+
+**Manual dot click (`goToHero(idx)`).** If `idx === heroIndex`, no-op. Otherwise:
+1. `setHeroFading(true)`.
+2. After `HERO_FADE_MS / 2` (300ms): `setHeroIndex(idx)`, `setHeroFading(false)`.
+Half-duration makes the manual jump feel snappier than an auto-cycle.
 
 ### URL pane state
 - `?film=<id>` — selected film. `useSearchParams()` reads/writes.
@@ -94,8 +119,6 @@ Flex column, `overflow: hidden`, `position: relative`.
 
 ## TODO(redesign)
 
-- All inline styles — migrate row internals to Griffel for parity.
-- Hero is a single fixed image (`oppenheimer`); no slideshow rotation despite the 4 slide dots.
 - `+ NEW PROFILE` footer button has no handler. Needs URL pane state (e.g. `?pane=new-profile`) + form pane.
 - "EDIT · ↻" actions string is decorative — no onClick handlers wired.
 
@@ -103,7 +126,16 @@ Flex column, `overflow: hidden`, `position: relative`.
 
 - [ ] Split-body grid: `1fr 0px 0px` closed, `1fr 4px <paneWidth>px` open, with `transitionSlow` ease
 - [ ] `useSplitResize` for drag-resize handle + `isResizing` no-transition state
-- [ ] Hero 220px with darkened poster + left-side fade gradient + grain layer + greeting + slide dots
+- [ ] Hero 220px tall, `overflow: hidden`, bottom 1px border
+- [ ] `heroSlides` absolute container; all four canonical posters rendered simultaneously, active at `opacity: 1`, others at `opacity: 0`, `transition: opacity 0.8s ease`
+- [ ] `heroImgFading` brings active poster back to `opacity: 0` during crossfade; transition is symmetric (fade-out + fade-in overlap)
+- [ ] Ken Burns: every poster animates `scale(1.06) translate(-0.8%, -0.6%)` → `scale(1.06) translate(0.8%, 0.6%)` over 16s, ease-in-out, alternate, infinite
+- [ ] Edge-fade overlay (`heroEdgeFade`): two-gradient `background-image` (top+bottom dark, right dark), `backgroundSize: 100% 115%, 115% 100%`, 18s drift animation cycling `backgroundPosition`
+- [ ] Left-side gradient (`heroGradient`): `linear-gradient(90deg, colorBg0 0%, rgba(5,7,6,0.85) 30%, transparent 65%)`
+- [ ] Grain layer + greeting eyebrow + display title
+- [ ] Slide dots: 4 `<button type="button">` with `aria-label`, active 22×3px green / inactive 6×3px faint, width+color transitioning at `transitionSlow`
+- [ ] `useEffect` interval (6 000ms) with inner `setTimeout` (600ms) for crossfade; both refs cleaned up on unmount
+- [ ] `goToHero(idx)` on dot click: half-duration (300ms) manual crossfade, no-op if already active
 - [ ] Breadcrumb path with scanning indicator
 - [ ] 5-column ProfileRow: chevron / name+path / match-bar / size / actions
 - [ ] Match bar: green (or yellow if unmatched) progress fill OR spinner during scan
@@ -113,9 +145,8 @@ Flex column, `overflow: hidden`, `position: relative`.
 - [ ] URL pane state: `?film=<id>` (toggle off on second click)
 - [ ] Pre-expand profile containing the deep-linked film
 - [ ] Footer: counts in Mono uppercase + `+ NEW PROFILE` CTA wired to GraphQL mutation
-- [ ] Slide dots wired to a real slideshow (rotate `heroFilm` every N seconds)
 
 ## Status
 
-- [ ] Designed in `design/Release` lab (baseline reflects current state)
+- [x] Designed in `design/Release` lab (hero cycling + Ken Burns + animated edge fade — 2026-05-01, PR #46 commit e088fb5; remaining `TODO(redesign)` items: `+ NEW PROFILE` handler, EDIT/rescan actions)
 - [ ] Production implementation
