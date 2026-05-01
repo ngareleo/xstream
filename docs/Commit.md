@@ -15,6 +15,28 @@ Entry shape (each entry ends with the divider line described above):
 
 <!-- ENTRIES BELOW — newest first; each ends with a bare `---` line. The architect's next invocation will treat the no-entries state as the first-run case and prepend a bootstrap entry at HEAD. -->
 
+## f75e3ca — 2026-05-01
+
+**Files:** `docs/INDEX.md`
+**Why:** added INDEX row for `docs/migrations/release-design/Changes.md` (Prerelease → Release cross-cutting diff) per migrations-lead notification after PR #46 landed
+
+---
+
+## 92da4bc — 2026-05-01 (PR #46 release-design Griffel sweep + poster offline cache)
+
+**Files:** `docs/migrations/release-design/Components/DetailPane.md`, `docs/migrations/release-design/Components/Poster.md`, `docs/migrations/release-design/Components/Library.md`, `docs/migrations/release-design/Components/Player.md`, `docs/migrations/release-design/Components/Settings.md`, `docs/migrations/release-design/Components/Goodbye.md`, `docs/migrations/release-design/Components/NotFound.md`, `docs/migrations/release-design/Components/Profiles.md`
+**Why:** PR #46 Griffel sweep — added `.styles.ts` to 7 lab files and removed stale "inline styles only" TODO entries; updated Poster API note (geometry now caller-supplied via className, style prop dropped); Profiles row-internals inline TODO removed (covered by sweep)
+
+---
+
+## 92da4bc — 2026-05-01
+
+**Files:** no doc updates needed
+**Why:** sync scan — `874c246` ports library scanner to Rust (docs/migrations/rust-rewrite/06-File-Handling-Layer.md in-flight under migrations-lead ownership, no architect action); `92da4bc` scaffolds design/Release/ lab + release-design migration (INDEX rows already landed in prior session)
+**Source commits scanned:** `ae702ab..92da4bc`
+
+---
+
 ## ae702ab — 2026-05-01 (release-design migration INDEX rows)
 
 **Files:** `docs/INDEX.md`

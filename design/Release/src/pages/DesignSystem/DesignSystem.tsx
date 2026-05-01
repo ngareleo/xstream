@@ -1,5 +1,7 @@
 import { type FC, type ReactNode } from "react";
+import { mergeClasses } from "@griffel/react";
 import { LOGOS, LogoCard, Logo02 } from "../../components/Logo/index.js";
+import { useDesignSystemStyles } from "./DesignSystem.styles.js";
 
 const COLORS: Array<[string, string, string, string]> = [
   ["bg-0", "var(--bg-0)", "#050706", "App ink"],
@@ -19,90 +21,31 @@ const COLORS: Array<[string, string, string, string]> = [
 const SPACING = [4, 8, 12, 16, 24, 32];
 
 export const DesignSystem: FC = () => {
+  const styles = useDesignSystemStyles();
   return (
-    <div
-      style={{
-        height: "100%",
-        overflow: "auto",
-        padding: "32px 40px 80px",
-      }}
-    >
-      <div className="eyebrow" style={{ color: "var(--green)" }}>
+    <div className={styles.shell}>
+      <div className={mergeClasses("eyebrow", styles.eyebrow)}>
         DESIGN SYSTEM · /design-system
       </div>
-      <div
-        style={{
-          fontFamily: "var(--font-head)",
-          fontSize: 56,
-          lineHeight: 0.92,
-          letterSpacing: "-0.01em",
-          color: "var(--text)",
-          marginTop: 12,
-          marginBottom: 8,
-        }}
-      >
-        Xstream — visual language.
-      </div>
-      <div style={{ color: "var(--text-dim)", maxWidth: 720, lineHeight: 1.6 }}>
+      <div className={styles.hero}>Xstream — visual language.</div>
+      <div className={styles.intro}>
         Token map, type scale, spacing, and seven candidate logos for the
         post-Moran identity. Pick a logo and update <code>Logo02</code> in{" "}
         <code>components/Logo/index.tsx</code> + the AppHeader brand glyph
         once you are ready to standardize.
       </div>
 
-      {/* ============== Tokens ============== */}
       <Section label="T-01" title="Color tokens">
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))",
-            gap: 12,
-          }}
-        >
+        <div className={styles.tokenGrid}>
           {COLORS.map(([name, value, code, usage]) => (
-            <div
-              key={name}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 12,
-                padding: 10,
-                border: "1px solid var(--border-soft)",
-                background: "var(--surface)",
-              }}
-            >
-              <div
-                style={{
-                  width: 36,
-                  height: 36,
-                  background: value,
-                  border: "1px solid var(--border)",
-                }}
-              />
-              <div style={{ minWidth: 0 }}>
-                <div style={{ fontSize: 11, color: "var(--text)" }}>{name}</div>
-                <div
-                  style={{
-                    fontSize: 9,
-                    color: "var(--text-muted)",
-                    fontFamily: "var(--font-mono)",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    whiteSpace: "nowrap",
-                  }}
-                  title={code}
-                >
+            <div key={name} className={styles.tokenCard}>
+              <div className={styles.swatch} style={{ background: value }} />
+              <div className={styles.tokenInfo}>
+                <div className={styles.tokenName}>{name}</div>
+                <div className={styles.tokenCode} title={code}>
                   {code}
                 </div>
-                <div
-                  style={{
-                    fontSize: 10,
-                    color: "var(--text-faint)",
-                    marginTop: 2,
-                  }}
-                >
-                  {usage}
-                </div>
+                <div className={styles.tokenUsage}>{usage}</div>
               </div>
             </div>
           ))}
@@ -110,7 +53,7 @@ export const DesignSystem: FC = () => {
       </Section>
 
       <Section label="T-02" title="Type scale">
-        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        <div className={styles.typeStack}>
           <Type sample="Anton 56" hint="DISPLAY · HERO" size={56} font="head" />
           <Type sample="Anton 32" hint="TITLE" size={32} font="head" />
           <Type
@@ -130,27 +73,11 @@ export const DesignSystem: FC = () => {
       </Section>
 
       <Section label="T-03" title="Spacing scale">
-        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        <div className={styles.spacingStack}>
           {SPACING.map((sp) => (
-            <div
-              key={sp}
-              style={{ display: "flex", alignItems: "center", gap: 14 }}
-            >
-              <div
-                style={{
-                  width: sp,
-                  height: 18,
-                  background: "var(--green)",
-                  flexShrink: 0,
-                }}
-              />
-              <div
-                style={{
-                  fontFamily: "var(--font-mono)",
-                  fontSize: 11,
-                  color: "var(--text-dim)",
-                }}
-              >
+            <div key={sp} className={styles.spacingRow}>
+              <div className={styles.spacingBar} style={{ width: sp }} />
+              <div className={styles.spacingLabel}>
                 {sp}px · space{SPACING.indexOf(sp) + 1}
               </div>
             </div>
@@ -158,20 +85,13 @@ export const DesignSystem: FC = () => {
         </div>
       </Section>
 
-      {/* ============== Logos ============== */}
       <Section label="L · 1–7" title="Logo candidates">
-        <div style={{ color: "var(--text-muted)", marginBottom: 16, fontSize: 13 }}>
+        <div className={styles.logoIntro}>
           Seven explorations. Logo02 (stacked-X monogram) is the default mark
           used in the AppHeader and app-icon mockup below — change the import
           in <code>components/AppHeader/AppHeader.tsx</code> to switch.
         </div>
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fill, minmax(380px, 1fr))",
-            gap: 18,
-          }}
-        >
+        <div className={styles.logoGrid}>
           {LOGOS.map((entry) => (
             <LogoCard
               key={entry.code}
@@ -182,34 +102,13 @@ export const DesignSystem: FC = () => {
         </div>
       </Section>
 
-      {/* ============== Context frames ============== */}
       <Section label="C-01" title="App icon — Logo02 mark, three sizes">
-        <div
-          style={{
-            background: "var(--surface)",
-            border: "1px solid var(--border)",
-            borderRadius: 4,
-            padding: 28,
-            display: "flex",
-            gap: 24,
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
+        <div className={mergeClasses(styles.contextFrame, styles.iconRow)}>
           {[64, 96, 128].map((s) => (
             <div
               key={s}
-              style={{
-                width: s,
-                height: s,
-                borderRadius: s * 0.22,
-                background: "linear-gradient(160deg, #14181a, #050706)",
-                border: "1px solid var(--border)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                boxShadow: "0 14px 30px -16px var(--green-glow)",
-              }}
+              className={styles.iconTile}
+              style={{ width: s, height: s, borderRadius: s * 0.22 }}
             >
               <Logo02 size={s * 0.55} showWordmark={false} />
             </div>
@@ -218,40 +117,12 @@ export const DesignSystem: FC = () => {
       </Section>
 
       <Section label="C-02" title="Header lockup">
-        <div
-          style={{
-            background: "var(--surface)",
-            border: "1px solid var(--border)",
-            borderRadius: 4,
-            padding: "28px 32px",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-          }}
-        >
-          <div
-            style={{
-              fontFamily: "var(--font-head)",
-              fontSize: 38,
-              letterSpacing: "-0.03em",
-              display: "flex",
-              alignItems: "baseline",
-            }}
-          >
-            <span style={{ color: "var(--green)" }}>X</span>
-            <span style={{ color: "var(--text)" }}>stream</span>
+        <div className={mergeClasses(styles.contextFrame, styles.headerLockup)}>
+          <div className={styles.brand}>
+            <span className={styles.brandX}>X</span>
+            <span className={styles.brandWord}>stream</span>
           </div>
-          <div
-            style={{
-              display: "flex",
-              gap: 22,
-              fontSize: 12,
-              fontFamily: "var(--font-mono)",
-              color: "var(--text-dim)",
-              letterSpacing: "0.12em",
-              textTransform: "uppercase",
-            }}
-          >
+          <div className={styles.navList}>
             <span>Profiles</span>
             <span>Library</span>
             <span>Settings</span>
@@ -260,17 +131,7 @@ export const DesignSystem: FC = () => {
       </Section>
 
       <Section label="C-03" title="Brand swatches">
-        <div
-          style={{
-            background: "var(--surface)",
-            border: "1px solid var(--border)",
-            borderRadius: 4,
-            padding: 24,
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))",
-            gap: 14,
-          }}
-        >
+        <div className={mergeClasses(styles.contextFrame, styles.swatchPanel)}>
           {(
             [
               ["Ink", "var(--bg-0)", "#050706"],
@@ -281,27 +142,9 @@ export const DesignSystem: FC = () => {
             ] as const
           ).map(([name, c, code]) => (
             <div key={name}>
-              <div
-                style={{
-                  width: "100%",
-                  aspectRatio: "1.4/1",
-                  background: c,
-                  border: "1px solid var(--border)",
-                  marginBottom: 8,
-                }}
-              />
-              <div style={{ fontSize: 11, color: "var(--text)", fontWeight: 600 }}>
-                {name}
-              </div>
-              <div
-                style={{
-                  fontSize: 9,
-                  color: "var(--text-muted)",
-                  fontFamily: "var(--font-mono)",
-                }}
-              >
-                {code}
-              </div>
+              <div className={styles.swatchTile} style={{ background: c }} />
+              <div className={styles.swatchName}>{name}</div>
+              <div className={styles.swatchCode}>{code}</div>
             </div>
           ))}
         </div>
@@ -314,76 +157,50 @@ const Section: FC<{ label: string; title: string; children: ReactNode }> = ({
   label,
   title,
   children,
-}) => (
-  <section style={{ marginTop: 56 }}>
-    <div
-      style={{
-        display: "flex",
-        alignItems: "baseline",
-        gap: 16,
-        marginBottom: 18,
-      }}
-    >
-      <span
-        style={{
-          fontFamily: "var(--font-mono)",
-          fontSize: 10,
-          letterSpacing: "0.22em",
-          color: "var(--green)",
-        }}
-      >
-        {label}
-      </span>
-      <span
-        style={{
-          fontFamily: "var(--font-head)",
-          fontSize: 24,
-          letterSpacing: "-0.01em",
-          color: "var(--text)",
-        }}
-      >
-        {title}
-      </span>
-    </div>
-    {children}
-  </section>
-);
+}) => {
+  const styles = useDesignSystemStyles();
+  return (
+    <section className={styles.section}>
+      <div className={styles.sectionHead}>
+        <span className={styles.sectionLabel}>{label}</span>
+        <span className={styles.sectionTitle}>{title}</span>
+      </div>
+      {children}
+    </section>
+  );
+};
 
+// Type scale samples carry runtime-driven font + size + line-height combos that
+// would explode the Griffel rule count if precomputed for every size; the static
+// hint label uses styles.typeHint, the dynamic sample row stays inline.
 const Type: FC<{
   sample: string;
   hint: string;
   size: number;
   font: "head" | "body" | "mono";
   uppercase?: boolean;
-}> = ({ sample, hint, size, font, uppercase }) => (
-  <div>
-    <div
-      style={{
-        fontFamily: `var(--font-${font})`,
-        fontSize: size,
-        lineHeight: font === "head" ? 0.95 : 1.45,
-        letterSpacing:
-          font === "head"
-            ? "-0.01em"
-            : font === "mono"
-              ? "0.18em"
-              : undefined,
-        textTransform: uppercase ? "uppercase" : undefined,
-        color: "var(--text)",
-      }}
-    >
-      {sample}
+}> = ({ sample, hint, size, font, uppercase }) => {
+  const styles = useDesignSystemStyles();
+  return (
+    <div>
+      <div
+        style={{
+          fontFamily: `var(--font-${font})`,
+          fontSize: size,
+          lineHeight: font === "head" ? 0.95 : 1.45,
+          letterSpacing:
+            font === "head"
+              ? "-0.01em"
+              : font === "mono"
+                ? "0.18em"
+                : undefined,
+          textTransform: uppercase ? "uppercase" : undefined,
+          color: "var(--text)",
+        }}
+      >
+        {sample}
+      </div>
+      <div className={styles.typeHint}>{hint}</div>
     </div>
-    <div
-      style={{
-        fontFamily: "var(--font-mono)",
-        fontSize: 10,
-        color: "var(--text-muted)",
-        letterSpacing: "0.12em",
-        marginTop: 4,
-      }}
-    >
-      {hint}
-    </div>
-  </div>
-);
+  );
+};

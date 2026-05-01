@@ -10,7 +10,7 @@
 
 ## Purpose
 
-Landing page (`/`). Profile-tree directory: each library expands to reveal its films; selecting a film opens [`DetailPane`](DetailPane.md) in a drag-resizable right column.
+Profile-tree directory (`/profiles`). Each library expands to reveal its films; selecting a film opens [`DetailPane`](DetailPane.md) in a drag-resizable right column. The page opens directly at the breadcrumb — there is no hero.
 
 ## Visual
 
@@ -18,20 +18,11 @@ Landing page (`/`). Profile-tree directory: each library expands to reveal its f
 - Closed: `gridTemplateColumns: "1fr 0px 0px"`.
 - Open: `gridTemplateColumns: \`1fr 4px ${paneWidth}px\`` (overridden inline so the `useSplitResize`-driven width animates smoothly).
 - `height: 100%`, `transition: grid-template-columns ${transitionSlow}` (0.25s ease).
+- **`paddingTop: tokens.headerHeight`, `boxSizing: border-box`** — the page is responsible for its own header clearance (AppShell no longer reserves a header row). The split-body starts below the header.
 - `isResizing` adds `transitionProperty: none` so the drag is jank-free.
 
 ### Left column (`leftCol`)
 Flex column, `overflow: hidden`, `position: relative`.
-
-### Hero (220px tall)
-- Full-bleed `<Poster>` (`Profiles.styles.ts`: `heroImg` — `position: absolute, inset: 0, object-fit: cover, filter: brightness(0.55)`).
-- Gradient overlay: `linear-gradient(90deg, ${colorBg0} 0%, rgba(5,7,6,0.85) 30%, transparent 65%)` — darkens the left side for legibility.
-- Grain layer (shared `.grain-layer` utility).
-- Body block (`heroBody`) absolutely positioned with `padding: 30px 36px`:
-  - `greetingEyebrow`: time-of-day greeting + uppercased user name (e.g. `· Good evening, ALEX`)
-  - `greeting`: large display title (`{totalFilms} films, quietly indexed.`)
-  - `slideDots`: 4 dots in a row; active dot wider (`slideDotActive` vs `slideDotInactive`).
-- Hero film picker: prefers `films.find(f => f.id === "oppenheimer")`, falls back to `films[0]`.
 
 ### Breadcrumb
 - Path-style breadcrumb: `~ / media / films` with the leaf in `var(--text)`, others muted.
@@ -92,19 +83,29 @@ Flex column, `overflow: hidden`, `position: relative`.
 - Play link: `<Link to="/player/:id">` styled as a small button. Selected variant gets green bg + green-ink text; unselected gets transparent + 1px border.
 - `e.stopPropagation()` on the play-link click so it doesn't toggle selection.
 
+## Changes from Prerelease
+
+- **Route:** OLD — primary home route `/` (was `<Dashboard>`). NEW — secondary route `/profiles`.
+- **Component name:** OLD — `<Dashboard>` at `pages/Dashboard/`. NEW — `<Profiles>` at `pages/Profiles/`.
+- **Hero:** OLD — a full-width slideshow hero existed above the profile directory in the Dashboard (Prerelease `<Slideshow>` component, cycling 4 images, greeting overlay). NEW — no hero. The page opens directly at the breadcrumb. (A hero slideshow with Ken Burns was added in commit e088fb5, then removed in commit 04ea22b — the final state is no hero.)
+- **URL pane state:** OLD — Dashboard used `?pane=film-detail&filmId=xxx` (two params: `pane` and `filmId`). NEW — Profiles uses `?film=<id>` (single param, matching the Library pattern).
+- **Pane width:** OLD — `useSplitResize(360)` — 360px default pane width. NEW — same hook, pane width unchanged at 360px (Release `useSplitResize` call still passes 360).
+- **Header clearance:** OLD — the AppShell grid reserved a 52px header row; Dashboard did not need to add any `paddingTop`. NEW — `splitBody` adds `paddingTop: tokens.headerHeight, boxSizing: border-box` because the shell no longer reserves a grid row.
+- **AppHeader rendering:** OLD — Dashboard rendered its own `<AppHeader>` as a direct child, placing it in the `gridArea: head` grid cell. NEW — AppHeader is rendered by `<AppShell>` (absolute layer); Profiles does not render its own header.
+- **NewProfilePane:** OLD — Dashboard had a `<NewProfilePane>` form rendered in the right rail when `?pane=new-profile` was set. NEW — no equivalent in Release Profiles (the `+ NEW PROFILE` footer button exists but has no handler — `TODO(redesign)`).
+- **Film detail surface:** OLD — `<FilmDetailPane>` inline component with gradient-placeholder 200px hero + re-link/linking toggle. NEW — Release `<Profiles>` uses the standalone `<DetailPane>` component (with real OMDb poster via `<Poster>`).
+- **Identity:** Active film row: OLD — `background: var(--red-dim)`, `borderLeft: 2px solid var(--red)`. NEW — `background: var(--green-soft)`, `borderLeft: 2px solid var(--green)`. Match bar: OLD — filled red when unmatched. NEW — filled yellow when unmatched.
+
 ## TODO(redesign)
 
-- All inline styles — migrate row internals to Griffel for parity.
-- Hero is a single fixed image (`oppenheimer`); no slideshow rotation despite the 4 slide dots.
 - `+ NEW PROFILE` footer button has no handler. Needs URL pane state (e.g. `?pane=new-profile`) + form pane.
 - "EDIT · ↻" actions string is decorative — no onClick handlers wired.
 
 ## Porting checklist (`client/src/pages/Profiles/`)
 
-- [ ] Split-body grid: `1fr 0px 0px` closed, `1fr 4px <paneWidth>px` open, with `transitionSlow` ease
+- [ ] Split-body grid: `1fr 0px 0px` closed, `1fr 4px <paneWidth>px` open, with `transitionSlow` ease; `paddingTop: tokens.headerHeight`, `boxSizing: border-box` (page manages header clearance)
 - [ ] `useSplitResize` for drag-resize handle + `isResizing` no-transition state
-- [ ] Hero 220px with darkened poster + left-side fade gradient + grain layer + greeting + slide dots
-- [ ] Breadcrumb path with scanning indicator
+- [ ] Breadcrumb path with scanning indicator (page opens here — no hero above it)
 - [ ] 5-column ProfileRow: chevron / name+path / match-bar / size / actions
 - [ ] Match bar: green (or yellow if unmatched) progress fill OR spinner during scan
 - [ ] Expanded ProfileRow shows nested FilmRow children with `bg-1` background
@@ -113,9 +114,8 @@ Flex column, `overflow: hidden`, `position: relative`.
 - [ ] URL pane state: `?film=<id>` (toggle off on second click)
 - [ ] Pre-expand profile containing the deep-linked film
 - [ ] Footer: counts in Mono uppercase + `+ NEW PROFILE` CTA wired to GraphQL mutation
-- [ ] Slide dots wired to a real slideshow (rotate `heroFilm` every N seconds)
 
 ## Status
 
-- [ ] Designed in `design/Release` lab (baseline reflects current state)
+- [x] Designed in `design/Release` lab — hero cycling + Ken Burns + animated edge fade landed 2026-05-01, PR #46 commit e088fb5; hero then removed in same PR commit 04ea22b (page now opens at breadcrumb). `splitBody` gains `paddingTop: tokens.headerHeight, boxSizing: border-box` for positioned-shell header clearance (2026-05-01, PR #46 commit 5301df6). Remaining `TODO(redesign)` items: `+ NEW PROFILE` handler, EDIT/rescan actions.
 - [ ] Production implementation

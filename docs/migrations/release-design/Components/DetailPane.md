@@ -4,7 +4,8 @@
 
 ## Files
 
-- `design/Release/src/components/DetailPane/DetailPane.tsx` (no `.styles.ts` — inline `CSSProperties`)
+- `design/Release/src/components/DetailPane/DetailPane.tsx`
+- `design/Release/src/components/DetailPane/DetailPane.styles.ts`
 - Prerelease behavioural reference: `design/Prerelease/src/components/DetailPane/`
 
 ## Purpose
@@ -75,9 +76,18 @@ Right-rail film detail card. Identical structure on the Profiles and Library pag
 
 None.
 
+## Changes from Prerelease
+
+- **Component extraction:** OLD — the detail pane was an inline component defined inside each page file (`FilmDetailPane` in `Dashboard.tsx`, `DetailPane` in `Library.tsx`). NEW — standalone component at `design/Release/src/components/DetailPane/`. The `Prerelease behavioural reference` for this spec is both page files.
+- **Poster hero:** OLD — 200px hero area with `background: film.gradient` (CSS gradient string, no real image). NEW — `<Poster>` component fills the 220px hero area with a real OMDb JPG (`film.posterUrl`), falling back to a gradient placeholder.
+- **Film model:** OLD — `Film.gradient: string` drives the hero background; no `posterUrl`. NEW — `Film.posterUrl: string | null` is passed to `<Poster>`; `gradient` field removed.
+- **Colour identity:** OLD — resolution badge uses `badgeRed` class (red chip). NEW — resolution chip uses `class="chip green"` (green chip). CTA link text is white-on-green instead of white-on-red.
+- **Border colour:** OLD — `colorBorder: "#222222"`. NEW — `colorBorder: "#25302a"`.
+- **Re-link state:** OLD — `linking` state was URL-encoded in Dashboard (`?linking=true` param, reset when switching films). In Library's inline `DetailPane`, `linking` was local state. NEW — Release `DetailPane` component uses local state (`useState`) for `linking`. The URL-encoding behaviour from Dashboard is not reproduced.
+- **Body content parity:** The structural sections (action row, title, eyebrow, chip row, IMDb+on-disk row, plot, cast, file info box) are unchanged between Prerelease and Release. Exact font sizes and padding values are the same.
+
 ## TODO(redesign)
 
-- Inline styles only — no Griffel `makeStyles`. Migrate to a `.styles.ts` for parity with AppHeader, AppShell, Sidebar, Profiles.
 - "Re-link" button has no handler; production should open a search-OMDb dialog.
 - The `● ON DISK` indicator is hard-coded green; should reflect actual file presence via the `Film` model.
 

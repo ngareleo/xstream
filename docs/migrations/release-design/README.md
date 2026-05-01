@@ -16,7 +16,7 @@ Migrate the xstream client from the **Prerelease** identity (codename Moran — 
 
 ## Status
 
-Documentation in flight. [`Components/AppHeader.md`](Components/AppHeader.md) is the model spec — fully fleshed from the iteration in this session. The other 12 spec files capture today's lab state at a **baseline** level — every detail visible in the source is recorded; sections that depend on values not yet decided are marked `TODO(redesign)`.
+Documentation updated via PR #46 audit (2026-05-01). Five specs are now `done` (fully fleshed, zero `TODO(redesign)` placeholders blocking a porting agent): **AppShell**, **AppHeader**, **Library**, **Watchlist**, **Player**. Remaining specs are at `baseline` level (all values visible in source recorded; open design questions marked `TODO(redesign)`).
 
 Implementation in production has not started.
 
@@ -26,6 +26,7 @@ Implementation in production has not started.
 - [`design/Prerelease/`](../../../design/Prerelease/) — the frozen Moran prototype. Behavioural reference for any contract not re-stated in the Release spec (URL pane state, drag-resize, Player state machine, inactivity hide all port verbatim).
 - [`docs/design/UI-Design-Spec/01-Release-Tokens-And-Layout.md`](../../design/UI-Design-Spec/01-Release-Tokens-And-Layout.md) — token map + page-by-page status, lives outside this migration because tokens survive past the port.
 - [`client/src/`](../../../client/src/) — the port target.
+- [`Changes.md`](Changes.md) — cross-cutting diff of every meaningful design change between Prerelease and Release. Start here when you need a high-level orientation before reading individual component specs.
 
 ## Contract
 

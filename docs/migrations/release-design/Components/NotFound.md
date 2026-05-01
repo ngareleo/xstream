@@ -4,7 +4,8 @@
 
 ## Files
 
-- `design/Release/src/pages/NotFound/NotFound.tsx` (no `.styles.ts` — inline)
+- `design/Release/src/pages/NotFound/NotFound.tsx`
+- `design/Release/src/pages/NotFound/NotFound.styles.ts`
 - Prerelease behavioural reference: `design/Prerelease/src/pages/NotFound/`
 
 ## Purpose
@@ -13,9 +14,10 @@
 
 ## Visual
 
-### Outer container
-- `height: 100%`, `position: relative`, `overflow: hidden`, `background: var(--bg-0)`.
+### Outer container (`.shell`)
+- `height: 100%`, `position: relative`, `overflow: hidden`, `backgroundColor: colorBg0`.
 - `display: flex`, centred (both axes).
+- **`paddingTop: tokens.headerHeight`, `boxSizing: border-box`** — the page is responsible for its own header clearance, so the centred 404 content stays roughly mid-viewport (not hidden behind the header).
 
 ### Layered atmosphere (bottom to top)
 1. `.grain-layer` utility, `opacity: 0.2`.
@@ -39,6 +41,17 @@
 
 None.
 
+## Changes from Prerelease
+
+- **Header clearance:** OLD — NotFound rendered its own `<AppHeader>` then a `.main` container (required by the Prerelease grid model). NEW — header is provided by `<AppShell>`; NotFound adds `paddingTop: tokens.headerHeight, boxSizing: border-box` to its own `.shell` container.
+- **Title copy:** OLD — `"Page not found"`. NEW — `"Nothing here."`.
+- **Body copy:** OLD — `"The page you're looking for doesn't exist or has been moved."`. NEW — `"The page you tried to reach has moved or never existed. Head back to the library to keep browsing."`.
+- **Ghost numeral style:** OLD — the `"404"` ghost was styled via a `code`-style element with the Prerelease heading font (Bebas Neue). NEW — `font-size: 32vw`, Anton, `opacity: 0.04`, `letter-spacing: -0.04em`, `aria-hidden`, no-select — a full atmospheric watermark.
+- **Atmospheric layers:** OLD — grain + radial gradient background (present in Prerelease). NEW — grain + radial green-soft glow (same structure, green accent replaces any red).
+- **Colour identity:** OLD — "Browse library" CTA button had red background. NEW — green background (`background: var(--green)`, `color: var(--green-ink)`). Go back button: unchanged (transparent + 1px border + dim text).
+- **"Browse library" href:** OLD — `<Link to="/library">`. NEW — `<Link to="/">` — because `/library` no longer exists (home is now `/`). Copy still reads "Browse library" — noted as a TODO.
+- **Route and shell:** Identical — `*` catch-all inside AppShell in both labs.
+
 ## TODO(redesign)
 
 - "Browse library" copy + icon (`IconSearch`) say library but the link points to `/` (Profiles). Either change the copy to "Browse profiles" or change the href to `/library` to match.
@@ -47,6 +60,7 @@ None.
 ## Porting checklist (`client/src/pages/NotFound/`)
 
 - [ ] Renders inside AppShell (not full viewport like Goodbye)
+- [ ] `.shell`: `paddingTop: tokens.headerHeight`, `boxSizing: border-box` (page manages header clearance so the 404 stays mid-viewport)
 - [ ] Grain layer at 0.2 opacity
 - [ ] Radial green-soft glow centred
 - [ ] Ghost "404" at 32vw / 0.04 opacity / Anton
@@ -59,5 +73,5 @@ None.
 
 ## Status
 
-- [ ] Designed in `design/Release` lab (baseline reflects current state)
+- [x] Designed in `design/Release` lab — baseline reflects prior state; `.shell` gains `paddingTop: tokens.headerHeight, boxSizing: border-box` for positioned-shell header clearance (2026-05-01, PR #46 commit 5301df6, `feat/release-design-omdb-griffel`, not yet merged to main)
 - [ ] Production implementation

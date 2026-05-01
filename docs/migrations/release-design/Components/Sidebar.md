@@ -1,97 +1,76 @@
 # Sidebar
 
-> Status: **baseline** (Spec) · **not started** (Production)
+> Status: **deleted / superseded** — the Sidebar component was removed in PR #46 commit 787f136 (`feat/release-design-omdb-griffel`, not yet merged to main). This file is a tombstone. Do not port this component.
 
-## Files
+## What happened
 
-- `design/Release/src/components/Sidebar/Sidebar.tsx`
-- `design/Release/src/components/Sidebar/Sidebar.styles.ts`
-- Prerelease behavioural reference: `design/Prerelease/src/components/Sidebar/`
+The `design/Release/src/components/Sidebar/` directory (both `Sidebar.tsx` and `Sidebar.styles.ts`) was deleted in PR #46 commit 787f136. No remaining references to `<Sidebar>` exist in the lab codebase.
 
-## Purpose
+Navigation (Library, Profiles, Watchlist links) moved to the centred nav in [`AppHeader`](AppHeader.md). The shell is now a single-column layout — see [`AppShell.md`](AppShell.md).
 
-Left-rail navigation: top section is `NAVIGATION` (route links — Profiles, Library, Settings, Design system); below that `LIBRARIES` (live status of each scanned profile); footer is the user identity card.
+## What transferred to AppHeader
 
-## Visual
+- **Avatar** — the user-row avatar (gradient + initials) is now rendered in the AppHeader right cluster at 34×34 (was 30×30 in the Sidebar user-row). Same gradient (`linear-gradient(140deg, colorGreenDeep, colorGreen)`), same ink colour, same initials pattern — only the container and size changed.
 
-### Container (`side`)
+For the full avatar spec, see [`AppHeader.md`](AppHeader.md) — "Right cluster — Avatar" section.
+
+## What was NOT ported
+
+- **`LIBRARIES` section** (live status dots for each scanned profile) — this signal is absent from the new shell. When the production implementation reaches the AppHeader, a porting checklist note should track whether library scan status needs to surface in the header, a notification badge on the scan icon, or elsewhere.
+- **NAVIGATION section** as a sidebar list — superseded by the three-link header nav.
+- **User-row chevron / account dropdown** — was a TODO in the sidebar; still unresolved. Future: the avatar button in the header could open an account/sign-out dropdown.
+
+## Prior spec (preserved for reference)
+
+The sidebar spec recorded these values prior to deletion. They are not porting targets, but may be useful as reference if the `LIBRARIES` signal or user-row dropdown is re-introduced later in the header or a future overlay.
+
+### Container
+
 - `gridArea: side`, 220px wide.
 - `borderRight: 1px solid ${colorBorder}`.
 - `backgroundColor: tokens.colorBg1` (`#0a0d0c`).
 - `display: flex`, `flexDirection: column`.
 - `paddingTop/Bottom: 18px`, `paddingLeft/Right: 12px`.
 
-### Section labels (`sectionLabel`)
-- JetBrains Mono 9px, `letter-spacing: 0.28em`, `color: tokens.colorTextFaint`.
-- Padding `0 6px 10px`.
-- `sectionLabelTopGap` adds `marginTop: 22px` between sections.
+### Section labels
 
-### Nav items (`navItem` + `navItemActive`)
-- `<NavLink>` with `mergeClasses(s.navItem, isActive && s.navItemActive)`.
+- JetBrains Mono 9px, `letter-spacing: 0.28em`, `color: tokens.colorTextFaint`.
+
+### Nav items
+
 - Inactive: `color: tokens.colorTextDim`, transparent bg, 2px transparent left border.
 - Active: `backgroundColor: tokens.colorGreenSoft`, `color: tokens.colorGreen`, `borderLeftColor: tokens.colorGreen`.
-- Padding `9px 10px`, `font-size: 12px`, `letter-spacing: 0.04em`.
-- Right corners only have radius (3px each) so the active left border draws cleanly.
-- Transitions: `background-color, color, border-color` over `tokens.transition`.
-- Inline icon (opacity 0.9) + label.
+- Right corners only have radius (3px) so the active left border draws cleanly.
 
-`NAV_ITEMS` array (in `Sidebar.tsx`):
-```ts
-[
-  { to: "/", label: "Profiles", icon: <IconFolder />, end: true },
-  { to: "/library", label: "Library", icon: <IconFilm /> },
-  { to: "/settings", label: "Settings", icon: <IconCog /> },
-  { to: "/design-system", label: "Design system", icon: <IconFilm /> },
-]
-```
+### Library row (LIBRARIES section)
 
-### Library row (`libraryRow`)
-- One row per profile in the mock `profiles` array.
-- Layout: name + dot on the left, count on the right (`justify-content: space-between`).
-- Padding `7px 10px`, `font-size: 12px`, `color: tokens.colorTextDim`.
-- **Status dot** (`libraryDot`): 5px circle, `border-radius: 999px`. Variants:
-  - `libraryDotOk`: `backgroundColor: tokens.colorGreen` (no scanning, no unmatched)
-  - `libraryDotWarn`: `backgroundColor: tokens.colorYellow` (unmatched > 0 OR scanning)
-- Count: JetBrains Mono 10px, `color: tokens.colorTextMuted`.
+- One row per profile. Layout: name + status dot on left, count on right.
+- **Status dot variants:** `libraryDotOk` (green — matched + idle), `libraryDotWarn` (yellow — unmatched > 0 OR scanning).
+- Count: JetBrains Mono 10px, `colorTextMuted`.
 
-### User row (`userRow`)
+### User row
+
 - Pinned to bottom via `<div className={s.spacer} />` (flex: 1).
-- Top border: `1px solid tokens.colorBorderSoft`, `marginTop: 12px`.
-- Layout: avatar + name/meta column + chevron.
-- **Avatar** (`avatar`): 30×30, `border-radius: 4px` on each corner, `background: linear-gradient(140deg, ${colorGreenDeep}, ${colorGreen})`, `color: tokens.colorGreenInk`, `font-weight: 700`, displays user initials.
-- **userName**: 12px, `color: tokens.colorText`.
-- **userMeta**: 10px JetBrains Mono, `color: tokens.colorTextMuted` — shows `user.hostMode`.
-- Chevron: `color: tokens.colorTextMuted`, rotated `-90deg`.
+- **Avatar:** 30×30, `border-radius: 4px`, `background: linear-gradient(140deg, ${colorGreenDeep}, ${colorGreen})`, `color: tokens.colorGreenInk`, `font-weight: 700`, displays `user.initials`.
+- **userName:** 12px, `colorText`.
+- **userMeta:** 10px JetBrains Mono, `colorTextMuted` — shows `user.hostMode`.
+- Chevron: `colorTextMuted`, rotated `-90deg`.
 
-## Behaviour
+## Changes from Prerelease
 
-- `<NavLink end={true}>` for `/` so it doesn't stay active on `/library`.
-- No animations beyond the `tokens.transition` colour transitions on nav items.
-- No URL params, no internal state.
+The Sidebar existed and was fully implemented in Prerelease. In Release it is deleted.
 
-## Subcomponents
+Key surface that existed in Prerelease and has no Release equivalent:
+- `LIBRARIES` section: one row per profile with a live status dot (`libraryDotOk` green / `libraryDotWarn` yellow) and a film/episode count. This signal is absent from the Release shell entirely.
+- Collapse toggle: `<button>` in the sidebar animated the AppShell grid column from 220px to 52px. The Release shell has no collapsible navigation surface.
+- User-row chevron / account dropdown: in Prerelease, clicking the user-row opened a `<ProfileMenu>` (profile links + account settings + sign-out). In Release, the avatar button is in the AppHeader right cluster — a sign-out dropdown is not yet implemented (flagged as `TODO` in `AppHeader.md`).
+- Nav structure: in Prerelease the sidebar held 4 links — Profiles (`/`), Library (`/library`), Settings, Feedback. All moved to the header except Feedback, which is removed.
 
-None.
+For the full prior spec values (container dimensions, nav item styles, library-row anatomy, user-row avatar) see the "Prior spec (preserved for reference)" section above.
 
-## TODO(redesign)
-
-- The user-row chevron currently has no click handler. Future: open a profile/account dropdown or sign-out menu (see [Goodbye.md](Goodbye.md)).
-- Consider collapsing the sidebar to `tokens.sidebarCollapsedWidth` (52px) — the token exists but no toggle wires it.
-
-## Porting checklist (`client/src/components/Sidebar/`)
-
-- [ ] 220px width, `colorBg1` background, right border
-- [ ] Section labels: JetBrains Mono 9px / 0.28em letter-spacing / faint colour
-- [ ] Nav items: 2px left border, transparent at rest → green when active
-- [ ] Active nav item: green-soft bg, green text, green left border
-- [ ] Right corners only on nav item radius (clean active left edge)
-- [ ] Library row: name + green-or-yellow status dot + count
-- [ ] Status dot variants: green when matched + idle, yellow when unmatched OR scanning
-- [ ] User row pinned via spacer flex: 1
-- [ ] Avatar: 30×30, green-deep → green linear gradient, green-ink initials
-- [ ] User meta in JetBrains Mono 10px showing host mode
+Cross-reference: [`Changes.md`](../Changes.md) — "Sidebar — deleted".
 
 ## Status
 
-- [ ] Designed in `design/Release` lab (baseline reflects current state)
-- [ ] Production implementation
+- [x] Designed in `design/Release` lab — **deleted** (2026-05-01, PR #46 commit 787f136, `feat/release-design-omdb-griffel`, not yet merged to main)
+- [ ] Production implementation — N/A (do not port; component removed)

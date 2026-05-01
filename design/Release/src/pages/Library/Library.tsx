@@ -1,496 +1,545 @@
-import { type FC, useMemo, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { type FC, useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { mergeClasses } from "@griffel/react";
 import {
   type Film,
+  type WatchlistItem,
   films,
   getFilmById,
-  profiles,
+  newReleaseIds,
+  user,
+  watchlist,
 } from "../../data/mock.js";
-import { ImdbBadge, IconSearch, IconWarn } from "../../lib/icons.js";
 import { Poster } from "../../components/Poster/Poster.js";
-import { DetailPane } from "../../components/DetailPane/DetailPane.js";
-import { useSplitResize } from "../../hooks/useSplitResize.js";
+import { ImdbBadge, IconBack, IconChevron, IconClose, IconPlay, IconSearch } from "../../lib/icons.js";
+import { useLibraryStyles } from "./Library.styles.js";
 
-type ViewMode = "grid" | "list";
+const HERO_FILM_IDS = ["oppenheimer", "barbie", "nosferatu", "civilwar"] as const;
+const HERO_INTERVAL_MS = 7000;
+const HERO_FADE_MS = 700;
+const TILE_WIDTH = 200;
+const TILE_GAP = 16;
+const TILE_STRIDE = TILE_WIDTH + TILE_GAP;
+const ROW_SCROLL_DURATION_MS = 1100;
+
+const easeOutQuint = (t: number): number => 1 - Math.pow(1 - t, 5);
+
+function smoothScrollBy(el: HTMLElement, dx: number, duration: number): void {
+  const start = el.scrollLeft;
+  const startTime = performance.now();
+  const step = (now: number): void => {
+    const elapsed = now - startTime;
+    const t = Math.min(elapsed / duration, 1);
+    el.scrollLeft = start + dx * easeOutQuint(t);
+    if (t < 1) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+}
+
+interface RowEntry {
+  item: WatchlistItem;
+  film: Film;
+}
+
+function greeting(): string {
+  const h = new Date().getHours();
+  if (h < 12) return "Good morning";
+  if (h < 18) return "Good afternoon";
+  return "Good evening";
+}
+
+function rowEntries(items: WatchlistItem[]): RowEntry[] {
+  const out: RowEntry[] = [];
+  for (const item of items) {
+    const film = getFilmById(item.filmId);
+    if (film !== undefined) out.push({ item, film });
+  }
+  return out;
+}
 
 export const Library: FC = () => {
+  const styles = useLibraryStyles();
   const [params, setParams] = useSearchParams();
   const filmId = params.get("film");
-  const profileFilter = params.get("profile");
   const selectedFilm = filmId ? getFilmById(filmId) : undefined;
-  const paneOpen = Boolean(selectedFilm);
 
-  const { paneWidth, containerRef, onResizeMouseDown } = useSplitResize();
+  const heroFilms = useMemo<Film[]>(() => {
+    const list = HERO_FILM_IDS.map((id) => getFilmById(id)).filter(
+      (f): f is Film => f !== undefined,
+    );
+    return list;
+  }, []);
 
-  const [search, setSearch] = useState("");
-  const [view, setView] = useState<ViewMode>("grid");
+  const [heroIndex, setHeroIndex] = useState(0);
+  const [heroFading, setHeroFading] = useState(false);
+  const heroFadeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const visible = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return films.filter((f) => {
-      if (profileFilter && f.profile !== profileFilter) return false;
-      if (!q) return true;
-      const hay = [f.title, f.filename, f.genre]
-        .filter(Boolean)
-        .map((s) => (s as string).toLowerCase());
-      return hay.some((s) => s.includes(q));
-    });
-  }, [search, profileFilter]);
+  useEffect(() => {
+    if (selectedFilm) return;
+    const interval = setInterval(() => {
+      setHeroFading(true);
+      heroFadeTimerRef.current = setTimeout(() => {
+        setHeroIndex((i) => (i + 1) % heroFilms.length);
+        setHeroFading(false);
+      }, HERO_FADE_MS);
+    }, HERO_INTERVAL_MS);
+    return () => {
+      clearInterval(interval);
+      if (heroFadeTimerRef.current !== null) clearTimeout(heroFadeTimerRef.current);
+    };
+  }, [heroFilms.length, selectedFilm]);
 
-  const buildParams = (next: Record<string, string | null>): URLSearchParams => {
-    const out = new URLSearchParams(params);
-    for (const [k, v] of Object.entries(next)) {
-      if (v === null) out.delete(k);
-      else out.set(k, v);
+  const goToHero = (idx: number): void => {
+    if (idx === heroIndex) return;
+    setHeroFading(true);
+    setTimeout(() => {
+      setHeroIndex(idx);
+      setHeroFading(false);
+    }, HERO_FADE_MS / 2);
+  };
+
+  const continueWatching = useMemo<RowEntry[]>(
+    () => rowEntries(watchlist.filter((w) => w.progress !== undefined)),
+    [],
+  );
+  const watchlistRest = useMemo<RowEntry[]>(
+    () => rowEntries(watchlist.filter((w) => w.progress === undefined)),
+    [],
+  );
+  const newReleases = useMemo<Film[]>(() => {
+    const out: Film[] = [];
+    for (const id of newReleaseIds) {
+      const film = getFilmById(id);
+      if (film !== undefined) out.push(film);
     }
     return out;
-  };
+  }, []);
 
-  const setProfileFilter = (id: string | null): void => {
-    setParams(buildParams({ profile: id }));
-  };
+  const [search, setSearch] = useState("");
+  const [searchFocused, setSearchFocused] = useState(false);
+  const [searchCaretX, setSearchCaretX] = useState(0);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const searchMirrorRef = useRef<HTMLSpanElement>(null);
+  const trimmedQuery = search.trim().toLowerCase();
+  const searching = trimmedQuery.length > 0;
+
+  useEffect(() => {
+    if (searchMirrorRef.current !== null) {
+      setSearchCaretX(searchMirrorRef.current.offsetWidth);
+    }
+  }, [search, searchFocused]);
+
+  const searchResults = useMemo<Film[]>(() => {
+    if (!trimmedQuery) return [];
+    return films.filter((f) => {
+      const title = (f.title ?? "").toLowerCase();
+      const filename = f.filename.toLowerCase();
+      const director = (f.director ?? "").toLowerCase();
+      const genre = (f.genre ?? "").toLowerCase();
+      return (
+        title.includes(trimmedQuery) ||
+        filename.includes(trimmedQuery) ||
+        director.includes(trimmedQuery) ||
+        genre.includes(trimmedQuery)
+      );
+    });
+  }, [trimmedQuery]);
 
   const openFilm = (id: string): void => {
-    if (filmId === id) setParams(buildParams({ film: null }));
-    else setParams(buildParams({ film: id }));
+    const next = new URLSearchParams(params);
+    next.set("film", id);
+    setParams(next);
   };
 
-  const closePane = (): void => setParams(buildParams({ film: null }));
+  const closeFilm = (): void => {
+    const next = new URLSearchParams(params);
+    next.delete("film");
+    setParams(next);
+  };
+
+  const [greetingTilt, setGreetingTilt] = useState({ rx: 0, ry: 0 });
+  const onGreetingMouseMove = (e: React.MouseEvent<HTMLDivElement>): void => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const nx = (e.clientX - rect.left) / rect.width - 0.5;
+    const ny = (e.clientY - rect.top) / rect.height - 0.5;
+    setGreetingTilt({ rx: ny * 18, ry: -nx * 18 });
+  };
+  const onGreetingMouseLeave = (): void => setGreetingTilt({ rx: 0, ry: 0 });
+
+  if (selectedFilm) {
+    return <FilmDetailsOverlay film={selectedFilm} onClose={closeFilm} />;
+  }
 
   return (
-    <div
-      ref={containerRef}
-      style={
-        paneOpen
-          ? {
-              display: "grid",
-              gridTemplateColumns: `1fr 4px ${paneWidth}px`,
-              height: "100%",
-              transition: "grid-template-columns 0.25s ease",
-            }
-          : {
-              display: "grid",
-              gridTemplateColumns: "1fr 0px 0px",
-              height: "100%",
-              transition: "grid-template-columns 0.25s ease",
-            }
-      }
-    >
-      <div
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          height: "100%",
-          overflow: "hidden",
-        }}
-      >
-        {/* Filter bar */}
-        <div
-          style={{
-            padding: "16px 28px",
-            borderBottom: "1px solid var(--border)",
-            display: "flex",
-            alignItems: "center",
-            gap: 16,
-          }}
-        >
-          <div
-            style={{
-              flex: 1,
-              display: "flex",
-              alignItems: "center",
-              gap: 10,
-              background: "var(--surface-2)",
-              border: "1px solid var(--border)",
-              padding: "8px 12px",
-              borderRadius: 3,
-            }}
-          >
-            <IconSearch style={{ color: "var(--text-muted)" }} />
-            <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search title, filename, genre…"
-              style={{
-                flex: 1,
-                background: "transparent",
-                border: 0,
-                outline: "none",
-                color: "var(--text)",
-                fontSize: 12,
-              }}
-            />
-            <span
-              style={{
-                fontFamily: "var(--font-mono)",
-                fontSize: 10,
-                color: "var(--text-faint)",
-                letterSpacing: "0.1em",
-              }}
-            >
-              ⌘K
-            </span>
-          </div>
-          <div style={{ display: "flex", gap: 4 }}>
-            {(["grid", "list"] as const).map((m) => {
-              const active = view === m;
-              return (
-                <button
-                  key={m}
-                  onClick={() => setView(m)}
-                  style={{
-                    padding: "8px 14px",
-                    border: "1px solid var(--border)",
-                    background: active ? "var(--green-soft)" : "transparent",
-                    color: active ? "var(--green)" : "var(--text-dim)",
-                    fontFamily: "var(--font-mono)",
-                    fontSize: 10,
-                    letterSpacing: "0.18em",
-                    borderRadius: 2,
-                    textTransform: "uppercase",
-                  }}
-                >
-                  {m}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Profile chips */}
-        <div
-          style={{
-            padding: "12px 28px",
-            display: "flex",
-            gap: 8,
-            borderBottom: "1px solid var(--border-soft)",
-            alignItems: "center",
-          }}
-        >
-          <ProfileChip
-            label="All profiles"
-            count={films.length}
-            active={!profileFilter}
-            onClick={() => setProfileFilter(null)}
-          />
-          {profiles.map((p) => (
-            <ProfileChip
-              key={p.id}
-              label={p.name}
-              count={p.filmCount ?? p.episodeCount ?? 0}
-              active={profileFilter === p.id}
-              warn={p.unmatched > 0}
-              onClick={() =>
-                setProfileFilter(profileFilter === p.id ? null : p.id)
-              }
+    <div className={styles.page}>
+      <div className={styles.hero}>
+        <div className={styles.heroSlides}>
+          {heroFilms.map((film, i) => (
+            <Poster
+              key={film.id}
+              url={film.posterUrl}
+              alt={film.title ?? film.filename}
+              className={mergeClasses(
+                styles.heroImg,
+                i === heroIndex && styles.heroImgActive,
+                i === heroIndex && heroFading && styles.heroImgFading,
+              )}
             />
           ))}
-          <div style={{ flex: 1 }} />
-          <span className="eyebrow">SORT · RECENTLY ADDED</span>
+        </div>
+        <div className={styles.heroEdgeFade} />
+        <div className={styles.heroBottomFade} />
+        <div className="grain-layer" />
+
+        <div
+          className={mergeClasses(
+            styles.searchBar,
+            searchFocused && styles.searchBarFocused,
+          )}
+        >
+          <span className={styles.searchIcon} aria-hidden="true">
+            <IconSearch />
+          </span>
+          <div className={styles.searchInputWrap}>
+            <span
+              ref={searchMirrorRef}
+              className={styles.searchMirror}
+              aria-hidden="true"
+            >
+              {search}
+            </span>
+            <input
+              ref={searchInputRef}
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              onFocus={() => setSearchFocused(true)}
+              onBlur={() => window.setTimeout(() => setSearchFocused(false), 120)}
+              placeholder={searchFocused ? "" : "Search films, directors, genres…"}
+              className={styles.searchInput}
+              aria-label="Search the library"
+              spellCheck={false}
+              autoComplete="off"
+            />
+            {searchFocused && (
+              <span
+                className={styles.searchCaret}
+                style={{ left: `${searchCaretX}px` }}
+                aria-hidden="true"
+              />
+            )}
+          </div>
+          {searching && (
+            <button
+              type="button"
+              onClick={() => setSearch("")}
+              aria-label="Clear search"
+              className={styles.searchClear}
+            >
+              <IconClose width={12} height={12} />
+            </button>
+          )}
         </div>
 
-        {/* Body */}
-        <div style={{ flex: 1, overflow: "auto", padding: "20px 28px" }}>
-          {view === "grid" ? (
+        <div className={styles.heroBody}>
+          <div>
+            <div className={styles.greetingEyebrow}>
+              · {greeting()}, {user.name.toUpperCase()}
+            </div>
             <div
+              className={styles.greeting}
+              onMouseMove={onGreetingMouseMove}
+              onMouseLeave={onGreetingMouseLeave}
               style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))",
-                gap: 18,
+                transform: `perspective(800px) rotateX(${greetingTilt.rx}deg) rotateY(${greetingTilt.ry}deg)`,
               }}
             >
-              {visible.map((f) => (
-                <PosterCard
-                  key={f.id}
-                  film={f}
-                  selected={filmId === f.id}
-                  onClick={() => openFilm(f.id)}
-                />
-              ))}
+              Tonight&apos;s
+              <br />
+              library.
+            </div>
+          </div>
+          <div className={styles.slideDots}>
+            {heroFilms.map((film, i) => (
+              <button
+                key={film.id}
+                type="button"
+                onClick={() => goToHero(i)}
+                aria-label={`Show ${film.title ?? film.filename}`}
+                className={mergeClasses(
+                  styles.slideDot,
+                  i === heroIndex ? styles.slideDotActive : styles.slideDotInactive,
+                )}
+              />
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className={styles.rowsScroll}>
+        {searching ? (
+          searchResults.length > 0 ? (
+            <div className={styles.searchResults}>
+              <div className={styles.rowHeader}>
+                Results · {searchResults.length}
+              </div>
+              <div className={styles.searchGrid}>
+                {searchResults.map((film) => (
+                  <FilmTile
+                    key={film.id}
+                    film={film}
+                    onClick={() => openFilm(film.id)}
+                  />
+                ))}
+              </div>
             </div>
           ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
-              {visible.map((f) => (
-                <ListRow
-                  key={f.id}
-                  film={f}
-                  selected={filmId === f.id}
-                  onClick={() => openFilm(f.id)}
-                />
-              ))}
+            <div className={styles.noResults}>
+              No films match &ldquo;{search.trim()}&rdquo;
             </div>
-          )}
-          {visible.length === 0 && (
-            <div
-              style={{
-                padding: "60px 0",
-                textAlign: "center",
-                color: "var(--text-muted)",
-                fontFamily: "var(--font-mono)",
-                fontSize: 12,
-                letterSpacing: "0.18em",
-                textTransform: "uppercase",
-              }}
-            >
-              No films match the current filter.
-            </div>
-          )}
-        </div>
-      </div>
-
-      {paneOpen && (
-        <>
-          <div
-            onMouseDown={onResizeMouseDown}
-            style={{
-              backgroundColor: "var(--border)",
-              cursor: "col-resize",
-            }}
-          />
-          {selectedFilm && (
-            <DetailPane film={selectedFilm} onClose={closePane} />
-          )}
-        </>
-      )}
-    </div>
-  );
-};
-
-const ProfileChip: FC<{
-  label: string;
-  count: number;
-  active: boolean;
-  warn?: boolean;
-  onClick: () => void;
-}> = ({ label, count, active, warn, onClick }) => (
-  <button
-    onClick={onClick}
-    style={{
-      padding: "6px 12px",
-      background: active ? "var(--green-soft)" : "var(--surface-2)",
-      border: `1px solid ${active ? "var(--green-deep)" : "var(--border)"}`,
-      color: active ? "var(--green)" : "var(--text-dim)",
-      borderRadius: 999,
-      fontSize: 11,
-      display: "flex",
-      alignItems: "center",
-      gap: 8,
-    }}
-  >
-    {warn && <IconWarn />}
-    <span>{label}</span>
-    <span
-      style={{
-        color: "var(--text-faint)",
-        fontFamily: "var(--font-mono)",
-        fontSize: 10,
-      }}
-    >
-      {count}
-    </span>
-  </button>
-);
-
-const PosterCard: FC<{
-  film: Film;
-  selected: boolean;
-  onClick: () => void;
-}> = ({ film, selected, onClick }) => {
-  const showHdrChip = film.resolution === "4K" && film.hdr && film.hdr !== "—";
-  return (
-    <div
-      onClick={onClick}
-      style={{
-        position: "relative",
-        cursor: "pointer",
-      }}
-    >
-      <div
-        style={{
-          aspectRatio: "2/3",
-          overflow: "hidden",
-          border: selected
-            ? "1px solid var(--green)"
-            : "1px solid var(--border)",
-          background: "var(--surface)",
-          position: "relative",
-          boxShadow: selected ? "0 0 0 3px var(--green-soft)" : "none",
-          transition: "box-shadow 0.15s, border-color 0.15s",
-        }}
-      >
-        <Poster
-          url={film.posterUrl}
-          alt={film.title ?? film.filename}
-          style={{ width: "100%", height: "100%", objectFit: "cover" }}
-        />
-        {showHdrChip && (
-          <span
-            style={{
-              position: "absolute",
-              top: 8,
-              right: 8,
-              background: "var(--green)",
-              color: "var(--green-ink)",
-              fontFamily: "var(--font-mono)",
-              fontSize: 9,
-              fontWeight: 700,
-              padding: "2px 6px",
-              borderRadius: 2,
-              letterSpacing: "0.1em",
-            }}
-          >
-            4K · {film.hdr}
-          </span>
-        )}
-        {film.rating !== null && (
-          <div
-            style={{
-              position: "absolute",
-              bottom: 6,
-              right: 6,
-              background: "rgba(0,0,0,0.7)",
-              color: "var(--yellow)",
-              fontFamily: "var(--font-mono)",
-              fontSize: 10,
-              padding: "2px 6px",
-              display: "flex",
-              alignItems: "center",
-              gap: 4,
-              borderRadius: 2,
-            }}
-          >
-            <ImdbBadge />
-            {film.rating}
-          </div>
-        )}
-        {!film.matched && (
-          <div
-            style={{
-              position: "absolute",
-              inset: 0,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              background: "rgba(0,0,0,0.4)",
-              color: "var(--yellow)",
-              fontFamily: "var(--font-mono)",
-              fontSize: 38,
-            }}
-          >
-            ?
-          </div>
-        )}
-      </div>
-      <div style={{ marginTop: 8 }}>
-        <div style={{ fontSize: 12, color: "var(--text)" }}>
-          {film.title ?? film.filename}
-        </div>
-        <div
-          style={{
-            fontSize: 10,
-            color: "var(--text-muted)",
-            fontFamily: "var(--font-mono)",
-            letterSpacing: "0.06em",
-            marginTop: 2,
-          }}
-        >
-          {[film.year, film.duration].filter(Boolean).join(" · ")}
-        </div>
-      </div>
-    </div>
-  );
-};
-
-const ListRow: FC<{
-  film: Film;
-  selected: boolean;
-  onClick: () => void;
-}> = ({ film, selected, onClick }) => {
-  const profileName = profiles.find((p) => p.id === film.profile)?.name ?? "";
-  return (
-    <div
-      onClick={onClick}
-      style={{
-        display: "grid",
-        gridTemplateColumns: "48px 2fr 1fr 0.6fr 0.6fr 0.4fr",
-        alignItems: "center",
-        gap: 14,
-        padding: "8px 14px",
-        background: selected ? "var(--green-soft)" : "transparent",
-        borderLeft: selected
-          ? "2px solid var(--green)"
-          : "2px solid transparent",
-        cursor: "pointer",
-        borderBottom: "1px solid var(--border-soft)",
-      }}
-    >
-      <Poster
-        url={film.posterUrl}
-        alt={film.title ?? film.filename}
-        style={{ width: 48, height: 68, objectFit: "cover" }}
-      />
-      <div>
-        <div style={{ fontSize: 12, color: "var(--text)" }}>
-          {film.title ?? film.filename}
-          {film.year && (
-            <span style={{ color: "var(--text-muted)" }}> · {film.year}</span>
-          )}
-        </div>
-        <div
-          style={{
-            fontSize: 10,
-            color: "var(--text-muted)",
-            fontFamily: "var(--font-mono)",
-            marginTop: 2,
-          }}
-        >
-          {(film.genre ?? "UNMATCHED").toUpperCase()} · {profileName}
-        </div>
-      </div>
-      <div style={{ display: "flex", gap: 4 }}>
-        <span className={`chip ${film.resolution === "4K" ? "green" : ""}`}>
-          {film.resolution}
-        </span>
-        {film.hdr && film.hdr !== "—" && (
-          <span className="chip">{film.hdr}</span>
-        )}
-      </div>
-      <div
-        style={{
-          fontFamily: "var(--font-mono)",
-          fontSize: 10,
-          color: "var(--yellow)",
-          display: "flex",
-          alignItems: "center",
-          gap: 4,
-        }}
-      >
-        {film.rating !== null && (
+          )
+        ) : (
           <>
-            <ImdbBadge />
-            {film.rating}
+            {continueWatching.length > 0 && (
+              <Row title="Continue watching">
+                {continueWatching.map(({ item, film }) => (
+                  <FilmTile
+                    key={item.id}
+                    film={film}
+                    progress={item.progress}
+                    onClick={() => openFilm(film.id)}
+                  />
+                ))}
+              </Row>
+            )}
+
+            {newReleases.length > 0 && (
+              <Row title="New releases">
+                {newReleases.map((film) => (
+                  <FilmTile
+                    key={film.id}
+                    film={film}
+                    onClick={() => openFilm(film.id)}
+                  />
+                ))}
+              </Row>
+            )}
+
+            {watchlistRest.length > 0 && (
+              <Row title="Watchlist">
+                {watchlistRest.map(({ item, film }) => (
+                  <FilmTile
+                    key={item.id}
+                    film={film}
+                    onClick={() => openFilm(film.id)}
+                  />
+                ))}
+              </Row>
+            )}
           </>
         )}
       </div>
-      <div
-        style={{
-          fontFamily: "var(--font-mono)",
-          fontSize: 10,
-          color: "var(--text-dim)",
-        }}
-      >
-        {film.duration}
+    </div>
+  );
+};
+
+interface RowProps {
+  title: string;
+  children: React.ReactNode;
+}
+
+const Row: FC<RowProps> = ({ title, children }) => {
+  const styles = useLibraryStyles();
+  const trackRef = useRef<HTMLDivElement>(null);
+  const [hasPrev, setHasPrev] = useState(false);
+  const [hasNext, setHasNext] = useState(false);
+
+  useEffect(() => {
+    const el = trackRef.current;
+    if (el === null) return;
+    const updateBounds = (): void => {
+      setHasPrev(el.scrollLeft > 4);
+      setHasNext(el.scrollLeft + el.clientWidth < el.scrollWidth - 4);
+    };
+    updateBounds();
+    el.addEventListener("scroll", updateBounds, { passive: true });
+    const ro = new ResizeObserver(updateBounds);
+    ro.observe(el);
+    return () => {
+      el.removeEventListener("scroll", updateBounds);
+      ro.disconnect();
+    };
+  }, [children]);
+
+  const pageSize = (): number => {
+    const el = trackRef.current;
+    if (el === null) return 0;
+    // Page = whole tiles that fit in the visible track width. Aligning the
+    // step to a tile-stride means the snap-to-tile boundary has nothing to
+    // adjust at rest, so the easing stays clean.
+    const tilesPerPage = Math.max(1, Math.floor(el.clientWidth / TILE_STRIDE));
+    return tilesPerPage * TILE_STRIDE;
+  };
+
+  const goPrev = (): void => {
+    const el = trackRef.current;
+    if (el === null) return;
+    smoothScrollBy(el, -pageSize(), ROW_SCROLL_DURATION_MS);
+  };
+
+  const goNext = (): void => {
+    const el = trackRef.current;
+    if (el === null) return;
+    smoothScrollBy(el, pageSize(), ROW_SCROLL_DURATION_MS);
+  };
+
+  return (
+    <div className={styles.row}>
+      <div className={styles.rowHeader}>{title}</div>
+      <div className={styles.rowFrame}>
+        <div ref={trackRef} className={styles.rowTrack}>
+          {children}
+        </div>
+        {hasPrev && (
+          <button
+            type="button"
+            onClick={goPrev}
+            aria-label="Previous"
+            className={mergeClasses(styles.rowArrow, styles.rowArrowLeft)}
+          >
+            <IconBack />
+          </button>
+        )}
+        {hasNext && (
+          <button
+            type="button"
+            onClick={goNext}
+            aria-label="Next"
+            className={mergeClasses(styles.rowArrow, styles.rowArrowRight)}
+          >
+            <IconChevron />
+          </button>
+        )}
       </div>
-      <div
-        style={{
-          fontFamily: "var(--font-mono)",
-          fontSize: 10,
-          color: "var(--text-dim)",
-          textAlign: "right",
-        }}
+    </div>
+  );
+};
+
+interface FilmTileProps {
+  film: Film;
+  progress?: number;
+  onClick: () => void;
+}
+
+const FilmTile: FC<FilmTileProps> = ({ film, progress, onClick }) => {
+  const styles = useLibraryStyles();
+  return (
+    <button type="button" onClick={onClick} className={styles.tile}>
+      <div className={styles.tileFrame}>
+        <Poster
+          url={film.posterUrl}
+          alt={film.title ?? film.filename}
+          className={styles.tileImage}
+        />
+        {progress !== undefined && (
+          <div className={styles.progressTrack}>
+            <div
+              className={styles.progressFill}
+              style={{ width: `${progress}%` }}
+            />
+          </div>
+        )}
+      </div>
+      <div className={styles.tileMeta}>
+        <div className={styles.tileTitle}>{film.title ?? film.filename}</div>
+        <div className={styles.tileSubtitle}>
+          {[film.year, film.duration].filter(Boolean).join(" · ")}
+        </div>
+      </div>
+    </button>
+  );
+};
+
+interface FilmDetailsOverlayProps {
+  film: Film;
+  onClose: () => void;
+}
+
+const FilmDetailsOverlay: FC<FilmDetailsOverlayProps> = ({ film, onClose }) => {
+  const styles = useLibraryStyles();
+  const navigate = useNavigate();
+
+  const playWithTransition = (): void => {
+    const target = `/player/${film.id}`;
+    if (typeof document.startViewTransition === "function") {
+      document.startViewTransition(() => navigate(target));
+    } else {
+      navigate(target);
+    }
+  };
+
+  return (
+    <div className={styles.overlay}>
+      <Poster
+        url={film.posterUrl}
+        alt={film.title ?? film.filename}
+        className={styles.overlayPoster}
+      />
+      <div className={styles.overlayGradient} />
+      <div className="grain-layer" />
+      <button
+        type="button"
+        onClick={onClose}
+        aria-label="Back to home"
+        className={styles.overlayBack}
       >
-        {film.size}
+        <IconBack />
+        <span>Back</span>
+      </button>
+      <button
+        type="button"
+        onClick={onClose}
+        aria-label="Close details"
+        className={styles.overlayClose}
+      >
+        <IconClose />
+      </button>
+      <div className={styles.overlayContent}>
+        <div className={styles.overlayChips}>
+          <span className={mergeClasses("chip", "green")}>{film.resolution}</span>
+          {film.hdr && film.hdr !== "—" && (
+            <span className="chip">{film.hdr}</span>
+          )}
+          {film.codec && <span className="chip">{film.codec}</span>}
+          {film.rating !== null && (
+            <span className={styles.overlayRating}>
+              <ImdbBadge />
+              {film.rating}
+            </span>
+          )}
+        </div>
+        <div className={styles.overlayTitle}>{film.title ?? film.filename}</div>
+        <div className={styles.overlayMetaRow}>
+          {[film.year, film.genre, film.duration]
+            .filter((v): v is string | number => v !== null && v !== undefined)
+            .join(" · ")}
+        </div>
+        {film.director && (
+          <div className={styles.overlayDirector}>
+            Directed by <span className={styles.overlayDirectorName}>{film.director}</span>
+          </div>
+        )}
+        {film.plot && <div className={styles.overlayPlot}>{film.plot}</div>}
+        <div className={styles.overlayActions}>
+          <button
+            type="button"
+            onClick={playWithTransition}
+            className={styles.playCta}
+          >
+            <IconPlay />
+            <span>Play</span>
+          </button>
+          <span className={styles.overlayFilename}>{film.filename}</span>
+        </div>
       </div>
     </div>
   );

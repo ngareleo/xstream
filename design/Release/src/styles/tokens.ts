@@ -39,6 +39,8 @@ export const tokens = {
   fontHead: "'Anton', sans-serif",
   fontBody: "'Inter', sans-serif",
   fontMono: "'JetBrains Mono', ui-monospace, monospace",
+  fontDisplay: "'Bytesized', system-ui, sans-serif",
+  fontNav: "'Science Gothic', system-ui, sans-serif",
 
   // Geometry
   radiusSm: "2px",

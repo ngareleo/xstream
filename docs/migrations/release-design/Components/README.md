@@ -2,21 +2,24 @@
 
 One spec file per UI element of `design/Release/`. Each file follows the same skeleton (Files, Purpose, Visual, Behaviour, Subcomponents, Porting checklist, Status). When you edit a file in the lab, update the matching spec. When you port a component to `client/src/`, tick the checklist.
 
+For a high-level summary of every architectural and per-page change between the Prerelease (Moran) and Release (Xstream) labs, see [`../Changes.md`](../Changes.md).
+
 Inline subcomponents (ProfileRow, FilmRow, ProfileChip, PosterCard, ListRow, VideoArea, SidePanel, SettingsRow, Toggle) are documented as **sections within their parent file**, not separate files. Promote one to its own file when its `.tsx` is extracted.
 
 ## Catalog
 
 | Component | Files (lab) | Spec | Production |
 |---|---|---|---|
-| [AppShell](AppShell.md) | `components/Layout/AppShell.{tsx,styles.ts}` | baseline | not started |
+| [AppShell](AppShell.md) | `components/Layout/AppShell.{tsx,styles.ts}` | done | not started |
 | [AppHeader](AppHeader.md) | `components/AppHeader/AppHeader.{tsx,styles.ts}` | done | not started |
-| [Sidebar](Sidebar.md) | `components/Sidebar/Sidebar.{tsx,styles.ts}` | baseline | not started |
+| [Sidebar](Sidebar.md) | ~~`components/Sidebar/Sidebar.{tsx,styles.ts}`~~ **deleted** | tombstone | n/a — deleted |
 | [DetailPane](DetailPane.md) | `components/DetailPane/DetailPane.tsx` | baseline | not started |
 | [Poster](Poster.md) | `components/Poster/Poster.tsx` | baseline | not started |
 | [Logo](Logo.md) | `components/Logo/{Logo01..Logo07,index}.tsx` | baseline | not started |
 | [Profiles page](Profiles.md) | `pages/Profiles/Profiles.{tsx,styles.ts}` | baseline | not started |
-| [Library page](Library.md) | `pages/Library/Library.tsx` | baseline | not started |
-| [Player page](Player.md) | `pages/Player/Player.tsx` | baseline | not started |
+| [Library page](Library.md) | `pages/Library/Library.{tsx,styles.ts}` | done | not started |
+| [Watchlist page](Watchlist.md) | `pages/Watchlist/Watchlist.{tsx,styles.ts}` | done | not started |
+| [Player page](Player.md) | `pages/Player/Player.tsx` | done | not started |
 | [Settings page](Settings.md) | `pages/Settings/Settings.tsx` | baseline | not started |
 | [DesignSystem page](DesignSystem.md) | `pages/DesignSystem/DesignSystem.tsx` | baseline | n/a — lab only |
 | [Goodbye page](Goodbye.md) | `pages/Goodbye/Goodbye.tsx` | baseline | not started |

@@ -44,6 +44,7 @@ Keep rows short (≤ ~120 chars). When adding a new topic file to `docs/`, add i
 | src-tauri/ crate — ServerConfig, in-process loopback, port injection, resource layout, ffmpeg_path resolver | `docs/migrations/rust-rewrite/Plan/03-Tauri-Packaging.md` |
 | Step 4 — Release plumbing + first beta (per-OS signing, Ed25519 updates, CI release matrix, soak group) | `docs/migrations/rust-rewrite/Plan/04-Release.md` |
 | Release-design migration — Prerelease (Moran) → Release (Xstream) per-component spec + porting checklist | `docs/migrations/release-design/README.md` |
+| Prerelease → Release cross-cutting diff (routing, shell, sidebar, fonts, mock data, visual language) | `docs/migrations/release-design/Changes.md` |
 | AppHeader spec (glass, custom caret, scan button, suggestions dropdown, ARIA) — model for all Release component specs | `docs/migrations/release-design/Components/AppHeader.md` |
 | Peer-to-peer streaming model (passthrough, Ed25519 invite tokens, content-addressed cache reuse, cross-peer traceparent, invariants) | `docs/architecture/Sharing/00-Peer-Streaming.md` |
 | Interim desktop-shell decision (Electron + Bun-as-sidecar; architectural surface, caveats, distribution, updates, CI, invariants) | `docs/architecture/Deployment/00-Interim-Desktop-Shell.md` |

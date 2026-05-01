@@ -27,6 +27,7 @@ client/.vite/
 *.jpg
 !docs/diagrams/*.png
 !src-tauri/icons/*.png
+!design/Release/public/posters/*.jpg
 
 # docs tooling state
 docs/.obsidian/

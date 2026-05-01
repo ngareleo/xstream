@@ -3,20 +3,20 @@ import { tokens } from "../../styles/tokens.js";
 
 export const useAppShellStyles = makeStyles({
   shell: {
-    display: "grid",
-    gridTemplateColumns: `${tokens.sidebarWidth} 1fr`,
-    gridTemplateRows: `${tokens.headerHeight} 1fr`,
-    gridTemplateAreas: `"head head" "side main"`,
+    position: "relative",
     width: "100vw",
     height: "100vh",
     backgroundColor: tokens.colorBg0,
     color: tokens.colorText,
-    overflow: "hidden",
-    position: "relative",
+    overflowX: "hidden",
+    overflowY: "hidden",
   },
   main: {
-    gridArea: "main",
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
     overflow: "hidden",
-    position: "relative",
   },
 });

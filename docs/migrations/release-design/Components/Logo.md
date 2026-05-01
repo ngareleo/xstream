@@ -57,6 +57,13 @@ interface LogoEntry {
 
 None — each `LogoNN.tsx` is a standalone SVG.
 
+## Changes from Prerelease
+
+- **Mark count:** OLD — one mark (`<LogoShield>` shield SVG, exported from `lib/icons.tsx`). NEW — seven candidate marks (`Logo01`–`Logo07`) in a dedicated `components/Logo/` directory; one is chosen at release time.
+- **Usage in Goodbye:** OLD — `<LogoShield>` at `width: 44, height: 52, opacity: 0.5` in the Goodbye page. NEW — `<Logo02 size={64} showWordmark={false} />` at `opacity: 0.6` in the Release Goodbye page.
+- **Usage in AppHeader:** OLD — `<LogoShield>` in the brand cell alongside "MORAN" text. NEW — the brand is now a text wordmark ("Xstream" in Bytesized) not a glyph. No logo is rendered in the AppHeader currently — the selection workflow will determine whether the final mark replaces or accompanies the wordmark.
+- **Design-system sandbox:** OLD — no comparable component existed; logo was a single shipped mark. NEW — `<LogoCard>` frames each mark in a boxed card for review. `MK-02` is flagged as the current default.
+
 ## TODO(redesign)
 
 - The "current default" is hard-coded as `Logo02` in `pages/DesignSystem/DesignSystem.tsx` (passes `highlighted={entry.code === "MK-02"}`). When the user picks a final, this needs:
