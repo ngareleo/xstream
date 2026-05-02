@@ -137,7 +137,7 @@ The exact column types, NULLability, and indexes live in the M0 doc.
 
 | #  | Milestone | Owner | Status | Notes |
 |----|-----------|-------|--------|-------|
-| M0 | Foundations: Porting-Guide + Schema-Changes + worktree setup | this agent (Opus 4.7, 2026-05-02) | in progress | Worktree created at `../xstream-release-design`; Porting-Guide.md + Schema-Changes.md written; README index updated. PR pending. |
+| M0 | Foundations: Plan + Porting-Guide + Schema-Changes + worktree setup | Opus 4.7 (2026-05-02) | done | Commit `262c57d`. Schema-Changes.md captures the discovery that the existing GQL surface is far more complete than the plan first assumed — the real M2 deltas are seasons/episodes + `Video.nativeResolution`. The design's `Film.kind` maps onto existing `Video.mediaType`. |
 | M1 | Tokens, fonts, shared CSS, icon sweep | _ready (M0 PR must merge first)_ | not started | Visual base. Existing pages stay running with new tokens. **Schema-Changes.md discovery:** the existing schema is far more complete than first thought — many things the plan listed for M2 (WatchlistItem, OmdbSearchResult, createLibrary/updateLibrary, matchVideo, etc.) already exist. Real M2 deltas are seasons/episodes + `Video.nativeResolution` only. |
 | M2 | GraphQL + SQLite schema migration | _waiting on M1_ | not started | One-shot schema. Adds resolvers; old UI keeps working until M3. |
 | M3 | AppShell + AppHeader + AccountMenu + Router cutover | _waiting on M2_ | not started | App boots with new shell; placeholder pages for `/`, `/profiles`, `/watchlist` until later milestones land them. Sidebar deleted. |
@@ -190,8 +190,8 @@ that worktree. Open a draft PR against `main` after this milestone.
   - Per-row "consumed by" pointer to the milestone that consumes the field.
 - [x] Set up git worktree at `../xstream-release-design` on branch
   `release-design`. Open draft PR titled "release-design: port lab → client".
-- [ ] Commit Porting-Guide + Schema-Changes in M0's commit. Push.
-- [ ] **Update this plan**: tick M0 row, set M1 `not started` → next.
+- [x] Commit Porting-Guide + Schema-Changes in M0's commit. Push. (Commit `262c57d`.)
+- [x] **Update this plan**: tick M0 row, set M1 `not started` → next.
 
 ### Inputs
 
