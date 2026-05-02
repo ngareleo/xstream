@@ -532,6 +532,14 @@ deletion path).
 - [x] No `client/src/components/sidebar/`, `dashboard-hero/`, or `pages/feedback-page/`, `pages/dashboard-page/` remain. _Also removed: `components/sign-out-dialog/` (sole consumer was Sidebar), `pages/film-detail-loader/` (sole consumers were dashboard-page + the previous LibraryPage; M4 already planned to delete it). `pages/library-page/LibraryPage.styles.ts`, `LibraryPage.strings.ts`, `pages/watchlist-page/WatchlistPage.styles.ts` deleted (broken token refs)._
 - [x] Roster row M3 = `done`.
 
+### Decisions
+
+1. **Router param name:** `/player/:videoId` (not `:filmId`). Retained from production; aligns with Relay backend IDs. Design lab spec (Player.md) updated to reflect the production param name.
+2. **Scan mutation deferral:** AppHeader exposes `AppHeader.ScanRequested` Nova event (`AppHeader.events.ts`); the real `scanLibraries` mutation is wired by M4's LibraryPage interceptor. M3 renders the lab's 2-second mock timer for visual feedback. Rationale: dashboard-page (prior consumer) is deleted; no page yet exists to display scan progress.
+3. **Header composition:** Shift from CSS grid to positioned-layer (absolute inset). Shell no longer reserves a grid row for the header; pages own `paddingTop: tokens.headerHeight` for clearance. Exception: Library hero overlaps at y=0 (designed).
+4. **Sidebar deletion:** Navigation consolidation into AppHeader (three centered NavLinks). Status signal from sidebar LIBRARIES section has no Release equivalent; flagged as M4+ work if client re-requests it.
+5. **Placeholder deletion:** `film-detail-loader`, `LibraryPage.styles.ts`, `LibraryPage.strings.ts`, `WatchlistPage.styles.ts` pre-deleted (broken token refs, will be recreated in their owning milestone). `sign-out-dialog` sole consumer was Sidebar; also deleted.
+
 ### Hand-off note for M4
 
 > Library is the biggest milestone — it lands 8 components plus the page
