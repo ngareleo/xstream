@@ -43,9 +43,16 @@ export function maxResolutionForHeight(
 }
 
 /**
- * Upgrades an OMDb/Amazon CDN poster URL from the default 300px width to a
- * higher resolution. The CDN accepts arbitrary _SX<width> values in the URL.
+ * Upgrades an OMDb / Amazon `m.media-amazon.com` poster URL to a target
+ * width. The CDN puts a chain of `_XXnnn` modifiers (and `_CR<crop>`
+ * runs) between `._V1_` and the file extension — for example
+ * `_V1_SX300.jpg` (only width set) or
+ * `_V1_QL75_UY562_CR35,0,380,562_.jpg` (quality + height + crop, no
+ * `_SX` at all). Strip the whole modifier block and replace it with a
+ * single `_SX<width>` so the CDN always serves the size we want. Pass
+ * non-Amazon URLs through unchanged.
  */
 export function upgradePosterUrl(url: string, width = 800): string {
-  return url.replace(/_SX\d+/, `_SX${width}`);
+  if (!url.includes("._V1_")) return url;
+  return url.replace(/(\._V1_)[^.]*(\.[a-z0-9]+)$/i, `$1SX${width}$2`);
 }
