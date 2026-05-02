@@ -11,11 +11,14 @@ This file is distinct from [`Commit.md`](Commit.md):
 
 How to use this file:
 
-- **At start of architect session:** skim the most recent ~5 entries. They are the cheapest way to load "what's happened lately and why".
-- **When asked a question whose answer turns on a recent decision:** search this file for the topic. The narrative entry will name the doc that landed and the rationale.
-- **When writing a new entry:** keep it to one paragraph plus a "Files:" line. Cross-link to the docs touched. Don't restate the `Commit.md` entry — assume the reader has it open.
+- **At start of architect session — read only the top entry** via `sed -n '1,/^---$/p' docs/History.md`. This returns the preamble plus the most recent entry up to its terminating divider, so the file can grow unbounded without inflating the boot-read cost. The protocol mirrors `Commit.md`.
+- **When recent context is needed:** widen to the top N entries with `awk '/^---$/{n++; if(n>=N) exit} {print}' docs/History.md` (substitute N=5 for "the last few"). Pure `sed` can't natively count divider matches, so a tiny `awk` pass is the right tool for top-N — but the default cadence is top-1 only.
+- **When asked a question whose answer turns on a recent decision:** grep this file for the topic. The narrative entry will name the doc that landed and the rationale.
+- **When writing a new entry:** keep it to one paragraph plus a "Files:" line. Cross-link to the docs touched. Don't restate the `Commit.md` entry — assume the reader has it open. Prepend the new entry **after the preamble block but before the first existing `---` divider** so newest-on-top stays intact.
 
-Entry shape:
+**IMPORTANT for the preamble:** do not use bare `---` lines anywhere in this top-of-file block — `sed -n '1,/^---$/p'` would stop at the first one and miss real entries below. The first `---` line in this file MUST be the terminator of the most recent entry. (Same constraint as `Commit.md` §preamble.)
+
+Entry shape (the entry ends with a single line containing exactly three hyphens — see existing entries below for the literal format):
 
 ```markdown
 ## <YYYY-MM-DD> — PR #<N> — <short title>
@@ -25,12 +28,12 @@ Entry shape:
 **Files:** `path/a.md`, `path/b.md`
 **Related Commit.md entry:** `<short-sha>`
 
----
+(terminating divider line goes here — see real entries below)
 ```
 
 > **Note on entries before 2026-05-01.** `docs/Commit.md` only began tracking architect-driven doc edits at PR #42 (`8534bc2`). Earlier entries below are seeded from PR titles + descriptions and carry the merge SHA in the Related-Commit slot rather than a true `Commit.md` cross-reference. The narrative is preserved; the cross-reference is best-effort for the pre-Commit.md era.
 
-<!-- ENTRIES BELOW — newest first; each ends with a bare `---` line. -->
+<!-- ENTRIES BELOW — newest first; each ends with a bare three-hyphen divider line. -->
 
 ## 2026-05-03 — PR #54 — boot-pack reorg + Principles/Tooling subtrees + History.md
 

@@ -15,7 +15,15 @@ I am the gatekeeper of xstream's knowledge base at `docs/`. I answer architectur
 1. [`docs/SUMMARY.md`](../../docs/SUMMARY.md) — a ≤120-line orientation primer on the shared baseline.
 2. [`docs/INDEX.md`](../../docs/INDEX.md) — the topic → file retrieval table. Each row points to one file.
 3. [`docs/Commit.md`](../../docs/Commit.md) — append-only log of past doc updates tied to git commits, **newest entry on top**. Read just the top entry: `sed -n '1,/^---$/p' docs/Commit.md` returns the preamble + first entry up to the first `---` divider, which is all I need to decide if a sync is required (see "Commit synchronisation" below).
-4. [`docs/History.md`](../../docs/History.md) — narrative log of doc updates, paired with `Commit.md`. **Read the most recent ~5 entries** (not just the top one) to build familiarity with how the knowledge base has evolved lately. The narrative entries explain *why* a change landed, what alternatives were considered, and what it unblocks — they are the cheapest way to load recent context that the terse `Commit.md` doesn't carry.
+4. [`docs/History.md`](../../docs/History.md) — narrative log of doc updates, paired with `Commit.md`. **Read just the top entry** with `sed -n '1,/^---$/p' docs/History.md` (same pattern as `Commit.md`). One narrative paragraph is the cheapest signal of "what changed last and why" — enough for default invocations.
+
+**Both `Commit.md` and `History.md` grow unbounded over the project's lifetime.** The top-entry-only sed pattern keeps boot-read cost flat as the files lengthen — never read either file in full on a routine invocation. When more recent context is genuinely needed (e.g. answering a question that turns on a multi-PR arc), widen with one of these on demand:
+
+- **History.md, top N entries:** `awk '/^---$/{n++; if(n>=N) exit} {print}' docs/History.md` — substitute N=3 or N=5 for "the last few".
+- **History.md, search by topic:** `grep -n -i 'topic-keyword' docs/History.md` then read the surrounding entry.
+- **Commit.md, top N entries:** same `awk` pattern against `Commit.md`. Rare — the sync protocol normally needs only the top one.
+
+Each on-demand widen costs more tokens; reserve it for the question that actually requires it. The four-files boot-read above stays at top-1 reads for every invocation.
 
 All four are checked-in files I maintain; keeping retrieval and sync state in `docs/` (not in this prompt) means a new topic file or sync entry shows up in the same PR that lands the doc change. If `SUMMARY.md` or `INDEX.md` is missing or materially stale, regenerate it or flag it for `/groom-knowledge-base`. If `Commit.md` is missing or has no entries yet, treat that as the first-run case under "Commit synchronisation". If `History.md` is missing or has only the bootstrap entry, that's fine — start using it; the narrative grows over time.
 
