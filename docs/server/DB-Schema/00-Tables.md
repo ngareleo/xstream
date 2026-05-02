@@ -1,6 +1,6 @@
 # Database Schema
 
-xstream uses SQLite via `bun:sqlite` with raw SQL. All queries go through `server/src/db/queries/`. WAL mode and foreign key enforcement are enabled on every connection.
+xstream uses SQLite via `rusqlite` with raw SQL. All queries are located in `server-rust/src/db/queries/`. WAL mode and foreign key enforcement are enabled on every connection.
 
 The database file lives at `tmp/xstream.db` (dev) or `$DB_PATH` (prod).
 
@@ -18,7 +18,7 @@ Populated via the `createLibrary` GraphQL mutation. Upserted by `path` so rename
 | `name` | TEXT | NOT NULL | Display name supplied by the mutation |
 | `path` | TEXT | NOT NULL UNIQUE | Absolute path to library root directory |
 | `media_type` | TEXT | NOT NULL | `'movies'` or `'tvShows'` |
-| `env` | TEXT | NOT NULL | `'dev'` or `'prod'` — filtered against `NODE_ENV` at scan time |
+| `env` | TEXT | NOT NULL | `'dev'` or `'prod'` — filtered against `RUST_ENV` at scan time |
 
 ---
 

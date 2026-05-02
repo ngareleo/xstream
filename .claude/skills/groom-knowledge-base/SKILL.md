@@ -77,9 +77,9 @@ List public exports that likely deserve a doc mention:
 
 ```sh
 rg -n "^export (async )?(function|const|class) [A-Z][A-Za-z0-9_]+" \
-   client/src/services/ server/src/services/ \
-   client/src/hooks/ server/src/routes/ \
-   server/src/graphql/resolvers/ \
+   client/src/services/ server-rust/src/services/ \
+   client/src/hooks/ server-rust/src/routes/ \
+   server-rust/src/graphql/ \
    --no-heading
 ```
 

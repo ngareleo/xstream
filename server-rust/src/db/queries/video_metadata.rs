@@ -1,4 +1,4 @@
-//! OMDb match metadata. Mirrors `server/src/db/queries/videoMetadata.ts`.
+//! OMDb match metadata.
 
 use rusqlite::{params, OptionalExtension, Row};
 
@@ -117,7 +117,6 @@ pub fn upsert_video_metadata(db: &Db, row: &VideoMetadataRow) -> DbResult<()> {
 /// Video IDs in `library_id` that have no `video_metadata` row yet. The
 /// scanner's auto-match step uses this to feed OMDb only for unmatched
 /// videos, so re-runs are idempotent (already-matched videos stay put).
-/// Mirrors `server/src/db/queries/videoMetadata.ts:getUnmatchedVideoIds`.
 pub fn get_unmatched_video_ids(db: &Db, library_id: &str) -> DbResult<Vec<String>> {
     db.with(|c| {
         let mut stmt = c.prepare(

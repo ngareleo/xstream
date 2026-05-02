@@ -1,12 +1,12 @@
 # Encode-pipeline tests
 
-Real-media integration tests for `chunker.startTranscodeJob` that exercise the full ffmpeg path against actual movie files. Catches regressions in HW-accel cascade, HDR encoding, the chunk PTS contract, and the no-software-fallback-at-4K invariant.
+Real-media integration tests for `chunker::start_transcode_job` that exercise the full ffmpeg path against actual movie files. Catches regressions in HW-accel cascade, HDR encoding, the chunk PTS contract, and the no-software-fallback-at-4K invariant.
 
 ## Opt-in via env var
 
-Tests are gated by `XSTREAM_TEST_MEDIA_DIR`. When unset (the default), the entire encode-test suite is skipped — `bun test` stays green for anyone without the fixtures locally. When set, the directory must contain media files matching the basenames in `server/src/test/fixtures/media.ts` (currently Mad Max: Fury Road and Furiosa: A Mad Max Saga). Symlink if your local filenames differ.
+Tests are gated by `XSTREAM_TEST_MEDIA_DIR`. When unset (the default), the entire encode-test suite is skipped. When set, the directory must contain media files matching the basenames in `server-rust/src/test/fixtures/media.rs` (currently Mad Max: Fury Road and Furiosa: A Mad Max Saga). Symlink if your local filenames differ.
 
-The `/setup-local` skill has a step that prompts for this directory and writes it to `.env`. `bun run check-env` reports per-fixture presence under "Test fixtures (dev)".
+The `/setup-local` skill has a step that prompts for this directory and writes it to a Tauri config file. Tests auto-discover the path at runtime.
 
 ## What the tests assert
 
@@ -23,29 +23,26 @@ For 1080p / 240p the assertion is downgraded to "encoding succeeded" — softwar
 
 ## Test infrastructure
 
-Three modules under `server/src/test/`:
+Located under `server-rust/src/test/`:
 
 | Module | Role |
 |---|---|
-| `fixtures/media.ts` | Per-fixture descriptors: filename, isHdr, testResolutions, chunkStartTimes, chunkDurationS. Add a new fixture by appending to `ALL_FIXTURES`. |
-| `encodeHarness.ts` | `resolveFixturesOrSkip()` (returns null when env var unset), `setupChunkerForTest()` (calls production `detectHwAccel`), `runChunk()` (wraps `startTranscodeJob` and bumps `job.connections` to defeat the 30 s orphan timer), `waitForCompletion()`, `firstPacketPts()` (concatenates init+segment_0000 and ffprobes). |
-| `traceCapture.ts` | In-memory `TracerProvider` swap so tests can drain `transcode.job` spans. See [`00-Side-Effects-Policy.md`](00-Side-Effects-Policy.md) § "Trace context capture" for why the global provider replacement uses `trace.disable()` first. |
+| `fixtures/mod.rs` | Per-fixture descriptors: filename, is_hdr, test_resolutions, chunk_start_times, chunk_duration_s. Add a new fixture by appending to `ALL_FIXTURES`. |
+| `encode_harness.rs` | Helper functions for test setup: `resolve_fixtures_or_skip()` (returns None when env var unset), `setup_chunker_for_test()` (initializes the chunker), `run_chunk()` (wraps `start_transcode_job` and manages connection count), `wait_for_completion()`, `first_packet_pts()` (extracts PTS from init+segment). |
+| `trace_capture.rs` | In-memory span capture so tests can verify `transcode.job` span attributes. Captures spans without affecting production telemetry. |
 
-The test file: `server/src/services/__tests__/chunker.encode.test.ts`. Skipped wholesale when fixtures resolve to null.
+The main test suite: `server-rust/src/services/tests/chunker_encode_integration.rs`. Skipped wholesale when fixtures resolve to None.
 
 ## GPU detection — reuses production logic
 
-The 4K-no-fallback gate uses the production `detectHwAccel(ffmpegPath, mode)` from `server/src/services/hwAccel.ts`. Two caveats baked into the harness:
+The 4K-no-fallback gate uses the production `detect_hw_accel(ffmpeg_path, mode)` from `server-rust/src/services/hw_accel.rs`. The harness detects available hardware (Linux VAAPI via `/dev/dri/renderD128`, native macOS/Windows) and calls the production detector with `"auto"` on capable systems, `"off"` otherwise.
 
-- **`detectHwAccel` is module-globally memoised** — first call wins, subsequent calls return the cache. Harness calls it once in setup.
-- **`detectHwAccel(_, "auto")` is fatal on probe failure** — calls `process.exit(1)` (kills the test runner) if VAAPI probe fails on Linux, or always on non-Linux. The harness pre-flights with `process.platform === "linux" && existsSync("/dev/dri/renderD128")` before passing `"auto"`; otherwise passes `"off"` for a clean `{ kind: "software" }` instead of a process exit.
-
-Pre-flight is a process-exit guard, not the HW discriminant. The discriminant for the 4K-no-fallback assertion is `hwConfig.kind !== "software"` — the same field production reads.
+The discriminant for the 4K-no-fallback assertion is whether the final span's `hwaccel` attribute is anything other than `"software"` — the same field production reads.
 
 ## Adding a new fixture
 
 1. Trim a representative clip of the source (or use the full file) and either drop it in `XSTREAM_TEST_MEDIA_DIR` or symlink with the expected basename.
-2. Add a `MediaFixture` entry to `server/src/test/fixtures/media.ts` documenting the source's distinguishing properties (HDR? unusual codec? uneven aspect ratio?) so the next person knows why this fixture exists.
+2. Add a `MediaFixture` entry in `server-rust/tests/encode_fixtures.rs` documenting the source's distinguishing properties (HDR? unusual codec? uneven aspect ratio?) so the next person knows why this fixture exists.
 3. If the fixture should run at a new resolution combo or chunk-start offset, set `testResolutions` and `chunkStartTimes` accordingly.
 
 See the [encoder edge-case test policy](02-Encoder-Edge-Case-Policy.md) for when adding a fixture is required vs optional.
@@ -54,11 +51,11 @@ See the [encoder edge-case test policy](02-Encoder-Edge-Case-Policy.md) for when
 
 ```sh
 # All tests (encode tests skip when env var unset)
-cd server && bun test
+cd server-rust && cargo test
 
 # Encode tests only, with fixtures
-XSTREAM_TEST_MEDIA_DIR=/path/to/movies bun test src/services/__tests__/chunker.encode.test.ts
+XSTREAM_TEST_MEDIA_DIR=/path/to/movies cargo test --test chunker_encode_integration
 
 # Filter to one fixture × one resolution (handy when iterating on a fix)
-XSTREAM_TEST_MEDIA_DIR=/path/to/movies bun test -t "Furiosa.*4k"
+XSTREAM_TEST_MEDIA_DIR=/path/to/movies cargo test --test chunker_encode_integration furiosa_4k
 ```

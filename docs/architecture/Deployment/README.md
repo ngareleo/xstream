@@ -1,14 +1,23 @@
 # Deployment
 
-How xstream gets packaged and delivered to end users — desktop shells, code signing, auto-update, and CI release pipelines.
+How xstream ships to end users — Tauri desktop bundles for Linux, Windows, and macOS, with bundled jellyfin-ffmpeg, code-signing per OS, and self-hosted Ed25519-signed auto-updates.
 
-This concept folder is **interim-focused**. The terminal-form deployment story for xstream is the Rust + Tauri rewrite ([`docs/migrations/rust-rewrite/`](../../migrations/rust-rewrite/), packaging in [`08-Tauri-Packaging.md`](../../migrations/rust-rewrite/08-Tauri-Packaging.md)). The docs here cover the **stop-gap question** of how to ship the current Bun-server + React-client architecture as a desktop app *before* the Rust port lands, so the product can be released and iterated on without rushing the rewrite.
-
-The decision has landed: **Electron + Bun-as-sidecar.** Read [`00-Interim-Desktop-Shell.md`](00-Interim-Desktop-Shell.md) first — it states the choice and lists the architectural surface a shell must accept. The other three docs deepen specific decisions and mechanics.
+The Rust server runs **in-process** inside the Tauri shell on a free `127.0.0.1` loopback port — there is no sidecar process and no separate runtime. Read [`00-Tauri-Desktop-Shell.md`](00-Tauri-Desktop-Shell.md) first; it is the prescriptive spec for the bundle. Then read [`01-Packaging-Internals.md`](01-Packaging-Internals.md) for the underlying mechanics, and [`02-Shipping-FFmpeg.md`](02-Shipping-FFmpeg.md) for how `jellyfin-ffmpeg` ends up in the bundle and on disk after install.
 
 | File | Hook |
 |---|---|
-| [`00-Interim-Desktop-Shell.md`](00-Interim-Desktop-Shell.md) | Decision: Electron + Bun-as-sidecar. Why this beats Tauri-with-Bun-sidecar and Electrobun for *interim*. The architectural surface a shell must accept; distribution, updates, CI shape; invariants every interim shell must preserve. Index doc — points at the three deep dives. |
-| [`01-Decisions.md`](01-Decisions.md) | Open questions resolved: hardware-acceleration decision (background, options, recommendation — VideoToolbox on macOS, software ceiling on Windows, soft fallback on Linux), Bun packaging via `bun build --compile`, library-picker UX (first-run + Settings → Electron folder picker → `createLibrary` mutation), static-asset serving, update-signing keys, channel rollout. |
-| [`02-Electron-Packaging-Internals.md`](02-Electron-Packaging-Internals.md) | Deep dive on how Electron produces cross-platform apps. Walks every layer from source on disk to a running app on a user's machine — `electron-builder` pipeline, asar archive, `extraResources`, what's inside the installed bundle per OS, how `electron-updater` actually applies updates (Squirrel.Mac / NSIS-web bsdiff / AppImage zsync), and the corrections to a common mental model. |
-| [`03-Shipping-FFmpeg.md`](03-Shipping-FFmpeg.md) | How `jellyfin-ffmpeg` ships under Electron — manifest pinning, the switch from `deb-install` to portable for every OS, where binaries live in the bundle (`extraResources` → `resources/ffmpeg/<plat>/`), runtime path resolution via `FFMPEG_DIR` env, build-time SHA256 verification, segment-cache invalidation on manifest bumps, GPL compliance. |
+| [`00-Tauri-Desktop-Shell.md`](00-Tauri-Desktop-Shell.md) | Prescriptive spec: `tauri.conf.json` shape, the in-process server, bundled ffmpeg, VAAPI Linux soft fallback, Ed25519-signed self-hosted updates, code-signing per OS, the GitHub Actions release matrix, and the open release-engineering questions. |
+| [`01-Packaging-Internals.md`](01-Packaging-Internals.md) | Internals walkthrough: source on disk → `cargo` + `tauri build` → OS-specific installer → installed app layout per OS → `tauri-plugin-updater` mechanics. Corrects the Electron-derived intuition that desktop apps ship a bundled browser engine and run their server logic in a sidecar. |
+| [`02-Shipping-FFmpeg.md`](02-Shipping-FFmpeg.md) | How `jellyfin-ffmpeg` gets bundled — manifest pinning, the portable strategy used for every OS, where binaries live in the Tauri resource tree (`resources/ffmpeg/<plat>/`), how `src-tauri/src/ffmpeg_path.rs` resolves them at runtime, build-time SHA256 verification, segment-cache invalidation on manifest bumps, and GPL compliance. |
+
+## What's still open
+
+These were marked open at the time the spec landed and are not yet resolved — they are tracked here so the deployment story doesn't lose them when the migration playbook is retired.
+
+1. **Universal macOS binary vs. per-arch.** Tauri can produce a single universal binary (`--target universal-apple-darwin`) or two arch-specific ones. Universal is simpler to host but doubles the download size. Defer until update-payload size matters.
+2. **Linux `.deb` apt repository.** Shipping a `.deb` is easy; hosting an apt repo with a key signature is more involved. v1 ships the `.deb` as a one-shot download; defer apt repo until users ask.
+3. **Auto-update scheduling under heavy use.** Today the updater checks every 24 h regardless of user activity. Pause checks while a stream is active to avoid replacing the binary mid-playback? Likely yes; defer to UX.
+4. **Code-signing identity rotation.** When the macOS Developer ID cert expires (yearly) we re-sign all current artefacts. Document the runbook before the first cert rotates.
+5. **Tauri auto-updater on Linux `.deb`.** Not supported by the plugin. Users on `.deb` follow distro updates manually — set in-app expectations.
+6. **Crash reporting.** Tauri does not bundle a crash reporter. Sentry has a `sentry-tauri` integration; needs a decision before v1 ships. Without it, OS-level reports are the only signal.
+7. **Bundle size.** jellyfin-ffmpeg portable builds are ~50 MB compressed per platform. The bundled AppImage is therefore ~70–80 MB. Acceptable for v1; defer optimisation.

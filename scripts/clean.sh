@@ -2,18 +2,18 @@
 # xstream clean — stop all processes, then wipe encoded segment output.
 #
 # What gets removed:
-#   tmp/segments/*/     — ffmpeg output directories (can be GBs; safe to delete,
-#                         re-transcode on demand)
+#   tmp/segments-rust/*/   — ffmpeg output directories (can be GBs; safe to
+#                            delete, re-transcode on demand)
 #   /tmp/xstream-test-*/   — per-PID SQLite databases written by the test suite
 #
 # What is NOT removed:
-#   tmp/xstream.db         — the media library database; survives so you don't
-#                         lose library/video metadata between runs
+#   tmp/xstream-rust.db    — the media library database; survives so you don't
+#                            lose library/video metadata between runs
 #   target/                — the Rust build cache; gigabytes of .o files
-#                         that take 30–60s to rebuild from scratch
+#                            that take 30–60s to rebuild from scratch
 #
 # Flags:
-#   --db        also wipe tmp/xstream.db (forces a full library rescan)
+#   --db        also wipe tmp/xstream-rust.db (forces a full library rescan)
 #   --target    also wipe the Rust build cache via `cargo clean` (forces
 #               a full rebuild on next `bun run dev`)
 #   --all       both of the above
@@ -52,13 +52,13 @@ done
 
 # ── 2. Remove segment directories ────────────────────────────────────────────
 
-SEGMENTS_DIR="$ROOT/tmp/segments"
+SEGMENTS_DIR="$ROOT/tmp/segments-rust"
 if [ -d "$SEGMENTS_DIR" ] && [ "$(ls -A "$SEGMENTS_DIR" 2>/dev/null)" ]; then
   seg_size=$(du -sh "$SEGMENTS_DIR" 2>/dev/null | cut -f1)
   rm -rf "${SEGMENTS_DIR:?}"/*
-  info "Cleared tmp/segments/ ($seg_size freed)"
+  info "Cleared tmp/segments-rust/ ($seg_size freed)"
 else
-  info "tmp/segments/ already empty"
+  info "tmp/segments-rust/ already empty"
 fi
 
 # ── 3. Remove test databases ──────────────────────────────────────────────────
@@ -75,7 +75,7 @@ fi
 # ── 4. Optionally wipe the main DB ───────────────────────────────────────────
 
 if $WIPE_DB; then
-  db="$ROOT/tmp/xstream.db"
+  db="$ROOT/tmp/xstream-rust.db"
   for f in "$db" "${db}-shm" "${db}-wal"; do
     [ -f "$f" ] && rm -f "$f" && info "Removed $f"
   done

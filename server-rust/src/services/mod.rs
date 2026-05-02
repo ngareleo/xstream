@@ -1,4 +1,4 @@
-//! Server services. Mirrors `server/src/services/*.ts`.
+//! Server services.
 //!
 //! Each submodule owns one service:
 //! - [`cache_index`] — content-addressed segment cache lookup.

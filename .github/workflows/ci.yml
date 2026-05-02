@@ -7,37 +7,8 @@ on:
     branches: ["**"]
 
 jobs:
-  server:
-    name: Server — lint, test, build
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: server
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
-
-      - name: Install dependencies
-        run: bun install
-
-      - name: Type-check
-        run: bun run lint
-
-      - name: Validate GraphQL SDL
-        run: bun run check:schema
-
-      - name: Test
-        run: bun run test
-
-      - name: Build
-        run: bun run build
-
   server-rust:
-    name: Rust server — fmt, clippy, build, test, SDL parity
+    name: Rust server — fmt, clippy, build, test
     runs-on: ubuntu-latest
 
     steps:
@@ -57,12 +28,13 @@ jobs:
         with:
           bun-version: latest
 
-      - name: Install root bun deps (graphql for the SDL-parity script)
+      - name: Install root bun deps
+        # Needed so the `scripts/` workspace can type-check.
         run: bun install
 
       - name: Lint scripts/ TS files
         # `scripts/` is its own Bun workspace with `tsc --noEmit` as its lint.
-        # Type-checks check-sdl-parity.ts, setup-ffmpeg.ts, test-chunking.ts.
+        # Type-checks setup-ffmpeg.ts and any other shared TS helpers.
         run: bun run --filter scripts lint
 
       - name: Format check
@@ -83,58 +55,21 @@ jobs:
       - name: Test
         run: cargo test --workspace --exclude xstream-tauri
 
-      - name: Install ffmpeg (apt, for SDL parity boot)
-        # The SDL parity step boots the Rust server, which probes for ffmpeg
-        # at startup before serving /healthz. We don't need jellyfin-ffmpeg
-        # here (the encode path isn't exercised); ubuntu's stock ffmpeg
-        # satisfies the boot dependency and the env-var override below
-        # skips the manifest version check.
-        run: sudo apt-get update -y && sudo apt-get install -y ffmpeg
-
-      - name: SDL parity (Rust introspection ↔ Bun typeDefs)
-        # Boots the Rust server, runs `scripts/check-sdl-parity.ts` against
-        # its introspection, and kills it. The script is the Step-1 acceptance
-        # gate — drift here means the Relay client's generated artifacts will
-        # break across the cutover.
-        #
-        # Env shape:
-        #   FFMPEG_PATH / FFPROBE_PATH — env-var override at
-        #     `services/ffmpeg_path.rs:resolve_ffmpeg_paths` skips the manifest
-        #     version check (CI doesn't install jellyfin-ffmpeg; ubuntu's
-        #     stock ffmpeg at /usr/bin satisfies the boot dependency without
-        #     a 50 MB .deb download per run).
-        #   HW_ACCEL=off — skips the VAAPI probe (no /dev/dri on CI runners).
-        #     The SDL parity check only exercises GraphQL introspection, so
-        #     the encode path isn't touched.
-        env:
-          FFMPEG_PATH: /usr/bin/ffmpeg
-          FFPROBE_PATH: /usr/bin/ffprobe
-          HW_ACCEL: "off"
+      - name: GraphQL schema drift check
+        # The client's relay-compiler reads `server-rust/schema.graphql`,
+        # which is the checked-in SDL emitted by the `print_schema` binary.
+        # If a server-side type changed without `bun run schema:emit`, the
+        # checked-in file would be stale and the client would generate
+        # outdated relay artefacts. Catch that here while we already have
+        # the Rust toolchain warm.
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p tmp
-          # Build the binary first, then exec — separates compile time from
-          # server-up time. With `cargo run`, a cold workspace cache (e.g. on
-          # the first run after Cargo.lock changes) eats into the healthcheck
-          # window and the for-loop times out before the server has even
-          # finished compiling.
-          cargo build --bin xstream-server
-          DB_PATH="$PWD/tmp/ci-xstream.db" target/debug/xstream-server &
-          SERVER_PID=$!
-          trap "kill $SERVER_PID 2>/dev/null || true; wait $SERVER_PID 2>/dev/null || true" EXIT
-
-          for _ in $(seq 1 60); do
-            if curl -fs http://127.0.0.1:3002/healthz >/dev/null 2>&1; then
-              echo "Rust server is up"
-              break
-            fi
-            sleep 0.5
-          done
-          # Hard-fail if the server never came up.
-          curl -fs http://127.0.0.1:3002/healthz >/dev/null
-
-          RUST_GRAPHQL_URL=http://127.0.0.1:3002/graphql bun run scripts/check-sdl-parity.ts
+          cargo run --quiet --bin print_schema -p xstream-server > /tmp/fresh-schema.graphql
+          if ! diff -u server-rust/schema.graphql /tmp/fresh-schema.graphql; then
+            echo "::error::server-rust/schema.graphql is stale — run 'bun run schema:emit' and commit the diff."
+            exit 1
+          fi
 
   tauri-build:
     name: Tauri — Linux build (unsigned)
@@ -162,9 +97,9 @@ jobs:
           bun-version: latest
 
       - name: Install Tauri Linux build deps
-        # Mirrors install.sh §0b. webkit2gtk-4.1 is what tauri 2 / wry expects.
-        # appindicator + rsvg cover system-tray + icon rendering. ffmpeg is
-        # already pulled in via setup-ffmpeg below.
+        # webkit2gtk-4.1 is what tauri 2 / wry expects. appindicator + rsvg
+        # cover system-tray + icon rendering. ffmpeg is staged separately via
+        # setup-ffmpeg below.
         run: |
           sudo apt-get update -y
           sudo apt-get install -y \

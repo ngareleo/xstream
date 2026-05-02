@@ -24,9 +24,9 @@ impl Mutation {
     /// Spawn a fire-and-forget background scan, then return the current
     /// library list immediately. Progress flows through the
     /// `library_scan_progress` subscription; the mutation contract is
-    /// "kicked off, here are the current libraries" — same shape as Bun.
-    /// `ScanState::mark_started` inside `scan_libraries` is the dedup
-    /// guard, so two concurrent callers won't both walk the filesystem.
+    /// "kicked off, here are the current libraries". `ScanState::mark_started`
+    /// inside `scan_libraries` is the dedup guard, so two concurrent
+    /// callers won't both walk the filesystem.
     async fn scan_libraries(&self, ctx: &Context<'_>) -> async_graphql::Result<Vec<Library>> {
         let app_ctx = ctx.data_unchecked::<crate::config::AppContext>();
         let spawn_ctx = app_ctx.clone();
@@ -99,8 +99,7 @@ impl Mutation {
             &extensions,
         )?;
         // Fire-and-forget background scan so a freshly-added profile gets
-        // indexed without the user having to click "Scan All" — Bun
-        // parity at `server/src/graphql/resolvers/mutation.ts:115-118`.
+        // indexed without the user having to click "Scan All".
         let spawn_ctx = app_ctx.clone();
         tokio::spawn(async move {
             crate::services::library_scanner::scan_libraries(&spawn_ctx).await;

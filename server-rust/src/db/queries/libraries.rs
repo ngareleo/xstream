@@ -1,4 +1,4 @@
-//! Library CRUD. Mirrors `server/src/db/queries/libraries.ts`.
+//! Library CRUD.
 
 use rusqlite::{params, params_from_iter, OptionalExtension, Row, ToSql};
 
@@ -63,8 +63,7 @@ pub fn get_library_by_id(db: &Db, id: &str) -> DbResult<Option<LibraryRow>> {
 /// this from inside `scan_libraries` for every library before walking
 /// it, so a row already created via `create_library` survives unchanged
 /// while still letting the scanner refresh `name`/`media_type`/`env`/
-/// `video_extensions` if a config update happened. Mirrors
-/// `server/src/db/queries/libraries.ts:upsertLibrary`.
+/// `video_extensions` if a config update happened.
 pub fn upsert_library(db: &Db, row: &LibraryRow) -> DbResult<()> {
     db.with(|c| {
         c.execute(

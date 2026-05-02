@@ -1,6 +1,5 @@
-//! `GET /stream/:job_id` — length-prefixed binary fMP4 stream. Mirrors
-//! `server/src/routes/stream.ts` and preserves the wire contract from
-//! `docs/architecture/Streaming/00-Protocol.md`:
+//! `GET /stream/:job_id` — length-prefixed binary fMP4 stream. Preserves
+//! the wire contract from `docs/architecture/Streaming/00-Protocol.md`:
 //!
 //! - 4-byte big-endian uint32 length prefix per chunk + raw fMP4 bytes.
 //! - Init segment is the first frame on every new stream.

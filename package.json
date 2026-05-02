@@ -3,7 +3,6 @@
   "private": true,
   "type": "module",
   "workspaces": [
-    "server",
     "client",
     "server-rust",
     "scripts"
@@ -12,16 +11,16 @@
     "dev": "command -v mprocs >/dev/null 2>&1 || { echo 'mprocs not found — install with: cargo install --locked mprocs'; echo '(see README \"Running in Development\" for details)'; exit 127; } && mprocs --config mprocs.yaml",
     "dev:plain": "bun run --filter '*' dev",
     "design": "command -v mprocs >/dev/null 2>&1 || { echo 'mprocs not found — install with: cargo install --locked mprocs'; exit 127; } && cd design && mprocs --config mprocs.yaml",
-    "build": "bun run --filter server build && bun run --filter client build",
+    "build": "bun run --filter client build",
     "lint": "bun run --filter '*' lint",
     "format": "prettier --write \"**/*.{ts,tsx,json}\" --ignore-path .prettierignore",
     "format:check": "prettier --check \"**/*.{ts,tsx,json}\" --ignore-path .prettierignore",
     "stop": "bash scripts/stop.sh",
     "check-env": "bash scripts/check-env.sh",
     "setup-ffmpeg": "bun scripts/setup-ffmpeg.ts",
+    "schema:emit": "cargo run --quiet --bin print_schema -p xstream-server > server-rust/schema.graphql",
     "tauri:dev": "command -v cargo-tauri >/dev/null 2>&1 || { echo 'cargo-tauri not found — install once with: cargo install tauri-cli --version ^2 --locked'; exit 127; } && cd src-tauri && cargo tauri dev",
     "tauri:build": "command -v cargo-tauri >/dev/null 2>&1 || { echo 'cargo-tauri not found — install once with: cargo install tauri-cli --version ^2 --locked'; exit 127; } && cd src-tauri && cargo tauri build --bundles deb,appimage",
-    "test-chunking": "bun scripts/test-chunking.ts",
     "clean": "bash scripts/clean.sh",
     "clean:db": "bash scripts/clean.sh --db",
     "seq:start": "bash scripts/seq-start.sh",
@@ -49,10 +48,6 @@
   "lint-staged": {
     "client/src/**/*.{ts,tsx}": [
       "eslint --fix --config client/eslint.config.js",
-      "prettier --write"
-    ],
-    "server/src/**/*.ts": [
-      "eslint --fix --config server/eslint.config.js",
       "prettier --write"
     ],
     "**/*.{json,yaml,yml}": [

@@ -116,7 +116,7 @@ Pure formatting/computation functions (`formatDuration`, `resolutionLabel`, etc.
 
 ## Re-running the compiler
 
-After any change to a `.graphql` tag in the client source, or any change to `server/schema.graphql`, regenerate Relay artifacts:
+After any change to a `.graphql` tag in the client source, or any change to the Rust server's GraphQL types, regenerate Relay artifacts:
 
 ```bash
 cd client && bun relay

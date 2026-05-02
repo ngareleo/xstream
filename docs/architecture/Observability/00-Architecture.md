@@ -11,10 +11,10 @@ Browser (client)
               │  Rsbuild dev proxy: /ingest/otlp → http://localhost:5341
               │  (no CORS issues; client credentials stay out of the bundle)
               ▼
-Server (Bun)
-  OTel SDK (sdk-trace-base, sdk-logs)
-    BatchSpanProcessor → OTLPTraceExporter  → OTEL_EXPORTER_OTLP_ENDPOINT/v1/traces
-    BatchLogRecordProcessor → OTLPLogExporter → OTEL_EXPORTER_OTLP_ENDPOINT/v1/logs
+Server (Rust)
+  OTel SDK (tracing, tracing-opentelemetry)
+    PeriodicBatchSpanProcessor → OTLPExporter  → OTEL_EXPORTER_OTLP_ENDPOINT/v1/traces
+    PeriodicBatchLogProcessor  → OTLPExporter  → OTEL_EXPORTER_OTLP_ENDPOINT/v1/logs
               │
               ▼
         Seq (dev)  /  Axiom (prod)

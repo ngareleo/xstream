@@ -1,0 +1,278 @@
+type AudioStreamInfo {
+	codec: String!
+	channels: Int!
+	sampleRate: Int!
+}
+
+type DirEntry {
+	name: String!
+	path: String!
+}
+
+enum JobStatus {
+	PENDING
+	RUNNING
+	COMPLETE
+	ERROR
+}
+
+type Library implements Node {
+	id: ID!
+	name: String!
+	path: String!
+	mediaType: MediaType!
+	videoExtensions: [String!]!
+	stats: LibraryStats!
+	"""
+	MAX_PAGE_SIZE = 100 (enforced server-side regardless of this default)
+	"""
+	videos(first: Int = 20, after: String, search: String, mediaType: MediaType): VideoConnection!
+}
+
+type LibraryScanProgress {
+	scanning: Boolean!
+	libraryId: ID
+	done: Int
+	total: Int
+}
+
+type LibraryScanUpdate {
+	scanning: Boolean!
+}
+
+type LibraryStats {
+	totalCount: Int!
+	matchedCount: Int!
+	unmatchedCount: Int!
+	totalSizeBytes: Float!
+}
+
+enum MediaType {
+	MOVIES
+	TV_SHOWS
+}
+
+type Mutation {
+	"""
+	Spawn a fire-and-forget background scan, then return the current
+	library list immediately. Progress flows through the
+	`library_scan_progress` subscription; the mutation contract is
+	"kicked off, here are the current libraries". `ScanState::mark_started`
+	inside `scan_libraries` is the dedup guard, so two concurrent
+	callers won't both walk the filesystem.
+	"""
+	scanLibraries: [Library!]!
+	"""
+	Spawn (or reuse) a transcode job for the requested video range.
+	Returns either a `TranscodeJob` payload (the job is now in the
+	chunker's job_store and segments will arrive via `/stream/:jobId`)
+	or a typed `PlaybackError` for the failure modes the client can
+	react to (capacity exhausted, video not found, probe failed, etc.).
+	"""
+	startTranscode(videoId: ID!, resolution: Resolution!, startTimeSeconds: Float, endTimeSeconds: Float): StartTranscodeResult!
+	createLibrary(name: String!, path: String!, mediaType: MediaType!, extensions: [String!]!): Library!
+	deleteLibrary(id: ID!): Boolean!
+	updateLibrary(id: ID!, name: String, path: String, mediaType: MediaType, extensions: [String!]): Library!
+	"""
+	Step 1 stub — writes an empty metadata row keyed by IMDb ID. The full
+	OMDb fetch ships in Step 2 alongside the scanner.
+	"""
+	matchVideo(videoId: ID!, imdbId: String!): Video!
+	unmatchVideo(videoId: ID!): Video!
+	addToWatchlist(videoId: ID!): WatchlistItem!
+	removeFromWatchlist(id: ID!): Boolean!
+	updateWatchProgress(videoId: ID!, progressSeconds: Float!): WatchlistItem!
+	setSetting(key: String!, value: String!): Boolean!
+	recordPlaybackSession(traceId: String!, videoId: ID!, resolution: Resolution!): PlaybackSession!
+}
+
+interface Node {
+	id: ID!
+}
+
+type OmdbSearchResult {
+	imdbId: String!
+	title: String!
+	year: Int
+	posterUrl: String
+	plot: String
+}
+
+type PageInfo {
+	hasNextPage: Boolean!
+	hasPreviousPage: Boolean!
+	startCursor: String
+	endCursor: String
+}
+
+"""
+Typed failure for a chunk-start request. Returned by union from startTranscode
+and surfaced via TranscodeJob.errorCode for failures that happen mid-job
+(probe / encode) after the mutation already resolved successfully.
+"""
+type PlaybackError {
+	code: PlaybackErrorCode!
+	message: String!
+	"""
+	Whether the orchestration layer should retry the same call.
+	"""
+	retryable: Boolean!
+	"""
+	Server's hint for how long to wait before retrying. Null when retryable is false.
+	"""
+	retryAfterMs: Int
+}
+
+enum PlaybackErrorCode {
+	"""
+	The server hit MAX_CONCURRENT_JOBS. Recoverable — retry after retryAfterMs.
+	"""
+	CAPACITY_EXHAUSTED
+	"""
+	The requested videoId does not exist in the DB. Non-retryable.
+	"""
+	VIDEO_NOT_FOUND
+	"""
+	ffprobe rejected the source file. Non-retryable for this resolution.
+	"""
+	PROBE_FAILED
+	"""
+	ffmpeg failed every fallback tier (HW → sw-pad → software). Non-retryable.
+	"""
+	ENCODE_FAILED
+	"""
+	Catch-all for unexpected server failures (DB write, mkdir, …). Non-retryable.
+	"""
+	INTERNAL
+}
+
+type PlaybackSession {
+	id: ID!
+	traceId: String!
+	videoTitle: String!
+	resolution: Resolution!
+	startedAt: String!
+}
+
+type Query {
+	node(id: ID!): Node
+	libraries: [Library!]!
+	videos(first: Int, libraryId: ID, search: String, mediaType: MediaType): VideoConnection!
+	video(id: ID!): Video
+	transcodeJob(id: ID!): TranscodeJob
+	watchlist: [WatchlistItem!]!
+	"""
+	OMDb search — Step 1 stub; returns empty list. Implemented for real
+	when the OMDb client lands in the Rust server (Step 2 area).
+	"""
+	searchOmdb(query: String!, year: Int): [OmdbSearchResult!]!
+	listDirectory(path: String!): [DirEntry!]!
+	playbackHistory: [PlaybackSession!]!
+	settings(keys: [String!]!): [SettingEntry!]!
+}
+
+enum Resolution {
+	RESOLUTION_240P
+	RESOLUTION_360P
+	RESOLUTION_480P
+	RESOLUTION_720P
+	RESOLUTION_1080P
+	RESOLUTION_4K
+}
+
+type SettingEntry {
+	key: String!
+	value: String
+}
+
+union StartTranscodeResult = TranscodeJob | PlaybackError
+
+type Subscription {
+	transcodeJobUpdated(jobId: ID!): TranscodeJob!
+	libraryScanUpdated: LibraryScanUpdate!
+	libraryScanProgress: LibraryScanProgress!
+}
+
+type TranscodeJob implements Node {
+	id: ID!
+	resolution: Resolution!
+	status: JobStatus!
+	totalSegments: Int
+	completedSegments: Int!
+	startTimeSeconds: Float
+	endTimeSeconds: Float
+	createdAt: String!
+	error: String
+	"""
+	Typed code for mid-job failures (set when status == ERROR). Null otherwise.
+	"""
+	errorCode: PlaybackErrorCode
+	video: Video!
+}
+
+type Video implements Node {
+	id: ID!
+	title: String!
+	filename: String!
+	durationSeconds: Float!
+	fileSizeBytes: Float!
+	bitrate: Int!
+	matched: Boolean!
+	mediaType: MediaType!
+	library: Library!
+	metadata: VideoMetadata
+	videoStream: VideoStreamInfo
+	audioStream: AudioStreamInfo
+}
+
+type VideoConnection {
+	edges: [VideoEdge!]!
+	pageInfo: PageInfo!
+	totalCount: Int!
+}
+
+type VideoEdge {
+	node: Video!
+	cursor: String!
+}
+
+type VideoMetadata {
+	imdbId: String!
+	title: String!
+	year: Int
+	genre: String
+	director: String
+	cast: [String!]!
+	rating: Float
+	plot: String
+	posterUrl: String
+}
+
+type VideoStreamInfo {
+	codec: String!
+	width: Int!
+	height: Int!
+	fps: Float!
+}
+
+type WatchlistItem implements Node {
+	id: ID!
+	addedAt: String!
+	progressSeconds: Float!
+	notes: String
+	video: Video!
+}
+
+"""
+Directs the executor to include this field or fragment only when the `if` argument is true.
+"""
+directive @include(if: Boolean!) on FIELD | FRAGMENT_SPREAD | INLINE_FRAGMENT
+"""
+Directs the executor to skip this field or fragment when the `if` argument is true.
+"""
+directive @skip(if: Boolean!) on FIELD | FRAGMENT_SPREAD | INLINE_FRAGMENT
+schema {
+	query: Query
+	mutation: Mutation
+	subscription: Subscription
+}

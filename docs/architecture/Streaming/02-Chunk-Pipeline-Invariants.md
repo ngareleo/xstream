@@ -17,13 +17,13 @@ The chunker spawns ffmpeg with `-ss <chunkStartS>`, no `-output_ts_offset`. ffmp
 
 Trade-off: seek chunks are one-offs that don't cache across re-seeks. Re-seeking to the same exact second misses cache. Acceptable; interactive scrubbing dominates over second-precise re-seeking. Pre-fix evidence (trace `9da5539d…`): fresh-cache mid-chunk seek wall-clock latency was 16-60 s because ffmpeg had to grind through the chunk-prefix encode before reaching the user's segment. Post-fix: ~1-2 s (VAAPI cold-start + first-segment latency).
 
-Code: `client/src/services/bufferManager.ts::setTimestampOffset`, `client/src/services/chunkPipeline.ts::processSegment` (calls it on every `isInit === true`), `client/src/services/playbackController.ts::handleSeeking` (anchors at `seekTime`), `server/src/services/chunker.ts::jobId` (hash version `v3` — `v2` invalidated `output_ts_offset`-era chunks; `v3` invalidates chunks encoded without the `dump_extra=keyframe` BSF, see § 1a).
+Code: `client/src/services/bufferManager.ts::setTimestampOffset`, `client/src/services/chunkPipeline.ts::processSegment` (calls it on every `isInit === true`), `client/src/services/playbackController.ts::handleSeeking` (anchors at `seekTime`), `server-rust/src/services/chunker.rs::job_id` (hash version `v3` — `v2` invalidated `output_ts_offset`-era chunks; `v3` invalidates chunks encoded without the `dump_extra=keyframe` BSF, see § 1a).
 
 ### 1a. Encoder must inject SPS/PPS in-band on every keyframe
 
 ffmpeg writes SPS/PPS NAL units only into init.mp4's `avcC` box by default. Chromium's chunk demuxer needs them in-band on every keyframe to reset its decoder context across fragment seams; without them, `appendBuffer()` accepts the bytes silently but the demuxer can fail at the sample-prepare step and Chromium internally calls `endOfStream(decode_error)` on the MediaSource — sealing it permanently with no JavaScript-visible event other than `videoEl.error` (`code = 3`, `MEDIA_ERR_DECODE`) and the `sourceended` MediaSource event. Trace `38e711a9…` captured this: 5.6 s after a fresh seek, the demuxer rejected a video sample and 16 ms later the MS was sealed.
 
-`server/src/services/ffmpegFile.ts::applyOutputOptions` adds `-bsf:v dump_extra=keyframe` to both encoder branches (libx264 software, h264_vaapi). The bitstream filter is encoder-agnostic — it injects SPS/PPS NAL units before every keyframe in the encoded output, regardless of which encoder produced the frame.
+`server-rust/src/services/ffmpeg_file.rs::apply_output_options` adds `-bsf:v dump_extra=keyframe` to both encoder branches (libx264 software, h264_vaapi). The bitstream filter is encoder-agnostic — it injects SPS/PPS NAL units before every keyframe in the encoded output, regardless of which encoder produced the frame.
 
 Defense-in-depth: if a future codec bug or unknown-Chromium-behaviour still flips MS to `"ended"` mid-playback, `BufferManager.init`'s `sourceended` event listener invokes `onMseDetached` (when `streamDone === false`) which routes through to `PlaybackController.handleMseDetached` — the existing per-session 3-recreate budget rebuilds the MediaSource at the user's current position. Diagnostic listeners on `sourceended` / `sourceclose` / `videoEl.error` are kept in place for future regressions.
 
@@ -34,7 +34,7 @@ Defense-in-depth: if a future codec bug or unknown-Chromium-behaviour still flip
 
 When the 3-recreate budget is exhausted, the surfaced error code is `MSE_DETACHED` for both paths. The code is intentionally not renamed to `MSE_RECOVERY_EXHAUSTED` or similar: (a) it is client-only — never crosses the wire, no external consumer; (b) from the retry-policy and error-overlay perspective both paths mean the same thing ("MSE session unrecoverable, rebuild budget spent"); (c) the rename cost (propagates across `playbackErrors.ts`, `playbackController.ts`, Seq filter strings, ADR, this doc) is not worth the marginal precision gain on a defensive path the user rarely sees.
 
-Code: `server/src/services/ffmpegFile.ts::applyOutputOptions` (BSF), `client/src/services/bufferManager.ts::init` (sourceended listener + recovery hook), `client/src/services/playbackController.ts::handleMseDetached` (rebuild — now seek-anchored, resumes at `videoEl.currentTime` directly per § 1).
+Code: `server-rust/src/services/ffmpeg_file.rs::apply_output_options` (BSF), `client/src/services/bufferManager.ts::init` (sourceended listener + recovery hook), `client/src/services/playbackController.ts::handleMseDetached` (rebuild — now seek-anchored, resumes at `videoEl.currentTime` directly per § 1).
 
 ## 2. Per-chunk init segments are required
 

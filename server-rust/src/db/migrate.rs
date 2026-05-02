@@ -1,4 +1,4 @@
-//! Idempotent schema setup. Mirrors `server/src/db/migrate.ts`.
+//! Idempotent schema setup.
 
 use rusqlite::Connection;
 

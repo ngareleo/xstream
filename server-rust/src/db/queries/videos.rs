@@ -1,5 +1,4 @@
 //! Video + video_streams queries + filter shapes.
-//! Mirrors `server/src/db/queries/videos.ts`.
 
 use rusqlite::{params, params_from_iter, OptionalExtension, Row, ToSql};
 
@@ -82,8 +81,7 @@ pub struct VideosFilter {
 
 /// Stream row shape for the scanner's `replace_video_streams`. The
 /// `id` column is auto-assigned by SQLite on insert, so the new-row
-/// shape omits it. Mirrors `Omit<VideoStreamRow, "id">` on the Bun side
-/// at `server/src/db/queries/videos.ts:34`.
+/// shape omits it.
 #[derive(Clone, Debug)]
 pub struct NewVideoStream {
     pub video_id: String,
@@ -97,8 +95,7 @@ pub struct NewVideoStream {
 }
 
 /// Insert-or-update a video row keyed by `path`. The library scanner
-/// calls this once per discovered file. Mirrors
-/// `server/src/db/queries/videos.ts:upsertVideo`.
+/// calls this once per discovered file.
 pub fn upsert_video(db: &Db, row: &VideoRow) -> DbResult<()> {
     db.with(|c| {
         c.execute(
@@ -133,9 +130,8 @@ pub fn upsert_video(db: &Db, row: &VideoRow) -> DbResult<()> {
 }
 
 /// Replace every stream row for `video_id` with the supplied list. The
-/// scanner calls this once per file after a successful ffprobe — Bun
-/// does the same delete-then-insert, so a re-probe overwrites stale
-/// streams cleanly. Mirrors `server/src/db/queries/videos.ts:replaceVideoStreams`.
+/// scanner calls this once per file after a successful ffprobe — the
+/// delete-then-insert means a re-probe overwrites stale streams cleanly.
 pub fn replace_video_streams(db: &Db, video_id: &str, streams: &[NewVideoStream]) -> DbResult<()> {
     db.with(|c| {
         c.execute(

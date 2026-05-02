@@ -1,4 +1,4 @@
-//! Library-scan progress state. Mirrors `server/src/services/scanStore.ts`.
+//! Library-scan progress state.
 //!
 //! One process-wide [`ScanState`] holds the current scan snapshot behind
 //! an `RwLock` and broadcasts every state change over a
@@ -10,8 +10,7 @@
 //! - [`mark_started`] is the atomic "is anyone scanning?" guard. It reads
 //!   and flips `scanning` under the same write-lock so two callers racing
 //!   into [`crate::services::library_scanner::scan_libraries`] cannot both
-//!   advance past the guard. Mirrors Bun's single-threaded `isScanRunning`
-//!   check at `server/src/services/libraryScanner.ts:296-304`.
+//!   advance past the guard.
 //! - Broadcast `send` returns `Err` only when no subscribers exist; the
 //!   scan itself is unaffected, so the no-receiver path is a documented
 //!   no-op (per `docs/code-style/Invariants/00-Never-Violate.md` §14, the

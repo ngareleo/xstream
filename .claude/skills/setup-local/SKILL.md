@@ -20,7 +20,7 @@ Run the install script from the project root:
 bash install.sh
 ```
 
-This installs Bun if missing, runs `bun install`, creates `tmp/segments/`, and generates Relay artifacts.
+This installs Bun if missing, runs `bun install`, creates `tmp/segments-rust/`, and generates Relay artifacts.
 
 If it fails, report the error output and stop.
 
@@ -33,10 +33,9 @@ bun run setup-ffmpeg
 ```
 
 Platform behaviour:
-- **Linux (x64 / arm64)**: downloads the Jellyfin `.deb`, verifies SHA256, runs `sudo dpkg -i`. You will see a sudo password prompt. The `.deb` installs to `/usr/lib/jellyfin-ffmpeg/` and ships a bundled newer libva + iHD driver — required for HW acceleration on any machine whose distro-packaged `intel-media-driver` predates the host GPU. Idempotent — a no-op if the pinned version is already installed.
-- **macOS / Windows**: downloads the portable archive, verifies SHA256, extracts to `vendor/ffmpeg/<platform>/`. No sudo.
+- **All platforms**: downloads the portable jellyfin-ffmpeg archive, verifies SHA256, extracts to `vendor/ffmpeg/<platform>/`. No sudo. The Tauri build later restages this into `src-tauri/resources/ffmpeg/<platform>/` via `bun run setup-ffmpeg --target=tauri-bundle`.
 
-The server refuses to start unless `ffmpeg -version` matches the pinned `versionString` exactly. If it doesn't, `bun run setup-ffmpeg --force` re-installs. If the user refuses sudo on Linux, stop and report — the server can't run without the pinned install.
+The server refuses to start unless `ffmpeg -version` matches the pinned `versionString` exactly. If it doesn't, `bun run setup-ffmpeg --force` re-installs.
 
 ## 3. Set up Seq (log management)
 
@@ -136,7 +135,7 @@ Report any variables shown as missing or misconfigured. Do not block on warnings
 Check if they are already running:
 
 ```sh
-lsof -i :3001 -i :5173 | grep LISTEN
+lsof -i :3002 -i :5173 | grep LISTEN
 ```
 
 If neither is running, start them:
@@ -145,7 +144,7 @@ If neither is running, start them:
 bun run dev
 ```
 
-Run in background and wait up to 15 seconds for both ports to become LISTEN. Re-check with `lsof -i :3001 -i :5173 | grep LISTEN`.
+Run in background and wait up to 15 seconds for both ports to become LISTEN. Re-check with `lsof -i :3002 -i :5173 | grep LISTEN`.
 
 If either port is still not listening after 15 seconds, report a startup failure.
 
@@ -162,7 +161,7 @@ Report:
 - ✓ ffmpeg + ffprobe present at `vendor/ffmpeg/<platform>/`
 - ✓ Seq running at http://localhost:5341 (credentials in `.seq-credentials`)
 - ✓ `.env` present
-- ✓ Dev servers running (server :3001, client :5173)
+- ✓ Dev servers running (server :3002, client :5173)
 - ✓ App accessible at http://localhost:5173
 - Encode-test fixtures: ✓ wired (`XSTREAM_TEST_MEDIA_DIR=...`) **or** ⚠ skipped — re-run setup or set the var manually to enable
 - Any items that need manual attention (e.g. OMDB_API_KEY, Seq API key for OTLP)

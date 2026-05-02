@@ -1,7 +1,6 @@
 //! Cascade-delete contract.
 //!
-//! Mirrors `server/src/db/queries/__tests__/cascade.test.ts`. The schema
-//! (replicated byte-for-byte in `db/migrate.rs`) wires:
+//! The schema (in `db/migrate.rs`) wires:
 //!
 //! - libraries → videos              ON DELETE CASCADE
 //! - videos    → video_streams       ON DELETE CASCADE

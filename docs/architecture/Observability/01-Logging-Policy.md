@@ -116,15 +116,7 @@ const incomingCtx = propagation.extract(context.active(), carrier);
 const span = tracer.startSpan("operation.name", { attributes }, incomingCtx);
 ```
 
-graphql-yoga resolvers receive the extracted context through `ctx.otelCtx` (set in the yoga `context` function in `routes/graphql.ts`) and pass it to service functions:
-
-```ts
-// In a mutation resolver:
-const job = await startTranscodeJob(localVideoId, resolution, start, end, ctx.otelCtx);
-
-// In the service function:
-const span = tracer.startSpan("transcode.job", { attributes }, parentOtelCtx);
-```
+Rust async-graphql resolvers receive the extracted context via the axum request extensions and pass it to service functions. The context flows through the OTel middleware on every request, so the span tree is automatically connected without explicit context passing in most cases.
 
 ## Cleanup and termination events
 

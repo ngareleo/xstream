@@ -1,32 +1,40 @@
 # Tests must leave the host as they found it
 
-The invariant: tests can write freely to their per-PID temp dir during execution, but **nothing they write may persist past worker exit, and they may never write into `tmp/xstream.db` or `tmp/segments/`** (the dev runtime paths).
+The invariant: tests can write freely to their per-test temp dir during execution, but **nothing they write may persist past test exit, and they may never write into `tmp/xstream-rust.db` or `tmp/segments-rust/`** (the dev runtime paths).
 
-This file documents the wiring that enforces the invariant + the rules for new tests.
+This file documents how the wiring enforces the invariant + the rules for new tests.
 
 ## Why this exists
 
-Before the per-PID isolation, four test files (`graphql.integration.test.ts`, `db/queries/{jobs,videos,libraries}.test.ts`) wrote test fixtures directly into the dev DB at `tmp/xstream.db`. Across many runs, the dev DB accumulated 6 ghost libraries (`gql-lib1`, `libtest`, `lib1`..`lib4`) and 10 dependent video rows that surfaced in the player's library UI. Diagnosed during this branch's session — see commit `386ef95` for the wiring + cleanup.
+Before the per-test isolation existed, integration tests could write fixtures directly into the dev DB and the dev would later see ghost libraries and orphan video rows in the player UI. Per-test temp paths eliminate the cross-contamination class of bug.
 
 ## How it's enforced
 
-**`server/src/test/setup.ts`** is the Bun test preload (configured via `bunfig.toml`'s `[test] preload`). It runs once per test worker, before any test file is evaluated, and:
+The Rust server's tests use `:memory:` SQLite and per-test temp dirs:
 
-1. Creates `/tmp/xstream-test-<pid>/`.
-2. Sets `process.env.DB_PATH` and `process.env.SEGMENT_DIR` to point inside it. Both env vars are honored by `server/src/config.ts` in **both** dev and prod branches (the dev branch was extended in commit `45f7f8f` for this purpose).
-3. **Before** creating the current PID's dir, scans `/tmp` for any `xstream-test-<pid>` whose PID is no longer alive (`process.kill(pid, 0)` throws ESRCH) and `rm -rf`s them.
+1. **`Db::open(Path::new(":memory:"))`** is the standard fixture for query-layer unit tests. Each `#[test]` constructs its own in-memory DB — no shared state between tests.
+2. **Integration tests that need a filesystem** (segment dir, scan-walker fixtures) build their `AppContext` via the `for_tests(...)` constructor, which receives a `tempfile::TempDir` for the segment root. The `TempDir` is dropped at end-of-test and cleans up automatically.
+3. **`AppContext::for_tests`** also stubs ffprobe at `/bin/true` so per-file probes don't actually invoke ffmpeg — the scanner tests focus on walk + insert correctness, not ffmpeg behaviour.
+4. **No env-var hand-off.** The Rust tests don't override `DB_PATH` / `SEGMENT_DIR` env vars on a worker process; the test harness is in-process and passes paths explicitly through `AppContext`.
 
-Cleanup runs at the **next** preload, not at the current exit. bun:test workers exit through a path that bypasses both `process.on("exit")` and `"beforeExit"`, so we can't reliably hook end-of-run. The next-preload-reaps-prior-PIDs model achieves the same outcome and is also SIGKILL-safe (a hard-killed worker leaves a dir; the next worker reaps it).
+This sidesteps the historical problem of "test worker exits without running cleanup hooks" — there is no global filesystem state to clean up, because every test built its own.
 
-`SEGMENT_DIR` isolation is also load-bearing for correctness, not just hygiene: `startTranscodeJob` derives the job cache key from `content_fingerprint + resolution + time range`. Without a fresh dir, stale segments from a prior run let it "restore" the cached job and silently skip re-encoding — assertions about fresh encoding silently pass against ghost output.
+## Encode-pipeline tests
+
+A second class of tests under `server-rust/tests/` runs the actual ffmpeg pipeline against real fixture media files. These tests are gated by `XSTREAM_TEST_MEDIA_DIR`:
+
+- **Without** `XSTREAM_TEST_MEDIA_DIR`: encode tests are skipped (they early-return with `eprintln!` indicating the skip reason).
+- **With** the env var pointing at a directory of fixture clips: each test transcodes a known segment and asserts on the resulting span tree (e.g. `hwaccel != "software"` for the 4K-no-fallback assertion).
+
+Encode-pipeline tests still write transcoded segments — they go to a `tempfile::TempDir` per test, never `tmp/segments-rust/`. See [`01-Encode-Pipeline-Tests.md`](01-Encode-Pipeline-Tests.md).
 
 ## Rules for new tests
 
-- Read `process.env.DB_PATH` and `process.env.SEGMENT_DIR` if you need the path. Never hardcode `tmp/xstream.db` or `tmp/segments/`.
-- If your test spawns a real subprocess (ffmpeg, etc.), make sure it writes under `SEGMENT_DIR`. The chunker already does this via `config.segmentDir`.
-- If your test creates rows in tables outside `videos` / `libraries` / `transcode_jobs`, the same per-PID isolation still applies — those rows live in the test DB and die with it.
-- Don't rely on absolute counts (`SELECT COUNT(*) FROM videos`) — the per-PID DB is shared by all test files in the same worker, so other tests may have seeded data. Use unique IDs and assert on what your test created.
+- **Use `Db::open(Path::new(":memory:"))`** for query-layer unit tests.
+- **Use `AppContext::for_tests(tempdir)`** for tests that need a filesystem + the full app context.
+- **Never hardcode `tmp/xstream-rust.db` or `tmp/segments-rust/`.** Let the `TempDir` be the path source.
+- **Don't rely on absolute counts** (`SELECT COUNT(*) FROM videos`) when sharing a DB across multiple `#[test]` items in the same module — use unique IDs and assert on what your test created. (Per-`#[test]` `:memory:` DBs sidestep this entirely; only relevant when a test deliberately reuses a DB across cases.)
 
 ## Trace context capture
 
-Same module also installs an in-memory `TracerProvider` (via `traceCapture.ts`) so tests can drain `transcode.job` / `chunk.stream` spans without flooding the dev Seq. Required because `trace.setGlobalTracerProvider` is one-shot in `@opentelemetry/api` — the preload calls `trace.disable()` first, then registers the in-memory provider so chunker's module-load `getTracer("chunker")` binds to it. Spans are exposed via `drainCapturedSpans()` / `resetCapturedSpans()`.
+When tests need to assert on span shape (e.g. encode-pipeline tests inspecting `hwaccel`, `transcode_complete`, fallback events), the Rust port uses `tracing-test` + an in-process `TestSubscriber` that captures spans/events into a `Vec<SpanData>` per test. The subscriber is set on a per-test scope — it does not affect the global `tracing` registry beyond the test's lifetime. See `server-rust/src/telemetry.rs::for_tests` for the constructor.

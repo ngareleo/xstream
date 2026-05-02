@@ -29,23 +29,23 @@ lsof -i :5173   # expect rsbuild
 lsof -i :5177   # stale instance — kill before proceeding
 ```
 
-Always test at `http://localhost:5173`. Always confirm the server is up at `http://localhost:3001` before starting playback checks (`lsof -i :3001 | grep LISTEN`).
+Always test at `http://localhost:5173`. Always confirm the server is up at `http://localhost:3002` before starting playback checks (`lsof -i :3002 | grep LISTEN`).
 
-The **Rust** server (browser-mode dev under the `useRustBackend` flag) listens on `:3002`. The **Tauri-embedded** Rust server picks a free `127.0.0.1:<port>` per-launch — find it via `pgrep -af xstream-tauri` then `lsof -p <pid>` to read the listening port, OR grep the dev log for `xstream-server listening`.
+The **Tauri-embedded** Rust server picks a free `127.0.0.1:<port>` per-launch — find it via `pgrep -af xstream-tauri` then `lsof -p <pid>` to read the listening port, OR grep the dev log for `xstream-server listening`.
 
 ## Tauri-mode debugging
 
-`bun run tauri:dev` opens a native desktop window — Playwright MCP **cannot** drive it directly. Tauri-on-Linux's webview is WebKit2GTK, which speaks the WebKit Inspector Protocol; Playwright speaks Chrome DevTools Protocol. The two are not interchangeable. The official end-to-end path (`tauri-driver` + WebDriver) is documented in `docs/migrations/rust-rewrite/Plan/03-Tauri-Packaging.md` but **not wired up yet** — it's a Step 3 follow-up.
+`bun run tauri:dev` opens a native desktop window — Playwright MCP **cannot** drive it directly. Tauri-on-Linux's webview is WebKit2GTK, which speaks the WebKit Inspector Protocol; Playwright speaks Chrome DevTools Protocol. The two are not interchangeable. The official end-to-end path (`tauri-driver` + WebDriver) is open work — see [`docs/architecture/Deployment/`](../../../docs/architecture/Deployment/README.md) for the deployment surface.
 
 What the agent can do today:
 
 | Goal | How |
 |---|---|
-| Verify the React UI / Rust backend behaviour | `browser_navigate http://localhost:5173/` while `bun run tauri:dev` runs. The same React/Relay client + Rust server are reachable; only the Tauri shell wrapper is missing. The `useRustBackend` flag drives origin (toggle in Settings to test the Rust server). |
+| Verify the React UI / Rust backend behaviour | `browser_navigate http://localhost:5173/` while `bun run dev` runs. The same React/Relay client + Rust server are reachable from the browser at `:5173`; only the Tauri shell wrapper is missing. |
 | Verify the Tauri-injected port specifically | Open DevTools in the Tauri window manually (right-click → Inspect — Tauri 2 dev mode enables this). Or check the dev log: `grep '__XSTREAM_SERVER_PORT__\|xstream-server listening' /tmp/tauri-dev.log`. |
 | Visual evidence of the native window (layout, chrome) | Screenshot via `grim -t png .claude/screenshots/NN-tauri-window.png` (Wayland) or `scrot -u .claude/screenshots/NN-tauri-window.png` (X11). Then `Read` the file. |
 | Verify the embedded server is reachable | `curl -sS http://127.0.0.1:<injected-port>/healthz` — port from the dev log. |
-| Verify Tauri-mode forces `useRustBackend` on | Read `client/src/config/rustOrigin.ts` — `TAURI_PORT !== null` short-circuits the flag. The browser MCP at `:5173` won't show this code path because `window.__XSTREAM_SERVER_PORT__` is unset there. |
+| Verify the origin selection logic | Read `client/src/config/rustOrigin.ts` — `TAURI_PORT !== null` selects the Tauri-injected loopback; otherwise dev falls back to `http://localhost:3002`. |
 
 Heuristic: if the bug is in the React app or any GraphQL/stream resolver, drive `:5173` with browser MCP. If the bug is in the Tauri shell itself (port injection, native dialogs, window chrome, Tauri's `app.path()` usage, code-signed updates), screenshot the native window or wait for the `tauri-driver` follow-up.
 
@@ -120,7 +120,7 @@ For verifying an OMDb lookup result, hit the URL directly (no browser needed, `W
 When a subscription isn't delivering events:
 
 1. `browser_snapshot` the client page while the subscription should be active.
-2. `browser_network_requests` and filter for `/graphql` with status 101 — that's the WebSocket upgrade. If status is 200, the Rsbuild proxy or `Bun.serve` upgrade handler is broken (see `docs/client/Debugging-Playbooks/00-Common-Issues.md`).
+2. `browser_network_requests` and filter for `/graphql` with status 101 — that's the WebSocket upgrade. If status is 200, the Rsbuild proxy or the axum upgrade handler is broken (see `docs/client/Debugging-Playbooks/00-Common-Issues.md`).
 3. `browser_evaluate` the page for active subscriptions:
    ```js
    // Relay exposes __relayEnvironment in dev

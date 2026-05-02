@@ -14,23 +14,23 @@ Libraries live exclusively in the `libraries` table of the SQLite DB. They are p
 | `env` | `"dev"` \| `"prod"`. Filtered by `NODE_ENV` at startup so a single DB can host both dev and prod entries. |
 | `videoExtensions` | JSON array of file extensions to match (e.g. `[".mkv", ".mp4"]`). |
 
-Entries whose `env` does not match the current `NODE_ENV` are silently ignored. Inaccessible paths log a `[scanner] Path not accessible` warning and the server continues starting up.
+Entries whose `env` does not match the current `RUST_ENV` are silently ignored. Inaccessible paths log a `[scanner] Path not accessible` warning and the server continues starting up.
 
 ---
 
-## AppConfig (server/src/config.ts)
+## AppConfig (server-rust/src/config.rs)
 
-`AppConfig` is exported from `server/src/config.ts` as the `config` singleton. It composes five groups of fields:
+`AppConfig` is exported from `server-rust/src/config.rs` as the `config` singleton. It composes five groups of fields:
 
 ### Top-level scalar fields
 
 | Field | Env var | Dev default | Prod default | Notes |
 |---|---|---|---|---|
-| `port` | `PORT` | `3001` | `8080` | |
-| `segmentDir` | `SEGMENT_DIR` | `./tmp/segments` | `./tmp/segments` | Override in tests to route to a per-PID temp dir |
-| `dbPath` | `DB_PATH` | `./tmp/xstream.db` | `./tmp/xstream.db` | Override in tests; persistent storage recommended in prod |
-| `scanIntervalMs` | `SCAN_INTERVAL_MS` | `30000` | `30000` | |
-| `hardwareAcceleration` | `HW_ACCEL` | `"auto"` | `"auto"` | `"off"` forces software encode |
+| `port` | `PORT` | `3002` | `8080` | |
+| `segment_dir` | `SEGMENT_DIR` | `./tmp/segments` | `./tmp/segments` | Override in tests to route to a per-PID temp dir |
+| `db_path` | `DB_PATH` | `./tmp/xstream.db` | `./tmp/xstream.db` | Override in tests; persistent storage recommended in prod |
+| `scan_interval_ms` | `SCAN_INTERVAL_MS` | `30000` | `30000` | |
+| `hardware_acceleration` | `HW_ACCEL` | `"auto"` | `"auto"` | `"off"` forces software encode |
 
 `SEGMENT_DIR` and `DB_PATH` are honored in dev (not just prod) so the test harness can route writes to a per-PID temp dir — see [`../../architecture/Testing/00-Side-Effects-Policy.md`](../../architecture/Testing/00-Side-Effects-Policy.md). Don't set them by hand in your dev shell unless you know what you're doing.
 
@@ -40,13 +40,13 @@ All ops-tunable timing and policy knobs for ffmpeg process management. Both dev 
 
 | Field | Default | Purpose |
 |---|---|---|
-| `maxConcurrentJobs` | `3` | Cap on concurrently encoding ffmpeg processes (dying jobs excluded from count). |
-| `forceKillTimeoutMs` | `2 000` | SIGTERM → SIGKILL grace per job. Caps the dying-zombie window for 4K-software encodes. |
-| `shutdownTimeoutMs` | `5 000` | Total wait in `killAllJobs` before the terminal SIGKILL pass. Must be > `forceKillTimeoutMs`. |
-| `orphanTimeoutMs` | `30 000` | Kill ffmpeg if a job has zero connections after this many ms (covers prefetched chunks where the user seeks away). |
-| `maxEncodeRateMultiplier` | `3` | Wall-clock budget multiplier — actual budget = `chunk_duration_s × this × 1 000 ms`. |
-| `capacityRetryHintMs` | `1 000` | `retryAfterMs` returned to the client on a `CAPACITY_EXHAUSTED` rejection. |
-| `inflightDedupTimeoutMs` | `5 000` | Max time a concurrent caller polls jobStore waiting for a peer to finish registering the same job. |
+| `max_concurrent_jobs` | `3` | Cap on concurrently encoding ffmpeg processes (dying jobs excluded from count). |
+| `force_kill_timeout_ms` | `2 000` | SIGTERM → SIGKILL grace per job. Caps the dying-zombie window for 4K-software encodes. |
+| `shutdown_timeout_ms` | `5 000` | Total wait in `kill_all_jobs` before the terminal SIGKILL pass. Must be > `force_kill_timeout_ms`. |
+| `orphan_timeout_ms` | `30 000` | Kill ffmpeg if a job has zero connections after this many ms (covers prefetched chunks where the user seeks away). |
+| `max_encode_rate_multiplier` | `3` | Wall-clock budget multiplier — actual budget = `chunk_duration_s × this × 1 000 ms`. |
+| `capacity_retry_hint_ms` | `1 000` | `retry_after_ms` returned to the client on a `CAPACITY_EXHAUSTED` rejection. |
+| `inflight_dedup_timeout_ms` | `5 000` | Max time a concurrent caller polls job_store waiting for a peer to finish registering the same job. |
 
 The pool reads these via `config.transcode.*`. See [`../../architecture/Streaming/06-FfmpegPool.md`](../../architecture/Streaming/06-FfmpegPool.md) for the cap formula and shutdown sweep logic.
 
@@ -54,20 +54,20 @@ The pool reads these via `config.transcode.*`. See [`../../architecture/Streamin
 
 | Field | Default | Purpose |
 |---|---|---|
-| `connectionIdleTimeoutMs` | `180 000` | Idle window before `/stream/:jobId` declares the connection dead and kills the job. Must exceed the widest back-pressure halt the client can induce (~60 s with default `forwardTargetS`). |
+| `connection_idle_timeout_ms` | `180 000` | Idle window before `/stream/:jobId` declares the connection dead and kills the job. Must exceed the widest back-pressure halt the client can induce (~60 s with default `forwardTargetS`). |
 
 ### Dev vs Prod
 
-Active profile is selected by `NODE_ENV`:
+Active profile is selected by `RUST_ENV`:
 
-| `NODE_ENV` | Profile |
+| `RUST_ENV` | Profile |
 |---|---|
-| absent or `development` | `dev` (port 3001) |
+| absent or `development` | `dev` (port 3002) |
 | `production` | `prod` (port 8080, `PORT` env var honored) |
 
-Both profiles share `transcodeDefaults` and `streamDefaults` — there are no per-environment overrides on the policy knobs today. Env-var overrides for the `transcode.*` / `stream.*` fields are planned groundwork for ops tuning.
+Both profiles share transcode and stream defaults — there are no per-environment overrides on the policy knobs today. Env-var overrides for the `transcode.*` / `stream.*` fields are planned groundwork for ops tuning.
 
-In production, `segmentDir` and `dbPath` should be set to persistent storage locations (not `/tmp`). Library entries in the DB are filtered by `env` against `NODE_ENV`, so a single DB can serve both dev and prod profiles.
+In production, `segment_dir` and `db_path` should be set to persistent storage locations (not `/tmp`). Library entries in the DB are filtered by `env` against `RUST_ENV`, so a single DB can serve both dev and prod profiles.
 
 ---
 
@@ -95,7 +95,7 @@ Job IDs are deterministic — the same video, resolution, start time, and end ti
 
 ## Resolution Profiles
 
-Defined in `RESOLUTION_PROFILES` in `server/src/config.ts`.
+Defined in `RESOLUTION_PROFILES` in `server-rust/src/config.rs`.
 
 | Label | Width | Height | Video Bitrate | H.264 Level | Segment ≈ size |
 |---|---|---|---|---|---|

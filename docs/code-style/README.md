@@ -4,8 +4,9 @@ Non-negotiables for anyone writing code in xstream — invariants, naming, patte
 
 | Folder | Hook |
 |---|---|
-| [`Invariants/`](Invariants/README.md) | The 10 structural rules. Breaking them silently corrupts runtime behaviour. |
+| [`Invariants/`](Invariants/README.md) | The structural rules. Breaking them silently corrupts runtime behaviour. |
 | [`Naming/`](Naming/README.md) | File naming: PascalCase for React components, camelCase for everything else. |
 | [`Server-Conventions/`](Server-Conventions/README.md) | Resolver shape, presenter layer, `setFfmpegPath` discipline. |
 | [`Client-Conventions/`](Client-Conventions/README.md) | Relay fragment contract, Griffel, Nova eventing, localization. |
+| [`Testing/`](Testing/) | Cross-cutting testing rules — tests travel with ports, assertions are the contract. |
 | [`Anti-Patterns/`](Anti-Patterns/README.md) | The full "don't" list. |

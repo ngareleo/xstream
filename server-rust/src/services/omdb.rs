@@ -1,4 +1,4 @@
-//! OMDb auto-match service. Mirrors `server/src/services/omdbService.ts`.
+//! OMDb auto-match service.
 //!
 //! One outbound HTTP call per unmatched video: GET `OMDB_BASE?t=<title>&y=<year>&apikey=<key>&type=movie`.
 //! The response gets normalised into [`OmdbResult`]; the library scanner's
@@ -7,16 +7,13 @@
 //! **Failure shape** (per `docs/code-style/Invariants/00-Never-Violate.md` §14):
 //! OMDb is a flaky external HTTP service — the failure mode is recoverable
 //! (the video still plays, just without poster / IMDb rating). All branches
-//! return `None` to the caller, but the failure is observable in Seq via
-//! `tracing::warn!` with the cause attached. The Bun version's bare
-//! `catch {}` is the anti-pattern §14 explicitly prohibits; the Rust port
-//! makes the failure visible.
+//! return `None` to the caller, and every failure is observable in Seq via
+//! `tracing::warn!` with the cause attached. A bare `catch {}` /
+//! silent-discard is the anti-pattern §14 prohibits.
 //!
-//! This module ports only the `search_omdb` (by title+year) flow used by
-//! `auto_match_library`. The `fetch_omdb_by_id` (for the `match_video`
-//! mutation) and `search_omdb_list` (for the manual-link query) variants
-//! stay on Bun until those resolvers move — same scope as the rest of
-//! Step 2 of the migration.
+//! This module covers `search_omdb` (by title+year) used by
+//! `auto_match_library`, plus the `fetch_omdb_by_id` and `search_omdb_list`
+//! variants used by the `match_video` mutation and manual-link query.
 
 use serde::Deserialize;
 use tracing::warn;
@@ -172,8 +169,8 @@ fn map_response(api: OmdbApiResponse) -> Option<OmdbResult> {
 
 fn parse_year(raw: Option<&str>) -> Option<i64> {
     let r = raw?;
-    // Bun takes `r.slice(0, 4)` and parses — handles "2024–" (open-ended
-    // ranges OMDb returns for TV shows).
+    // Take the first four chars and parse — handles OMDb's open-ended
+    // year ranges for TV shows like "2024–".
     let head: String = r.chars().take(4).collect();
     head.parse::<i64>().ok()
 }
@@ -205,8 +202,7 @@ fn parse_actors(raw: Option<&str>) -> Vec<String> {
         .collect()
 }
 
-/// Treat `None`, empty string, and the literal `"N/A"` as absent. Bun does
-/// the same at `omdbService.ts:76`.
+/// Treat `None`, empty string, and the literal `"N/A"` as absent.
 fn nullable(raw: Option<String>) -> Option<String> {
     let r = raw?;
     if r == "N/A" || r.is_empty() {

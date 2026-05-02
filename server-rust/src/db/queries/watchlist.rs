@@ -1,4 +1,4 @@
-//! Watchlist CRUD. Mirrors `server/src/db/queries/watchlist.ts`.
+//! Watchlist CRUD.
 
 use rusqlite::{params, OptionalExtension, Row};
 

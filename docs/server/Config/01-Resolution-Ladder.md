@@ -1,12 +1,10 @@
 # Resolution Ladder
 
-`RESOLUTION_PROFILES` in `server/src/config.ts` defines 240p → 4K with bitrate targets.
+`RESOLUTION_PROFILES` in `server-rust/src/config.rs` defines 240p → 4K with bitrate targets.
 
-The Resolution enum is mirrored in four places that **all change together**:
+The Resolution enum is mirrored in two places that **change together**:
 
-- `server/src/types.ts` — internal enum
-- `server/src/config.ts` — `RESOLUTION_PROFILES` map
-- `server/src/graphql/schema.ts` — GraphQL enum declaration
-- `server/src/graphql/mappers.ts` — `GQL_TO_RESOLUTION` / `RESOLUTION_TO_GQL` conversions
+- `server-rust/src/graphql/scalars.rs` — internal `Resolution` enum + `RESOLUTION_PROFILES` map
+- `server-rust/src/graphql/types.rs` — GraphQL enum declaration via async-graphql derives
 
-If any one of these is out of sync, the other three will still type-check but runtime behavior breaks silently (the mapper returns `undefined` for the missing variant).
+The single Rust enum is the source of truth for both the internal config map and the GraphQL surface; the async-graphql derive enforces a one-to-one mapping at compile time. Adding a variant to one without the other will not compile.
