@@ -1,7 +1,8 @@
 # FilmTile (component)
 
-> Status: **baseline** (Spec) · **not started** (Production)
+> Status: **done** (Spec) · **not started** (Production)
 > Spec created: 2026-05-02 — Poster card component used in carousel rows and search results grid. Exported constants (TILE_WIDTH, TILE_GAP, TILE_STRIDE) allow callers (PosterRow) to compute correct scroll distances and grid alignment.
+> Audited: 2026-05-02 — added FilmShape interface, Strings + Stories sections (M4 audit pass).
 
 ## Files
 
@@ -62,16 +63,61 @@ See [`MediaKindBadge`](MediaKindBadge.md) spec for full visual detail. FilmTile 
 
 ### Props
 
+```ts
+interface FilmTileProps {
+  film: FilmShape;       // see FilmShape below
+  progress?: number;     // 0–100; renders progress bar when defined
+  onClick: () => void;   // tile click handler
+}
+```
+
 - `film: FilmShape` — the film data (title, posterUrl, year, duration, progress).
 - `progress?: number` — optional progress percentage (0–100). If undefined, no progress bar is shown. Used for "continue watching" rows.
 - `onClick: () => void` — callback when the tile is clicked. Parent (PosterRow or search grid) typically calls `openFilm(film.id)`.
 
+### FilmShape (production)
+
+The lab uses `Film` from `data/mock.ts`. In production, FilmTile reads from a Relay fragment `FilmTile_film` with the following fields:
+
+```graphql
+fragment FilmTile_film on Video {
+  id
+  title         # may be null → fall back to filename
+  filename
+  kind          # MOVIE | SERIES → MediaKindBadge variant
+  posterUrl     # OMDb URL or null → Poster shows gradient placeholder
+  year          # may be null
+  duration      # seconds, may be null
+}
+```
+
 ### Click behaviour
 - Entire tile is clickable (frame + metadata).
 - Calls `onClick()` on click.
+- Native `<button type="button">` handles Enter/Space activation; default focus ring (`:focus-visible`) is preserved by the browser.
 
 ### Scroll snap
 - `scrollSnapAlign: start` — aligns to the start of the track when scroll-snapping occurs.
+
+## Strings (`FilmTile.strings.ts`)
+
+| Key | Value | Used as |
+|---|---|---|
+| (no localized strings) | — | Title falls back to `film.filename` when `film.title` is null; meta uses raw `year`/`duration` joined with `" · "`. No labels, button text, or aria-labels in this component. |
+
+The kind badge (which does have an aria-label) lives in `MediaKindBadge` and owns its own strings.
+
+## Stories (`FilmTile.stories.tsx`)
+
+| Story | Setup | What it verifies |
+|---|---|---|
+| Movie | `kind: "MOVIE"`, year + duration | Default tile, no kind badge |
+| Series | `kind: "SERIES"` | Kind badge visible top-left |
+| WithProgress | `progress: 35` | Progress bar bottom of frame, green fill 35% |
+| ProgressFull | `progress: 100` | Full-width green fill |
+| Unmatched | `title: null, filename: "weird.file.mkv"` | Falls back to filename, no year/duration |
+| MissingPoster | `posterUrl: null` | Poster gradient placeholder |
+| Hover | `parameters: { pseudo: { hover: true } }` | Frame lift + green border wipe
 
 ## Changes from Prerelease
 

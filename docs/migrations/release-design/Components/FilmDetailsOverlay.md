@@ -1,7 +1,8 @@
 # FilmDetailsOverlay (component)
 
-> Status: **baseline** (Spec) · **not started** (Production)
+> Status: **done** (Spec) · **not started** (Production)
 > Spec updated: 2026-05-02 — Play CTA glass pill now lights up green on hover (oklch(0.78 0.20 150 / α) with alpha-gradient borders, green text-shadow + glowing outer box-shadow; icon gets drop-shadow green filters). Added bottom scroll section with "You might also like" carousel (PosterRow + FilmTile components). Scroll hint text animates up-down below the action row when suggestions are present. Overlay now has `overflow-y: auto` for scrollable content. Hero section restructured: 100vh relative container (`hero`) holds poster + gradients + content stack; `suggestions` section rendered below with 40/60px padding.
+> Audited: 2026-05-02 — flagged invalid `tokens.colorGreenGlow / 0.35` formula and pinned alpha-substitution rule for production; clarified `pickSuggestions` ownership (LibraryPage); added Strings + Stories (M4 audit pass).
 
 ## Files
 
@@ -112,8 +113,8 @@ Full-bleed overlay covering the entire viewport when a user selects a film from 
   - `backgroundColor: oklch(0.78 0.20 150 / 0.18)` (green-tinted glass).
   - Border colours (alpha-gradient): `borderTopColor: oklch(0.78 0.20 150 / 0.55)` (bright top), `borderRightColor: oklch(0.78 0.20 150 / 0.4)`, `borderBottomColor: oklch(0.78 0.20 150 / 0.25)` (dim bottom), `borderLeftColor: oklch(0.78 0.20 150 / 0.4)`.
   - `color: tokens.colorGreen`.
-  - **Dimmed text-shadow:** `textShadow: 0 0 4px ${tokens.colorGreenGlow / 0.35}, 0 0 18px ${tokens.colorGreen}` — reduced from the bright variant (outer halo ambient from 80px → suppressed; inner focus narrowed). The text glows softly without the aggressive outer corona.
-  - **Dimmed outer box-shadow:** `boxShadow: inset 0 1px 0 oklch(0.78 0.20 150 / 0.55), inset 0 -1px 0 rgba(0,0,0,0.20), 0 14px 40px rgba(0,0,0,0.55), 0 0 14px ${tokens.colorGreenGlow / 0.18}` — ambient glow reduced to 14px with 0.18 alpha (from earlier 32px + 80px dual halos).
+  - **Dimmed text-shadow:** `textShadow: 0 0 4px {colorGreenGlow @ α=0.35}, 0 0 18px {colorGreen}` — reduced from the bright variant (outer halo ambient from 80px → suppressed; inner focus narrowed). The text glows softly without the aggressive outer corona. **Production note:** `colorGreenGlow` already includes alpha; for the `@ 0.35` form, derive an explicit `rgba(...)` by sampling the underlying RGB of `colorGreenGlow` and using `0.35` as the alpha — `${tokens.colorGreenGlow / 0.35}` is invalid CSS.
+  - **Dimmed outer box-shadow:** `boxShadow: inset 0 1px 0 oklch(0.78 0.20 150 / 0.55), inset 0 -1px 0 rgba(0,0,0,0.20), 0 14px 40px rgba(0,0,0,0.55), 0 0 14px {colorGreenGlow @ α=0.18}` — ambient glow reduced to 14px with α=0.18 (from earlier 32px + 80px dual halos). Same alpha-substitution rule as text-shadow.
 - **Active (`:active`):** `transform: translateY(0) scale(0.98)`.
 - **Inner icon (`& svg`):** **engraved treatment at rest** — `color: rgba(255,255,255,0.55)`, `filter: drop-shadow(0 1px 0.5px rgba(255,255,255,0.45)) drop-shadow(0 -1px 0.5px rgba(0,0,0,0.55))` (recessed-into-glass illusion). **On hover (`:hover svg`):** `color: tokens.colorGreen`, `filter: drop-shadow(0 0 4px ${tokens.colorGreen}) drop-shadow(0 0 12px ${tokens.colorGreenGlow})` (green glow on icon).
 - Contents: `<IconPlay>` + `<span>Play</span>`.
@@ -136,9 +137,9 @@ Full-bleed overlay covering the entire viewport when a user selects a film from 
 - Contains a `<PosterRow title="You might also like">` component wrapping `<FilmTile>` cards for each suggestion.
 - Click handler on each tile: calls `onSelectSuggestion(id)` if provided, which also triggers a scroll-to-top animation on the overlay (`overlayRef.current?.scrollTo({ top: 0, behavior: "smooth" })`), OR navigates to `/player/{id}` if callback not provided.
 
-### Suggestion scoring (from Library page)
+### Suggestion scoring — owned by LibraryPage, not the overlay
 
-The `pickSuggestions(film, all)` helper (used by Library when rendering FilmDetailsOverlay) ranks suggestions by:
+`pickSuggestions(film, all): Film[]` lives on `LibraryPage` (the parent). The overlay receives the result via the `suggestions` prop — it never computes scores itself. Ranking heuristic:
 
 1. **Director match:** if same director, +50 points.
 2. **Profile match:** same library profile, +8 points.
@@ -221,6 +222,33 @@ The `.overlayPoster` element has **`viewTransitionName: "film-backdrop"`**. This
 - [ ] Accept props: `film: FilmShape`, `suggestions?: Film[]` (default: []), `onClose: () => void`, `onSelectSuggestion?: (id: string) => void`
 - [ ] Wire to real Film data (replace mock data)
 - [ ] Verify `viewTransitionName: "film-backdrop"` matches Player's backdrop view-transition name
+
+## Strings (`FilmDetailsOverlay.strings.ts`)
+
+| Key | Value | Used as |
+|---|---|---|
+| `play` | `"Play"` | Play CTA label |
+| `back` | `"Back"` | Back pill label |
+| `backAriaLabel` | `"Back to home"` | Back pill aria-label |
+| `closeAriaLabel` | `"Close details"` | Close button aria-label |
+| `unmatched` | `"Unmatched file"` | Title fallback when `film.title` is null |
+| `directedBy` | `"Directed by "` | Director-line prefix |
+| `seasons` | `"SEASONS"` | Seasons rail header |
+| `onDiskFormat` | `"{onDisk}/{total} ON DISK"` | Seasons rail header right side |
+| `youMightAlsoLike` | `"You might also like"` | Suggestions row title (passed to `<PosterRow title>`) |
+| `scrollHint` | `"▾ scroll for suggestions"` | Bottom-of-hero pulsing hint |
+
+## Stories (`FilmDetailsOverlay.stories.tsx`)
+
+| Story | Setup | What it verifies |
+|---|---|---|
+| Movie | `kind: "MOVIE"`, no suggestions | Hero with poster, content stack, no rail, no scroll hint |
+| MovieWithSuggestions | + `suggestions: [8 films]` | Scroll hint pulses; PosterRow renders below hero |
+| Series | `kind: "SERIES"` + `seasons` | Right-side seasons rail, content stack max-width 560px |
+| SeriesWithSuggestions | series + suggestions | Both rail and bottom carousel render |
+| UnmatchedFile | `title: null, plot: null, year: null` | Title falls back to "Unmatched file"; meta row collapses |
+| LongPlot | 600-char plot | Wraps inside 640px max-width |
+| HoverPlay | parameter-pseudo on Play CTA | Glass pill green-tinted, icon green, dimmed glow |
 
 ## TODO(redesign)
 

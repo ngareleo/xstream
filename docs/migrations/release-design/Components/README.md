@@ -16,7 +16,7 @@ Inline subcomponents (ProfileRow, FilmRow, ProfileChip, PosterCard, ListRow, Vid
 | [Sidebar](Sidebar.md) | ~~`components/Sidebar/Sidebar.{tsx,styles.ts}`~~ **deleted** | tombstone | done — deleted |
 | [DetailPane](DetailPane.md) | `components/DetailPane/DetailPane.tsx` | baseline | not started |
 | [EdgeHandle](EdgeHandle.md) | `components/EdgeHandle/EdgeHandle.{tsx,styles.ts}` | done | not started |
-| [Poster](Poster.md) | `components/Poster/Poster.tsx` | baseline | done |
+| [Poster](Poster.md) | `components/Poster/Poster.tsx` | done | done |
 | [Logo](Logo.md) | `components/Logo/{Logo01..Logo07,index}.tsx` | baseline | not started |
 | [Profiles page](Profiles.md) | `pages/Profiles/Profiles.{tsx,styles.ts}` | baseline | not started |
 | [ProfileRow component](ProfileRow.md) | `components/ProfileRow/ProfileRow.{tsx,styles.ts}` | baseline | not started |
@@ -26,12 +26,12 @@ Inline subcomponents (ProfileRow, FilmRow, ProfileChip, PosterCard, ListRow, Vid
 | [ProfileForm component](ProfileForm.md) | `components/ProfileForm/ProfileForm.{tsx,styles.ts}` | baseline | not started |
 | [DirectoryBrowser](DirectoryBrowser.md) | `components/DirectoryBrowser/DirectoryBrowser.{tsx,styles.ts,mockFs.ts}` | baseline | not started |
 | [Library page](Library.md) | `pages/Library/Library.{tsx,styles.ts}` | done | not started |
-| [SearchSlide component](SearchSlide.md) | `components/SearchSlide/SearchSlide.{tsx,styles.ts}` | baseline | not started |
-| [FilterSlide component](FilterSlide.md) | `components/FilterSlide/FilterSlide.{tsx,styles.ts}` + `filters.ts` | baseline | not started |
-| [PosterRow component](PosterRow.md) | `components/PosterRow/PosterRow.{tsx,styles.ts}` | baseline | not started |
-| [FilmTile component](FilmTile.md) | `components/FilmTile/FilmTile.{tsx,styles.ts}` | baseline | not started |
-| [FilmDetailsOverlay component](FilmDetailsOverlay.md) | `components/FilmDetailsOverlay/FilmDetailsOverlay.{tsx,styles.ts}` | baseline | not started |
-| [SeasonsPanel component](SeasonsPanel.md) | `components/SeasonsPanel/SeasonsPanel.{tsx,styles.ts}` | baseline | not started |
+| [SearchSlide component](SearchSlide.md) | `components/SearchSlide/SearchSlide.{tsx,styles.ts}` | done | not started |
+| [FilterSlide component](FilterSlide.md) | `components/FilterSlide/FilterSlide.{tsx,styles.ts}` + `filters.ts` | done | not started |
+| [PosterRow component](PosterRow.md) | `components/PosterRow/PosterRow.{tsx,styles.ts}` | done | not started |
+| [FilmTile component](FilmTile.md) | `components/FilmTile/FilmTile.{tsx,styles.ts}` | done | not started |
+| [FilmDetailsOverlay component](FilmDetailsOverlay.md) | `components/FilmDetailsOverlay/FilmDetailsOverlay.{tsx,styles.ts}` | done | not started |
+| [SeasonsPanel component](SeasonsPanel.md) | `components/SeasonsPanel/SeasonsPanel.{tsx,styles.ts}` | done | not started |
 | [MediaKindBadge component](MediaKindBadge.md) | `components/MediaKindBadge/MediaKindBadge.{tsx,styles.ts}` | done | not started |
 | [Watchlist page](Watchlist.md) | `pages/Watchlist/Watchlist.{tsx,styles.ts}` | done | not started |
 | [Player page](Player.md) | `pages/Player/Player.tsx` | done | not started |

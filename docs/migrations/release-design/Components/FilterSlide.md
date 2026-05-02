@@ -1,7 +1,8 @@
 # FilterSlide (component)
 
-> Status: **baseline** (Spec) · **not started** (Production)
+> Status: **done** (Spec) · **not started** (Production)
 > Spec created: 2026-05-02 — TUI-style filter table panel displayed inside the Library hero when the filter mode is active.
+> Audited: 2026-05-02 — pinned constants from `filters.ts` (HDRS, CODECS, DECADES); resolved HDR-null + decade-format TODOs; added Strings + Stories (M4 audit pass).
 
 ## Files
 
@@ -77,11 +78,12 @@ TUI-style hero panel for the filter-active state. Renders a monospaced table wit
 - **`toggleSetItem(set: Set<T>, item: T): Set<T>`** — adds item if not present, removes if present. Returns a new Set.
 - **`filtersActive(filters: Filters): number`** — returns the total count of selected items across all dimensions.
 - **`EMPTY_FILTERS`** — a Filters object with all dimensions as empty Sets. Used for reset.
-- **Constants:**
-  - `RESOLUTIONS = ["4K", "1080p", "720p"]` (or similar, matching the resolution ladder)
-  - `HDRS = ["HDR10", "Dolby Vision", "—"]` (where `"—"` represents SDR)
-  - `CODECS = ["HEVC", "VP9", "AV1", "H264"]` (or similar)
-  - `DECADES = [1920, 1930, …, 2020, 2030]` (or similar range)
+- **Constants** (single source of truth: `filters.ts`):
+  - `RESOLUTIONS: Resolution[] = ["4K", "1080p", "720p"]`
+  - `HDRS: Hdr[] = ["DV", "HDR10", "HDR10+", "—"]` (where `"—"` represents SDR; UI relabels as `"SDR"`)
+  - `CODECS: Codec[] = ["HEVC", "H264", "AV1"]`
+  - `DECADES: { decade: number; label: string }[] = [{ decade: 1990, label: "'90s" }, { decade: 2000, label: "'00s" }, { decade: 2010, label: "'10s" }, { decade: 2020, label: "'20s" }]`
+  - `EMPTY_FILTERS: Filters` — all four sets empty.
 
 ## Changes from Prerelease
 
@@ -106,10 +108,35 @@ This component is new in Release — no Prerelease equivalent. In Prerelease, th
 - [ ] Wire `onClose` and `onClearFilters` callbacks to parent Library state machine
 - [ ] Ensure filter application order: filters always narrow query results, never broaden them
 
-## TODO(redesign)
+## Decided 2026-05-02 (audit)
 
-- HDR dimension: decide how to present null HDR value (currently `"—"` → `"SDR"` mapping in UI). Confirm labeling with design.
-- Decade ranges: confirm bucketing logic (`Math.floor(year / 10) * 10`). Decide display format (`"'90s"` vs `"1990s"` vs `"1990–1999"`).
+- **HDR null**: stored model uses `"—"` as the SDR sentinel. UI labels this as `"SDR"` via the toggle's `label === "—" ? "SDR" : label` branch. Keep this mapping in production.
+- **Decade format**: `"'90s"` style (matches design source `DECADES` constant — short, monospace-friendly, fits the TUI aesthetic). Production uses the same `{ decade, label }` pair shape.
+
+## Strings (`FilterSlide.strings.ts`)
+
+| Key | Value | Used as |
+|---|---|---|
+| `eyebrow` | `"filters"` | Eyebrow prefix |
+| `dimResolution` | `"resolution"` | Row label |
+| `dimHdr` | `"hdr"` | Row label |
+| `dimCodec` | `"codec"` | Row label |
+| `dimDecade` | `"decade"` | Row label |
+| `sdrLabel` | `"SDR"` | Display label for `"—"` HDR value |
+| `actionDone` | `"[↩] Done"` | Primary action button |
+| `actionClear` | `"[⇧⌫] Clear"` | Secondary action button |
+| `hintFormat` | `"{libraries} libraries · {totalMatched} matches before filters"` | Bottom-right hint |
+| `boxOn` / `boxOff` | `"[x]"` / `"[ ]"` | Toggle box glyphs |
+
+## Stories (`FilterSlide.stories.tsx`)
+
+| Story | Setup | What it verifies |
+|---|---|---|
+| Empty | `EMPTY_FILTERS` | All toggles `[ ]`, Clear button disabled |
+| OneDimension | `resolutions: { "4K" }` | One green toggle in resolution row, Clear enabled |
+| AllDimensions | one selected per dimension | Counter `totalMatched → resultCount` shrinks visibly |
+| WithQuery | `query: "noir"` | Eyebrow shows `"· filters · noir · {n} → {m}"` |
+| HdrSdr | `hdrs: { "—" }` | SDR toggle shows `"[x] SDR"` (mapped from `"—"`) |
 
 ## Status
 

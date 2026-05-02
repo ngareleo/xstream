@@ -1,7 +1,8 @@
 # SearchSlide (component)
 
-> Status: **baseline** (Spec) · **not started** (Production)
+> Status: **done** (Spec) · **not started** (Production)
 > Spec created: 2026-05-02 — TUI-style search results panel displayed inside the Library hero when the search input has focus or contains a query.
+> Audited: 2026-05-02 — corrected eyebrow + status accents to match design source (`filtered (n)`, `n filter(s) on`); added ESC contract, Strings + Stories (M4 audit pass).
 
 ## Files
 
@@ -21,11 +22,12 @@ TUI-style hero panel for the search-active state. Renders a monospaced prompt ro
 
 ### Eyebrow row (`slideEyebrow`)
 - Mono 11px / `letterSpacing: 0.22em` / uppercase / `colorGreen`.
-- Text pattern varies by state:
+- Text pattern varies by state (matches design source `SearchSlide.tsx`):
   - No query, no filters: `"· search"`
-  - Query but no filters: `"· query · {resultCount} result(s)"`
-  - No query, filters active: `"· filtered · {resultCount} films"` (shows filtered result count against the full library)
-  - Query + filters active: append `" · "` + `<span slideEyebrowAccent>` (white text) `"{activeFilterCount} filter(s)"`
+  - Query, no filters: `"· query · {resultCount} result(s)"`
+  - No query, filters active: `"· filtered · {resultCount} film(s)"`
+  - Query + filters active: same as "Query, no filters" + append `" · "` + `<span slideEyebrowAccent>"{activeFilterCount} filter(s)"</span>` (white).
+- Pluralization rule throughout: `count === 1 ? "result"/"film"/"filter" : "results"/"films"/"filters"`.
 - The accent span uses `color: tokens.colorText` (white).
 
 ### Prompt row (`slidePromptRow`)
@@ -41,10 +43,10 @@ TUI-style hero panel for the search-active state. Renders a monospaced prompt ro
 ### Status row (`slideStatus`)
 - Mono 12px / `letterSpacing: 0.06em` / `colorTextDim`.
 - Flex row with wrap, `columnGap: 10px`, `rowGap: 6px`.
-- Three variants:
-  - **With query:** `"{resultCount} of {totalMatched} match(es)"` + `·` (sep, `colorTextFaint`) + `"{profilesMatched} profile(s)"` + if filters active: `·` (sep) + `<span slideStatusAccent>"{activeFilterCount} filter(s)"` (green).
-  - **No query, no filters:** `<span slideStatusHint>` (italic, `colorTextMuted`) `"type to search films, directors, genres"`.
-  - **No query, filters active:** `"{resultCount} of {totalMatched} films · {profilesMatched} profile(s) · {activeFilterCount} filter(s) on"` (all in `colorTextDim`, status text rather than hint).
+- Three variants (matches design source):
+  - **Query (with or without filters):** `"{resultCount} of {totalMatched} match(es)"` + `·` (sep, `colorTextFaint`) + `"{profilesMatched} profile(s)"` + if filters active: `·` (sep) + `<span slideStatusAccent>"filtered ({activeFilterCount})"</span>` (green).
+  - **No query, no filters:** `<span slideStatusHint>"type to search films, directors, genres"</span>` (italic, `colorTextMuted`).
+  - **No query, filters active:** `"{resultCount} of {totalMatched} films · {profilesMatched} profile(s) · "` + `<span slideStatusAccent>"{activeFilterCount} filter(s) on"</span>` (green).
 
 ### Actions row (`slideActions`)
 - `marginTop: auto` (push to bottom).
@@ -94,6 +96,39 @@ This component is new in Release — no Prerelease equivalent. In Prerelease, th
 - [ ] Primary action: `"[F] Filter"` green underlined text (Mono 13px uppercase), hover white; calls `onOpenFilter()`
 - [ ] Secondary action: `"[ESC] Clear"` grey underlined text (Mono 12px uppercase), hover white; calls `onClear()`
 - [ ] Wire `onOpenFilter` and `onClear` callbacks to parent Library state machine
+
+## ESC + keyboard contract
+
+ESC handling is **parent-owned** by `LibraryPage`'s top-level keyboard handler — it clears query/filters and returns the hero to `idle` mode. SearchSlide's `[ESC] Clear` button calls `onClear()` for click-only access; the actual ESC keypress wiring lives in the page so it works even when focus is in the search input.
+
+## Strings (`SearchSlide.strings.ts`)
+
+| Key | Value | Used as |
+|---|---|---|
+| `eyebrowSearch` | `"search"` | Idle eyebrow |
+| `eyebrowQuery` | `"query"` | Eyebrow prefix when query present |
+| `eyebrowFiltered` | `"filtered"` | Eyebrow when filters active without query |
+| `result` / `results` | `"result"` / `"results"` | Pluralized count |
+| `film` / `films` | `"film"` / `"films"` | Pluralized count for filter-only |
+| `filter` / `filters` | `"filter"` / `"filters"` | Pluralized count for filter accent |
+| `match` / `matches` | `"match"` / `"matches"` | Pluralized status word |
+| `profile` / `profiles` | `"profile"` / `"profiles"` | Pluralized profile count |
+| `statusFiltered` | `"filtered ({n})"` | Green accent when query AND filters |
+| `statusFiltersOn` | `"{n} filter(s) on"` | Green accent when no-query AND filters |
+| `statusHint` | `"type to search films, directors, genres"` | Italic hint when idle |
+| `actionFilter` | `"[F] Filter"` | Primary action button |
+| `actionClear` | `"[ESC] Clear"` | Secondary action button |
+
+## Stories (`SearchSlide.stories.tsx`)
+
+| Story | Setup | What it verifies |
+|---|---|---|
+| Idle | empty query, no filters | "search" eyebrow + italic hint, cursor pulsing |
+| WithQuery | `query: "blade"`, results > 0 | Query echoed in 56px monospace + result count |
+| WithQueryNoMatch | `query: "xyzzy"`, `resultCount: 0` | "0 of 0 matches" status |
+| FiltersOnly | empty query, `activeFilterCount: 2` | "filtered" eyebrow, green accent status |
+| QueryAndFilters | `query: "noir"`, `activeFilterCount: 3` | Both eyebrow accent and status accent shown |
+| LongQuery | 60-char query | Text overflows + clips inside `overflow-x: hidden` |
 
 ## Status
 

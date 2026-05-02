@@ -1,6 +1,6 @@
 # Poster
 
-> Status: **baseline** (Spec) · **done** (Production)
+> Status: **done** (Spec) · **done** (Production)
 
 ## Files
 

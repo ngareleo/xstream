@@ -1,7 +1,8 @@
 # SeasonsPanel (component)
 
-> Status: **baseline** (Spec) · **not started** (Production)
+> Status: **done** (Spec) · **not started** (Production)
 > Spec created: 2026-05-02 — Reusable season → episode browser. Renders an accordion of seasons with expandable episodes. Used inline in FilmRow expansion, DetailPane series section, and FilmDetailsOverlay seasons rail. Props: `seasons: Season[]`, `defaultOpenFirst?: boolean`. Each season shows a progress indicator (green complete, yellow partial, grey missing) and meta line (X of Y episodes on disk).
+> Audited: 2026-05-02 — added Strings + Stories sections (M4 audit pass).
 
 ## Files
 
@@ -195,6 +196,32 @@ This component is new in Release. Prerelease had no TV-show concept; SeasonsPane
 - [ ] Click available episode (when `onSelectEpisode` provided) calls the handler
 - [ ] Hover subtle background tint on season headers + episode rows (non-interactive episodes remain non-hoverable)
 - [ ] Wire to real `Season` + `Episode` data model (replace mock data)
+
+## Strings (`SeasonsPanel.strings.ts`)
+
+| Key | Value | Used as |
+|---|---|---|
+| `seasonFormat` | `"Season {n}"` | Season header title |
+| `onDiskFormat` | `"{onDisk} of {total} on disk"` | Episode count line |
+| `episodeFormat` | `"Episode {n}"` | Title fallback when `episode.title` is null |
+| `episodeCodeFormat` | `"S{ss}E{ee}"` | Episode code (zero-padded) |
+| `statusOnDisk` | `"ON DISK"` | Status pill (complete) |
+| `statusPartial` | `"PARTIAL"` | Status pill (some episodes) |
+| `statusMissing` | `"MISSING"` | Status pill (no episodes) |
+| `playingEyebrow` | `"● PLAYING"` | Active episode eyebrow (Player only) |
+| `playAriaFormat` | `"Play {code}: {title}"` | aria-label on available episode buttons |
+
+## Stories (`SeasonsPanel.stories.tsx`)
+
+| Story | Setup | What it verifies |
+|---|---|---|
+| Closed | 3 seasons, none open | All chevrons right, no episodes visible |
+| DefaultOpenFirst | `defaultOpenFirst: true` | Season 1 expands on mount |
+| MultiOpen | user expands seasons 1 + 3 | Both stay open simultaneously |
+| Accordion | `accordion: true`, expand 1, then 2 | Season 1 closes when season 2 opens |
+| MixedStatus | season 1 complete, 2 partial, 3 missing | Three status pills + three fill colours |
+| InteractivePlayer | `onSelectEpisode + activeEpisode` | Available episodes are buttons; active episode shows ● PLAYING + green left-rail |
+| MissingEpisodes | one season with `onDisk: false` for all | Outline dots, non-interactive rows |
 
 ## Status
 

@@ -1,7 +1,8 @@
 # PosterRow (component)
 
-> Status: **baseline** (Spec) · **not started** (Production)
+> Status: **done** (Spec) · **not started** (Production)
 > Spec created: 2026-05-02 — Carousel row with smooth-scroll pagination arrows and RAF-eased animation. Used by Library page for continue-watching, new-releases, and watchlist rows.
+> Audited: 2026-05-02 — corrected SCROLL_DURATION_MS to 1100, easeOutQuint, props to `{title, children}`; resolved arrow-icon TODO; added Strings + Stories (M4 audit pass).
 
 ## Files
 
@@ -10,7 +11,7 @@
 
 ## Purpose
 
-Horizontal-scroll carousel row with pagination arrows (left/right). Renders a row label (title), left/right edge arrows (conditionally visible based on scroll position), and a flex track of `<FilmTile>` components. Smooth scroll uses RAF-based easing (easeInOutCubic, 720ms). Used by Library page for "Continue Watching", "New Releases", and "Watchlist" rows.
+Horizontal-scroll carousel row with pagination arrows (left/right). Renders a row label (title), left/right edge arrows (conditionally visible based on scroll position), and a flex track of arbitrary children (typically `<FilmTile>` instances). Smooth scroll uses RAF-based easing (`easeOutQuint`, 1100ms). Used by Library page for "Continue Watching", "New Releases", and "Watchlist" rows.
 
 ## Visual
 
@@ -58,8 +59,8 @@ Horizontal-scroll carousel row with pagination arrows (left/right). Renders a ro
 ## Behaviour
 
 ### Smooth scroll animation
-- **RAF-based:** `easeInOutCubic` easing curve (cubic formula: `t < 0.5 ? 4t³ : 1 - (-2t+2)³/2`).
-- **Duration:** `ROW_SCROLL_DURATION_MS = 720` ms.
+- **RAF-based:** `easeOutQuint` easing curve (`1 - Math.pow(1 - t, 5)`) — strong front-loaded acceleration, gentle settle.
+- **Duration:** `SCROLL_DURATION_MS = 1100` ms (matches the design source).
 - **Page size computation (`pageSize()`):**
   - `tilesPerPage = Math.max(1, Math.floor(el.clientWidth / TILE_STRIDE))`.
   - `pageSize = tilesPerPage * TILE_STRIDE`.
@@ -73,14 +74,20 @@ Horizontal-scroll carousel row with pagination arrows (left/right). Renders a ro
 
 ### Props
 
+```ts
+interface PosterRowProps {
+  title: string;
+  children: ReactNode;   // typically <FilmTile> instances
+}
+```
+
 - `title: string` — row header text (e.g., "Continue watching").
-- `films: FilmShape[]` — array of film objects to render as tiles.
-- `onSelectFilm: (film: FilmShape) => void` — callback when a tile is clicked. Parent (Library) typically navigates or opens the detail pane.
+- `children: ReactNode` — caller renders `<FilmTile>` (or any child) for each item. PosterRow does NOT own the data shape — it is purely a layout/scroll container. Callers wire `onClick` directly on each child.
 
 ### Constants
 
 - **`TILE_WIDTH = 200`**, **`TILE_GAP = 16`**, **`TILE_STRIDE = 216`** — imported from FilmTile module.
-- **`ROW_SCROLL_DURATION_MS = 720`** — smooth-scroll animation duration.
+- **`SCROLL_DURATION_MS = 1100`** — smooth-scroll animation duration.
 
 ## Changes from Prerelease
 
@@ -103,20 +110,37 @@ This component is new in Release as an extracted, reusable carousel unit. In Pre
 - [ ] Page size function: `Math.max(1, Math.floor(trackWidth / TILE_STRIDE)) * TILE_STRIDE`
 - [ ] On left arrow click: RAF-animate scroll left by page size (720ms easeInOutCubic)
 - [ ] On right arrow click: RAF-animate scroll right by page size (720ms easeInOutCubic)
-- [ ] Render `<FilmTile>` for each film in `films`, passing `onSelectFilm` as onClick
-- [ ] Wire to real film data (replace mock data)
+- [ ] Render `children` directly inside the track (no internal data ownership; caller owns `<FilmTile>` array + click handlers)
+- [ ] Cleanup on unmount: remove scroll listener, disconnect ResizeObserver
 
-## TODO(redesign)
-
-- Arrow icon choice: confirm IconBack is the correct left arrow. (Consider: use a ChevronLeft instead if that feels better.)
+**Decided 2026-05-02 (audit):** left arrow uses `IconBack`, right arrow uses `IconChevron` — matches the design source. The asymmetry is intentional: `IconBack` is the project-standard "back/previous" glyph and reads as "go left through history of cards," not "rotate-flip a chevron."
 
 ## Status
 
 - [x] Designed in `design/Release` lab — PosterRow component extracted from Library's inline carousel 2026-05-02, PR #48. Glass-effect pagination arrows with hover lift/glow. RAF-based smooth scroll (easeInOutCubic, 720ms). Page size computed as multiple of TILE_STRIDE for snap alignment.
 - [ ] Production implementation
 
+## Strings (`PosterRow.strings.ts`)
+
+| Key | Value | Used as |
+|---|---|---|
+| `prevAriaLabel` | `"Previous"` | Left arrow `aria-label` |
+| `nextAriaLabel` | `"Next"` | Right arrow `aria-label` |
+
+The `title` is supplied by the caller (e.g. `"Continue watching"`, `"New releases"`); PosterRow does not own row labels.
+
+## Stories (`PosterRow.stories.tsx`)
+
+| Story | Setup | What it verifies |
+|---|---|---|
+| Empty | 0 children | No arrows rendered, header still visible |
+| Few | 3 `<FilmTile>` (fits viewport) | No arrows (track fits) |
+| Overflowing | 12 `<FilmTile>` | Right arrow visible at start, both visible mid-scroll, only left visible at end |
+| Hover | parameter-pseudo on arrow | Arrow lift + green border/text on hover |
+
 ## Notes
 
 - **Scroll snap alignment:** The `scroll-snap-type: x proximity` constraint on the track only works reliably during manual scroll. During the RAF animation (programmatic `scrollLeft +=`), snap-point alignment is not enforced by the browser. The component ensures snapping by computing page size as a multiple of TILE_STRIDE.
-- **RAF easing:** The easeInOutCubic curve gives a smooth acceleration → deceleration feel. The 720ms duration (0.72s) is long enough to be perceived as smooth but short enough to feel responsive.
+- **RAF easing:** `easeOutQuint` gives a strong initial slide that decelerates smoothly into the snap. The 1100ms duration is intentionally generous so the user can read tile titles as they pass.
 - **Arrow visibility:** Arrows are hidden when the track content fits entirely in the viewport (hasPrev + hasNext both false), providing a clean UX when no scrolling is needed.
+- **Glass arrow `rgba(8,11,10,0.65)`:** raw rgba, not a token — this is a deliberate low-level glass tint that doesn't map to any colorBg token (it's darker than `colorBg0` and slightly green-tinted). Keep as a literal in `.styles.ts`.
