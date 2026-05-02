@@ -23,6 +23,8 @@ export const useVideoPlayerStyles = makeStyles({
   },
 
   // ── Idle overlay (pre-play) ────────────────────────────────────────────────
+  // Full-area click-to-play scrim — no visible button. The primary play
+  // affordance is the green disc in the ControlBar.
   idleOverlay: {
     position: "absolute",
     top: 0,
@@ -30,60 +32,12 @@ export const useVideoPlayerStyles = makeStyles({
     bottom: 0,
     left: 0,
     zIndex: 5,
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    justifyContent: "center",
-    rowGap: "14px",
-    cursor: "pointer",
     backgroundColor: "rgba(0,0,0,0.35)",
-  },
-  // Glass 88×88 lab-style play disc (iOS-26 Liquid Glass inspired):
-  // translucent white bg, backdrop blur + saturate, beveled borders
-  // (top brighter, bottom darker), layered inset highlights + drop shadow.
-  playBtn: {
-    width: "88px",
-    height: "88px",
-    borderRadius: "50%",
-    backgroundColor: "rgba(255,255,255,0.12)",
-    backdropFilter: "blur(20px) saturate(180%)",
-    WebkitBackdropFilter: "blur(20px) saturate(180%)",
-    borderTopWidth: "1px",
-    borderRightWidth: "1px",
-    borderBottomWidth: "1px",
-    borderLeftWidth: "1px",
-    borderTopStyle: "solid",
-    borderRightStyle: "solid",
-    borderBottomStyle: "solid",
-    borderLeftStyle: "solid",
-    borderTopColor: "rgba(255,255,255,0.30)",
-    borderRightColor: "rgba(255,255,255,0.18)",
-    borderBottomColor: "rgba(255,255,255,0.10)",
-    borderLeftColor: "rgba(255,255,255,0.18)",
-    color: "rgba(255,255,255,0.55)",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
+    borderTopWidth: 0,
+    borderRightWidth: 0,
+    borderBottomWidth: 0,
+    borderLeftWidth: 0,
     cursor: "pointer",
-    boxShadow:
-      "inset 0 1px 0 rgba(255,255,255,0.35), inset 0 -1px 0 rgba(0,0,0,0.25), 0 12px 40px rgba(0,0,0,0.5)",
-    transitionProperty: "transform, background-color",
-    transitionDuration: "0.2s",
-    transitionTimingFunction: "ease",
-    "& svg": {
-      width: "40px",
-      height: "40px",
-      display: "block",
-      filter:
-        "drop-shadow(0 1px 0.5px rgba(255,255,255,0.45)) drop-shadow(0 -1px 0.5px rgba(0,0,0,0.55))",
-    },
-    ":hover": {
-      backgroundColor: "rgba(255,255,255,0.18)",
-      transform: "scale(1.04)",
-    },
-    ":active": {
-      transform: "scale(0.96)",
-    },
   },
 
   // ── Loading overlay ────────────────────────────────────────────────────────
