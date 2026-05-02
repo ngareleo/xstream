@@ -263,7 +263,7 @@ The `libraryScanUpdated` subscription emits the current scan state immediately o
 
 async-graphql unions are derived via `#[derive(Union)]` over an enum. Each variant carries a struct that itself derives `SimpleObject` / `Object`. The `__typename` discrimination happens at compile time via the variant name; there is no `__resolveType` boilerplate to maintain.
 
-See `StartTranscodeResult` in `server-rust/src/graphql/types.rs` as the canonical example.
+See `StartTranscodeResult` in `server-rust/src/graphql/types/transcode_job.rs` as the canonical example.
 
 ## Error-handling contract
 
