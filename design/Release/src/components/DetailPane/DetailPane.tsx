@@ -37,10 +37,12 @@ export const DetailPane: FC<DetailPaneProps> = ({ film, onClose }) => {
 
       <div className={styles.body}>
         <div className={styles.actionRow}>
-          <Link to={`/player/${film.id}`} className={styles.playBtn}>
-            ▶ Play in {film.resolution}
+          <Link to={`/player/${film.id}`} className={styles.playAction}>
+            ▶ Play
           </Link>
-          <button className={styles.reLinkBtn}>RE-LINK</button>
+          <button type="button" className={styles.editAction}>
+            Edit
+          </button>
         </div>
 
         <div className={styles.title}>{film.title ?? "Unmatched file"}</div>

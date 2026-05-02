@@ -4,7 +4,7 @@ One spec file per UI element of `design/Release/`. Each file follows the same sk
 
 For a high-level summary of every architectural and per-page change between the Prerelease (Moran) and Release (Xstream) labs, see [`../Changes.md`](../Changes.md).
 
-Inline subcomponents (ProfileRow, FilmRow, ProfileChip, PosterCard, ListRow, VideoArea, SidePanel, SettingsRow, Toggle) are documented as **sections within their parent file**, not separate files. Promote one to its own file when its `.tsx` is extracted.
+Inline subcomponents (ProfileRow, FilmRow, ProfileChip, PosterCard, ListRow, VideoArea, SidePanel, SettingsRow, Toggle) are documented as **sections within their parent file**, not separate files. Promote one to its own file when its `.tsx` is extracted. **Exception:** ProfileForm is a shared component extracted from Dashboard's NewProfilePane form and used by both CreateProfile and EditProfile pages — it gets its own spec file because it is a reusable unit not nested in a single parent.
 
 ## Catalog
 
@@ -12,17 +12,31 @@ Inline subcomponents (ProfileRow, FilmRow, ProfileChip, PosterCard, ListRow, Vid
 |---|---|---|---|
 | [AppShell](AppShell.md) | `components/Layout/AppShell.{tsx,styles.ts}` | done | not started |
 | [AppHeader](AppHeader.md) | `components/AppHeader/AppHeader.{tsx,styles.ts}` | done | not started |
+| [AccountMenu](AccountMenu.md) | `components/AccountMenu/AccountMenu.{tsx,styles.ts}` | done | not started |
 | [Sidebar](Sidebar.md) | ~~`components/Sidebar/Sidebar.{tsx,styles.ts}`~~ **deleted** | tombstone | n/a — deleted |
 | [DetailPane](DetailPane.md) | `components/DetailPane/DetailPane.tsx` | baseline | not started |
 | [EdgeHandle](EdgeHandle.md) | `components/EdgeHandle/EdgeHandle.{tsx,styles.ts}` | done | not started |
 | [Poster](Poster.md) | `components/Poster/Poster.tsx` | baseline | not started |
 | [Logo](Logo.md) | `components/Logo/{Logo01..Logo07,index}.tsx` | baseline | not started |
 | [Profiles page](Profiles.md) | `pages/Profiles/Profiles.{tsx,styles.ts}` | baseline | not started |
+| [ProfileRow component](ProfileRow.md) | `components/ProfileRow/ProfileRow.{tsx,styles.ts}` | baseline | not started |
+| [FilmRow component](FilmRow.md) | `components/FilmRow/FilmRow.{tsx,styles.ts}` | baseline | not started |
+| [CreateProfile page](CreateProfile.md) | `pages/CreateProfile/CreateProfile.{tsx}` | baseline | not started |
+| [EditProfile page](EditProfile.md) | `pages/EditProfile/EditProfile.{tsx}` | baseline | not started |
+| [ProfileForm component](ProfileForm.md) | `components/ProfileForm/ProfileForm.{tsx,styles.ts}` | baseline | not started |
+| [DirectoryBrowser](DirectoryBrowser.md) | `components/DirectoryBrowser/DirectoryBrowser.{tsx,styles.ts,mockFs.ts}` | baseline | not started |
 | [Library page](Library.md) | `pages/Library/Library.{tsx,styles.ts}` | done | not started |
+| [SearchSlide component](SearchSlide.md) | `components/SearchSlide/SearchSlide.{tsx,styles.ts}` | baseline | not started |
+| [FilterSlide component](FilterSlide.md) | `components/FilterSlide/FilterSlide.{tsx,styles.ts}` + `filters.ts` | baseline | not started |
+| [PosterRow component](PosterRow.md) | `components/PosterRow/PosterRow.{tsx,styles.ts}` | baseline | not started |
+| [FilmTile component](FilmTile.md) | `components/FilmTile/FilmTile.{tsx,styles.ts}` | baseline | not started |
+| [FilmDetailsOverlay component](FilmDetailsOverlay.md) | `components/FilmDetailsOverlay/FilmDetailsOverlay.{tsx,styles.ts}` | baseline | not started |
 | [Watchlist page](Watchlist.md) | `pages/Watchlist/Watchlist.{tsx,styles.ts}` | done | not started |
 | [Player page](Player.md) | `pages/Player/Player.tsx` | done | not started |
 | [Settings page](Settings.md) | `pages/Settings/Settings.tsx` | baseline | not started |
+| [DevPanel](DevPanel.md) | `components/DevPanel/DevPanel.{tsx,styles.ts}` | baseline | n/a — lab only |
 | [DesignSystem page](DesignSystem.md) | `pages/DesignSystem/DesignSystem.tsx` | baseline | n/a — lab only |
+| [Error page](Error.md) | `pages/Error/Error.{tsx,styles.ts}` | baseline | not started |
 | [Goodbye page](Goodbye.md) | `pages/Goodbye/Goodbye.tsx` | baseline | not started |
 | [NotFound page](NotFound.md) | `pages/NotFound/NotFound.tsx` | baseline | not started |
 

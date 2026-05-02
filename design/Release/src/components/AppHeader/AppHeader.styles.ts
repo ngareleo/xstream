@@ -14,6 +14,18 @@ export const useAppHeaderStyles = makeStyles({
     display: "grid",
     gridTemplateColumns: "1fr auto 1fr",
     alignItems: "center",
+    // Background + soft bottom mask live on a sibling layer (`headerBg`)
+    // so the bottom fade doesn't clip descendants — e.g., the account
+    // dropdown that extends below the header's bottom edge.
+  },
+  headerBg: {
+    position: "absolute",
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    zIndex: -1,
+    pointerEvents: "none",
     backgroundImage:
       "linear-gradient(180deg, rgba(20,28,24,0.55) 0%, rgba(8,11,10,0.78) 100%)",
     backgroundColor: "rgba(8,11,10,0.62)",
@@ -139,13 +151,13 @@ export const useAppHeaderStyles = makeStyles({
     animationTimingFunction: "linear",
   },
 
+  accountWrap: {
+    position: "relative",
+  },
   avatar: {
     width: "34px",
     height: "34px",
-    borderTopLeftRadius: "4px",
-    borderTopRightRadius: "4px",
-    borderBottomLeftRadius: "4px",
-    borderBottomRightRadius: "4px",
+    borderRadius: "50%",
     backgroundImage: `linear-gradient(140deg, ${tokens.colorGreenDeep}, ${tokens.colorGreen})`,
     color: tokens.colorGreenInk,
     fontFamily: tokens.fontMono,
@@ -170,5 +182,8 @@ export const useAppHeaderStyles = makeStyles({
       transform: "translateY(-1px)",
       boxShadow: `0 4px 14px ${tokens.colorGreenSoft}`,
     },
+  },
+  avatarOpen: {
+    boxShadow: `0 0 0 2px ${tokens.colorGreen}, 0 6px 18px ${tokens.colorGreenSoft}`,
   },
 });

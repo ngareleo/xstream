@@ -1,5 +1,6 @@
 import { type FC, type ReactNode } from "react";
 import { AppHeader } from "../AppHeader/AppHeader.js";
+import { DevPanel } from "../DevPanel/DevPanel.js";
 import { useAppShellStyles } from "./AppShell.styles.js";
 
 export const AppShell: FC<{ children: ReactNode }> = ({ children }) => {
@@ -8,6 +9,7 @@ export const AppShell: FC<{ children: ReactNode }> = ({ children }) => {
     <div className={s.shell}>
       <AppHeader />
       <main className={s.main}>{children}</main>
+      <DevPanel />
     </div>
   );
 };

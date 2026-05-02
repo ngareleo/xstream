@@ -1,21 +1,26 @@
 import { type FC, useMemo, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { mergeClasses } from "@griffel/react";
-import {
-  type Film,
-  type Profile,
-  getFilmById,
-  getFilmsForProfile,
-  profiles,
-} from "../../data/mock.js";
-import { ImdbBadge, IconChevron } from "../../lib/icons.js";
-import { Poster } from "../../components/Poster/Poster.js";
+import { getFilmById, getFilmsForProfile, profiles } from "../../data/mock.js";
 import { DetailPane } from "../../components/DetailPane/DetailPane.js";
+import { FilmRow } from "../../components/FilmRow/FilmRow.js";
+import { ProfileRow } from "../../components/ProfileRow/ProfileRow.js";
 import { useSplitResize } from "../../hooks/useSplitResize.js";
 import { useProfilesStyles } from "./Profiles.styles.js";
 
+/**
+ * Library list view — every profile and every film, expandable.
+ * Owns:
+ *  - the expanded-set state (which profiles show their films)
+ *  - the right detail pane (driven by `?film=<id>`)
+ *  - the empty-state branch (gated on `?empty=1` for design-lab preview)
+ *  - the resize-split between left list and right detail pane
+ *
+ * The actual row visuals live in ProfileRow + FilmRow.
+ */
 export const Profiles: FC = () => {
   const s = useProfilesStyles();
+  const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
 
   const filmId = params.get("film");
@@ -51,6 +56,35 @@ export const Profiles: FC = () => {
   const totalUnmatched = profiles.reduce((acc, p) => acc + p.unmatched, 0);
   const scanningCount = profiles.filter((p) => p.scanning).length;
 
+  // Design-lab toggle: `/profiles?empty=1` previews the no-libraries state.
+  if (params.get("empty") === "1") {
+    return (
+      <div className={s.emptyRoot}>
+        <div className={s.emptyWatermark}>profiles</div>
+        <div className={s.emptyContent}>
+          <div className={s.emptyEyebrow}>· no libraries yet</div>
+          <div className={s.emptyHeadline}>
+            <span className={s.emptyHeadlineWhite}>your collection</span>
+            <span className={s.emptyHeadlineAccent}>starts here.</span>
+          </div>
+          <div className={s.emptyRule} />
+          <p className={s.emptyBody}>
+            Point Xstream at a folder of films or shows. We&rsquo;ll scan
+            recursively, match titles against OMDb, and pull posters.
+          </p>
+          <div className={s.emptyActions}>
+            <Link to="/profiles/new" className={s.emptyCta}>
+              + Create your first profile
+            </Link>
+            <span className={s.emptyHint}>
+              ⌘ N · paths can be local or networked
+            </span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div
       ref={containerRef}
@@ -82,24 +116,39 @@ export const Profiles: FC = () => {
         </div>
 
         <div className={s.rowsScroll}>
-          {profiles.map((p) => (
-            <ProfileRow
-              key={p.id}
-              profile={p}
-              expanded={expandedIds.has(p.id)}
-              onToggle={() => toggleProfile(p.id)}
-              children={getFilmsForProfile(p.id)}
-              selectedFilmId={filmId}
-              onSelectFilm={openFilm}
-            />
-          ))}
+          {profiles.map((p) => {
+            const filmsInProfile = getFilmsForProfile(p.id);
+            return (
+              <ProfileRow
+                key={p.id}
+                profile={p}
+                expanded={expandedIds.has(p.id)}
+                onToggle={() => toggleProfile(p.id)}
+              >
+                {filmsInProfile.map((f) => (
+                  <FilmRow
+                    key={f.id}
+                    film={f}
+                    selected={filmId === f.id}
+                    onClick={() => openFilm(f.id)}
+                  />
+                ))}
+              </ProfileRow>
+            );
+          })}
         </div>
 
         <div className={s.footer}>
           <span>
             {profiles.length} PROFILES · {totalFilms} FILMS · {totalUnmatched} UNMATCHED
           </span>
-          <button className={s.footerCta}>+ NEW PROFILE</button>
+          <button
+            type="button"
+            className={s.footerCta}
+            onClick={() => navigate("/profiles/new")}
+          >
+            + NEW PROFILE
+          </button>
         </div>
       </div>
 
@@ -111,144 +160,6 @@ export const Profiles: FC = () => {
           )}
         </>
       )}
-    </div>
-  );
-};
-
-interface ProfileRowProps {
-  profile: Profile;
-  expanded: boolean;
-  onToggle: () => void;
-  children: Film[];
-  selectedFilmId: string | null;
-  onSelectFilm: (id: string) => void;
-}
-
-const ProfileRow: FC<ProfileRowProps> = ({
-  profile,
-  expanded,
-  onToggle,
-  children,
-  selectedFilmId,
-  onSelectFilm,
-}) => {
-  const s = useProfilesStyles();
-  const matchPct = (profile.matched / profile.total) * 100;
-  const warn = profile.unmatched > 0;
-  return (
-    <div className={s.profileBlock}>
-      <div
-        onClick={onToggle}
-        className={mergeClasses(
-          s.profileHeader,
-          expanded && s.profileHeaderExpanded,
-        )}
-      >
-        <span className={mergeClasses(s.chevron, expanded && s.chevronOpen)}>
-          <IconChevron />
-        </span>
-        <div>
-          <div className={s.profileName}>{profile.name}</div>
-          <div className={s.profilePath}>{profile.path}</div>
-        </div>
-
-        <div>
-          {profile.scanning ? (
-            <div className={s.scanRow}>
-              <div className={s.scanSpinner} />
-              {profile.scanProgress?.done}/{profile.scanProgress?.total}
-            </div>
-          ) : (
-            <div className={s.matchRow}>
-              <div className={s.matchTrack}>
-                <div
-                  className={mergeClasses(s.matchFill, warn && s.matchFillWarn)}
-                  style={{ width: `${matchPct}%` }}
-                />
-              </div>
-              <span
-                className={mergeClasses(s.matchPct, warn && s.matchPctWarn)}
-              >
-                {Math.round(matchPct)}%
-              </span>
-            </div>
-          )}
-        </div>
-
-        <div className={s.size}>{profile.size}</div>
-        <div className={s.rowEnd}>
-          {profile.scanning ? "SCANNING…" : "EDIT · ↻"}
-        </div>
-      </div>
-
-      {expanded && children.length > 0 && (
-        <div className={s.filmsList}>
-          {children.map((f) => (
-            <FilmRow
-              key={f.id}
-              film={f}
-              selected={selectedFilmId === f.id}
-              onClick={() => onSelectFilm(f.id)}
-            />
-          ))}
-        </div>
-      )}
-    </div>
-  );
-};
-
-interface FilmRowProps {
-  film: Film;
-  selected: boolean;
-  onClick: () => void;
-}
-
-const FilmRow: FC<FilmRowProps> = ({ film, selected, onClick }) => {
-  const s = useProfilesStyles();
-  return (
-    <div
-      onClick={onClick}
-      className={mergeClasses(s.filmRow, selected && s.filmRowSelected)}
-    >
-      <Poster
-        url={film.posterUrl}
-        alt={film.title ?? film.filename}
-        className={s.filmThumb}
-      />
-      <div>
-        <div className={s.filmTitle}>
-          {film.title ?? film.filename}{" "}
-          {film.year && <span className={s.filmYear}>· {film.year}</span>}
-        </div>
-        <div className={s.filmMeta}>
-          {(film.genre ?? "UNMATCHED").toUpperCase()} · {film.duration}
-        </div>
-      </div>
-      <div className={s.chipRow}>
-        <span className={mergeClasses("chip", "green", s.chipSmall)}>
-          {film.resolution}
-        </span>
-        {film.hdr && film.hdr !== "—" && (
-          <span className={mergeClasses("chip", s.chipSmall)}>{film.hdr}</span>
-        )}
-      </div>
-      <div className={s.ratingCell}>
-        {film.rating !== null && (
-          <>
-            <ImdbBadge />
-            <span className={s.ratingValue}>{film.rating}</span>
-          </>
-        )}
-      </div>
-      <div className={s.playCell}>
-        <Link
-          to={`/player/${film.id}`}
-          onClick={(e) => e.stopPropagation()}
-          className={mergeClasses(s.playLink, selected && s.playLinkActive)}
-        >
-          ▶ Play
-        </Link>
-      </div>
     </div>
   );
 };

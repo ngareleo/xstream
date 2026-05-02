@@ -1,7 +1,7 @@
 # DetailPane
 
 > Status: **baseline** (Spec) · **not started** (Production)
-> Spec updated: 2026-05-02 — Play button restyled as a glass pill (translucent white bg, `backdrop-filter: blur(20px) saturate(180%)`, `border-radius: 999px`, beveled-light borders, inset highlights + drop shadow + on-hover lift). iOS-26 Liquid Glass inspired. Replaces the previous solid green / 2px-radius styling.
+> Spec updated: 2026-05-02 — Action row uses two distinct text-link styles: `playAction` (green text + green underline, white text + white underline on hover) and `editAction` (white text + faint white underline, green text + green underline on hover). "Play" label now reads `▶ Play` (resolved from "Play in {resolution}"). "Edit" button styled as white underline text.
 
 ## Files
 
@@ -30,9 +30,17 @@ Right-rail film detail card. Identical structure on the Profiles and Library pag
 - `padding: 16px 22px`, `flex: 1`, `overflow-y: auto`.
 
 #### Action row (top of body)
-- `<Link to={\`/player/\${film.id}\`}>` Play button — fills `flex: 1`, `padding: 12px 18px`, **glass effect**: `backgroundColor: rgba(255,255,255,0.10)`, `color: #fff`, `borderRadius: 999px` (full pill), `backdropFilter: blur(20px) saturate(180%)`, beveled-light borders (top brighter than bottom), `boxShadow: inset 0 1px 0 rgba(255,255,255,0.30), inset 0 -1px 0 rgba(0,0,0,0.20), 0 8px 24px rgba(0,0,0,0.35)`. JetBrains Mono 11px / 0.18em / uppercase / 600. On hover: bg lifts to `rgba(255,255,255,0.16)` + amplified shadow + subtle white halo. On `:active`: `transform: scale(0.98)`.
-  - Label: `▶ Play in {film.resolution}`.
-- Re-link button (mock — no handler) — `padding: 10px 14px`, transparent bg, `border: 1px solid var(--border)`, `color: var(--text-dim)`, same Mono treatment.
+- Two text-link elements side-by-side: `display: flex`, `alignItems: center`, `columnGap: 18px`.
+- **Play link** (`playAction`) — `<Link to={\`/player/\${film.id}\`}>` with label `▶ Play`.
+  - JetBrains Mono 11px, `letterSpacing: 0.18em`, uppercase, `backgroundColor: transparent`, no border, `paddingTop: 0`, `paddingBottom: 2px`, `paddingLeft: 0`, `paddingRight: 0`.
+  - `color: tokens.colorGreen`, `textDecorationLine: underline`, `textDecorationColor: tokens.colorGreen`, `textDecorationThickness: 1px`, `textUnderlineOffset: 4px`.
+  - Transition `color, text-decoration-color, opacity` on `0.15s`.
+  - On `:hover`: `color: tokens.colorText`, `textDecorationColor: tokens.colorText` (green underline + text both flip to white).
+- **Edit button** (`editAction`) — `<button>` with label `Edit`.
+  - Same font as Play: Mono 11px, `letterSpacing: 0.18em`, uppercase, no border, padding `0 0 2px 0`.
+  - `color: tokens.colorText` (white), `textDecorationLine: underline`, `textDecorationColor: rgba(232, 238, 232, 0.35)` (faint white), `textDecorationThickness: 1px`, `textUnderlineOffset: 4px`.
+  - Transition `color, text-decoration-color, opacity` on `0.15s`.
+  - On `:hover`: `color: tokens.colorGreen`, `textDecorationColor: tokens.colorGreen` (text and underline flip to green).
 
 #### Title
 - Anton 32px, `letter-spacing: -0.01em`, `text-transform: uppercase`, `color: var(--text)`.
@@ -89,14 +97,14 @@ None.
 
 ## TODO(redesign)
 
-- "Re-link" button has no handler; production should open a search-OMDb dialog.
+- The "Edit" button has no handler; production should open a profile edit flow or OMDb re-match dialog.
 - The `● ON DISK` indicator is hard-coded green; should reflect actual file presence via the `Film` model.
 
 ## Porting checklist (`client/src/components/DetailPane/`)
 
 - [ ] 220px hero with Poster + bottom-fade gradient + 26×26 close button
 - [ ] `border-left: 1px solid border`, `background: bg-1`, full-height column
-- [ ] Action row: Play (`<Link>` to `/player/:id`) + Re-link buttons in JetBrains Mono uppercase
+- [ ] Action row: two `textAction`-styled links in flex row `columnGap: 18px` — Play link (`<Link>` to `/player/:id`) + Edit button; green Mono underline text with white-on-hover transition
 - [ ] Title in Anton 32px uppercase (with `"Unmatched file"` fallback)
 - [ ] Eyebrow row: year · genre · duration in Mono uppercase
 - [ ] Chip row: resolution (green chip) + HDR + codec + audio chips
@@ -110,5 +118,5 @@ None.
 
 ## Status
 
-- [ ] Designed in `design/Release` lab (baseline reflects current state)
+- [x] Designed in `design/Release` lab — action row restyled with two distinct text-link styles (Play + Edit) 2026-05-02, PR #48. `playAction` = green-underline-with-hover-to-white (primary); `editAction` = faint-white-underline-with-hover-to-green (secondary). Replaces the former glass-pill Play button + outline Re-link button design.
 - [ ] Production implementation

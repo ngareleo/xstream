@@ -1,6 +1,7 @@
 # Profiles (page)
 
 > Status: **baseline** (Spec) · **not started** (Production)
+> Spec updated: 2026-05-02 — FilmRow split into three click targets: poster → player page; row body → opens DetailPane; Play/Edit text links in right cell. FilmRow hover adds background tint + 2px green border (except when selected, which locks the green state). Poster thumbnail wraps in a `<button>` with green-tinted hover overlay (▶ Play icon) + scale effect.
 
 ## Files
 
@@ -33,9 +34,22 @@ Flex column, `overflow: hidden`, `position: relative`.
 
 ### Rows scroll (`rowsScroll`)
 - Maps `profiles` to `<ProfileRow>` (subcomponent below).
+- Only rendered when `showEmpty` is false — empty state replaces the entire layout when `?empty=1` is set.
 
 ### Footer
-- Sticky bottom row: `{profiles.length} PROFILES · {totalFilms} FILMS · {totalUnmatched} UNMATCHED` + `+ NEW PROFILE` CTA button.
+- Sticky bottom row: `{profiles.length} PROFILES · {totalFilms} FILMS · {totalUnmatched} UNMATCHED` + `+ NEW PROFILE` CTA button (links to `/profiles/new`).
+
+### Empty state
+- Gated by `?empty=1` search param in the design lab — previews the no-libraries UX.
+- Large watermark text `"profiles"` in Anton 340px, top-right, at `-60px` bottom/right (alpha 0.022, pointer-events none).
+- Radial dot grid background (`28px 28px` circles, white 1px, alpha 0.045).
+- Content column: `flexDirection: column`, `rowGap: 20px`.
+  - Eyebrow: Mono 10px green uppercase "· no libraries yet".
+  - Headline: Anton 96px uppercase, split into two spans — "your collection" (white) + "starts here." (green).
+  - Rule: 56px wide × 3px tall, green, `border-radius: 2px`.
+  - Body text: 14px body font, `lineHeight: 1.65`, dimmed, max 360px wide.
+  - Actions: flex row `columnGap: 20px`, contains a `<Link to="/profiles/new">` styled as `emptyCta` + a hint span (Mono 10px faint "⌘ N · paths can be local or networked").
+  - `emptyCta`: Mono 12px green underline text, `textUnderlineOffset: 5px`, transition colour on hover to full white.
 
 ### Resize handle
 - Visible only when `paneOpen`. `<div onMouseDown={onResizeMouseDown}>` with `backgroundColor: tokens.colorBorder`, `cursor: col-resize`, `:hover` flips to `tokens.colorGreen`.
@@ -59,29 +73,15 @@ Flex column, `overflow: hidden`, `position: relative`.
 
 ## Subcomponents
 
-### `ProfileRow` (inline)
-- 5-column grid row: chevron · name+path · match-bar · size · actions.
-- `padding: 11px 24px`, gap 16, `cursor: pointer`.
-- `background: var(--surface)` when expanded.
-- Chevron: `<IconChevron>` rotated 90° when expanded with 0.15s transition.
-- Name: 13px, `color: var(--text)`. Path: Mono 10px, `color: var(--text-muted)` / 0.04em.
-- **Match bar**:
-  - When `profile.scanning`: shows a 10×10 spinner (`border: 1.5px solid var(--green)`, `border-top: transparent`, `animation: spin 0.9s linear infinite`) + `{done}/{total}` in Mono 10px green.
-  - Otherwise: 3px tall progress bar (`background: var(--surface-2)`) filled to `matchPct` width with green (or yellow when `unmatched > 0`); right-side label `{round(matchPct)}%` in Mono 10px (yellow if unmatched, else muted).
-- Size cell: Mono 11px / `var(--text-dim)`.
-- Actions cell: Mono 9px / 0.12em / muted, right-aligned. Shows `SCANNING…` while scanning, else `EDIT · ↻`.
-- Children render only when `expanded && children.length > 0`, in a `paddingLeft: 30px, background: var(--bg-1)` container.
+The Profiles page now delegates to two extracted child components:
 
-### `FilmRow` (inline, nested under `ProfileRow`)
-- Same 5-column grid, `padding: 8px 24px`.
-- Selected: `background: var(--green-soft)`, `borderLeft: 2px solid var(--green)` (transparent border when not selected so layout doesn't shift).
-- Poster thumbnail: 26×38, `border: 1px solid var(--border)`.
-- Title: 12px / `var(--text)`. Year suffix: `· {year}` in `var(--text-muted)`.
-- Sub-line: `{genre.toUpperCase()} · {duration}` in Mono 10px / `var(--text-muted)`.
-- Chip group: green resolution chip + (optional) HDR chip (font-size 9, padding `2px 5px`).
-- Rating: `<ImdbBadge>` + `{rating}` in yellow (when present).
-- Play link: `<Link to="/player/:id">` styled as a small button. Selected variant gets green bg + green-ink text; unselected gets transparent + 1px border.
-- `e.stopPropagation()` on the play-link click so it doesn't toggle selection.
+### **`ProfileRow` component** (extracted to `components/ProfileRow/`)
+
+One library row in the tree. See [`ProfileRow.md`](ProfileRow.md) for the full spec. 5-column grid: chevron · name+path · match-bar · size · actions. Contains inline children (FilmRow list) with expandable state. Props: `profile`, `expanded`, `onToggleExpand`, `children`.
+
+### **`FilmRow` component** (extracted to `components/FilmRow/`)
+
+One film inside an expanded ProfileRow. See [`FilmRow.md`](FilmRow.md) for the full spec. Same 5-column grid layout. Click targets split: poster → player page; row body → opens DetailPane; Play/Edit text links are right-aligned. Props: `film`, `selected`, `onSelect`, `onOpenDetail`.
 
 ## Changes from Prerelease
 
@@ -98,8 +98,7 @@ Flex column, `overflow: hidden`, `position: relative`.
 
 ## TODO(redesign)
 
-- `+ NEW PROFILE` footer button has no handler. Needs URL pane state (e.g. `?pane=new-profile`) + form pane.
-- "EDIT · ↻" actions string is decorative — no onClick handlers wired.
+None. The `+ NEW PROFILE` footer button now links to `/profiles/new` (CreateProfile page); the "EDIT" link in the actions cell links to `/profiles/:profileId/edit` (EditProfile page). The empty state is live at `?empty=1`.
 
 ## Porting checklist (`client/src/pages/Profiles/`)
 
@@ -109,13 +108,31 @@ Flex column, `overflow: hidden`, `position: relative`.
 - [ ] 5-column ProfileRow: chevron / name+path / match-bar / size / actions
 - [ ] Match bar: green (or yellow if unmatched) progress fill OR spinner during scan
 - [ ] Expanded ProfileRow shows nested FilmRow children with `bg-1` background
-- [ ] FilmRow selected state: green-soft bg + 2px green left border (transparent when not selected to prevent shift)
-- [ ] Play link in FilmRow uses `e.stopPropagation()` so row toggle doesn't fire
+- [ ] FilmRow at-rest: `background: transparent`, `borderLeft: 2px solid transparent`; `:hover`: `background: rgba(232, 238, 232, 0.05)`, `borderLeftColor: var(--border)`
+- [ ] FilmRow selected state: `background: var(--green-soft)`, `borderLeft: 2px solid var(--green)`, `:hover` locked to green-soft (no flicker)
+- [ ] Poster thumbnail (`filmThumbBtn`): 26×38 button, no visible bg; contains image + hover overlay; `:hover` adds `scale(1.05)` + green shadow
+- [ ] Hover overlay (`filmThumbHover`): absolute fill, flexed center, displays `▶` in green, `backgroundColor: rgba(5, 7, 6, 0.55)`, `opacity: 0` → `1` on parent `:hover`
+- [ ] Poster button navigates to `/player/:id` on click
+- [ ] Right cell: two text-link buttons (`filmPlayAction` + `filmEditAction`) in `columnGap: 12px`
+- [ ] `filmPlayAction`: green Mono 9px underline text, `letterSpacing: 0.16em`, uppercase, `textUnderlineOffset: 3px`; hover green → white; links to `/player/:id`
+- [ ] `filmEditAction`: white Mono 9px underline text, faint white underline; hover white → green; wired to `/profiles/:profileId/edit` (or delete modal)
+- [ ] Both Play and Edit buttons use `e.stopPropagation()` so clicks don't toggle row selection
 - [ ] URL pane state: `?film=<id>` (toggle off on second click)
 - [ ] Pre-expand profile containing the deep-linked film
-- [ ] Footer: counts in Mono uppercase + `+ NEW PROFILE` CTA wired to GraphQL mutation
+- [ ] Footer: counts in Mono uppercase + `+ NEW PROFILE` CTA wired to `/profiles/new` (or create-profile mutation in GraphQL)
+- [ ] Empty state: `?empty=1` design-lab toggle renders watermark + content section with headline/rule/body/CTA + hint
+- [ ] "EDIT" action link wired to `/profiles/:profileId/edit`
+
+## Extracted components (2026-05-02, PR #48)
+
+The Profiles page is now a thin shell (ca. 160 lines) that delegates to two extracted child components. Each component has its own spec file and `.tsx` + `.styles.ts` pair in the design lab:
+
+- [`ProfileRow.md`](ProfileRow.md) — 5-column library row with chevron, name+path, match-bar, size, actions (EDIT link)
+- [`FilmRow.md`](FilmRow.md) — 5-column film row with poster button, metadata, chips, Play/Edit text links
+
+Profiles.tsx owns the split-body grid, `useSplitResize` hook, URL pane state (`?film=<id>`), expansion state, empty state, and footer. Shared `PROFILE_GRID_COLUMNS = "30px 1.3fr 0.7fr 0.6fr 80px"` constant lives in `pages/Profiles/grid.ts` so both ProfileRow and FilmRow style sheets import it, keeping column widths locked together.
 
 ## Status
 
-- [x] Designed in `design/Release` lab — hero cycling + Ken Burns + animated edge fade landed 2026-05-01, PR #46 commit e088fb5; hero then removed in same PR commit 04ea22b (page now opens at breadcrumb). `splitBody` gains `paddingTop: tokens.headerHeight, boxSizing: border-box` for positioned-shell header clearance (2026-05-01, PR #46 commit 5301df6). Remaining `TODO(redesign)` items: `+ NEW PROFILE` handler, EDIT/rescan actions.
-- [ ] Production implementation
+- [x] Designed in `design/Release` lab — components extracted 2026-05-02, PR #48. Profiles became a thinner page shell (~160 lines). ProfileRow handles expansion state, match-bar spinner, EDIT link. FilmRow handles click-target split (poster → player, body → detail pane), hover tints + green border (locked when selected to prevent flicker), Play/Edit text links. Each extracted child component has its own `.tsx` + `.styles.ts` + `.md` spec.
+- [ ] Production implementation (`client/src/pages/Profiles/` + `client/src/components/` split)

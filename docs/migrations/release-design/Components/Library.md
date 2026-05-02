@@ -1,7 +1,7 @@
 # Library (page)
 
 > Status: **done** (Spec) · **not started** (Production)
-> Spec updated: 2026-05-02 (latest in day) — Play CTA's inner `<IconPlay>` now renders with an **engraved** treatment (`& svg` rule: muted color + paired drop-shadows for a recessed-into-glass illusion). Earlier 2026-05-02 — `FilmDetailsOverlay` Play CTA restyled as a glass pill (Liquid Glass): translucent white bg, `border-radius: 999px`, backdrop blur, beveled borders, layered shadows. Replaces the solid-green 3px-radius styling. Matches Player big-play and DetailPane play buttons. Note: the shared `IconPlay` SVG path was corrected (centroid → 8,8) on the same date. Earlier 2026-05-01 (PR #46, commit 907c331) — hero changed to `75vh` with `borderRadius: 6px`; page is now **inset** (`.page` has `paddingLeft/Right: 40px`); `heroBody paddingLeft/Right: 44px`, `paddingBottom: 20px`; three rows (Continue Watching + New Releases + Watchlist); `rowsScroll` has `paddingTop: 20px` only (no left/right — page provides 40px inset); `searchGrid` uses `repeat(auto-fill, 200px)` columns; tile width is 200px. Prior update (73a9cca) hero height 300 → 420px; `.overlayPoster` gains `viewTransitionName: "film-backdrop"`; Play CTA changed from `<Link>` to `<button onClick={playWithTransition}>`. Prior update (6fd44e4) search bar moves inside hero (top-right, absolute), gradient strip replaces bordered card, custom pulsing green caret + mirror span, `caretColor: transparent`. Prior update (773681e) hero grows to 300px; heroBody paddingTop calc(headerHeight + 32px), paddingBottom 24, paddingLeft/Right 56, rowGap 20. Prior update (45d1097) hero shrinks to 280px; dots stack under greeting via rowGap. Prior update (5301df6) made hero full-bleed (no border/radius). Prior update (9cc6d48) added page padding + 340px bordered card. Prior update (787f136) added search bar. Prior update (04ea22b) replaced grid/filter/DetailPane with hero+rows+overlay.
+> Spec updated: 2026-05-02 (PR #48) — Added hero modes (idle / searching / filtering) and TUI-style slide panels. When the search bar gains focus or content, hero backdrop swaps to `heroPanelBg` (dark + dot-grid + subtle green glow); hero body shows `SearchSlide` (giant monospace prompt + match counts + `[F] Filter` button). Clicking Filter opens `FilterSlide` (TUI table: resolution / HDR / codec / decade toggles as `[ ] label` / `[x] label`, `[↩] Done` and `[⇧⌫] Clear` buttons). ESC keybind: in filter mode → close filter; in search mode → clear all (query + filters + focus). Clear button now shows when filters are active too. Search bar stays mounted in all modes; only hero body content swaps. Earlier 2026-05-02 — Play CTA's inner `<IconPlay>` now renders with an **engraved** treatment (`& svg` rule: muted color + paired drop-shadows for a recessed-into-glass illusion). Earlier 2026-05-02 — `FilmDetailsOverlay` Play CTA restyled as a glass pill (Liquid Glass): translucent white bg, `border-radius: 999px`, backdrop blur, beveled borders, layered shadows. Replaces the solid-green 3px-radius styling. Matches Player big-play and DetailPane play buttons. Note: the shared `IconPlay` SVG path was corrected (centroid → 8,8) on the same date. Earlier 2026-05-01 (PR #46, commit 907c331) — hero changed to `75vh` with `borderRadius: 6px`; page is now **inset** (`.page` has `paddingLeft/Right: 40px`); `heroBody paddingLeft/Right: 44px`, `paddingBottom: 20px`; three rows (Continue Watching + New Releases + Watchlist); `rowsScroll` has `paddingTop: 20px` only (no left/right — page provides 40px inset); `searchGrid` uses `repeat(auto-fill, 200px)` columns; tile width is 200px. Prior update (73a9cca) hero height 300 → 420px; `.overlayPoster` gains `viewTransitionName: "film-backdrop"`; Play CTA changed from `<Link>` to `<button onClick={playWithTransition}>`. Prior update (6fd44e4) search bar moves inside hero (top-right, absolute), gradient strip replaces bordered card, custom pulsing green caret + mirror span, `caretColor: transparent`. Prior update (773681e) hero grows to 300px; heroBody paddingTop calc(headerHeight + 32px), paddingBottom 24, paddingLeft/Right 56, rowGap 20. Prior update (45d1097) hero shrinks to 280px; dots stack under greeting via rowGap. Prior update (5301df6) made hero full-bleed (no border/radius). Prior update (9cc6d48) added page padding + 340px bordered card. Prior update (787f136) added search bar. Prior update (04ea22b) replaced grid/filter/DetailPane with hero+rows+overlay.
 
 ## Files
 
@@ -53,25 +53,129 @@ The `.greeting` div handles `onMouseMove` and `onMouseLeave` on itself:
 - The Griffel `.greeting` class supplies `transitionProperty: transform`, `transitionDuration: 0.18s`, `transitionTimingFunction: ease-out` for the snap-back animation.
 - **Rotation magnitude:** ±9° in each axis (normalized offset ±0.5 × factor 18).
 
-### Search bar (inside hero, top-right)
+### Hero modes (idle / searching / filtering)
 
-Rendered inside the hero block between `grain-layer` and `heroBody`. Contains: `<span searchIcon>`, `<div searchInputWrap>`, optional `<button searchClear>`. Present in the dash view only (the overlay replaces the whole page component). Position: **`position: absolute`, `top: calc(${tokens.headerHeight} + 24px)`, `right: 32px`, `zIndex: 3`, `width: 320px`** — opposite corner from the bottom-left greeting. `display: flex`, `alignItems: center`, `columnGap: 10px`, `paddingTop: 8px`, `paddingBottom: 8px`, `paddingLeft: 16px`, `paddingRight: 12px`.
+The hero has three states controlled by the `heroMode` state machine:
 
-- **Input container (`searchBar`):** no border, no border-radius, no solid background. Horizontal gradient strip: `backgroundImage: linear-gradient(90deg, rgba(20,28,24,0) 0%, rgba(20,28,24,0.42) 22%, rgba(20,28,24,0.42) 78%, rgba(20,28,24,0) 100%)`. `transitionProperty: background-image`, `transitionDuration: tokens.transition` (0.15s). Note: `background-image` transition is the spec value — browsers may not animate this, but the token reference is correct.
-- **Focused state (`searchBarFocused`):** bumps gradient mid-stop alpha to 0.7. Applied via JS `searchFocused` state (set `onFocus`, cleared `onBlur` after 120ms `window.setTimeout` so clicks on the clear button register before blur).
+```js
+heroMode = filterOpen ? "filtering" : (searchFocused || searching ? "searching" : "idle")
+```
+
+- **`idle`** (default): Rotating poster slideshow + rotating-greeting overlay. Backdrop is the grain layer + edge-fade + bottom-fade. Hero body shows the greeting text + slide dots. Hero `.heroActive` class not applied.
+- **`searching`**: Search input has focus or contains a query. Hero backdrop swaps to `heroPanelBg` (dark semi-transparent + subtle green radial glow + dot-grid pattern). Hero body shows `<SearchSlide>` component instead of greeting. Hero gets `.heroActive` class.
+- **`filtering`**: Filter panel is open (triggered by `[F] Filter` button from SearchSlide). Hero backdrop remains `heroPanelBg`. Hero body shows `<FilterSlide>` component. Hero gets `.heroActive` class.
+
+When `heroMode !== "idle"`, the `searchBar` automatically gains focused styling (`searchBarFocused` class applied when `searchFocused || heroMode !== "idle"`), bumping the gradient alpha from 0.42 to 0.7.
+
+#### `heroPanelBg` (backdrop for searching and filtering modes)
+
+Applied to the hero when `heroMode !== "idle"`:
+
+- `position: absolute`, `inset: 0`, `pointerEvents: none`, `backgroundColor: tokens.colorBg1`.
+- **Radial glow:** `radial-gradient(circle at 70% 30%, rgba(120, 200, 150, 0.06) 0%, transparent 60%)`.
+- **Dot-grid pattern:** `radial-gradient(circle, rgba(255,255,255,0.045) 1px, transparent 1px)`, `backgroundSize: 28px 28px`.
+- Together, the glow + grid creates a subtle tech-forward backdrop that reads as "active" without overwhelming the large text rendered on top.
+
+### Search bar (inside hero, always present, all modes)
+
+Rendered inside the hero block between `grain-layer` and `heroBody` in **all three hero modes**. Contains: `<span searchIcon>`, `<div searchInputWrap>`, optional `<button searchClear>`. Position: **`position: absolute`, `top: calc(${tokens.headerHeight} + 24px)`, `right: 32px`, `zIndex: 3`, `width: 320px`** — opposite corner from the bottom-left greeting. `display: flex`, `alignItems: center`, `columnGap: 10px`, `paddingTop: 8px`, `paddingBottom: 8px`, `paddingLeft: 16px`, `paddingRight: 12px`.
+
+- **Input container (`searchBar`):** no border, no border-radius, no solid background. Horizontal gradient strip: `backgroundImage: linear-gradient(90deg, rgba(20,28,24,0) 0%, rgba(20,28,24,0.42) 22%, rgba(20,28,24,0.42) 78%, rgba(20,28,24,0) 100%)`. `transitionProperty: background-image`, `transitionDuration: tokens.transition` (0.15s).
+- **Active state (`searchBarFocused`):** bumps gradient mid-stop alpha to 0.7. Applied via JS when `searchFocused || heroMode !== "idle"`. Blur clears `searchFocused` after 120ms `window.setTimeout` (so clicks on the clear button register before the blur handler fires).
 - **Search icon (`searchIcon`):** `<IconSearch>` at `color: colorGreen`, `flexShrink: 0`.
 - **Input wrap (`searchInputWrap`):** `position: relative`, `flexGrow: 1`, `display: flex`, `alignItems: center`, `minWidth: 0`, `height: 20px`. Houses the real input, the hidden mirror span, and the custom caret span.
 - **Input (`searchInput`):** `caretColor: transparent` (hides the native browser caret). `width: 100%`, `backgroundColor: transparent`, no border, `outlineStyle: none`. `fontFamily: tokens.fontMono`, `fontSize: 12px`, `letterSpacing: 0.06em`, `color: tokens.colorText`. `paddingTop/Bottom: 0`, `paddingLeft: 0`, `paddingRight: 12px`. Placeholder: `color: colorTextMuted`, `letterSpacing: 0.14em`, `textTransform: uppercase`, `fontSize: 10px`. `spellCheck={false}`, `autoComplete="off"`, `aria-label="Search the library"`. Placeholder text: `"Search films, directors, genres…"` (shown only when not focused; cleared when focused via conditional prop).
 - **Mirror span (`searchMirror`):** `position: absolute`, `left: 0`, `top: 50%`, `transform: translateY(-50%)`, `visibility: hidden`, `pointerEvents: none`, `whiteSpace: pre`, Mono 12px, `letterSpacing: 0.06em`. Receives the same text value as the input. A `useEffect` reads `searchMirrorRef.current.offsetWidth` to set `searchCaretX` whenever `search` or `searchFocused` changes.
-- **Custom caret span (`searchCaret`):** rendered inside `searchInputWrap` only when `searchFocused` is true. `position: absolute`, `top: 50%`, `marginTop: -7px` (centres 14px element on midline), `width: 7px`, `height: 14px`. `borderRadius: 1px` on all corners. `backgroundColor: tokens.colorGreen`. `boxShadow: 0 0 6px ${tokens.colorGreen}, 0 0 14px ${tokens.colorGreenGlow}`. Pulsing keyframe: `0%, 100%` → `opacity: 1, transform: scaleY(1)`; `50%` → `opacity: 0.25, transform: scaleY(0.86)`. `animationDuration: 1.05s`, `animationIterationCount: infinite`, `animationTimingFunction: ease-in-out`. Positioned via inline `style={{ left: searchCaretX + "px" }}` from the mirror-span measurement.
-- **Clear button (`searchClear`):** `<IconClose width={12} height={12}>` inside a 20×20 button, `aria-label="Clear search"`. Shown when `searching` (`trimmedQuery.length > 0`). `color: colorTextMuted`, hover `color: colorText`. Clicking `setSearch("")`.
-- **Trimmed query:** the derived value `trimmedQuery = search.trim().toLowerCase()` controls the searching/empty branch.
-- **Empty state:** `trimmedQuery.length === 0` → show three default rows below.
-- **Results state:** `trimmedQuery.length > 0` AND `searchResults.length > 0` → `rowsScroll` renders a `<div searchResults>` (flex column `rowGap: 16px`) containing a `<div rowHeader>` reading `"Results · {N}"` (Mono 11px / `colorTextDim`) + `<div searchGrid>`.
-- **`searchGrid`:** `display: grid`, `gridTemplateColumns: repeat(auto-fill, 200px)`, `justifyContent: start`, `columnGap: 16px`, `rowGap: 24px`. Reuses `<FilmTile>` (same 200px wide component as the rows).
-- **No-match state:** `trimmedQuery.length > 0` AND `searchResults.length === 0` → `<div noResults>` with `"No films match "{search.trim()}""`. Mono 12px, `letterSpacing: 0.18em`, uppercase, `colorTextMuted`, `textAlign: center`, `paddingTop/Bottom: 40px`.
-- **Filter logic:** all `films` entries whose `title`, `filename`, `director`, or `genre` (each `.toLowerCase()`) includes `trimmedQuery`. Computed by `useMemo` on `trimmedQuery`.
-- All filtering is client-side against the in-memory `films` array. Production: replace with a backend search query (Relay refetch or subscription).
+- **Custom caret span (`searchCaret`):** rendered inside `searchInputWrap` only when `searchFocused` is true. `position: absolute`, `top: 50%`, `marginTop: -7px` (centres 14px element on midline), `width: 7px`, `height: 14px`. `borderRadius: 1px` on all corners. `backgroundColor: tokens.colorGreen`. `boxShadow: 0 0 6px ${tokens.colorGreen}, 0 0 14px ${tokens.colorGreenGlow}`. Pulsing keyframe: `0%, 100%` → `opacity: 1, transform: scaleY(1)`; `50%` → `opacity: 0.25, transform: scaleY(0.86)`. `animationDuration: 1.05s`, `animationIterationCount: infinite`, `animationTimingFunction: ease-in-out`. Positioned via inline `style={{ left: searchCaretX + "px" }}`.
+- **Clear button (`searchClear`):** `<IconClose width={12} height={12}>` inside a 20×20 button, `aria-label="Clear search"`. Shown when `searching || activeFilterCount > 0` (i.e., there is either a query or active filters to clear). `color: colorTextMuted`, hover `color: colorText`. Clicking calls `clearAll()` (resets query, filters, filter-open flag, and focus).
+
+### Search + filter state machine
+
+Core state variables and derived values:
+
+- `[search, setSearch]` — the query string (raw, not trimmed).
+- `[searchFocused, setSearchFocused]` — true when the input element is focused.
+- `[filterOpen, setFilterOpen]` — true when the filter slide is active.
+- `[filters, setFilters]` — the Filters object: `{ resolutions: Set<Resolution>, hdrs: Set<Hdr>, codecs: Set<Codec>, decades: Set<number> }`.
+- `trimmedQuery = search.trim().toLowerCase()` — controls matching logic.
+- `searching = trimmedQuery.length > 0` — query is not empty.
+- `heroMode = filterOpen ? "filtering" : (searchFocused || searching ? "searching" : "idle")` — three-state selector.
+- `activeFilterCount = filtersActive(filters)` — total number of selected filter items.
+- `queryMatched = useMemo(...)` — all films whose title/filename/director/genre contains `trimmedQuery` (case-insensitive).
+- `searchResults = useMemo(...)` — `applyFilters(queryMatched, filters)`. **Filters always apply on top of query matches; they never broaden the result set.**
+
+#### Filter application
+
+**`applyFilters(list: Film[], filters: Filters): Film[]`** — if no filters active, return list unchanged. Otherwise, exclude films that don't match **all** active filter dimensions:
+- If `filters.resolutions.size > 0` and film's resolution not in set, exclude.
+- If `filters.hdrs.size > 0` and film's HDR value (or `"—"` if null) not in set, exclude.
+- If `filters.codecs.size > 0` and film's codec not in set, exclude.
+- If `filters.decades.size > 0`, exclude if film's year is null OR `Math.floor(film.year / 10) * 10` not in set.
+
+#### ESC keybind
+
+When `heroMode !== "idle"`, ESC key triggers:
+- If `filterOpen === true`: `setFilterOpen(false)` (exit filter mode; search slide takes over).
+- Else: `clearAll()` (exit search mode entirely, reset all state).
+
+#### Clear all helper
+
+**`clearAll()`** — sets `search = ""`, `filters = EMPTY_FILTERS`, `filterOpen = false`, `searchFocused = false` simultaneously.
+
+### SearchSlide component (inline in hero body, searching mode only)
+
+Rendered as `<SearchSlide ... />` when `heroMode === "searching"`. A TUI-style prompt panel showing the search query, match counts, and filter affordance.
+
+**Props:** `query: string`, `resultCount: number`, `totalMatched: number`, `profilesMatched: number`, `activeFilterCount: number`, `onOpenFilter: () => void`, `onClear: () => void`.
+
+- **`slidePanel` container:** `flexGrow: 1`, `display: flex`, `flexDirection: column`, `rowGap: 20px`, `fontFamily: tokens.fontMono`, `color: tokens.colorText`, `paddingTop: 12px`. Flex column layout so action buttons stick to the bottom.
+- **Eyebrow (`slideEyebrow`):** Mono 11px / `letterSpacing: 0.22em` / uppercase / `colorGreen`. Text pattern varies by state:
+  - No query, no filters: `"· search"`
+  - Query but no filters: `"· query · {resultCount} result(s)"`
+  - Filters active (regardless of query): append `" · "` + `<span slideEyebrowAccent>` (white text) `"{activeFilterCount} filter(s)"`
+- **Prompt row (`slidePromptRow`):** `display: flex`, `alignItems: baseline`, `columnGap: 16px`, Mono **56px** / `lineHeight: 1` / `letterSpacing: -0.01em`.
+  - **Caret (`slidePromptCaret`):** green Mono `">"`.
+  - **Text (`slidePromptText`):** white, `display: inline-flex`, `alignItems: center`, `columnGap: 4px`, `minHeight: 1em`, `overflowX: hidden`, `whiteSpace: nowrap`. Renders `query.trim()` if present, empty string otherwise.
+  - **Cursor (`slidePromptCursor`):** green block cursor (`width: 12px`, `height: 0.85em`), glowing shadow. Pulsing animation (same as search-bar caret: 1.05s ease-in-out). **Always visible** when in searching mode (no conditional render).
+- **Status row (`slideStatus`):** Mono 12px / `letterSpacing: 0.06em` / `colorTextDim`. Flex row with wrap, `columnGap: 10px`, `rowGap: 6px`. Two variants:
+  - **With query:** `"{resultCount} of {totalMatched} match(es)"` + `·` (sep, `colorTextFaint`) + `"{profilesMatched} profile(s)"` + if filters: `·` (sep) + `<span slideStatusAccent>"filtered ({activeFilterCount})"` (green).
+  - **No query:** `<span slideStatusHint>` (italic, `colorTextMuted`) `"type to search films, directors, genres"`.
+- **Actions row (`slideActions`):** `marginTop: auto` (push to bottom), `display: flex`, `alignItems: center`, `columnGap: 20px`, `paddingTop: 16px`, `flexWrap: wrap`.
+  - **Primary (`slidePrimary`):** `"[F] Filter"` — green underlined text, Mono 13px / `letterSpacing: 0.18em` / uppercase. `textDecorationColor: colorGreen`, `textUnderlineOffset: 5px`, `textDecorationThickness: 1px`. Hover: text + underline → white. `onClick={onOpenFilter}`.
+  - **Secondary (`slideSecondary`):** `"[ESC] Clear"` — grey underlined text, Mono 12px / `letterSpacing: 0.18em` / uppercase. Same underline styling. Hover: white. `onClick={onClear}`.
+
+### FilterSlide component (inline in hero body, filtering mode only)
+
+Rendered as `<FilterSlide ... />` when `heroMode === "filtering"`. A TUI-style table panel with toggle checkboxes for each filter dimension.
+
+**Props:** `query: string`, `filters: Filters`, `setFilters: React.Dispatch<React.SetStateAction<Filters>>`, `resultCount: number`, `totalMatched: number`, `onClose: () => void`, `onClearFilters: () => void`.
+
+- **`slidePanel` container:** same as SearchSlide.
+- **Eyebrow:** Mono 11px / uppercase / `colorGreen`. Text pattern:
+  - Base: `"· filters"` + if query: `" · {query.trim()}"` + if query and results differ: `" · "` + `<span slideEyebrowAccent>"{totalMatched} → {resultCount}"` (white).
+- **TUI table (`tuiTable`):** `display: flex`, `flexDirection: column`, `rowGap: 10px`, Mono 13px, `paddingTop/Bottom: 8px`, `paddingLeft/Right: 16px`. Left border: 1px `colorBorder`. Background: `rgba(20, 24, 22, 0.55)` (semi-transparent dark).
+  - **Filter row (`tuiRow`):** CSS grid `gridTemplateColumns: 120px 1fr`, `columnGap: 16px`, `alignItems: center`.
+    - **Label (`tuiRowLabel`):** Mono 11px / `letterSpacing: 0.22em` / uppercase / `colorTextFaint`. Renders dimension name: `"resolution"`, `"hdr"`, `"codec"`, `"decade"`.
+    - **Options (`tuiRowOptions`):** `display: flex`, `flexWrap: wrap`, `columnGap: 16px`, `rowGap: 6px`. Houses 3–4 `<TuiToggle>` buttons.
+  - **TUI toggle button (`tuiToggle`):** `<button type="button">` with `aria-pressed={checked}`. Mono 13px / `letterSpacing: 0.04em`. `color: colorTextDim` at rest, `colorText` on hover. When checked: `color: colorGreen` (and stays green on hover). Inline-flex, `columnGap: 8px`, renders:
+    - **Box (`tuiToggleBox`):** Mono, color inherited from parent. Renders `"[x]"` when checked, `"[ ]"` when unchecked.
+    - **Label:** the filter option label (e.g., `"4K"`, `"HDR10"`, `"HEVC"`, `"'90s"`). Special case: HDR value `"—"` is labeled as `"SDR"`.
+  - Clicking a toggle calls `setFilters((f) => ({ ...f, <dimension>: toggleSetItem(f.<dimension>, item) }))` where `toggleSetItem` implements a Set toggle (add if not present, remove if present).
+- **Actions row:** `marginTop: auto`, `display: flex`, `alignItems: center`, `columnGap: 20px`, `paddingTop: 16px`, `flexWrap: wrap`.
+  - **Primary (`slidePrimary`):** `"[↩] Done"` — green underlined text (same style as SearchSlide primary). `onClick={onClose}`.
+  - **Secondary (`slideSecondary`):** `"[⇧⌫] Clear"` — grey underlined text (same style as SearchSlide secondary). `disabled={active === 0}` (where `active = filtersActive(filters)`). When disabled: `opacity: 0.35`, `cursor: not-allowed`. `onClick={onClearFilters}` (sets all filters to empty Sets).
+  - **Hint (`slideHint`):** `marginLeft: auto`, Mono 10px / `letterSpacing: 0.12em` / `colorTextFaint` / uppercase. Text: `"{profiles.length} libraries · {totalMatched} matches before filters"`.
+
+### Search results display (rowsScroll section)
+
+When `heroMode === "searching"`:
+
+- **With results:** `trimmedQuery.length > 0` AND `searchResults.length > 0` → `rowsScroll` renders a `<div searchResults>` (flex column `rowGap: 16px`) with a `<div rowHeader>` reading `"Results · {N}"` (Mono 11px / `colorTextDim`) + `<div searchGrid>`.
+  - **`searchGrid`:** `display: grid`, `gridTemplateColumns: repeat(auto-fill, 200px)`, `justifyContent: start`, `columnGap: 16px`, `rowGap: 24px`. Reuses `<FilmTile>` (same 200px component as the rows).
+- **No matches:** `trimmedQuery.length > 0` AND `searchResults.length === 0` → `<div noResults>` (Mono 12px / `letterSpacing: 0.18em` / uppercase / `colorTextMuted` / `textAlign: center` / `paddingTop/Bottom: 40px`) with text `"No films match "{search.trim()}""`.
+
+When `heroMode === "idle"` (empty query, filters inactive):
+- Show the three default rows (Continue Watching, New Releases, Watchlist) as documented in the Row section below.
 
 ### Row section (below hero)
 
@@ -240,9 +344,27 @@ Creates a new `URLSearchParams` from the current params, deletes `film`, calls `
 
 ## Subcomponents
 
-### `FilmDetailsOverlay` (inline or co-located)
+The Library page now delegates to several extracted child components:
 
-- Props: `film: FilmShape`, `onClose: () => void`.
+### **`SearchSlide` component** (extracted to `components/SearchSlide/`)
+
+TUI-style search results panel displayed in the hero when the search input has focus or contains a query. See [`SearchSlide.md`](SearchSlide.md) for the full spec. Props: `query`, `resultCount`, `totalMatched`, `profilesMatched`, `activeFilterCount`, `onOpenFilter`, `onClear`.
+
+### **`FilterSlide` component** (extracted to `components/FilterSlide/`)
+
+TUI-style filter table (resolution / HDR / codec / decade toggles). See [`FilterSlide.md`](FilterSlide.md) for the full spec. Props: `query`, `filters`, `setFilters`, `resultCount`, `totalMatched`, `onClose`, `onClearFilters`.
+
+### **`PosterRow` component** (extracted to `components/PosterRow/`)
+
+Horizontal-scroll carousel row with smooth-scroll pagination arrows. See [`PosterRow.md`](PosterRow.md) for the full spec. Displays tiles (continue watching, new releases, watchlist). Props: `title`, `films`, `onSelectFilm`.
+
+### **`FilmTile` component** (extracted to `components/FilmTile/`)
+
+Poster card used in carousels and search results grid. See [`FilmTile.md`](FilmTile.md) for the full spec. 200px width, aspect ratio 2/3, progress bar optional. Exports `TILE_WIDTH`, `TILE_GAP`, `TILE_STRIDE` constants for callers. Props: `film`, `progress`, `onClick`.
+
+### **`FilmDetailsOverlay` component** (extracted to `components/FilmDetailsOverlay/`)
+
+Full-bleed film-details overlay. See [`FilmDetailsOverlay.md`](FilmDetailsOverlay.md) for the full spec. Rendered when `?film=<id>` is set. Props: `film`, `onClose`. Uses `document.startViewTransition` for play-CTA crossfade.
 - Renders the full-bleed overlay described in the overlay view section above.
 
 ## View Transitions contract
@@ -304,6 +426,70 @@ Fallback on browsers without View Transitions support (e.g., Safari < 18): plain
 - [ ] Interval: 7 000ms; inner timeout: 700ms; both cleaned up via refs on unmount. Effect dependency: `[heroFilms.length, selectedFilm]`
 - [ ] `goToHero(idx)`: no-op if same index; else fade out (setHeroFading true), 350ms later set index + fade in
 
+### Hero modes (idle / searching / filtering)
+
+- [ ] State: `[heroMode, heroMode]` derived from `filterOpen`, `searchFocused`, `searching`. `heroMode = filterOpen ? "filtering" : (searchFocused || searching ? "searching" : "idle")`
+- [ ] `.heroActive` class applied when `heroMode !== "idle"` — visual changes:
+  - [ ] `borderRadius: 0` (hero loses rounded corners; becomes flush with page edges)
+  - [ ] `backgroundColor: colorBg0` (dark hero reads as continuous with page background, no visible border)
+- [ ] `heroPanelBg` (dark backdrop + dot-grid + radial glow) rendered when `heroMode !== "idle"`, positioned `absolute inset: 0 pointerEvents: none`
+  - [ ] `backgroundImage: radial-gradient(ellipse 92% 88% at 50% 48%, #000 55%, transparent 100%)` — soft radial mask that fades the dot grid + green glow into transparency at the edges
+  - [ ] Rationale: dissolve the hero's visual edge into the page background when in search or filter mode
+- [ ] Hero body conditionally renders:
+  - **idle mode:** greeting eyebrow + 3D-tilted greeting text + slide dots (existing behavior)
+  - **searching mode:** `<SearchSlide ... />` component
+  - **filtering mode:** `<FilterSlide ... />` component
+- [ ] `searchBarFocused` class applied when `searchFocused || heroMode !== "idle"` (bumps gradient alpha from 0.42 to 0.7)
+
+### SearchSlide component (hero body, searching mode)
+
+- [ ] `slidePanel`: flex column, `rowGap: 20px`, `fontFamily: fontMono`, `paddingTop: 12px`, `flexGrow: 1` (push actions down)
+- [ ] Eyebrow: Mono 11px / `letterSpacing: 0.22em` / uppercase / green. Text: `"· search"` (no query) or `"· query · {resultCount} result(s)"` (with query) + if filters active: `" · "` + `<span slideEyebrowAccent>` (white) `"{activeFilterCount} filter(s)"`
+- [ ] Prompt row: flex `alignItems: baseline columnGap: 16px`, Mono **56px** / `lineHeight: 1`
+  - [ ] Caret (`slidePromptCaret`): green `">"`, Mono weight
+  - [ ] Text (`slidePromptText`): white, `display: inline-flex alignItems: center columnGap: 4px minHeight: 1em overflowX: hidden whiteSpace: nowrap`. Renders trimmed query if present
+  - [ ] Cursor (`slidePromptCursor`): green block (`width: 12px height: 0.85em`), glowing shadow, pulsing animation 1.05s ease-in-out. Always visible in searching mode.
+- [ ] Status row: Mono 12px / `letterSpacing: 0.06em` / `colorTextDim`, flex wrap `columnGap: 10px rowGap: 6px`
+  - [ ] With query: `"{resultCount} of {totalMatched} match(es) · {profilesMatched} profile(s)"` + if filtered: `" · "` + `<span slideStatusAccent>` (green) `"filtered ({activeFilterCount})"`
+  - [ ] No query: `<span slideStatusHint>` (italic `colorTextMuted`) `"type to search films, directors, genres"`
+  - [ ] Separators: `<span slideStatusSep>` (dim) `"·"`
+- [ ] Actions row: `marginTop: auto`, flex `alignItems: center columnGap: 20px paddingTop: 16px flexWrap: wrap`
+  - [ ] Primary button (`slidePrimary`): `"[F] Filter"`, green underlined text, Mono 13px / `letterSpacing: 0.18em` / uppercase, `textDecorationColor: colorGreen textUnderlineOffset: 5px textDecorationThickness: 1px`. Hover: white. `onClick={onOpenFilter}`
+  - [ ] Secondary button (`slideSecondary`): `"[ESC] Clear"`, grey underlined text, Mono 12px / `letterSpacing: 0.18em` / uppercase. Hover: white. `onClick={onClear}`
+
+### FilterSlide component (hero body, filtering mode)
+
+- [ ] `slidePanel`: flex column, `rowGap: 20px`, `fontFamily: fontMono`, `paddingTop: 12px`, `flexGrow: 1`
+- [ ] Eyebrow: Mono 11px / `letterSpacing: 0.22em` / uppercase / green. Text: `"· filters"` + if query: `" · {query.trim()}"` + if query and results differ: `" · "` + `<span slideEyebrowAccent>` (white) `"{totalMatched} → {resultCount}"`
+- [ ] TUI table (`tuiTable`): flex column, `rowGap: 10px`, Mono 13px, `paddingTop/Bottom: 8px paddingLeft/Right: 16px`, left border 1px `colorBorder`, bg `rgba(20, 24, 22, 0.55)`
+  - [ ] Each dimension (resolution, HDR, codec, decade) rendered as `<FilterRow label="..." >` containing 3–4 `<TuiToggle>` buttons
+  - [ ] `tuiRow`: CSS grid `gridTemplateColumns: 120px 1fr columnGap: 16px alignItems: center`
+    - [ ] `tuiRowLabel`: Mono 11px / `letterSpacing: 0.22em` / uppercase / `colorTextFaint`. Dimension name.
+    - [ ] `tuiRowOptions`: flex `flexWrap: wrap columnGap: 16px rowGap: 6px`, houses toggle buttons
+  - [ ] `tuiToggle` button: Mono 13px / `letterSpacing: 0.04em`, `aria-pressed={checked}`. `color: colorTextDim` at rest, `colorText` on hover. When checked: `color: colorGreen`. Inline-flex `alignItems: center columnGap: 8px`.
+    - [ ] `tuiToggleBox`: Mono, color inherited. Renders `"[x]"` (checked) or `"[ ]"` (unchecked)
+    - [ ] Label: filter option (e.g., `"4K"`, `"HDR10"`, `"HEVC"`, `"'90s"`). Special case: HDR `"—"` → label `"SDR"`
+  - [ ] Filter constants:
+    - [ ] `RESOLUTIONS = ["4K", "1080p", "720p"]`
+    - [ ] `HDRS = ["DV", "HDR10", "HDR10+", "—"]`
+    - [ ] `CODECS = ["HEVC", "H264", "AV1"]`
+    - [ ] `DECADES = [{decade: 1990, label: "'90s"}, {decade: 2000, label: "'00s"}, {decade: 2010, label: "'10s"}, {decade: 2020, label: "'20s"}]`
+- [ ] Actions row: `marginTop: auto`, flex `alignItems: center columnGap: 20px paddingTop: 16px flexWrap: wrap`
+  - [ ] Primary button (`slidePrimary`): `"[↩] Done"`, green underlined text (same style as SearchSlide). `onClick={onClose}`
+  - [ ] Secondary button (`slideSecondary`): `"[⇧⌫] Clear"`, grey underlined text. `disabled={activeFilterCount === 0}`. When disabled: `opacity: 0.35 cursor: not-allowed`. `onClick={onClearFilters}` (resets all filters to empty Sets)
+  - [ ] Hint (`slideHint`): `marginLeft: auto`, Mono 10px / `letterSpacing: 0.12em` / `colorTextFaint` / uppercase. Text: `"{profiles.length} libraries · {totalMatched} matches before filters"`
+- [ ] Filter state and application:
+  - [ ] `Filters` type: `{ resolutions: Set<Resolution>, hdrs: Set<Hdr>, codecs: Set<Codec>, decades: Set<number> }`
+  - [ ] `activeFilterCount = resolutions.size + hdrs.size + codecs.size + decades.size`
+  - [ ] `searchResults = applyFilters(queryMatched, filters)` — filters apply on top of query matches, never broaden
+  - [ ] `applyFilters` excludes films that don't match all active filter dimensions (see "Filter application" section above)
+  - [ ] `toggleSetItem<T>(set: Set<T>, item: T)` helper: add if not present, remove if present
+  - [ ] `clearAll()` helper: resets `search`, `filters`, `filterOpen`, `searchFocused` simultaneously
+- [ ] ESC keybind:
+  - [ ] When `heroMode !== "idle"`: attach window keydown listener
+  - [ ] If `filterOpen === true`: `setFilterOpen(false)`
+  - [ ] Else: `clearAll()`
+
 ### Search bar (inside hero)
 
 - [ ] `searchBar`: `position: absolute`, `top: calc(headerHeight + 24px)`, `right: 32px`, `zIndex: 3`, `width: 320px`, `display: flex`, `alignItems: center`, `columnGap: 10px`, `paddingTop/Bottom: 8px`, `paddingLeft: 16px`, `paddingRight: 12px`
@@ -314,13 +500,17 @@ Fallback on browsers without View Transitions support (e.g., Safari < 18): plain
 - [ ] `searchInput`: `caretColor: transparent`, `width: 100%`, transparent bg, no border, no outline, Mono 12px, `letterSpacing: 0.06em`, `paddingRight: 12px`, `paddingTop/Bottom/Left: 0`. Placeholder: `colorTextMuted`, `letterSpacing: 0.14em`, uppercase, 10px. `spellCheck={false}`, `autoComplete="off"`, `aria-label="Search the library"`. Placeholder cleared on focus (conditional prop on `placeholder`).
 - [ ] `searchMirror`: `position: absolute`, `left: 0`, `top: 50%`, `transform: translateY(-50%)`, `visibility: hidden`, `pointerEvents: none`, `whiteSpace: pre`, Mono 12px, `letterSpacing: 0.06em`. `useEffect([search, searchFocused])` reads `mirrorRef.current.offsetWidth` → `setSearchCaretX`
 - [ ] `searchCaret`: rendered when `searchFocused`. `position: absolute`, `top: 50%`, `marginTop: -7px`, `width: 7px`, `height: 14px`, `borderRadius: 1px` all corners, `backgroundColor: colorGreen`, `boxShadow: 0 0 6px colorGreen, 0 0 14px colorGreenGlow`. Pulsing keyframe: 0%/100% `opacity:1 scaleY(1)`, 50% `opacity:0.25 scaleY(0.86)`, 1.05s ease-in-out infinite. Positioned via `style={{ left: searchCaretX + "px" }}`
-- [ ] `searchClear`: 20×20 button, `<IconClose 12×12>`, `aria-label="Clear search"`, shown when `searching` (trimmedQuery.length > 0). Click: `setSearch("")`
+- [ ] `searchClear`: 20×20 button, `<IconClose 12×12>`, `aria-label="Clear search"`, shown when `searching || activeFilterCount > 0`. Click: `clearAll()` (resets query + filters + focus)
 - [ ] `onBlur` clears `searchFocused` after 120ms `window.setTimeout` (so clicks on the clear button register first)
-- [ ] Empty query (`trimmedQuery.length === 0`) → rows section renders three row components
-- [ ] Non-empty query, results found → `searchResults` flex column `rowGap: 16px` containing `rowHeader` (`"Results · {N}"`) + `searchGrid` (`display: grid`, `gridTemplateColumns: repeat(auto-fill, 200px)`, `justifyContent: start`, `columnGap: 16px`, `rowGap: 24px`) with `<FilmTile>` per result
-- [ ] Non-empty query, no results → `<div noResults>` `"No films match …"`, Mono 12px, `letterSpacing: 0.18em`, uppercase, `colorTextMuted`, `textAlign: center`, `paddingTop/Bottom: 40px`
-- [ ] Filter: title / filename / director / genre (all `.toLowerCase()`) includes `trimmedQuery`
-- [ ] Production: replace client-side filter with backend search query / Relay refetch
+- [ ] State variables: `[search, setSearch]`, `[searchFocused, setSearchFocused]`, `[filterOpen, setFilterOpen]`, `[filters, setFilters]`
+- [ ] Derived values: `trimmedQuery = search.trim().toLowerCase()`, `searching = trimmedQuery.length > 0`, `heroMode = filterOpen ? "filtering" : (searchFocused || searching ? "searching" : "idle")`, `activeFilterCount = filtersActive(filters)`
+- [ ] `queryMatched`: all films whose title/filename/director/genre (case-insensitive) includes `trimmedQuery`. Recomputed by `useMemo([trimmedQuery])`
+- [ ] `searchResults = applyFilters(queryMatched, filters)`. Recomputed by `useMemo([queryMatched, filters])`
+- [ ] When `heroMode === "idle"` and `trimmedQuery.length === 0` → rows section renders three default row components
+- [ ] When `heroMode === "searching"` with results found → `searchResults` flex column `rowGap: 16px` containing `rowHeader` (`"Results · {N}"`) + `searchGrid` (`display: grid gridTemplateColumns: repeat(auto-fill, 200px) justifyContent: start columnGap: 16px rowGap: 24px`) with `<FilmTile>` per result
+- [ ] When `heroMode === "searching"` with no results → `<div noResults>` (Mono 12px / `letterSpacing: 0.18em` / uppercase / `colorTextMuted` / `textAlign: center` / `paddingTop/Bottom: 40px`) with text `"No films match "{search.trim()}""` 
+- [ ] Query filter logic: title / filename / director / genre (all `.toLowerCase()`) includes `trimmedQuery`
+- [ ] Production: replace client-side query/filter with backend search query / Relay refetch. Wire `?q=<query>` URL param for shareability.
 
 ### Rows section
 
@@ -377,5 +567,5 @@ Fallback on browsers without View Transitions support (e.g., Safari < 18): plain
 
 ## Status
 
-- [x] Designed in `design/Release` lab — hero+rows+overlay layout (2026-05-01, PR #46 commit 04ea22b). Search bar between hero and rows added (787f136). Page-level padding + hero downsized to 340px card + spacing tightened (9cc6d48). Hero made full-bleed (5301df6). Hero shrunk to 280px; dots stack under greeting (45d1097). Hero grown to 300px; search bar refactored to centered pill (773681e). Search bar moved inside hero top-right; gradient strip style; custom green caret + mirror span (6fd44e4). Hero height → 420px; search grid restructured; `.overlayPoster` gets `viewTransitionName: "film-backdrop"`; Play CTA → `<button onClick={playWithTransition}>` (73a9cca). Hero changed to `75vh` + `borderRadius: 6px` + page inset (40px); RAF-eased row scroll (720ms easeInOutCubic); three rows (Continue Watching + New Releases + Watchlist); greeting eyebrow line; heroBody `paddingLeft/Right: 44px`, `paddingBottom: 20px`; `searchGrid` → 200px columns; overlay Back pill (top-left) added alongside Close button (907c331). PR #46 on `feat/release-design-omdb-griffel`, not yet merged to main.
+- [x] Designed in `design/Release` lab — hero+rows+overlay layout (2026-05-01, PR #46 commit 04ea22b). Search bar between hero and rows added (787f136). Page-level padding + hero downsized to 340px card + spacing tightened (9cc6d48). Hero made full-bleed (5301df6). Hero shrunk to 280px; dots stack under greeting (45d1097). Hero grown to 300px; search bar refactored to centered pill (773681e). Search bar moved inside hero top-right; gradient strip style; custom green caret + mirror span (6fd44e4). Hero height → 420px; search grid restructured; `.overlayPoster` gets `viewTransitionName: "film-backdrop"`; Play CTA → `<button onClick={playWithTransition}>` (73a9cca). Hero changed to `75vh` + `borderRadius: 6px` + page inset (40px); RAF-eased row scroll (720ms easeInOutCubic); three rows (Continue Watching + New Releases + Watchlist); greeting eyebrow line; heroBody `paddingLeft/Right: 44px`, `paddingBottom: 20px`; `searchGrid` → 200px columns; overlay Back pill (top-left) added alongside Close button (907c331). PR #46 on `feat/release-design-omdb-griffel`, merged to main 2026-05-01. **Latest (2026-05-02, PR #48):** hero modes (idle / searching / filtering); SearchSlide + FilterSlide TUI panels; `heroPanelBg` dark backdrop with dot-grid + subtle green glow; ESC keybind for mode exit; filter dimensions (resolution / HDR / codec / decade) with checkbox toggles; **active-mode visual updates: `.heroActive` now sets `borderRadius: 0` (flush with page edges) + `backgroundColor: colorBg0` (continuous with page bg); `heroPanelBg` radial mask: `radial-gradient(ellipse 92% 88% at 50% 48%, #000 55%, transparent 100%)` fades dot grid + green glow into transparency at edges**.
 - [ ] Production implementation

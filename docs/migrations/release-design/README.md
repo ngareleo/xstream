@@ -16,9 +16,17 @@ Migrate the xstream client from the **Prerelease** identity (codename Moran — 
 
 ## Status
 
-Documentation updated via PR #46 audit (2026-05-01). Five specs are now `done` (fully fleshed, zero `TODO(redesign)` placeholders blocking a porting agent): **AppShell**, **AppHeader**, **Library**, **Watchlist**, **Player**. Remaining specs are at `baseline` level (all values visible in source recorded; open design questions marked `TODO(redesign)`).
+Documentation updated via PR #46 audit (2026-05-01), PR #48 sync (2026-05-02, hero modes + SearchSlide + FilterSlide TUI panels + component decomposition). 
 
-Implementation in production has not started.
+**Spec completion:**
+- **`done`** (5 components): **AppShell**, **AppHeader**, **Library**, **Watchlist**, **Player** — fully fleshed, zero `TODO(redesign)` placeholders.
+- **`baseline`** (26 components): all values visible in source; open design questions marked `TODO(redesign)`.
+
+**Recently added** (2026-05-02, PR #48):
+- **Eight extracted components:** SearchSlide, FilterSlide, PosterRow, FilmTile, FilmDetailsOverlay (from Library); ProfileRow, FilmRow (from Profiles). Each now has its own `.tsx` + `.styles.ts` in the design lab and a dedicated `.md` spec with porting checklist. Parent pages (Library, Profiles) became thin shells (~160–260 lines) delegating to extracted components. Shared `PROFILE_GRID_COLUMNS` constant (`pages/Profiles/grid.ts`) locks column widths across ProfileRow and FilmRow.
+- **Earlier:** DirectoryBrowser (popover for ProfileForm), DevPanel (lab-only QA nav), Error (runtime-error page).
+
+**Implementation in production:** not started (all specs are design-lab first; porting begins once a spec is `done` or clearly marked `baseline` with knowns only).
 
 ## Links
 
