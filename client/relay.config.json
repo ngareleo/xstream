@@ -1,7 +1,7 @@
 {
   "src": "./src",
   "language": "typescript",
-  "schema": "../server/schema.graphql",
+  "schema": "../server-rust/schema.graphql",
   "exclude": ["**/node_modules/**", "**/__mocks__/**", "**/__generated__/**"],
   "artifactDirectory": "./src/relay/__generated__"
 }

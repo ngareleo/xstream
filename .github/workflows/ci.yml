@@ -55,6 +55,22 @@ jobs:
       - name: Test
         run: cargo test --workspace --exclude xstream-tauri
 
+      - name: GraphQL schema drift check
+        # The client's relay-compiler reads `server-rust/schema.graphql`,
+        # which is the checked-in SDL emitted by the `print_schema` binary.
+        # If a server-side type changed without `bun run schema:emit`, the
+        # checked-in file would be stale and the client would generate
+        # outdated relay artefacts. Catch that here while we already have
+        # the Rust toolchain warm.
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo run --quiet --bin print_schema -p xstream-server > /tmp/fresh-schema.graphql
+          if ! diff -u server-rust/schema.graphql /tmp/fresh-schema.graphql; then
+            echo "::error::server-rust/schema.graphql is stale — run 'bun run schema:emit' and commit the diff."
+            exit 1
+          fi
+
   tauri-build:
     name: Tauri — Linux build (unsigned)
     runs-on: ubuntu-latest

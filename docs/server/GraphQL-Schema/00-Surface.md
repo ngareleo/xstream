@@ -2,6 +2,19 @@
 
 The server exposes a single GraphQL endpoint at `POST /graphql` (queries and mutations). Subscriptions are served over WebSocket via async-graphql's built-in WebSocket transport using the `graphql-ws` subprotocol.
 
+## SDL emission — the client's contract
+
+The Rust `Schema<Query, Mutation, Subscription>` is the source of truth. The wire SDL the React client sees is generated from it via the `print_schema` binary in `server-rust/src/bin/print_schema.rs`:
+
+```sh
+bun run schema:emit
+# → cargo run --bin print_schema -p xstream-server > server-rust/schema.graphql
+```
+
+`server-rust/schema.graphql` is **checked in** so `relay-compiler` can read it without booting the server. `client/relay.config.json` points at the file via `../server-rust/schema.graphql`. CI's `server-rust` job runs the same binary and diffs against the checked-in copy — drift fails the build with a hint to run `bun run schema:emit`.
+
+Run `bun run schema:emit` after any change that affects SDL output (new field, renamed type, changed nullability, enum variant added) and commit the regenerated `server-rust/schema.graphql` alongside the Rust change.
+
 ---
 
 ## Relay Compliance

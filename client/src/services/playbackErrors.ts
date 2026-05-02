@@ -1,6 +1,6 @@
 /**
  * Typed playback errors. Mirrors the server's `PlaybackErrorCode` enum 1:1
- * (see `server/src/graphql/schema.ts`). Used by the chunk-start mutation
+ * (see `server-rust/src/graphql/types.rs`). Used by the chunk-start mutation
  * handler in `useChunkedPlayback` to discriminate the `StartTranscodeResult`
  * union and by `PlaybackController.requestChunk` to drive retry policy.
  *

@@ -1,6 +1,6 @@
 /**
  * Single source of truth for client-side compile-time tunables. Mirrors the
- * server's `AppConfig` shape (`server/src/config.ts`) — a single exported
+ * server's `AppConfig` shape (`server-rust/src/config.rs`) — a single exported
  * object with nested namespaces. Runtime-mutable user preferences live in
  * `featureFlags.ts` instead; this file is for non-toggleable defaults.
  *

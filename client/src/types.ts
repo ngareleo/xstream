@@ -3,7 +3,7 @@
 export type { Resolution as GQLResolution } from "./relay/__generated__/useChunkedPlaybackStartChunkMutation.graphql.js";
 
 // Human-readable display labels that map 1:1 to GQLResolution values.
-// Keep these in sync with RESOLUTION_PROFILES in server/src/config.ts.
+// Keep these in sync with RESOLUTION_PROFILES in server-rust/src/config.rs.
 export type Resolution = "240p" | "360p" | "480p" | "720p" | "1080p" | "4k";
 
 export const DISPLAY_TO_GQL: Record<Resolution, string> = {
