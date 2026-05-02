@@ -121,7 +121,7 @@ Authoritative reference: `docs/02-Observability.md`. Quick map:
 | Server | `transcode.job` | ffmpeg lifetime; periodic `transcode_progress` events; `hwaccel` attribute |
 | Server | `library.scan` | OMDb auto-match included as events |
 
-Service-name attributes: `xstream-client` (browser) and `xstream-server` (Bun).
+Service-name attributes: `xstream-client` (browser) and `xstream-server` (Rust).
 
 ## 7. Pulling traceId from an arbitrary URL
 

@@ -47,18 +47,6 @@ export const FLAG_KEYS = {
    *  ffmpeg stderr captured. Default OFF; remove once the root cause is
    *  fixed (Phase 5 of the plan). */
   devForceShortChunkAtZero: "flag.devForceShortChunkAtZero",
-  /** Single flag for the Rust + Tauri migration cutover. When ON, both the
-   *  Relay client and the streaming service route to the Rust server at
-   *  `localhost:3002`; when OFF, both go to the Bun server at
-   *  `localhost:3001`. The two services are runtime-independent (neither
-   *  knows about the other's job store, segment cache, or DB writes), so
-   *  splitting traffic between them produces a 404 / split-brain — they
-   *  must be flipped together as one backend. Both processes always run in
-   *  dev (mprocs) so toggling is instant. Default OFF.
-   *  Reload required after toggle — `relay/environment.ts` reads the flag
-   *  at module-init, before server hydration.
-   *  See `docs/migrations/rust-rewrite/Plan/02-Streaming.md`. */
-  useRustBackend: "flag.useRustBackend",
 } as const;
 
 export const FLAG_REGISTRY: readonly FlagDescriptor[] = [
@@ -99,15 +87,6 @@ export const FLAG_REGISTRY: readonly FlagDescriptor[] = [
     name: "Dev: force short first chunk at startS=0",
     description:
       "Reproduces the VAAPI HDR 4K silent-failure bug. When ON, cold-start uses FIRST_CHUNK_DURATION_S=30 instead of the safe 300s window, so the failure mode triggers and `transcode_silent_failure` events land in Seq for diagnosis. Leave OFF unless investigating.",
-    valueType: "boolean",
-    defaultValue: false,
-    category: "experimental",
-  },
-  {
-    key: FLAG_KEYS.useRustBackend,
-    name: "Use Rust backend (migration cutover)",
-    description:
-      "Routes ALL backend traffic — GraphQL + /stream — to the Rust server on localhost:3002. When OFF, everything goes to Bun on 3001. The two services are runtime-independent (neither shares state with the other), so this is one switch — splitting GraphQL and /stream between them does not work. Both servers always run in dev (mprocs), so toggling is instant. Reload required after toggle.",
     valueType: "boolean",
     defaultValue: false,
     category: "experimental",

@@ -2,7 +2,7 @@
 
 ## The invariant
 
-The network stream is a sink the consumer pulls from, never a source the producer pushes into. `server/src/routes/stream.ts` uses `new ReadableStream({ pull(controller) })`. Every byte sent corresponds to a `read()` the consumer issued. There are no hidden queues between disk read and client receive.
+The network stream is a sink the consumer pulls from, never a source the producer pushes into. `server-rust/src/routes/stream.rs` uses Axum's streaming response with per-request segment fetching. Every byte sent corresponds to a client read request. There are no hidden queues between disk read and client receive.
 
 This is a load-bearing invariant — see rule #12 in [`docs/code-style/Invariants/00-Never-Violate.md`](../../code-style/Invariants/00-Never-Violate.md).
 
@@ -14,18 +14,18 @@ Each `pull` call does exactly one of:
 
 | State | Action |
 |---|---|
-| First call (`segmentIndex === -1`) | Read `init.mp4` from disk, enqueue `[4-byte length][bytes]`, set `segmentIndex = 0`. |
-| `segment_NNNN.m4s` exists | Read it, enqueue frame, increment `segmentIndex`. |
-| Encoder still producing | `await Bun.sleep(100)` inside `pull`, then return without enqueuing — the controller re-calls `pull`. |
-| Job `complete` or `error` AND no more segments | `controller.close()` — stream ends cleanly. |
-| Idle ≥ 180 s (no new segment) | `controller.error(...)` — closes stream and triggers job kill. |
-| Client disconnects mid-pull | `cancel(reason)` called by the UA — cleans up job connection count. |
+| First call (`segmentIndex == -1`) | Read `init.mp4` from disk, write `[4-byte length][bytes]` to response, set `segmentIndex = 0`. |
+| `segment_NNNN.m4s` exists | Read it, write frame to response, increment `segmentIndex`. |
+| Encoder still producing | Sleep 100ms, then retry — the client will re-request. |
+| Job `complete` or `error` AND no more segments | Close response — stream ends cleanly. |
+| Idle ≥ 180 s (no new segment) | Close response with error — closes stream and triggers job kill. |
+| Client disconnects | TCP connection closes — request handler aborts, cleans up job connection count. |
 
 A single `resolveNextSegmentPath()` helper collapses the in-memory vs DB-evicted path distinction so the `pull` implementation itself is uniform across live-encoded and DB-restored jobs.
 
-### Why not `start` with an internal loop?
+### Why demand-driven, not eager streaming?
 
-A `start` loop enqueues segments as fast as it can produce them into the controller's internal queue. The UA's backpressure signal (`desiredSize`) is ignored and the queue grows without bound before the TCP window closes. At 4K the difference is visible in traces: the prior `start` implementation dumped ~250 MB into MSE before backpressure engaged (trace `e699c0ae`). With `pull`, each enqueue corresponds to one consumer `read()`, so the queue depth stays at 1 and the TCP window provides the real backpressure signal.
+Eager implementations write segments as fast as they can produce them into the output buffer. At 4K the difference is visible in traces: a hypothetical eager implementation would dump ~250 MB into the client before TCP backpressure engages. With demand-driven streaming, each write corresponds to one client read request, so the output buffer stays shallow and the TCP window provides the real backpressure signal.
 
 ---
 

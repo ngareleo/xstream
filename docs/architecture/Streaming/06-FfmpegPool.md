@@ -1,6 +1,6 @@
 # ffmpeg Pool
 
-`server/src/services/ffmpegPool.ts` owns the bounded concurrency layer for all ffmpeg processes. The chunker owns the VAAPI tier cascade, segment watching, and orphan/max-encode timers; they all call through the pool API.
+`server-rust/src/services/ffmpeg_pool.rs` owns the bounded concurrency layer for all ffmpeg processes. The chunker owns the VAAPI tier cascade, segment watching, and orphan/max-encode timers; they all call through the pool API.
 
 ## Why a separate module
 
@@ -19,18 +19,18 @@ cap hit   = usedSlots >= config.transcode.maxConcurrentJobs (default 3)
 
 ## Configuration
 
-The pool's tunable knobs live on `AppConfig` (`server/src/config.ts`) so service-level policy is consolidated in one place rather than scattered as module-private constants:
+The pool's tunable knobs live on `AppConfig` (`server-rust/src/config.rs`) so service-level policy is consolidated in one place rather than scattered as module-private constants:
 
 | Field | Default | Purpose |
 |---|---|---|
-| `transcode.maxConcurrentJobs` | 3 | Cap limit. |
-| `transcode.forceKillTimeoutMs` | 2 000 | SIGTERM → SIGKILL grace per job. |
-| `transcode.shutdownTimeoutMs` | 5 000 | Total wait in `killAllJobs` before the terminal SIGKILL pass. |
-| `transcode.orphanTimeoutMs` | 30 000 | Kill ffmpeg if a job has zero connections after this long (chunker timer). |
-| `transcode.maxEncodeRateMultiplier` | 3 | Wall-clock encode budget = `chunk_duration_s × this × 1000` (chunker timer). |
-| `transcode.capacityRetryHintMs` | 1 000 | `retryAfterMs` returned to clients on `CAPACITY_EXHAUSTED`. |
-| `transcode.inflightDedupTimeoutMs` | 5 000 | Max wait for a concurrent caller to register a peer's job. |
-| `stream.connectionIdleTimeoutMs` | 180 000 | Idle window before `/stream/:jobId` declares the connection dead. |
+| `transcode.max_concurrent_jobs` | 3 | Cap limit. |
+| `transcode.force_kill_timeout_ms` | 2 000 | SIGTERM → SIGKILL grace per job. |
+| `transcode.shutdown_timeout_ms` | 5 000 | Total wait in `kill_all_jobs` before the terminal SIGKILL pass. |
+| `transcode.orphan_timeout_ms` | 30 000 | Kill ffmpeg if a job has zero connections after this long (chunker timer). |
+| `transcode.max_encode_rate_multiplier` | 3 | Wall-clock encode budget = `chunk_duration_s × this × 1000` (chunker timer). |
+| `transcode.capacity_retry_hint_ms` | 1 000 | `retry_after_ms` returned to clients on `CAPACITY_EXHAUSTED`. |
+| `transcode.inflight_dedup_timeout_ms` | 5 000 | Max wait for a concurrent caller to register a peer's job. |
+| `stream.connection_idle_timeout_ms` | 180 000 | Idle window before `/stream/:jobId` declares the connection dead. |
 
 ## Lifecycle
 
@@ -58,28 +58,29 @@ Idempotent: calling `killJob` twice on the same id is a no-op after the first ca
 
 ## KillReason union
 
-```typescript
-type KillReason =
-  | "client_request"
-  | "client_disconnected"
-  | "stream_idle_timeout"
-  | "orphan_no_connection"
-  | "max_encode_timeout"
-  | "cascade_retry"
-  | "server_shutdown";
+```rust
+pub enum KillReason {
+    ClientRequest,
+    ClientDisconnected,
+    StreamIdleTimeout,
+    OrphanNoConnection,
+    MaxEncodeTimeout,
+    CascadeRetry,
+    ServerShutdown,
+}
 ```
 
 All kill-reason strings are now type-checked at the call site. The `cascade_retry` reason is used when the chunker kills a VAAPI job to retry at a lower tier.
 
 ## Shutdown sweep
 
-`killAllJobs(timeoutMs?)` — when omitted, defaults to `config.transcode.shutdownTimeoutMs` (5 000 ms):
+`kill_all_jobs(timeout_ms?)` — when omitted, defaults to `config.transcode.shutdown_timeout_ms` (5 000 ms):
 
 1. Calls `killJob(id, "server_shutdown")` on every live command (per-job SIGKILL escalation starts).
 2. `Promise.race([all exits, timeout])`.
 3. After the timeout, SIGKILL any remaining stragglers.
 
-Called from `server/src/index.ts` shutdown handler. The default sweep timeout (5 s) > the per-job force-kill timeout (2 s), so most jobs are already gone by the time the sweep timeout fires.
+Called from the shutdown path in `server-rust/src/lib.rs`. The default sweep timeout (5 s) > the per-job force-kill timeout (2 s), so most jobs are already gone by the time the sweep timeout fires.
 
 ## Telemetry
 
@@ -120,7 +121,7 @@ type ProcessHooks = {
   onKilled: (reason: KillReason) => void;
 };
 
-// Progress data forwarded from fluent-ffmpeg's progress event.
+// Progress data extracted from ffmpeg's output.
 type ProgressData = {
   percent?: number;
   timemark?: string;

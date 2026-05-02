@@ -1,4 +1,4 @@
-//! Segment queries. Mirrors `server/src/db/queries/segments.ts`.
+//! Segment queries.
 //!
 //! Segments belong to a transcode job (FK CASCADE). The chunker writes one
 //! row per encoded segment as ffmpeg flushes it; the stream route reads

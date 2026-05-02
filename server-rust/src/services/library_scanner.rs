@@ -1,4 +1,4 @@
-//! Library scanner. Mirrors `server/src/services/libraryScanner.ts`.
+//! Library scanner.
 //!
 //! One sweep walks every library row in the DB, fingerprints each video
 //! file, ffprobes it for streams + duration, and upserts the
@@ -8,16 +8,16 @@
 //!
 //! Triggers:
 //! - GraphQL `scan_libraries` mutation (resolver spawns this).
-//! - GraphQL `create_library` mutation (chains a fire-and-forget scan
-//!   so adding a profile auto-indexes it — the user-visible "click Scan
-//!   All did nothing" symptom that motivated this port).
+//! - GraphQL `create_library` mutation (chains a fire-and-forget scan so
+//!   adding a profile auto-indexes it — the user-visible "click Scan All
+//!   did nothing" symptom this guards against).
 //! - [`spawn_periodic_scan`] background loop, started at boot from
-//!   `lib.rs::run`. Re-entry-guarded by [`crate::services::scan_state::ScanState::mark_started`].
+//!   `lib.rs::run`. Re-entry-guarded by
+//!   [`crate::services::scan_state::ScanState::mark_started`].
 //!
 //! OMDb auto-match runs after each library finishes its file walk: any
 //! video without a `video_metadata` row gets searched against OMDb (if
-//! `OMDB_API_KEY` is configured). Mirrors Bun's per-library
-//! `autoMatchLibrary` at `server/src/services/libraryScanner.ts:240-288`.
+//! `OMDB_API_KEY` is configured) — see [`auto_match_library`].
 
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
@@ -70,8 +70,8 @@ pub async fn scan_libraries(ctx: &AppContext) {
         info!(library_count = libraries.len(), "library.scan started");
 
         for library in &libraries {
-            // Probe access first — Bun emits `library_skipped` for
-            // unreachable paths (offline mount, deleted directory).
+            // Probe access first — emit `library_skipped` for unreachable
+            // paths (offline mount, deleted directory).
             if !Path::new(&library.path).exists() {
                 warn!(
                     library_name = %library.name,
@@ -166,9 +166,8 @@ async fn scan_one_library(ctx: &AppContext, library: &LibraryRow) {
 }
 
 /// Recursive directory walk. Returns every file whose extension matches
-/// `extensions` (case-insensitive). Mirrors Bun's behaviour at
-/// `server/src/services/libraryScanner.ts:80-97` — descends into all
-/// subdirectories regardless of name, filters files by extension only.
+/// `extensions` (case-insensitive). Descends into all subdirectories
+/// regardless of name, filters files by extension only.
 fn walk_directory(root: &Path, extensions: &HashSet<String>) -> Vec<PathBuf> {
     WalkDir::new(root)
         .follow_links(false)
@@ -209,8 +208,7 @@ enum ProcessError {
 }
 
 /// Probe one file, fingerprint it, and upsert the rows. The video id is
-/// `sha1(path)` to match Bun (existing rows survive the cutover when both
-/// backends touch the same DB).
+/// `sha1(path)` so existing rows are stable across re-scans.
 async fn process_file(path: &Path, library_id: &str, ctx: &AppContext) -> Result<(), ProcessError> {
     let file_meta = tokio::fs::metadata(path).await?;
     let size_bytes = file_meta.len();
@@ -273,9 +271,7 @@ async fn process_file(path: &Path, library_id: &str, ctx: &AppContext) -> Result
 }
 
 /// Fingerprint = `<size_bytes>:<sha1(first 64KB)>`. Stable across renames
-/// and moves; changes only when file content does. Identical formula to
-/// Bun (`libraryScanner.ts:69-77`) so both backends produce the same
-/// fingerprints for the same file content during the cutover.
+/// and moves; changes only when file content does.
 async fn compute_content_fingerprint(
     path: &Path,
     size_bytes: u64,
@@ -324,8 +320,7 @@ fn default_extensions() -> HashSet<String> {
 
 /// Match every unmatched video in `library` against OMDb. Silent no-op
 /// when no `OMDB_API_KEY` is configured (typical dev path) or when the
-/// library has no unmatched videos. Mirrors Bun's `autoMatchLibrary` at
-/// `server/src/services/libraryScanner.ts:240-288`.
+/// library has no unmatched videos.
 ///
 /// Per-video failures (network error, no match found, missing video row)
 /// are tolerated — the helper logs and moves to the next id. The scan is
@@ -454,11 +449,10 @@ async fn match_one_video(ctx: &AppContext, omdb: &OmdbClient, video_id: &str) {
     );
 }
 
-/// Spawn the periodic background re-scan loop. Mirrors Bun's
-/// `setInterval`-equivalent at `server/src/index.ts:63-74`: every
-/// `interval_ms` ticks, a scan is kicked off if one is not already
-/// running. The re-entry guard lives in `scan_libraries` →
-/// `ScanState::mark_started`, so this loop never has to check itself.
+/// Spawn the periodic background re-scan loop. Every `interval_ms`
+/// ticks, a scan is kicked off if one is not already running. The
+/// re-entry guard lives in `scan_libraries` → `ScanState::mark_started`,
+/// so this loop never has to check itself.
 pub fn spawn_periodic_scan(ctx: AppContext) {
     let interval = Duration::from_millis(ctx.config.scan.interval_ms);
     tokio::spawn(async move {
@@ -469,9 +463,8 @@ pub fn spawn_periodic_scan(ctx: AppContext) {
     });
 }
 
-/// Parse a torrent-style filename into `(title, year)`. Mirrors Bun's
-/// `parseTitleFromFilename` at `server/src/services/libraryScanner.ts:205-234`.
-/// Public so the OMDb port (deferred) can call it directly.
+/// Parse a torrent-style filename into `(title, year)`.
+/// Public so the OMDb match path can call it directly.
 pub fn parse_title_from_filename(filename: &str) -> (String, Option<i32>) {
     let stem = match filename.rsplit_once('.') {
         Some((stem, _ext)) => stem,
@@ -517,9 +510,8 @@ pub fn parse_title_from_filename(filename: &str) -> (String, Option<i32>) {
     }
 
     let title_raw = match year_at {
-        // Bun's regex consumes the separator before the year as part of
-        // the match — its `slice(0, yearMatch.index)` ends BEFORE that
-        // separator. Replicate by trimming trailing separator chars.
+        // Trim trailing separator chars so a stem like "Movie.2024" yields
+        // title "Movie" (not "Movie."), matching the user's expected title.
         Some(idx) => stem[..idx].trim_end_matches(['.', ' ', '_', '(', '-']),
         None => {
             // No year — strip a `.NNNN[pP]` resolution token if present.
@@ -561,8 +553,7 @@ pub fn parse_title_from_filename(filename: &str) -> (String, Option<i32>) {
 
 // ── Tests ────────────────────────────────────────────────────────────────────
 //
-// `parse_title_from_filename` cases ported 1:1 from
-// `server/src/services/__tests__/libraryScanner.test.ts:5-88`.
+// `parse_title_from_filename` covers torrent-style filename parsing.
 // Walk + fingerprint coverage uses tempdirs.
 
 #[cfg(test)]
@@ -625,8 +616,8 @@ mod tests {
 
     #[test]
     fn parse_title_ignores_year_like_token_without_separators() {
-        // "Movie2024.mkv" has 2024 but no separator before it — Bun treats
-        // it as part of the title, not a year.
+        // "Movie2024.mkv" has 2024 but no separator before it — treat the
+        // whole thing as the title.
         let (title, year) = parse_title_from_filename("Movie2024.mkv");
         assert_eq!(title, "Movie2024");
         assert_eq!(year, None);

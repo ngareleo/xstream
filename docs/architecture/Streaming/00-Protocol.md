@@ -60,26 +60,26 @@ The server generates the init segment by running a zero-duration ffmpeg pass on 
 
 ## Server Streaming Logic
 
-`server/src/routes/stream.ts`:
+`server-rust/src/routes/stream.rs`:
 
-1. `addConnection(jobId)` — increments the in-memory connection counter for this job.
-2. Wait for `job.initSegmentPath` to be set (polling 100ms, max 60s).
-   - Uses `req.signal.addEventListener("abort", ...)` to detect early disconnects (Bun may mark the signal aborted before the coroutine runs its first `await`).
-   - Each `Bun.sleep()` is wrapped in try/catch; a thrown error means Bun cancelled the coroutine because the underlying TCP connection closed.
+1. Register the connection with the job (increments connection counter).
+2. Wait for `job.init_segment_path` to be set (polling 100ms, max 60s).
+   - Uses async cancellation to detect early disconnects.
+   - Errors are caught and propagated through the Result type.
 3. Read init segment bytes from disk → write `[4-byte length][bytes]` to response.
 4. Loop over segments:
    - If segment file exists at the expected path → read → write frame → increment index.
-   - If `job.status === 'complete'` or `'error'` → break.
-   - Else → `await sleep(100)` and retry.
-   - **`config.stream.connectionIdleTimeoutMs` (default 180 s)**: if no segment has been sent within that window while waiting for the encoder, close the connection and kill the job (see below).
-5. On `req.signal.aborted` (client disconnect): `removeConnection(jobId)`. If `connections === 0` and job is `running` → `killJob(jobId)` (SIGTERM).
-6. On natural stream end: `removeConnection(jobId)` and close.
+   - If `job.status === 'Complete'` or `'Error'` → break.
+   - Else → sleep 100ms and retry.
+   - **`config.stream.connection_idle_timeout_ms` (default 180 s)**: if no segment has been sent within that window while waiting for the encoder, close the connection and kill the job (see below).
+5. On client disconnect: deregister the connection. If `connections === 0` and job is `running` → `kill_job(job_id)` (SIGTERM).
+6. On natural stream end: deregister connection and close.
 
 **Connection counting + ffmpeg lifecycle:**
 - `ActiveJob.connections` tracks how many HTTP connections are consuming each job.
-- When the last connection drops (or times out), `killJob` sends SIGTERM to the ffmpeg process. This prevents zombie processes when users navigate away.
+- When the last connection drops (or times out), `kill_job` sends SIGTERM to the ffmpeg process. This prevents zombie processes when users navigate away.
 - Multiple tabs on the same job share a `connections` count; ffmpeg is only killed when **all** connections close.
-- Maximum concurrent running jobs: `config.transcode.maxConcurrentJobs` (default `3`, defined in `server/src/config.ts`). A 4th `startTranscode` call while 3 slots are occupied returns a typed `CAPACITY_EXHAUSTED` `PlaybackError` (with `retryAfterMs = config.transcode.capacityRetryHintMs`) — never throws. The cap formula is `liveActiveCount + reservations.size >= config.transcode.maxConcurrentJobs`, where `liveActiveCount = liveCommands.size − dyingJobIds.size`. Jobs that have been SIGTERM'd but haven't yet exited do **not** count toward the cap — they are tracked in a `dyingJobIds` set and their slot is freed immediately on the kill call. This prevents rapid back-to-back seeks from exhausting the cap while 4K-software flushes are still in flight. After `config.transcode.forceKillTimeoutMs` (default 2 s) a SIGKILL is escalated automatically, bounding the zombie window.
+- Maximum concurrent running jobs: `config.transcode.max_concurrent_jobs` (default `3`, defined in `server-rust/src/config.rs`). A 4th `startTranscode` call while 3 slots are occupied returns a typed `CAPACITY_EXHAUSTED` `PlaybackError` (with `retry_after_ms = config.transcode.capacity_retry_hint_ms`) — never throws. Jobs that have been SIGTERM'd but haven't yet exited do **not** count toward the cap — they are tracked separately and their slot is freed immediately on the kill call. This prevents rapid back-to-back seeks from exhausting the cap while 4K-software flushes are still in flight. After `config.transcode.force_kill_timeout_ms` (default 2 s) a SIGKILL is escalated automatically, bounding the zombie window.
 
 ---
 
@@ -247,7 +247,7 @@ The three knobs each do a different job:
 
 #### Memory table (at default `forwardTargetS + backBufferKeepS = 70s`)
 
-Using `RESOLUTION_PROFILES` video + audio bitrates from `server/src/config.ts`:
+Using `RESOLUTION_PROFILES` video + audio bitrates from `server-rust/src/config.rs`:
 
 | Resolution | Bitrate (v + a) | Peak resident buffer (70s × bitrate / 8) |
 |---|---|---|

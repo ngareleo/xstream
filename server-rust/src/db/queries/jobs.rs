@@ -1,7 +1,4 @@
-//! Transcode-job queries. Mirrors `server/src/db/queries/jobs.ts`.
-//!
-//! Read functions land in Step 1; write functions (insert, update, eviction)
-//! land here in Step 2 alongside the chunker.
+//! Transcode-job queries.
 
 use chrono::Utc;
 use rusqlite::{params, OptionalExtension, Row};

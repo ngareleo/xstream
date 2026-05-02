@@ -55,9 +55,9 @@ Run this skill when your change touches one of:
 - `client/src/services/streamingService.ts`
 - `client/src/services/bufferManager.ts`
 - `client/src/hooks/useChunkedPlayback.ts`
-- `server/src/routes/stream.ts`
-- `server/src/services/chunker.ts`
-- `server/src/graphql/resolvers/mutation.ts` (only the `startTranscode` resolver)
+- `server-rust/src/routes/stream.rs`
+- `server-rust/src/services/chunker.rs`
+- `server-rust/src/graphql/mutation.rs` (only the `start_transcode` resolver)
 
 …**and** the change alters an interaction visible in one of the four sequence diagrams: actor calls, ordering, span boundaries, back-pressure thresholds, seek/snap logic, or the resolution-switch handoff.
 

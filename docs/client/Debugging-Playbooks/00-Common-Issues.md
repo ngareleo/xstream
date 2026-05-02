@@ -10,24 +10,11 @@ Symptoms: `onNext` is never called; UI doesn't refresh after a scan; no subscrip
 
 **Check 1 — Rsbuild proxy forwards WebSocket upgrades.** In `client/rsbuild.config.ts`, `/graphql` proxy needs `ws: true`:
 ```ts
-proxy: { "/graphql": { target: "http://localhost:3001", ws: true } }
+proxy: { "/graphql": { target: "http://localhost:3002", ws: true } }
 ```
 Without it, Rsbuild intercepts the upgrade and returns HTTP 200, silently killing the connection.
 
-**Check 2 — `Bun.serve` has a WebSocket upgrade handler.** `server/src/index.ts` must explicitly upgrade WebSocket requests and pass a `websocket` key to `Bun.serve`:
-```ts
-import { handleProtocols, makeHandler as makeWsHandler } from "graphql-ws/lib/use/bun";
-import { schema } from "./routes/graphql.js";
-
-if (url.pathname === "/graphql" && req.headers.get("upgrade") === "websocket") {
-  const protocol = req.headers.get("sec-websocket-protocol") ?? "";
-  if (!handleProtocols(protocol)) return new Response("Bad Request", { status: 400 });
-  if (!server.upgrade(req)) return new Response("WebSocket upgrade failed", { status: 500 });
-  return new Response();
-}
-// in Bun.serve options:
-websocket: makeWsHandler({ schema }),
-```
+**Check 2 — Server has a WebSocket upgrade handler.** The Rust server (`server-rust/src/main.rs`) uses axum's built-in WebSocket support via `async-graphql`. The `/graphql` route handler automatically upgrades WebSocket connections.
 
 **Check 3 — Verify in DevTools.** Network → WS → `/graphql` → Messages. `{"type":"connection_ack"}` should appear within 1s. Status 200 instead of 101 means the upgrade handler is missing.
 
@@ -60,15 +47,9 @@ Broken links:
 
 Symptoms: a field like `Video.matched` always returns `false`/`null` even when data exists.
 
-Root cause: `@graphql-tools/schema`'s `makeExecutableSchema` merges resolvers by `Object.assign` — duplicate `Type.field` entries: **last one wins**. Check merge order in `server/src/routes/graphql.ts`.
+Root cause: async-graphql derives resolvers from struct field attributes — duplicate resolver definitions for the same field are a compile-time error, so this shouldn't happen in the Rust server.
 
-Fix: each GraphQL type has one authoritative resolver file:
-- `Video.*` → `resolvers/video.ts`
-- `Library.*` → `resolvers/library.ts`
-- `TranscodeJob.*` → `resolvers/job.ts`
-- Root fields → `resolvers/query.ts`, `mutation.ts`, `subscription.ts`
-
-Find conflicts: `grep -r "matched:" server/src/graphql/resolvers/`.
+If you see incorrect field values: check that the correct type definition is active (no stale imports) and that the resolver logic matches the schema definition in `server-rust/src/graphql/`.
 
 ---
 

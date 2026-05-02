@@ -1,15 +1,15 @@
-# Tauri Packaging
+# Tauri Desktop Shell
 
 How the Rust server + React/Relay client ship as a single signed Tauri desktop bundle for Linux, Windows, and macOS, distributed by the user (no third-party app stores). Self-hosted updates, bundled jellyfin-ffmpeg, code-signing per OS, and a CI matrix to produce all artefacts on every release tag.
 
-This doc assumes the Rust port (phases A-E from `07-Bun-To-Rust-Migration.md`) has landed. Tauri packaging is phase F.
+This is the prescriptive spec; for the underlying mechanics walkthrough read [`01-Packaging-Internals.md`](01-Packaging-Internals.md).
 
 ## 1. Tauri v2 project layout
 
 ```
 xstream/
-├── client/                          # React app (Rsbuild) — unchanged
-├── server-rust/                     # Rust workspace — see 07-Bun-To-Rust-Migration.md
+├── client/                          # React app (Rsbuild)
+├── server-rust/                     # Rust workspace — the server
 ├── src-tauri/                       # Tauri shell
 │   ├── Cargo.toml
 │   ├── tauri.conf.json
@@ -21,8 +21,8 @@ xstream/
 │   ├── icons/                       # Per-OS app icons
 │   └── resources/                   # See "Bundling ffmpeg" — vendor/ffmpeg/<platform>/
 └── scripts/
-    ├── ffmpeg-manifest.json         # unchanged, see 06-File-Handling-Layer.md
-    └── setup-ffmpeg                 # extended to populate src-tauri/resources/ffmpeg/<platform>
+    ├── ffmpeg-manifest.json         # see 02-Shipping-FFmpeg.md
+    └── setup-ffmpeg                 # populates src-tauri/resources/ffmpeg/<platform>
 ```
 
 `src-tauri/` is a sibling of `client/` and `server-rust/`, owned by the Tauri runtime. `tauri.conf.json` is the single source of truth for bundle metadata.
@@ -82,22 +82,22 @@ The `pubkey` is the **update signing public key**, NOT the node's identity pubke
 
 The React/Relay client is built once by Rsbuild (`client/dist/`) and bundled into the Tauri app's resources via `frontendDist`. At runtime the webview loads `tauri://localhost/index.html` directly from the bundle — no HTTP serve from the Rust server is involved for the client itself.
 
-This means **the Rust server does NOT serve static files in production.** The dev-only static-file path documented in `04-Web-Server-Layer.md` collapses; production routes are only `/graphql`, `/stream/:job_id`, and (during the bridge phase only) `/ingest/otlp`.
+This means **the Rust server does NOT serve static files in production.** Production routes are only `/graphql` and `/stream/:job_id`.
 
 ### OTLP exporter under Tauri
 
 When running under Tauri there is no Rsbuild dev proxy at `/ingest/otlp` — that proxy only exists in dev. The Rust process exports OTLP directly to the configured endpoint:
 
 - Default: `http://localhost:4317` (a user-installed local Seq with the OTLP receiver enabled), failing silently if unreachable.
-- Configurable via in-app settings (`<app_data_dir>/xstream-identity.db` `user_settings` table) — `OTEL_EXPORTER_OTLP_ENDPOINT` env override remains supported for dev/CI.
+- Configurable via in-app settings (`<app_data_dir>/xstream.db` `user_settings` table) — `OTEL_EXPORTER_OTLP_ENDPOINT` env override remains supported for dev/CI.
 
-Cross-reference `02-Observability-Layer.md` §4 (OTLP transport).
+Cross-reference [`docs/architecture/Observability/`](../Observability/README.md) for the OTLP transport.
 
 ## 3. Embedding the Rust server
 
 Two options were on the table; one is rejected.
 
-### Option A — server runs in-process, bound to a random free `127.0.0.1` port (RECOMMENDED)
+### Option A — server runs in-process, bound to a random free `127.0.0.1` port (chosen)
 
 ```rust
 // src-tauri/src/main.rs
@@ -134,7 +134,7 @@ const BASE_URL = (window as any).__XSTREAM_SERVER_PORT__
     : "http://localhost:3001";                                       // dev fallback
 ```
 
-**Why this is the recommended option**: every protocol stays HTTP (no IPC churn), the Rust server's binary streaming endpoint works unchanged, and the `01-Streaming-Layer.md` "client unchanged" invariant survives.
+**Why this option won**: every protocol stays HTTP (no IPC churn), the Rust server's binary streaming endpoint works unchanged, and the React/Relay client stays unchanged across the bundle.
 
 ### Option B — server logic compiled directly into Tauri commands (REJECTED)
 
@@ -149,7 +149,7 @@ Documented for completeness; not chosen.
 
 ## 4. Bundling ffmpeg
 
-The `06-File-Handling-Layer.md` doc covers ffmpeg path resolution at runtime; this section covers the build-time bundling and Tauri's resource discovery.
+[`02-Shipping-FFmpeg.md`](02-Shipping-FFmpeg.md) covers manifest pinning + runtime path resolution end-to-end; this section is the build-time bundling overview and Tauri's resource discovery.
 
 ### Build flow
 
@@ -199,11 +199,9 @@ The `jellyfin-ffmpeg` distribution publishes statically-linked portable builds f
 - **macOS**: no `brew install` requirement; the portable tarball ships everything.
 - **Windows**: no DLL hell; `.exe` is self-contained.
 
-See `docs/server/Hardware-Acceleration/00-Overview.md` for the HW-accel pipeline that depends on this binary's specific build.
+See [`docs/server/Hardware-Acceleration/00-Overview.md`](../../server/Hardware-Acceleration/00-Overview.md) for the HW-accel pipeline that depends on this binary's specific build.
 
 ## 5. VAAPI Linux fallback under Tauri
-
-Today `server/src/services/hwAccel.ts`'s VAAPI probe is **fatal** on probe failure — the Bun prototype is developer-focused and a probe failure means a misconfigured dev environment.
 
 Under Tauri the user may not be in the `video` / `render` group; permissions to `/dev/dri/renderD128` may not be available on first launch. Fatal-on-probe-failure would brick the app for any user on a fresh Linux install.
 
@@ -226,7 +224,7 @@ pub fn probe_vaapi_with_fallback(strategy: &mut HwAccelStrategy) -> ProbeOutcome
 
 The toast is delivered via Tauri's event system: the server emits a `hwaccel_fallback` event, the React layer catches it and shows a one-time-per-launch banner. The user's options surface in settings: "Try hardware acceleration" (re-probe), "Stay on software encode" (persist the choice in `user_settings`).
 
-Cross-reference `docs/server/Hardware-Acceleration/00-Overview.md`.
+Cross-reference [`docs/server/Hardware-Acceleration/00-Overview.md`](../../server/Hardware-Acceleration/00-Overview.md).
 
 ## 6. Self-hosted updates
 
@@ -411,7 +409,7 @@ In-app updater checks at startup + every 24h; the manifest is fetched, version-c
 
 GitHub Actions workflow at `.github/workflows/release.yml`. Triggered by `push` of tags matching `v*.*.*`.
 
-**Baseline from Step 3:** A Linux-only, unsigned, draft-pre-release form of `release.yml` is established during Step 3 (commit `5d8bf06`, PR #43 — not yet merged to main as of 2026-05-01). It uses `tauri-apps/tauri-action@v0` with no signing secrets, produces `.deb` + `.AppImage` as draft GitHub Release artefacts and 7-day workflow artefacts, and carries `HW_ACCEL=off` (CI runners have no `/dev/dri`). The same PR also adds a `tauri-build` job to `ci.yml` for per-push build-parity verification. The eventual-state matrix shown below is what Step 4 promotes to.
+**Baseline today:** a Linux-only, unsigned, draft-pre-release form of `release.yml` is in place. It uses `tauri-apps/tauri-action@v0` with no signing secrets, produces `.deb` + `.AppImage` as draft GitHub Release artefacts and 7-day workflow artefacts, and carries `HW_ACCEL=off` (CI runners have no `/dev/dri`). A `tauri-build` job in `ci.yml` enforces per-push build parity. The eventual-state matrix shown below is what the signed-release rollout promotes to.
 
 ```yaml
 name: Release
@@ -482,22 +480,12 @@ These are **build-time only** — nothing the user installs. The bundled AppImag
 
 ## 10. Open questions
 
-1. **Universal macOS binary vs. arch-specific**: Tauri can produce a single universal binary (`--target universal-apple-darwin`) or two separate ones. Universal is simpler to host but doubles the download size. Defer until update payload size matters.
-2. **Linux `.deb` apt repository**: shipping a `.deb` is easy; hosting an apt repo with a key signature is more involved. v1 ships the `.deb` as a one-shot download; defer apt repo until users ask.
-3. **Auto-update scheduling under heavy use**: today the updater checks every 24h regardless of user activity. Pause checks while a stream is active to avoid replacing the binary mid-playback? Likely yes; defer to UX.
-4. **Code-signing identity rotation**: when the macOS Developer ID cert expires (yearly) we re-sign all current artefacts. Document the runbook before the first cert rotates.
-5. **Tauri auto-updater on Linux deb**: not supported by the plugin. Users on `.deb` follow distro updates manually — set in-app expectations.
-6. **Crash reporting**: Tauri does not bundle a crash reporter. Sentry has a `sentry-tauri` integration; needs a decision before v1 ships. Without it, OS-level reports are the only signal.
-7. **Bundle size**: jellyfin-ffmpeg portable builds are ~50 MB compressed per platform. The bundled AppImage is therefore ~70-80 MB. Acceptable for v1; defer optimization.
+The deployment-wide open questions live in this folder's [`README.md`](README.md) — they are tracked there because they cut across all three docs in this folder.
 
 ## Cross-references
 
-- [`00-Rust-Tauri-Port.md`](00-Rust-Tauri-Port.md) — anchor doc with stable contracts.
-- [`01-Streaming-Layer.md`](01-Streaming-Layer.md) — the binary stream protocol that Option B would have broken.
-- [`02-Observability-Layer.md`](02-Observability-Layer.md) — OTLP exporter behaviour under Tauri (no proxy).
-- [`04-Web-Server-Layer.md`](04-Web-Server-Layer.md) — server bind config, dev-only static-file path.
-- [`05-Database-Layer.md`](05-Database-Layer.md) — `app_cache_dir()` vs. `app_data_dir()` two-DB split.
-- [`06-File-Handling-Layer.md`](06-File-Handling-Layer.md) — ffmpeg manifest and resource-dir resolution.
-- [`07-Bun-To-Rust-Migration.md`](07-Bun-To-Rust-Migration.md) — phase F is this doc.
-- [`09-Tauri-Packaging-Internals.md`](09-Tauri-Packaging-Internals.md) — the pedagogical deep-dive companion to this spec; walks the build pipeline, installed-app layout per OS, and update mechanics with the Electron-derived mental-model corrections.
+- [`01-Packaging-Internals.md`](01-Packaging-Internals.md) — the pedagogical deep-dive companion to this spec; walks the build pipeline, installed-app layout per OS, and update mechanics.
+- [`02-Shipping-FFmpeg.md`](02-Shipping-FFmpeg.md) — ffmpeg manifest pinning, portable strategy, runtime resolution.
+- [`docs/architecture/Streaming/00-Protocol.md`](../Streaming/00-Protocol.md) — the binary stream protocol that Option B would have broken.
+- [`docs/architecture/Observability/`](../Observability/README.md) — OTLP exporter behaviour under Tauri (no proxy).
 - [`docs/server/Hardware-Acceleration/00-Overview.md`](../../server/Hardware-Acceleration/00-Overview.md) — VAAPI Linux fallback motivations.

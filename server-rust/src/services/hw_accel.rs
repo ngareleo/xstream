@@ -1,5 +1,4 @@
-//! Hardware-acceleration probe + selection. Mirrors
-//! `server/src/services/hwAccel.ts`.
+//! Hardware-acceleration probe + selection.
 //!
 //! Policy: the server probes at startup for a platform-appropriate HW path.
 //! If `auto` (the default) and the probe fails, the resolver returns a typed

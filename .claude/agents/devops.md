@@ -19,20 +19,24 @@ On **first invocation per session**, read these before formulating an answer. Th
 - `.github/workflows/*` — CI pipelines
 - `scripts/*` — dev/ops scripts (`setup-ffmpeg.ts`, `check-env.sh`, `seq-start.sh`, `seq-stop.sh`, `clean.sh`, `stop.sh`)
 - `scripts/ffmpeg-manifest.json` — pinned native binary versions + SHA256
-- `package.json` (root + `server/` + `client/` + `design/`) — npm/bun scripts + dependency versions
+- `package.json` (root + `client/` + `server-rust/` + `scripts/`) — Bun workspace scripts
+- `Cargo.toml` (root + `server-rust/` + `src-tauri/`) — Rust workspace + crate deps
 - `.env.example` — full env var surface
-- `server/src/db/migrate.ts` — DB schema state
+- `server-rust/src/db/migrate.rs` — DB schema state
 - `docs/server/Config/00-AppConfig.md` — runtime config and library configuration
 - `docs/architecture/Observability/` — Seq/OTel pipeline
+- `docs/architecture/Deployment/` — Tauri bundling + release surface
 
 ## Local dev setup
 
 Run `/setup-local` to bring up deps, Seq, and dev servers in one step.
 
 Component commands:
-- `bun install` — root + workspaces (Bun workspace protocol)
+- `bun install` — root + client + server-rust + scripts (Bun workspaces)
+- `bun run setup-ffmpeg` — downloads + verifies pinned jellyfin-ffmpeg into `vendor/ffmpeg/<platform>/`
 - `bun run seq:start` — first run generates `.seq-credentials` (gitignored) with random admin password
-- `bun run dev` — server + client + relay-compiler + tsc watchers
+- `bun run dev` — starts the Rust server (port 3002) + Rsbuild client (port 5173) under mprocs
+- `bun run tauri:dev` — full Tauri desktop shell (Rust server runs in-process inside the Tauri app)
 - `bun run check-env` — validates every required env var; red/green output
 
 ### Seq credentials
@@ -57,43 +61,41 @@ Adding a new env var:
    - `check_default` — vars with a safe built-in fallback
    - `check_not_localhost` — URLs that must not point to localhost in prod
 3. Place in the right section (Server / Metadata / Telemetry) — add a new `section` heading if the concern is new.
-4. If read from `server/src/config.ts`, add to both `dev` and `prod` objects.
+4. If read from `server-rust/src/config.rs`, surface it via `AppConfig::from_env` (or the equivalent constructor) so dev / Tauri / CI all see it.
 5. Run `bun check-env` — new var should show up correctly.
 
 ## ffmpeg manifest pinning
 
 `scripts/ffmpeg-manifest.json` is the lockfile for native binaries — one exact jellyfin-ffmpeg version with per-platform SHA256. Bump workflow:
 
-1. Look up the new release at `https://github.com/jellyfin/jellyfin-ffmpeg/releases`. Five assets we pin: linux amd64 `.deb`, linux arm64 `.deb`, darwin x64 `tar.xz`, darwin arm64 `tar.xz`, win x64 `zip` — keep asset-naming pattern consistent with the current manifest.
+1. Look up the new release at `https://github.com/jellyfin/jellyfin-ffmpeg/releases`. Five assets we pin: linux x64 portable `tar.xz`, linux arm64 portable `tar.xz`, darwin x64 `tar.xz`, darwin arm64 `tar.xz`, win x64 `zip` — every platform uses the portable strategy.
 2. Download all five and compute `sha256sum`. Update the manifest: bump `version`, `versionString` (the exact string `ffmpeg -version` emits — e.g. `7.1.3-Jellyfin`), `releaseUrl`, and each platform's `asset` + `sha256`.
-3. Run `bun run setup-ffmpeg --force` locally to verify the new pin installs cleanly. If encoder flags changed between versions (rare), update the VAAPI case in `server/src/services/ffmpegFile.ts::applyOutputOptions`.
+3. Run `bun run setup-ffmpeg --force` locally to verify the new pin installs cleanly. If encoder flags changed between versions (rare), update the VAAPI case in `server-rust/src/services/ffmpeg_file.rs` (filter chain + output options).
 4. Commit manifest + any encoder-flag changes together. Server startup verifies `ffmpeg -version` matches `versionString`; drift is fatal with a pointer to `bun run setup-ffmpeg`.
 
-Never rely on system `ffmpeg` on `$PATH` — the resolver does not fall back to it. If the pinned install breaks, re-run `bun run setup-ffmpeg` rather than hand-editing the resolver. On Linux the install strategy is `sudo dpkg -i` (ships bundled iHD driver at `/usr/lib/jellyfin-ffmpeg/`); macOS/Windows use portable archives into `vendor/ffmpeg/<platform>/`.
+Never rely on system `ffmpeg` on `$PATH` — the resolver does not fall back to it. If the pinned install breaks, re-run `bun run setup-ffmpeg` rather than hand-editing the resolver. All platforms install to `vendor/ffmpeg/<platform>/`. The Tauri release path additionally stages the same binaries into `src-tauri/resources/ffmpeg/<platform>/` via `bun run setup-ffmpeg --target=tauri-bundle`.
 
 ## DB migrations
 
-`server/src/db/migrate.ts` owns schema: idempotent `CREATE TABLE IF NOT EXISTS` and column adds.
+`server-rust/src/db/migrate.rs` owns schema: idempotent `CREATE TABLE IF NOT EXISTS` and column adds.
 
 Adding a table:
-1. Append `CREATE TABLE IF NOT EXISTS ...` using individual `db.run()` calls inside `db.transaction()()` — `db.exec()` is deprecated in `bun:sqlite`.
-2. Create `server/src/db/queries/<table>.ts` with typed query functions.
-3. Import from services/resolvers as needed.
+1. Append `CREATE TABLE IF NOT EXISTS ...` inside `migrate::run` using `conn.execute(...)` calls in a single transaction.
+2. Create `server-rust/src/db/queries/<table>.rs` with typed query functions; re-export from `server-rust/src/db/queries/mod.rs`.
+3. Import from services / resolvers as needed.
 
-**No backward-compatible migrations are guaranteed.** `content_fingerprint` in `videos` was added as `NOT NULL` — old DBs without it must be deleted (`rm tmp/xstream.db`) and regenerated on startup.
+**No backward-compatible migrations are guaranteed.** `content_fingerprint` in `videos` was added as `NOT NULL` — old DBs without it must be deleted (`rm tmp/xstream-rust.db`) and regenerated on startup.
 
 ## CI/CD
 
-`.github/workflows/ci.yml` is the single pipeline. It runs on every PR against `main`:
-- `bun install`
-- `bun run format:check` (Prettier, CI mode)
-- `bun run lint` in each workspace (`tsc --noEmit && eslint src`)
-- `bun test` in `server/`
-- `bun relay` in `client/` (fails if generated artifacts are stale)
+`.github/workflows/ci.yml` is the single PR pipeline:
+- `server-rust` job — `cargo fmt --check`, `cargo clippy --workspace --exclude xstream-tauri -- -D warnings`, `cargo build --workspace --exclude xstream-tauri --all-targets`, `cargo test --workspace --exclude xstream-tauri`. Plus a `bun run --filter scripts lint` for the shared TS helpers.
+- `tauri-build` job — installs GTK / webkit2gtk / appindicator / rsvg apt deps, stages bundled ffmpeg, builds the Tauri AppImage + `.deb` (unsigned), uploads as 7-day artifacts so reviewers can smoke-test from a green CI run.
+- `client` job — `bun install`, Playwright browsers, `bun run relay`, `bun run lint`, `bun run test`, `bun run test-storybook`, `bun run build-storybook`, `bun run build`. Uploads the bundle-stats report to GitHub Pages on `main`.
 
-Read `.github/workflows/ci.yml` at session start — job names change, and the user may be hitting a specific stage. CI failures almost always map to: Prettier mis-format, ESLint rule, missing explicit return type, a stale `__generated__/` artifact, or a schema-vs-fragment drift caught by relay-compiler.
+Read `.github/workflows/ci.yml` at session start — job names and step names are stable but content evolves. CI failures almost always map to: a Clippy warning promoted to error, missing `cargo fmt`, a stale Relay artifact, or a schema-vs-fragment drift caught by relay-compiler against the live Rust introspection.
 
-No release workflow exists yet — the project ships today as local-only dev. Release to Tauri desktop bundles is deferred until the Rust rewrite (see architect agent for the port roadmap).
+The signed-release workflow (Tauri matrix across macOS / Windows / Linux with code-signing + Ed25519 update manifest) is the next deliverable — see [`docs/architecture/Deployment/00-Tauri-Desktop-Shell.md`](../../docs/architecture/Deployment/00-Tauri-Desktop-Shell.md) §9 for the eventual shape and the open release-engineering questions in [`docs/architecture/Deployment/README.md`](../../docs/architecture/Deployment/README.md).
 
 ## Backend debugging playbooks
 
@@ -107,24 +109,23 @@ ps aux | grep ffmpeg | grep -v grep
 # look for 2+ lines with identical -ss, -t, segment_dir
 ```
 
-Root cause: async-initialisation window in `startTranscodeJob` (`server/src/services/chunker.ts`). The duplicate-check (`getJob(id)`) and concurrent-job cap (`activeCommands.size`) are evaluated before the job is registered. Two calls arriving during the window between the first `await` (e.g. `access`, `mkdir`) and the `setJob()` call both pass guards and each spawn ffmpeg.
+Root cause: an async window in `start_transcode_job` (`server-rust/src/services/chunker.rs`) where the duplicate-check (`get_job(id)`) and concurrent-job cap are evaluated before the job is registered. Two calls arriving during the gap between the first `.await` (e.g. `tokio::fs::create_dir_all`) and the `set_job(...)` call both pass the guards and each spawn ffmpeg.
 
-Fix pattern — synchronous `inflightJobIds = new Set<string>()` added before any `await`:
-```ts
-inflightJobIds.add(id);          // before first await
-// ... async work (access, mkdir) ...
-insertJob(job);
-setJob(job);
-inflightJobIds.delete(id);
+Fix pattern — synchronous in-flight set populated before any `.await`:
+```rust
+inflight_job_ids.insert(id.clone());     // before first .await
+// ... async work ...
+insert_job(&job)?;
+set_job(&job);
+inflight_job_ids.remove(&id);
 ```
-Include `inflightJobIds.size` in `MAX_CONCURRENT_JOBS` checks. For duplicate IDs, poll `getJob(id)` rather than proceed:
-```ts
-if (inflightJobIds.has(id)) {
-  for (let i = 0; i < 50; i++) {
-    await Bun.sleep(100);
-    const pending = getJob(id);
-    if (pending) return pending;
-  }
+Include `inflight_job_ids.len()` in `MAX_CONCURRENT_JOBS` checks. For duplicate IDs, poll the job store rather than proceed:
+```rust
+if inflight_job_ids.contains(&id) {
+    for _ in 0..50 {
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        if let Some(pending) = get_job(&id) { return Ok(pending); }
+    }
 }
 ```
 
@@ -136,44 +137,39 @@ ps aux | grep ffmpeg | grep -v grep | awk '{print $2}' | xargs -r kill -9
 
 ### VAAPI probe fails (`VA_STATUS_ERROR_INVALID_PARAMETER` / exit `-22`)
 
-Symptoms: `detectHwAccel` fatally exits; ffmpeg stderr shows `Failed to create VAAPI device` or the `0x16` error; `vainfo` against `/dev/dri/renderD128` fails or reports missing H.264 encode entrypoints.
+Symptoms: `detect_hw_accel` errors at startup (or under Tauri, falls back to software with a `hwaccel_fallback` event); ffmpeg stderr shows `Failed to create VAAPI device` or the `0x16` error; `vainfo` against `/dev/dri/renderD128` fails or reports missing H.264 encode entrypoints.
 
 Three root causes, in rough order of likelihood:
 
-1. **Distro driver version gap.** Distro `intel-media-driver` may predate the host GPU (e.g. Ubuntu 24.04 ships 24.1.0 — Intel Lunar Lake needs 24.2.0+). Jellyfin-ffmpeg bundles a newer `libva` + iHD driver at `/usr/lib/jellyfin-ffmpeg/lib/dri/` — this is why Linux install is `.deb`, not the portable tarball. Do NOT add `LD_LIBRARY_PATH` / `LIBVA_DRIVERS_PATH` workarounds around a portable build — jellyfin-ffmpeg's `libva` has a compiled-in RUNPATH and ignores those env vars. `bun run setup-ffmpeg` on Linux is the single supported path.
+1. **Distro driver version gap.** Distro `intel-media-driver` may predate the host GPU (e.g. Ubuntu 24.04 ships 24.1.0 — Intel Lunar Lake needs 24.2.0+). Jellyfin-ffmpeg portable ships a bundled `libva` + iHD driver alongside the binary — that's why we use the portable strategy on every platform. Do NOT add `LD_LIBRARY_PATH` / `LIBVA_DRIVERS_PATH` workarounds — jellyfin-ffmpeg's `libva` has a compiled-in RUNPATH and ignores those env vars. `bun run setup-ffmpeg` is the single supported install path.
 
-2. **Resolver pointing at wrong binary.** If manual `/usr/lib/jellyfin-ffmpeg/ffmpeg -version` initialises VAAPI but the server probe fails, another service module has called `setFfmpegPath` with a stale path. fluent-ffmpeg's path cache is module-global; only `resolveFfmpegPaths` in `ffmpegPath.ts` should call `setFfmpegPath`. Bisect imports to find any other caller.
+2. **Resolver pointing at wrong binary.** If manual `vendor/ffmpeg/<plat>/ffmpeg -version` initialises VAAPI but the server probe fails, another module is bypassing the canonical path resolver. Only `services::ffmpeg_path::resolve_ffmpeg_paths` (or `src-tauri/src/ffmpeg_path.rs::resolve` in Tauri mode) should be the source of `FfmpegPaths` — bisect callers if a different path slipped through.
 
 3. **`/dev/dri/renderD128` permissions.** Server user must be in the `render` group (`video` on older distros). Check with `ls -l /dev/dri/renderD128`. After `usermod`, **fully log out** (not just `newgrp`) so the new GID sticks in the shell that launches `bun run dev`.
 
 ### OMDb auto-match not linking well-labelled files
 
-Symptoms: `[scanner] Auto-matching N unmatched video(s)` appears but no `[scanner] Matched:` lines follow.
+Symptoms: `library.scan` span shows `auto_match_started` with `unmatched_count > 0` but no `omdb_matched` events follow.
 
-1. **`OMDB_API_KEY` configured?** `omdbService.ts` checks `process.env.OMDB_API_KEY` then `getSetting("omdbApiKey")` (Settings → Metadata). Neither set → `isOmdbConfigured()` returns false, auto-match silently skipped. Server logs a startup warning when missing.
+1. **`OMDB_API_KEY` configured?** `services::omdb` reads `OMDB_API_KEY` env first, then the persisted `omdbApiKey` user setting (Settings → Metadata). Neither set → `OmdbClient` is `None`, auto-match silently skipped. Server logs a startup warning when missing.
 
-2. **Test title extraction.** `parseTitleFromFilename` in `libraryScanner.ts` handles dot-separated torrent names, parenthesised years `(2024)`, year-at-end. Invoke directly:
-   ```ts
-   parseTitleFromFilename("Furiosa: A Mad Max Saga (2024) 4K.mkv")
-   // → { title: "Furiosa: A Mad Max Saga", year: 2024 }
-   ```
-   Wrong output → add the filename to `server/src/services/__tests__/libraryScanner.test.ts` and fix the regex. Drive regex changes from real filenames, not invented ones.
+2. **Test title extraction.** `parse_title_from_filename` in `services/library_scanner.rs` handles dot-separated torrent names, parenthesised years `(2024)`, year-at-end. Add the failing filename to the `parse_title_*` tests in `library_scanner.rs` `mod tests` and fix the regex. Drive regex changes from real filenames, not invented ones.
 
-3. **Title in OMDb catalog?** OMDb doesn't have every title. `searchOmdb` returns `null` on no-match (silent by design). Verify a specific title at `https://www.omdbapi.com/?t=<title>&y=<year>&apikey=<key>`.
+3. **Title in OMDb catalog?** OMDb doesn't have every title. `services::omdb::search_omdb` returns `None` on no-match (silent by design). Verify a specific title at `https://www.omdbapi.com/?t=<title>&y=<year>&apikey=<key>`.
 
-4. **Re-trigger scan.** Unmatched videos stay in `getUnmatchedVideoIds()` across scans — fixes apply on the next scan (click "Scan" in Settings → Library, or restart the server).
+4. **Re-trigger scan.** Unmatched videos stay in `get_unmatched_video_ids()` across scans — fixes apply on the next scan (click "Scan" in Settings → Library, or restart the server).
 
 ### Identifying the active dev server port
 
-Multiple Rsbuild instances running (stale session + new one) fight for a port. The correct server is the one started with `bun run client` from workspace root, on the configured port (default: `5173`):
+Multiple Rsbuild instances running (stale session + new one) fight for a port. The correct server is the one started with `bun run --filter client dev` from workspace root, on the configured port (default: `5173`):
 ```sh
 lsof -i :5173   # expect rsbuild
 lsof -i :5177   # stale instance — kill it
 ```
-Always test at `http://localhost:5173`.
+Always test at `http://localhost:5173`. The Rust server is on `:3002` in dev; if the Tauri shell is running it picks a free loopback port instead — `pgrep -af xstream-tauri` then `lsof -p <pid>` to find it.
 
 ## What to say when the user asks about CI/deployment
 
 - **"Is this ready to merge?"** — read `.github/workflows/ci.yml`, report what stages run, say "CI must pass before merge" or list the likely failure mode if they've described a symptom.
-- **"How do we release?"** — there is no release pipeline yet. Ship target is Tauri desktop once the Rust rewrite lands. Delegate architectural questions to the `architect` agent.
-- **"Why is CI failing?"** — ask for the failing step name, then read the matching job in `ci.yml` to identify what it runs. Common: relay-compiler drift (`bun relay` didn't run), unformatted files, `explicit-module-boundary-types` on an export, or `no-floating-promises`.
+- **"How do we release?"** — release plumbing for signed Tauri bundles is the next milestone. The bundle layout, signing strategy, and update manifest design are spec'd in [`docs/architecture/Deployment/`](../../docs/architecture/Deployment/README.md). Implementation is open work — defer to the architect for design questions.
+- **"Why is CI failing?"** — ask for the failing step name, then read the matching job in `ci.yml` to identify what it runs. Common: a Clippy warning (with `-D warnings` set), missing `cargo fmt`, a stale Relay artifact (`bun run --filter client relay`), unformatted TS files, or `explicit-module-boundary-types` on a client export.

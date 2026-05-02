@@ -13,9 +13,6 @@
 # server-rust dev script prepends $HOME/.cargo/bin to PATH internally).
 
 procs:
-  server:
-    cwd: ./server
-    cmd: [bun, run, dev]
   server-rust:
     cwd: ./server-rust
     cmd: [bun, run, dev]

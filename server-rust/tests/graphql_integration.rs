@@ -1,16 +1,8 @@
 //! GraphQL API integration tests.
 //!
-//! Mirrors `server/src/graphql/__tests__/graphql.integration.test.ts`. Bun's
-//! version went through `yoga.fetch(new Request(...))` to exercise the
-//! HTTP shape; here we drive `XstreamSchema::execute` directly because the
-//! axum handler is a thin wrapper over the schema (the HTTP shape is
-//! covered by the e2e Playwright test the user already runs).
-//!
-//! One Step-1 caveat: `startTranscode` returns `INTERNAL` (the chunker is
-//! Step 2), not `VIDEO_NOT_FOUND` like the Bun side — so the typed-error
-//! union test asserts the Step-1 contract. When the chunker port lands,
-//! this test should be updated to assert `VIDEO_NOT_FOUND` for an unknown
-//! video and reinstate the cap-rejection / probe / encode error variants.
+//! Drives `XstreamSchema::execute` directly because the axum handler is a
+//! thin wrapper over the schema (the HTTP shape is covered by the e2e
+//! Playwright test the user already runs).
 
 use std::path::Path;
 
@@ -171,10 +163,9 @@ async fn library_scan_updated_emits_initial_state_immediately() {
 
 #[tokio::test]
 async fn create_library_spawns_background_scan_that_flips_scanning_true_then_false() {
-    // Mirrors the Bun behaviour at `server/src/graphql/resolvers/mutation.ts:115-118`
-    // — `createLibrary` returns immediately AND fires a fire-and-forget
-    // scan. The user-visible regression that motivated the port: a freshly
-    // added profile must auto-index without the user clicking "Scan All".
+    // `createLibrary` returns immediately AND fires a fire-and-forget scan.
+    // The user-visible regression this guards: a freshly added profile must
+    // auto-index without the user clicking "Scan All".
     //
     // The for-tests AppContext stubs ffprobe at `/bin/true`, so per-file
     // probes fail and no video rows get written. That's fine for this test

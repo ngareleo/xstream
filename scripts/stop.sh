@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# xstream stop — kill the Bun server, the Rust server, the Rsbuild client,
+# xstream stop — kill the Rust server, the Rsbuild client,
 # any in-flight ffmpeg jobs, and the Seq container.
 # Safe to run at any time; reports what it killed and exits 0 even if nothing
 # was running. Preserves all persisted data (DB, segments, .seq-credentials,
@@ -44,7 +44,6 @@ stop_seq() {
 
 # Kill in reverse start order so dependents go first.
 kill_pattern "Rsbuild dev server"          "rsbuild"
-kill_pattern "Bun server"                  "bun.*src/index"
 # Rust server — match both the binary itself (cargo build artifact) and the
 # `cargo run` driver process, because killing one without the other leaves
 # the orphan holding port 3002.

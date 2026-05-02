@@ -2,7 +2,7 @@
 
 > **Audience:** an architect who knows the streaming + Rust + ffmpeg surface but has never shipped a desktop app. The goal is to walk every layer from "source code" to "installed app" to "auto-update," in detail, and correct the common mental model along the way — especially the Electron-derived intuition that desktop apps ship a bundled browser engine and run their server logic in a sidecar process.
 
-The companion doc [`08-Tauri-Packaging.md`](08-Tauri-Packaging.md) is the **prescriptive spec** for our Tauri build (config, CI matrix, secrets, signing checklist). This doc is the **internals walkthrough** — it explains *what is happening under the hood* and *why* the spec landed where it did, parallel in shape to [`docs/architecture/Deployment/02-Electron-Packaging-Internals.md`](../../architecture/Deployment/02-Electron-Packaging-Internals.md) (the Electron interim's equivalent doc). Read `08` for what to configure; read this for why.
+The companion doc [`00-Tauri-Desktop-Shell.md`](00-Tauri-Desktop-Shell.md) is the **prescriptive spec** for our Tauri build (config, CI matrix, secrets, signing checklist). This doc is the **internals walkthrough** — it explains *what is happening under the hood* and *why* the spec landed where it did. Read `00` for what to configure; read this for why.
 
 A common starting mental model — often imported from Electron — is: *"The desktop app is a Chromium-bundle with my code injected, and the server runs as a sidecar process the shell spawns."* For a **Tauri** app, both halves are different:
 
@@ -68,7 +68,7 @@ The xstream repo has three workspaces relevant to Tauri packaging:
 ```
 xstream/
 ├── client/                    # React + Relay (Rsbuild output: client/dist/)
-├── server-rust/               # Rust workspace — the post-port server (see 07-Bun-To-Rust-Migration.md)
+├── server-rust/               # Rust workspace — the server
 ├── src-tauri/                 # Tauri shell — the bundle entry point
 │   ├── Cargo.toml
 │   ├── tauri.conf.json        # bundle config — see 08-Tauri-Packaging.md §1
@@ -86,7 +86,7 @@ xstream/
     └── setup-ffmpeg           # extended to stage src-tauri/resources/ffmpeg/<plat>/
 ```
 
-`src-tauri/src/main.rs` is the program entry — there is **no analogue to Electron's `electron/main.ts` shim**. Where the Electron interim has *two* entry points (the Electron main process plus a Bun sidecar binary), the Tauri build has *one*: `main.rs` boots Tauri, opens a WebView, and calls `xstream_server::run(...)` as a function on the same `tokio::async_runtime`. [`08-Tauri-Packaging.md`](08-Tauri-Packaging.md) §3 documents this as **Option A — server runs in-process, bound to a random free 127.0.0.1 port** and rejects Option B (Tauri IPC) because IPC's JSON serialisation breaks the binary length-prefixed `/stream/:jobId` framing pinned in [`00-Rust-Tauri-Port.md`](00-Rust-Tauri-Port.md).
+`src-tauri/src/main.rs` is the program entry. The Tauri build has *one* entry point: `main.rs` boots Tauri, opens a WebView, and calls `xstream_server::run(...)` as a function on the same `tokio::async_runtime`. [`00-Tauri-Desktop-Shell.md`](00-Tauri-Desktop-Shell.md) §3 documents this as **Option A — server runs in-process, bound to a random free 127.0.0.1 port** and rejects Option B (Tauri IPC) because IPC's JSON serialisation would break the binary length-prefixed `/stream/:jobId` framing pinned in [`docs/architecture/Streaming/00-Protocol.md`](../Streaming/00-Protocol.md).
 
 ## 3. The build pipeline — what `tauri build` actually does
 
@@ -107,13 +107,13 @@ Each invocation runs the same logical pipeline, with OS-specific artefact produc
 
 - **No `node-gyp` rebuild.** There are no native Node modules in the bundle because there is no Node bundle. SQLite is `rusqlite` with the `bundled` feature; ffmpeg is a subprocess (`tokio::process::Command`); OTel is `tracing` + `opentelemetry-otlp` — all pure Rust crates statically linked into the binary.
 - **The Rust toolchain is the build dependency.** Cross-compilation is OS-bound (you cannot reliably cross-compile to macOS from Linux without Apple's signing chain), so CI uses native runners per target — same shape as the Electron release matrix.
-- **HW-accel features are compile-time.** `vaapi` / `videotoolbox` / `d3d11va` Cargo features turn on the per-OS hardware paths. The Linux bundle ships the VAAPI path; macOS gets VideoToolbox; Windows gets D3D11VA / QSV. (`Architecture-Review-2026-04-28.md` §1 flags that VAAPI is the only currently-implemented HW path; this is a **release blocker** for macOS / Windows that Tauri packaging does not unblock on its own.)
+- **HW-accel features are compile-time.** `vaapi` / `videotoolbox` / `d3d11va` Cargo features turn on the per-OS hardware paths. The Linux bundle ships the VAAPI path; macOS gets VideoToolbox; Windows gets D3D11VA / QSV. VAAPI is the only currently-implemented HW path; the macOS / Windows paths are stubbed and are a **release blocker** for those bundles that Tauri packaging does not unblock on its own.
 
 ### 3.2 Frontend resource collection
 
-`tauri.conf.json` declares `frontendDist: "../client/dist"` (see [`08-Tauri-Packaging.md`](08-Tauri-Packaging.md) §1). At build time `tauri build` reads `client/dist/` and embeds it as bundle resources. At runtime the Tauri WebView intercepts the `tauri://localhost/` URL scheme and serves files from those embedded resources — there is no HTTP server in the path for static assets.
+`tauri.conf.json` declares `frontendDist: "../client/dist"` (see [`00-Tauri-Desktop-Shell.md`](00-Tauri-Desktop-Shell.md) §1). At build time `tauri build` reads `client/dist/` and embeds it as bundle resources. At runtime the Tauri WebView intercepts the `tauri://localhost/` URL scheme and serves files from those embedded resources — there is no HTTP server in the path for static assets.
 
-This means **the Rust server does NOT serve static files in production.** [`08-Tauri-Packaging.md`](08-Tauri-Packaging.md) §2 already calls this out: production routes are only `/graphql`, `/stream/:jobId`, and (during the bridge phase) `/ingest/otlp`. The dev-only static-file path documented in [`04-Web-Server-Layer.md`](04-Web-Server-Layer.md) is collapsed.
+This means **the Rust server does NOT serve static files in production.** [`00-Tauri-Desktop-Shell.md`](00-Tauri-Desktop-Shell.md) §2 already calls this out: production routes are only `/graphql` and `/stream/:jobId`.
 
 ### 3.3 No asar — what replaces it
 
@@ -130,7 +130,7 @@ Source-code concealment is the same level as Electron's asar — i.e., trivially
 
 `tauri.conf.json`'s `bundle.resources` glob is Tauri's analogue to Electron's `extraResources`. Files matching the glob are copied into the platform's resource directory (the same paths listed in §3.3) untouched.
 
-We use this for `resources/ffmpeg/**/*` — the portable jellyfin-ffmpeg binaries per platform. They cannot be embedded as Rust `include_bytes!` because we need to spawn them as subprocesses (`tokio::process::Command::new(&ffmpeg_path)`) and that requires a real on-disk path. The runtime resolver at `src-tauri/src/ffmpeg_path.rs` calls `app.path().resource_dir()` and joins `ffmpeg/<plat>/{ffmpeg,ffprobe}` against it — see [`08-Tauri-Packaging.md`](08-Tauri-Packaging.md) §4 for the resolver code and [`06-File-Handling-Layer.md`](06-File-Handling-Layer.md) for the manifest pin policy.
+We use this for `resources/ffmpeg/**/*` — the portable jellyfin-ffmpeg binaries per platform. They cannot be embedded as Rust `include_bytes!` because we need to spawn them as subprocesses (`tokio::process::Command::new(&ffmpeg_path)`) and that requires a real on-disk path. The runtime resolver at `src-tauri/src/ffmpeg_path.rs` calls `app.path().resource_dir()` and joins `ffmpeg/<plat>/{ffmpeg,ffprobe}` against it — see [`00-Tauri-Desktop-Shell.md`](00-Tauri-Desktop-Shell.md) §4 for the resolver code and [`02-Shipping-FFmpeg.md`](02-Shipping-FFmpeg.md) for the manifest pin policy.
 
 ### 3.5 No Electron runtime injection — what does ship
 
@@ -155,23 +155,23 @@ Net installer size: ~100–150 MB versus Electron's ~220–250 MB. The savings a
 
 ### 3.6 OS-specific packaging
 
-Same wrapping matrix as the Electron interim:
+The wrapping matrix:
 
 - **macOS.** The Rust binary becomes `<App>.app/Contents/MacOS/xstream`; the `.app` is then put inside a `.dmg` for distribution. We additionally produce `.app.tar.gz` for the updater (§7).
 - **Windows.** The binary becomes `xstream.exe`; `tauri build` produces both an MSI (WiX) and an NSIS `.exe` installer. The MSI is the primary updater artefact.
 - **Linux.** AppImage (self-mounting executable; preferred for the auto-updater) and `.deb` (extracts to `/opt/xstream/`; falls outside the auto-updater path — users follow distro update mechanics).
 
-What's *inside* differs from Electron at every layer — see §5.
+What's *inside* differs from a hypothetical Electron build at every layer — see §5.
 
 ### 3.7 Code signing
 
 Same platform-native chains as Electron, driven by `tauri.conf.json` and CI env vars rather than `electron-builder`'s config block:
 
 - **macOS.** `tauri build` invokes `codesign` against the `.app` and the `.dmg` using the identity in `tauri.conf.json`'s `bundle.macOS.signingIdentity`. With `bundle.macOS.notarize` configured it also runs `xcrun notarytool` to send the signed app to Apple, wait for notarization, and staple the ticket. Hardened runtime is on by default (notarization requires it).
-- **Windows.** `signtool sign` against `.exe` and `.msi`, with timestamping. The cert is supplied via the `WINDOWS_CERTIFICATE` + `WINDOWS_CERTIFICATE_PASSWORD` env vars (or HSM token for EV) — see [`08-Tauri-Packaging.md`](08-Tauri-Packaging.md) §7.
+- **Windows.** `signtool sign` against `.exe` and `.msi`, with timestamping. The cert is supplied via the `WINDOWS_CERTIFICATE` + `WINDOWS_CERTIFICATE_PASSWORD` env vars (or HSM token for EV) — see [`00-Tauri-Desktop-Shell.md`](00-Tauri-Desktop-Shell.md) §7.
 - **Linux.** No platform-level signing. Update payloads are signed separately with the Tauri Ed25519 key (§7).
 
-The cert procurement specifics, costs, and the SmartScreen-warm-up trade-off live in [`08-Tauri-Packaging.md`](08-Tauri-Packaging.md) §7. `Architecture-Review-2026-04-28.md` §2 flags signing as having weeks of lead time and an unmade decision (OV vs EV; remote signer vs self-hosted runner) — this needs to be resolved before the Step-4 release per the review's "What to track next" section.
+The cert procurement specifics, costs, and the SmartScreen-warm-up trade-off live in [`00-Tauri-Desktop-Shell.md`](00-Tauri-Desktop-Shell.md) §7. Signing has weeks of lead time and an unmade decision (OV vs EV; remote signer vs self-hosted runner) — this needs to be resolved before the first signed release.
 
 ### 3.8 Manifest publication
 
@@ -190,7 +190,7 @@ Tauri uses a **JSON** manifest (`latest.json`), not `electron-updater`'s YAML fi
 }
 ```
 
-Per [`08-Tauri-Packaging.md`](08-Tauri-Packaging.md) §6 + §8 the manifest gets uploaded to the updates host (Cloudflare R2 / S3 / GitHub Pages) with a short cache TTL while the binary assets get long-cache headers. `Architecture-Review-2026-04-28.md` §5.1 calls out that the aggregator job has `needs: build` with no `if: always()`, so a single OS signing failure blocks the manifest for *all* OSes — a CI-policy gap to resolve before the first release tag.
+Per [`00-Tauri-Desktop-Shell.md`](00-Tauri-Desktop-Shell.md) §6 + §8 the manifest gets uploaded to the updates host (Cloudflare R2 / S3 / GitHub Pages) with a short cache TTL while the binary assets get long-cache headers. The aggregator job today has `needs: build` with no `if: always()`, so a single OS signing failure blocks the manifest for *all* OSes — a CI-policy gap to resolve before the first release tag.
 
 ## 4. What the user actually downloads
 
@@ -255,15 +255,15 @@ When the user is running xstream, `ps` shows ~1–2 processes for one Tauri inst
 
 - The Rust binary (the main process — Tauri shell, the `xstream_server::run(...)` task on `tokio`, the WebView host).
 - A WebView child process (managed by the OS WebView — WebKit on macOS / Linux, WebView2 on Windows).
-- Plus N ffmpeg subprocesses, one per active transcode job (capped at 3 by `config.transcode.maxConcurrentJobs` — [`01-Streaming-Layer.md`](01-Streaming-Layer.md) §"Counter-cap").
+- Plus N ffmpeg subprocesses, one per active transcode job (capped at 3 by `config.transcode.max_concurrent_jobs` — see [`docs/architecture/Streaming/`](../Streaming/README.md) for the streaming pipeline).
 
-Electron's interim shell shows ~5 processes per instance (Electron main + GPU helper + ≥1 renderer + Bun sidecar). The collapse to 1 main + 1 WebView + N ffmpeg is the operational consequence of the in-process server choice.
+An Electron equivalent would show ~5 processes per instance (Electron main + GPU helper + ≥1 renderer + sidecar server). The collapse to 1 main + 1 WebView + N ffmpeg is the operational consequence of the in-process server choice.
 
 ## 6. Runtime — what happens when the user clicks the icon
 
 1. **OS launches the Rust binary directly.** macOS reads `Info.plist` and locates `Contents/MacOS/xstream`. Windows runs the `.exe`. Linux executes the AppImage's mount stub or the `.deb`'s `/opt/xstream/xstream`. There is no Electron-runtime intermediation step.
 2. **`main.rs` boots Tauri.** `tauri::Builder::default()` constructs the app; `tauri::generate_context!()` wires the embedded resources into the WebView's `tauri://localhost/` scheme handler. The OS WebView is created (WebKit / WebView2).
-3. **`Builder::setup` runs the in-process server.** From [`08-Tauri-Packaging.md`](08-Tauri-Packaging.md) §3 Option A:
+3. **`Builder::setup` runs the in-process server.** From [`00-Tauri-Desktop-Shell.md`](00-Tauri-Desktop-Shell.md) §3 Option A:
    - Pick a free port by binding `127.0.0.1:0` and reading `.local_addr()`.
    - `tauri::async_runtime::spawn` `xstream_server::run(ServerConfig { ... })` with that port + `app.path().app_cache_dir()` for the cache DB + `app.path().app_data_dir()` for the identity DB + `ffmpeg_path::resolve(&app_handle)` for the bundled binaries.
    - The server runs on the same `tokio` runtime as Tauri itself — **same process, separate task**, not a child process. This is the load-bearing departure from Electron's sidecar model.
@@ -276,7 +276,7 @@ For a Tauri app the user's original "compile source into an executable" intuitio
 
 - The Rust binary actually *is* compiled per-OS by `cargo`. Your server code, the Tauri shell, and the public update key are all part of that binary's `.text` / `.rodata`.
 - The embedded frontend (React HTML/CSS/JS) is the only meaningful "data" surface — read at runtime by the WebView from bundle resources.
-- jellyfin-ffmpeg lives outside the binary as a portable subprocess for licensing + size reasons (see [`06-File-Handling-Layer.md`](06-File-Handling-Layer.md) §"manifest pinning") — but that is a deliberate carve-out, not the default model.
+- jellyfin-ffmpeg lives outside the binary as a portable subprocess for licensing + size reasons (see [`02-Shipping-FFmpeg.md`](02-Shipping-FFmpeg.md) §"manifest pinning") — but that is a deliberate carve-out, not the default model.
 
 So the data-vs-code distinction Electron has to constantly explain is small here. The mental model that needs adjusting is the *Electron-derived* one: Tauri does *not* ship a runtime + script bundle.
 
@@ -286,7 +286,7 @@ The user's intuition for Electron — *"updates are diffs of the built bundle"* 
 
 ### 7.1 Update detection
 
-The Rust binary registers `tauri_plugin_updater` and runs `updater.check().await` at startup and every 24h while the app is running. From [`08-Tauri-Packaging.md`](08-Tauri-Packaging.md) §6 the endpoint is:
+The Rust binary registers `tauri_plugin_updater` and runs `updater.check().await` at startup and every 24h while the app is running. From [`00-Tauri-Desktop-Shell.md`](00-Tauri-Desktop-Shell.md) §6 the endpoint is:
 
 ```
 https://updates.example.com/{{target}}/{{arch}}/{{current_version}}
@@ -304,9 +304,9 @@ Tauri compares `manifest.version` to the running binary's compile-time version (
 **This is where the biggest mental-model adjustment relative to Electron lives.** Tauri does **full-bundle replacement** on every platform — there is no bsdiff (Windows) or zsync (Linux) or Squirrel.Mac partial swap:
 
 - **macOS — full `.app.tar.gz` replacement.** Download the entire ~120 MB tarball, atomically replace the `.app` in `/Applications/`. Same shape as Squirrel.Mac except no Squirrel involvement; `tauri-plugin-updater` does the swap directly.
-- **Windows — full `.msi.zip` replacement.** Download the new MSI (zipped), re-run the installer in `passive` mode (`tauri.conf.json` `bundle.windows.installMode: "passive"` — see [`08-Tauri-Packaging.md`](08-Tauri-Packaging.md) §1). Replaces the entire install tree.
+- **Windows — full `.msi.zip` replacement.** Download the new MSI (zipped), re-run the installer in `passive` mode (`tauri.conf.json` `bundle.windows.installMode: "passive"` — see [`00-Tauri-Desktop-Shell.md`](00-Tauri-Desktop-Shell.md) §1). Replaces the entire install tree.
 - **Linux AppImage — full file replacement.** Download the new ~110 MB AppImage, replace the old file in-place (the AppImage is a single self-contained executable so this is one `rename(2)`-class operation).
-- **Linux `.deb` — not supported by the plugin.** Users on the `.deb` path follow distro-update mechanics (apt repo if we ever ship one; manual `dpkg -i` otherwise). [`08-Tauri-Packaging.md`](08-Tauri-Packaging.md) §10.5 flags this as an open item; the implication is in-app messaging needs to set the right expectation for `.deb` users.
+- **Linux `.deb` — not supported by the plugin.** Users on the `.deb` path follow distro-update mechanics (apt repo if we ever ship one; manual `dpkg -i` otherwise). [`00-Tauri-Desktop-Shell.md`](00-Tauri-Desktop-Shell.md) §10.5 flags this as an open item; the implication is in-app messaging needs to set the right expectation for `.deb` users.
 
 #### Why this trade
 
@@ -318,7 +318,7 @@ For xstream's release cadence (small user base, infrequent releases) this is acc
 
 There are no diffs. Each `.app.tar.gz` / `.msi.zip` / `.AppImage` is the entire post-build artefact, signed once by CI. Architects coming from Electron should expect every update to be a ~110 MB download.
 
-UX implication: the install should not interrupt mid-playback. `bundle.windows.installMode: passive` defers the install until quit; the macOS / Linux flows already do this. [`08-Tauri-Packaging.md`](08-Tauri-Packaging.md) §10.3 flags "pause checks during active stream" as an open UX question — defaulting to `windows.installMode: passive` and only running `update.download_and_install().await` after `app.quit()` is the recommended posture until that lands.
+UX implication: the install should not interrupt mid-playback. `bundle.windows.installMode: passive` defers the install until quit; the macOS / Linux flows already do this. [`00-Tauri-Desktop-Shell.md`](00-Tauri-Desktop-Shell.md) §10.3 flags "pause checks during active stream" as an open UX question — defaulting to `windows.installMode: passive` and only running `update.download_and_install().await` after `app.quit()` is the recommended posture until that lands.
 
 ### 7.4 Backward compatibility — where it actually lives
 
@@ -326,9 +326,9 @@ The bundle is fully replaceable — `tauri-plugin-updater` swaps the entire inst
 
 What needs backward compat is **external state** that survives an update:
 
-- **Two-DB schema split.** [`05-Database-Layer.md`](05-Database-Layer.md) §4.1 specifies two SQLite databases — the **cache DB** (`app_cache_dir/xstream.db`, wipe-safe) and the **identity DB** (`app_data_dir/xstream-identity.db`, must migrate forward). The cache DB carries transcode / segment / library state; wiping on schema change is acceptable. The identity DB carries user preferences, persistent session state, and (when sharing ships) node keypairs + trusted-peer records — it MUST migrate forward and MUST NOT be in `tmp/`-class storage. [`05-Database-Layer.md`](05-Database-Layer.md) §4.1 is emphatic about this. A new agent adding a "trusted peers" feature must put the table in the identity DB; this constraint outlives any single release.
-- **Segment cache layout.** [`06-File-Handling-Layer.md`](06-File-Handling-Layer.md) specifies the content-addressed cache key `(videoId, resolution, startS, endS) → JobId` decoupled from `jobId`. On ffmpeg manifest bumps the cache is wiped (segments may have different byte-shapes under a different ffmpeg version). The DB row shape is stable.
-- **Reverse-DNS bundle identifier.** `tauri.conf.json` `identifier: "com.example.xstream"` (placeholder). Once shipped to users, **this cannot change** without breaking auto-update for existing installs — `tauri-plugin-updater` uses it for path scoping. `Architecture-Review-2026-04-28.md` §6.1 flags this as a one-time pre-release decision; it must be locked before the first release tag.
+- **Two-DB schema split.** Two SQLite databases — the **cache DB** (`app_cache_dir/xstream.db`, wipe-safe) and the **identity DB** (`app_data_dir/xstream-identity.db`, must migrate forward). The cache DB carries transcode / segment / library state; wiping on schema change is acceptable. The identity DB carries user preferences, persistent session state, and (when sharing ships) node keypairs + trusted-peer records — it MUST migrate forward and MUST NOT be in `tmp/`-class storage. A new agent adding a "trusted peers" feature must put the table in the identity DB; this constraint outlives any single release. See [`docs/server/DB-Schema/`](../../server/DB-Schema/README.md).
+- **Segment cache layout.** Content-addressed cache key `(video_id, resolution, start_s, end_s) → job_id` decoupled from `job_id`. On ffmpeg manifest bumps the cache is wiped (segments may have different byte-shapes under a different ffmpeg version). The DB row shape is stable.
+- **Reverse-DNS bundle identifier.** `tauri.conf.json` `identifier: "com.example.xstream"` (placeholder). Once shipped to users, **this cannot change** without breaking auto-update for existing installs — `tauri-plugin-updater` uses it for path scoping. One-time pre-release decision; must be locked before the first release tag.
 
 ### 7.5 Signature verification at update time
 
@@ -343,7 +343,7 @@ Ed25519 verification runs **before** the update is applied. The flow:
 - **Electron** piggybacks on the OS code-signing chain (codesign on macOS, Authenticode on Windows) for update verification. The cert that signed the *installer* must match the cert in the running app for the update to be accepted. Linux AppImage uses `electron-builder`'s own per-app key (a separate concept from OS signing).
 - **Tauri** uses a single self-signed Ed25519 key for **all three platforms**. Operationally simpler — one key to rotate, one verifier in the plugin — but a compromised signing key is the most damaging incident class. An attacker with the Ed25519 private key can ship a "signed" update that runs arbitrary code on every user's machine.
 
-[`08-Tauri-Packaging.md`](08-Tauri-Packaging.md) §6 documents the key generation + CI secret storage; §7 calls out that rotation requires every user to reinstall once via a non-update path. `Architecture-Review-2026-04-28.md` §"What to track next" lists "code-signing identity rotation" as a runbook gap to close before the first cert rotates.
+[`00-Tauri-Desktop-Shell.md`](00-Tauri-Desktop-Shell.md) §6 documents the key generation + CI secret storage; §7 calls out that rotation requires every user to reinstall once via a non-update path. The macOS Developer ID cert rotation runbook is a gap to close before the first cert rotates.
 
 ### 7.6 When the update is applied
 
@@ -359,7 +359,7 @@ Ed25519 verification runs **before** the update is applied. The flow:
 | Common intuition (often Electron-derived) | Tauri reality |
 |---|---|
 | Desktop apps bundle a browser engine. | Tauri uses the OS WebView (WebKit on macOS/Linux, WebView2 on Windows). No Chromium ships. ~120 MB savings per installer. |
-| The server runs as a sidecar process the shell spawns. | The Rust server is an **in-process** task on the same `tokio` runtime as Tauri ([`08-Tauri-Packaging.md`](08-Tauri-Packaging.md) §3 Option A). 127.0.0.1 loopback is preserved so the binary stream protocol doesn't change, but `ps` shows one main process, not two. |
+| The server runs as a sidecar process the shell spawns. | The Rust server is an **in-process** task on the same `tokio` runtime as Tauri ([`00-Tauri-Desktop-Shell.md`](00-Tauri-Desktop-Shell.md) §3 Option A). 127.0.0.1 loopback is preserved so the binary stream protocol doesn't change, but `ps` shows one main process, not two. |
 | Updates are byte-level diffs of the built bundle. | True for Electron. **False for Tauri** — every platform downloads the full signed bundle (~110 MB). The wire shape is simpler; the bandwidth cost is higher. |
 | Code signing for updates is the OS chain. | OS signing (codesign, Authenticode) covers the **installer** trust path. The **update** signing key is a separate Ed25519 keypair baked into `tauri.conf.json`. Tauri verifies updates with its own key, not the OS's. |
 | The same React app behaves identically on every OS WebView. | Real concern. WebKit (macOS/Linux) and WebView2 (Windows) have small but non-zero behavioural deltas. Browser-spec features used by xstream's player (MSE, fetch streaming) need explicit per-WebView verification. See §9. |
@@ -367,25 +367,20 @@ Ed25519 verification runs **before** the update is applied. The flow:
 
 ## 9. Architecture-fit callouts
 
-Cross-cutting context already on record across `docs/migrations/rust-rewrite/` that constrains, justifies, or threatens the Tauri packaging story. Read alongside the per-section detail above.
+Cross-cutting constraints that justify or threaten the Tauri packaging story. Read alongside the per-section detail above.
 
-- **In-process server preserves the streaming invariant.** [`01-Streaming-Layer.md`](01-Streaming-Layer.md) pins the pull-based stream protocol (`axum::Body::from_stream` driven by an `mpsc::Receiver`, invariant #12). [`08-Tauri-Packaging.md`](08-Tauri-Packaging.md) §3 rejects Option B (Tauri IPC) because the binary length-prefixed `/stream/:jobId` framing would not survive IPC's JSON serialisation. Option A keeps every protocol on HTTP over loopback so the React client survives the migration unchanged — `00-Rust-Tauri-Port.md` §"Stable contracts" is explicit that this is non-negotiable.
-- **Two-DB split is forward-loaded for sharing.** [`05-Database-Layer.md`](05-Database-Layer.md) §4.1 splits identity (`app_data_dir`) from cache (`app_cache_dir`). Tauri's `app_data_dir()` / `app_cache_dir()` resolution maps cleanly onto the two-DB constraint — `xstream-identity.db` lives at `~/Library/Application Support/xstream/` (macOS), `$XDG_CONFIG_HOME/xstream/` (Linux), `%APPDATA%\xstream\` (Windows), and survives reinstall + update. This is what makes v1 packaging compatible with future peer-streaming nodes.
-- **HW-accel coverage on macOS / Windows is the largest open release risk.** `Architecture-Review-2026-04-28.md` §1 — VAAPI on Linux is the only currently-implemented HW path; VideoToolbox + D3D11VA / QSV are stubbed. Per the review, *"for 4K on Apple Silicon, software libx264 is a first-class UX regression — this isn't optional."* Tauri packaging does not unblock this; it must be unblocked separately before the macOS bundle ships.
-- **CI partial-build policy is unmade.** `Architecture-Review-2026-04-28.md` §5.1 — the `latest.json` aggregation in [`08-Tauri-Packaging.md`](08-Tauri-Packaging.md) §9 has `needs: build` with no `if: always()`, so one OS signing failure blocks the manifest for all OSes. A per-platform fallback policy is needed before the first release tag.
-- **Reverse-DNS identifier is one-shot.** `Architecture-Review-2026-04-28.md` §6.1 — `com.example.xstream` is a placeholder; once shipped, can't change without breaking auto-update for existing installs. One-time decision needed before any user binary.
-- **Linux `webkit2gtk` runtime version drift.** AppImage / `.deb` users get the OS's WebKit, not a bundled one. Older distros may ship a too-old `webkit2gtk` (MSE feature gaps, codec coverage holes, fetch-streaming bugs). Three options when this bites: document a minimum-version policy in release notes, require `webkit2gtk` ≥ X via `bundle.linux.deb.depends`, or build a Flatpak that ships its own WebKit. Not yet decided; flag here as an unresolved risk for the v1 Linux launch.
-- **Crash reporting is unmade.** `Architecture-Review-2026-04-28.md` §7.1 + [`08-Tauri-Packaging.md`](08-Tauri-Packaging.md) §10.6 — Tauri does not bundle a crash reporter. `sentry-tauri` is the standard integration; without it (and with telemetry off-by-default), production bug reports arrive context-free. Decide before v1.
-- **Coordination with the Electron interim ffmpeg-staging contract.** `Architecture-Review-2026-04-28.md` §8 — if the Electron interim shell uses a different ffmpeg staging strategy from `setup-ffmpeg --target=tauri-bundle`, the migration ends up cleaning up a parallel system. The two paths should share a contract before either ships at scale.
+- **In-process server preserves the streaming invariant.** [`docs/architecture/Streaming/00-Protocol.md`](../Streaming/00-Protocol.md) pins the pull-based stream protocol (`axum::Body::from_stream` driven by an `mpsc::Receiver`). [`00-Tauri-Desktop-Shell.md`](00-Tauri-Desktop-Shell.md) §3 rejects Option B (Tauri IPC) because the binary length-prefixed `/stream/:jobId` framing would not survive IPC's JSON serialisation. Option A keeps every protocol on HTTP over loopback so the React client doesn't change — non-negotiable.
+- **Two-DB split is forward-loaded for sharing.** Identity (`app_data_dir`) and cache (`app_cache_dir`) live in separate SQLite files. Tauri's `app_data_dir()` / `app_cache_dir()` resolution maps cleanly — `xstream-identity.db` lives at `~/Library/Application Support/xstream/` (macOS), `$XDG_CONFIG_HOME/xstream/` (Linux), `%APPDATA%\xstream\` (Windows), and survives reinstall + update. See [`docs/server/DB-Schema/`](../../server/DB-Schema/README.md).
+- **HW-accel coverage on macOS / Windows is the largest open release risk.** VAAPI on Linux is the only currently-implemented HW path; VideoToolbox + D3D11VA / QSV are stubbed. For 4K on Apple Silicon, software libx264 is a UX regression — this isn't optional. Tauri packaging does not unblock this; it must be unblocked separately before the macOS bundle ships. See [`docs/server/Hardware-Acceleration/`](../../server/Hardware-Acceleration/README.md).
+- **CI partial-build policy is unmade.** The `latest.json` aggregation in [`00-Tauri-Desktop-Shell.md`](00-Tauri-Desktop-Shell.md) §9 has `needs: build` with no `if: always()`, so one OS signing failure blocks the manifest for all OSes. A per-platform fallback policy is needed before the first release tag.
+- **Reverse-DNS identifier is one-shot.** `com.example.xstream` is a placeholder; once shipped, can't change without breaking auto-update for existing installs. One-time decision needed before any user binary.
+- **Linux `webkit2gtk` runtime version drift.** AppImage / `.deb` users get the OS's WebKit, not a bundled one. Older distros may ship a too-old `webkit2gtk` (MSE feature gaps, codec coverage holes, fetch-streaming bugs). Three options when this bites: document a minimum-version policy in release notes, require `webkit2gtk` ≥ X via `bundle.linux.deb.depends`, or build a Flatpak that ships its own WebKit. Unresolved risk for the v1 Linux launch.
+- **Crash reporting is unmade.** Tauri does not bundle a crash reporter. `sentry-tauri` is the standard integration; without it (and with telemetry off-by-default), production bug reports arrive context-free. Decide before v1.
 
 ## 10. Cross-references
 
-- [`08-Tauri-Packaging.md`](08-Tauri-Packaging.md) — the prescriptive spec; *what* to configure (Tauri config, CI matrix, secrets, signing checklist).
-- [`00-Rust-Tauri-Port.md`](00-Rust-Tauri-Port.md) — anchor doc: stable contracts (binary stream framing, two-DB split, sharing forward pointer).
-- [`01-Streaming-Layer.md`](01-Streaming-Layer.md) — pull-based stream protocol; why in-process server preserves the invariant.
-- [`05-Database-Layer.md`](05-Database-Layer.md) §4.1 — two-DB split rationale and the constraints that survive reinstalls.
-- [`06-File-Handling-Layer.md`](06-File-Handling-Layer.md) — ffmpeg manifest pinning + content-addressed segment cache key.
-- [`07-Bun-To-Rust-Migration.md`](07-Bun-To-Rust-Migration.md) — runtime model shift + phased migration order; phase F is `08`. This `09` is the internals walkthrough that complements the `08` spec.
-- [`Architecture-Review-2026-04-28.md`](Architecture-Review-2026-04-28.md) — open release risks called out in §9 above.
-- [`docs/architecture/Deployment/02-Electron-Packaging-Internals.md`](../../architecture/Deployment/02-Electron-Packaging-Internals.md) — the parallel doc for the Electron interim. Many patterns reappear here with a different shell; this doc's §§3–8 mirror that doc's §§3–8.
-- [`docs/architecture/Deployment/00-Interim-Desktop-Shell.md`](../../architecture/Deployment/00-Interim-Desktop-Shell.md) — for the Electron-vs-Tauri interim trade-off framing where it intersects this doc.
+- [`00-Tauri-Desktop-Shell.md`](00-Tauri-Desktop-Shell.md) — the prescriptive spec; *what* to configure (Tauri config, CI matrix, secrets, signing checklist).
+- [`02-Shipping-FFmpeg.md`](02-Shipping-FFmpeg.md) — manifest pinning + portable strategy + content-addressed segment cache key.
+- [`docs/architecture/Streaming/00-Protocol.md`](../Streaming/00-Protocol.md) — pull-based stream protocol; why in-process server preserves the invariant.
+- [`docs/server/DB-Schema/`](../../server/DB-Schema/README.md) — two-DB split rationale and the constraints that survive reinstalls.
+- [`docs/server/Hardware-Acceleration/`](../../server/Hardware-Acceleration/README.md) — HW-accel coverage; the macOS / Windows gap that blocks those bundles.

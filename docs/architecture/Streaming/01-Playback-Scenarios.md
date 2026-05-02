@@ -31,7 +31,7 @@ When the current chunk stream finishes, `startChunkSeries` chains to the next on
 - `removeConnection(id)` decrements on disconnect, stream completion, or the 90 s idle timeout.
 - When `connections` drops to `0` while the job is still `running`, `killJob(id)` sends `SIGTERM` to ffmpeg.
 
-ffmpeg dies within seconds of the last tab closing — no zombies. `chunker.startTranscodeJob` also enforces `config.transcode.maxConcurrentJobs` (default 3); a fourth simultaneous transcode returns a `CAPACITY_EXHAUSTED` typed error, surfaced as a playback error. Cap accounting (live, dying, inflight) lives in `server/src/services/ffmpegPool.ts` — see [`06-FfmpegPool.md`](06-FfmpegPool.md).
+ffmpeg dies within seconds of the last tab closing — no zombies. `chunker::start_transcode_job` also enforces `config.transcode.max_concurrent_jobs` (default 3); a fourth simultaneous transcode returns a `CAPACITY_EXHAUSTED` typed error, surfaced as a playback error. Cap accounting (live, dying, inflight) lives in `server-rust/src/services/ffmpeg_pool.rs` — see [`06-FfmpegPool.md`](06-FfmpegPool.md).
 
 ## Scenario 2: Back-pressure (pause and resume)
 

@@ -1,7 +1,4 @@
-//! AppConfig + RESOLUTION_PROFILES — the server-wide tunables. Mirrors
-//! `server/src/config.ts`. Step 2 wires the streaming-related subsections
-//! (`transcode` and `stream`); other sections (scan interval, OMDb match,
-//! library config) come on as later steps need them.
+//! AppConfig + RESOLUTION_PROFILES — the server-wide tunables.
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -112,22 +109,20 @@ pub struct AppConfig {
     /// OMDb API key — `None` means auto-match is disabled (the scanner
     /// skips the metadata fetch silently). Resolved at boot from the
     /// `OMDB_API_KEY` env var with a fallback to the persisted
-    /// `omdbApiKey` setting in `user_settings`. Mirrors Bun's
-    /// `getApiKey()` at `server/src/services/omdbService.ts:40-43`.
+    /// `omdbApiKey` setting in `user_settings`.
     pub omdb_api_key: Option<String>,
 }
 
-/// Library-scanner tunables. Mirrors `server/src/config.ts` `scanIntervalMs`
-/// and `SCAN_CONCURRENCY` from `server/src/services/libraryScanner.ts:33`.
+/// Library-scanner tunables.
 #[derive(Clone, Debug)]
 pub struct ScanConfig {
-    /// Period of the background re-scan loop. Bun default is 30 s. Env
+    /// Period of the background re-scan loop. Default is 30 s. Env
     /// override (`SCAN_INTERVAL_MS`) lands with the broader env-loading
     /// migration; today this is a constant.
     pub interval_ms: u64,
     /// Maximum number of files probed/fingerprinted simultaneously per
     /// library. Bounded so `ffprobe` fan-out and FD pressure stay sane on
-    /// large libraries — Bun uses 4 (`SCAN_CONCURRENCY`).
+    /// large libraries — default is 4.
     pub concurrency: usize,
 }
 

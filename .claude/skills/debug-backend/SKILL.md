@@ -1,42 +1,42 @@
 ---
 name: debug-backend
-description: Diagnose and fix issues in the Bun server — GraphQL API, streaming endpoint, chunker, DB. Use when server returns unexpected results, jobs get stuck, or streams fail.
+description: Diagnose and fix issues in the Rust server — GraphQL API, streaming endpoint, chunker, DB. Use when server returns unexpected results, jobs get stuck, or streams fail.
 allowed-tools: Bash(bun *) Bash(curl *) Bash(sqlite3 *) Bash(ffprobe *) Bash(ls *)
 ---
 
 # Debug Backend
 
-Diagnose and fix issues in the Bun server (GraphQL API, streaming endpoint, chunker, DB).
+Diagnose and fix issues in the Rust server (GraphQL API, streaming endpoint, chunker, DB).
 
 For ffmpeg/VAAPI/OMDb/dev-server-port triage, delegate to the `devops` subagent — it owns those playbooks and scans `.github/workflows/`, `scripts/`, and `.env.example` before answering.
 
 ## Start the server in dev mode
 
 ```bash
-cd server && bun run dev
+cd server-rust && bun run dev
 ```
 
-Server listens on `http://localhost:3001` by default (configured in `src/config.ts`).
+Server listens on `http://localhost:3002` by default (configured in `server-rust/src/config.rs`).
 
 ## GraphQL API debugging
 
 ### Run a query against the live server
 ```bash
-curl -s -X POST http://localhost:3001/graphql \
+curl -s -X POST http://localhost:3002/graphql \
   -H "Content-Type: application/json" \
   -d '{"query": "{ libraries { id name } }"}' | jq .
 ```
 
 ### Introspect the schema
 ```bash
-curl -s -X POST http://localhost:3001/graphql \
+curl -s -X POST http://localhost:3002/graphql \
   -H "Content-Type: application/json" \
   -d '{"query": "{ __schema { types { name } } }"}' | jq '.data.__schema.types[].name'
 ```
 
 ### Test a mutation
 ```bash
-curl -s -X POST http://localhost:3001/graphql \
+curl -s -X POST http://localhost:3002/graphql \
   -H "Content-Type: application/json" \
   -d '{
     "query": "mutation { scanLibraries { id name } }"
@@ -45,7 +45,7 @@ curl -s -X POST http://localhost:3001/graphql \
 
 ### Start a transcode job
 ```bash
-curl -s -X POST http://localhost:3001/graphql \
+curl -s -X POST http://localhost:3002/graphql \
   -H "Content-Type: application/json" \
   -d '{
     "query": "mutation Start($vid: ID!, $res: Resolution!) { startTranscode(videoId: $vid, resolution: $res) { id status } }",
@@ -57,10 +57,10 @@ curl -s -X POST http://localhost:3001/graphql \
 
 ```bash
 # Check the binary stream (first 1KB = length prefix + init segment header)
-curl -s "http://localhost:3001/stream/JOB_ID" | xxd | head -20
+curl -s "http://localhost:3002/stream/JOB_ID" | xxd | head -20
 
 # Stream from a specific segment offset
-curl -s "http://localhost:3001/stream/JOB_ID?from=5" | xxd | head -4
+curl -s "http://localhost:3002/stream/JOB_ID?from=5" | xxd | head -4
 ```
 
 The first 4 bytes are a big-endian uint32 (length of the following fMP4 init segment).
@@ -69,7 +69,7 @@ The first 4 bytes are a big-endian uint32 (length of the following fMP4 init seg
 
 ```bash
 # Open the SQLite DB directly (dev path)
-sqlite3 server/tmp/xstream.db
+sqlite3 tmp/xstream-rust.db
 
 # List all tables
 .tables
@@ -100,20 +100,20 @@ Still emitted as plain logs (useful for stdout tailing):
 - `[chunker] Job XXXXXXXX complete` — all segments done
 - `[chunker] Killing ffmpeg — <kill_reason>` — always includes `kill_reason` (e.g. `client_disconnected`, `server_shutdown`, `stream_idle_timeout`, `orphan_no_connection`)
 
-To see the full ffmpeg command, temporarily add a longer log in `services/chunker.ts`:
-```typescript
-console.log(`[chunker] cmd: ${cmd}`); // remove the slice
+To see the full ffmpeg command, temporarily widen the log in `server-rust/src/services/chunker.rs`:
+```rust
+tracing::info!(cmd = %cmd_str, "[chunker] cmd"); // drop any truncation
 ```
 
 Check the segment directory:
 ```bash
-ls -la server/tmp/segments/JOB_ID/
+ls -la tmp/segments-rust/JOB_ID/
 # Should see: init.mp4, segment_0000.m4s, segment_0001.m4s, ...
 ```
 
 Validate an fMP4 segment:
 ```bash
-ffprobe server/tmp/segments/JOB_ID/segment_0000.m4s 2>&1 | grep Stream
+ffprobe tmp/segments-rust/JOB_ID/segment_0000.m4s 2>&1 | grep Stream
 ```
 
 ## Common issues
@@ -129,13 +129,13 @@ ffprobe server/tmp/segments/JOB_ID/segment_0000.m4s 2>&1 | grep Stream
 ## Running server tests
 
 ```bash
-cd server && bun test
+cd server-rust && cargo test
 
-# Single file
-bun test src/db/queries/jobs.test.ts
+# Single file / module
+cargo test --package xstream-server db::queries::jobs
 
 # Watch
-bun test --watch
+cargo watch -x test     # requires `cargo install cargo-watch`
 ```
 
 

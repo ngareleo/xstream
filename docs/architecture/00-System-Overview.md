@@ -1,8 +1,8 @@
 # System Overview
 
-xstream is split into two workspaces: a Bun server and an Rsbuild/React client. The server handles media indexing, video transcoding, and streaming. The client renders a browsable library and a streaming video player.
+xstream is split into two workspaces: a Rust server and an Rsbuild/React client. The server handles media indexing, video transcoding, and streaming. The client renders a browsable library and a streaming video player.
 
-> **Note on the server implementation:** The Bun/JS server is a prototype for rapid architecture validation. A Rust rewrite is planned for production performance at 4K bitrates. The GraphQL schema and the `/stream/:jobId` binary protocol are the stable contracts — the client will require no changes across the rewrite provided these interfaces stay compatible. See `CLAUDE.md` for the exact compatibility requirements.
+> **Note on the server implementation:** The server is written in Rust for production performance at 4K bitrates. The GraphQL schema and the `/stream/:jobId` binary protocol are stable interfaces. See `CLAUDE.md` for the exact interface compatibility details.
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -17,20 +17,20 @@ xstream is split into two workspaces: a Bun server and an Rsbuild/React client. 
                                                              ││││
                          HTTP/WebSocket                      ││││
 ┌────────────────────────────────────────────────────────────┼┼┼┼─┐
-│  Server (Bun :3001)                                        ││││ │
+│  Server (Rust :3002)                                       ││││ │
 │                                                            ││││ │
-│  POST /graphql ── graphql-yoga ── resolvers ───────────────┘│││ │
-│  WS  /graphql  ── graphql-yoga ── subscriptions ────────────┘││ │
-│  GET /stream/:jobId ── stream.ts ────────────────────────────┘│ │
+│  POST /graphql ── async-graphql + axum ── resolvers ──────┘│││ │
+│  WS  /graphql  ── async-graphql + axum ── subscriptions ───┘││ │
+│  GET /stream/:jobId ── routes::stream ──────────────────────┘│ │
 │                              │                                 │ │
-│                         jobStore (memory)                      │ │
+│                         job_store (memory)                     │ │
 │                              │                                 │ │
 │              ┌───────────────┴──────────────────┐              │ │
 │              │                                  │              │ │
-│         chunker.ts                        libraryScanner.ts    │ │
-│         ffmpeg → .m4s segments            ffprobe → DB         │ │
+│         chunker                       library_scanner          │ │
+│         ffmpeg → .m4s segments       ffprobe → DB             │ │
 │              │                                  │              │ │
-│         tmp/segments/<jobId>/            SQLite (tmp/xstream.db)  │ │
+│         tmp/segments/<jobId>/           SQLite (tmp/xstream.db)  │ │
 │                                                │              │ │
 │                                         db/queries/           │ │
 └───────────────────────────────────────────────────────────────┘
@@ -42,21 +42,20 @@ xstream is split into two workspaces: a Bun server and an Rsbuild/React client. 
 
 | Component | File | Responsibility |
 |---|---|---|
-| Entry point | `src/index.ts` | Startup sequence, `Bun.serve()`, route dispatch |
-| Config | `src/config.ts` | Dev/prod AppConfig, resolution profiles |
-| DB connection | `src/db/index.ts` | SQLite singleton with WAL mode and foreign keys enabled; `closeDb()` for graceful shutdown |
-| Migrations | `src/db/migrate.ts` | Idempotent schema creation on every startup |
-| Query layer | `src/db/queries/` | All SQL — one file per table |
-| Library scanner | `src/services/libraryScanner.ts` | Walks media directories, runs ffprobe + content fingerprint concurrently per file, upserts DB |
-| Scan store | `src/services/scanStore.ts` | In-memory scan state pub/sub; exposes `isScanRunning`, `markScanStarted/Ended`, async `subscribeToScan()` |
-| Chunker | `src/services/chunker.ts` | Manages ffmpeg jobs, watches output dir, updates jobStore + DB. Process-pool concerns (cap, kill/SIGKILL escalation, `killAllJobs()` for graceful shutdown) live in `src/services/ffmpegPool.ts`. |
-| Job store | `src/services/jobStore.ts` | In-memory map of active jobs (source of truth for streaming) |
-| GraphQL handler | `src/routes/graphql.ts` | graphql-yoga instance with schema and CORS config |
-| Stream handler | `src/routes/stream.ts` | Reads segments from jobStore, writes length-prefixed binary frames |
-| Schema | `src/graphql/schema.ts` | SDL type definitions |
-| Relay helpers | `src/graphql/relay.ts` | `toGlobalId` / `fromGlobalId` |
-| Enum mappers | `src/graphql/mappers.ts` | Converts between GQL enum strings and internal values |
-| Resolvers | `src/graphql/resolvers/` | Query, Mutation, Subscription implementations |
+| Entry point | `src/main.rs` | Startup sequence, axum server bind, route dispatch |
+| Config | `src/config.rs` | Dev/prod AppConfig, resolution profiles |
+| DB connection | `src/db/mod.rs` | SQLite singleton with WAL mode and foreign keys enabled; graceful shutdown handling |
+| Migrations | `src/db/migrate.rs` | Idempotent schema creation on every startup |
+| Query layer | `src/db/queries/` | All SQL — one module per table |
+| Library scanner | `src/services/library_scanner.rs` | Walks media directories, runs ffprobe + content fingerprint concurrently per file, upserts DB |
+| Scan state | `src/services/scan_state.rs` | In-memory scan state pub/sub; exposes scan running status and subscription |
+| Chunker | `src/services/chunker.rs` | Manages ffmpeg jobs, watches output dir, updates job_store + DB. Process-pool concerns (cap, kill/SIGKILL escalation) live in `src/services/ffmpeg_pool.rs`. |
+| Job store | `src/services/job_store.rs` | In-memory map of active jobs (source of truth for streaming) |
+| GraphQL handler | `src/routes/graphql.rs` | async-graphql + axum integration with schema and CORS config |
+| Stream handler | `src/routes/stream.rs` | Reads segments from job_store, writes length-prefixed binary frames |
+| Schema | `src/graphql/mod.rs` | async-graphql schema with derive macros |
+| Relay helpers | `src/relay.rs` | `to_global_id` / `from_global_id` |
+| Resolvers | `src/graphql/query.rs`, `src/graphql/mutation.rs`, `src/graphql/subscription.rs` | Query, Mutation, Subscription implementations |
 
 ### Client
 

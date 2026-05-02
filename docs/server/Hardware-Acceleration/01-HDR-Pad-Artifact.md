@@ -16,7 +16,7 @@ The original title of this file was "HDR Pad Artifact" because the first symptom
 
 ## Current implementation
 
-Two filter-chain variants (`vaapiVideoOptions` in `server/src/services/ffmpegFile.ts`), selected by the `isHdr` flag from `ffprobe` metadata:
+Two filter-chain variants (`vaapi_video_options` in `server-rust/src/services/ffmpeg_file.rs`), selected by the `isHdr` flag from `ffprobe` metadata:
 
 **SDR path:**
 ```
@@ -49,9 +49,11 @@ Known instance: `-ss 0 -t 30` on VAAPI HDR 4K (reproduced traces `1bac05bd…`, 
 
 **Structural fix (tracked as OBS-STDERR-001 in `docs/todo.md`):** capture ffmpeg stderr in the `transcode.job` span (a `stderr_tail` attribute already exists for cascade-error events but not for `transcode_complete`), then detect `segment_count == 0` after a clean exit and force the cascade to fall through to the next tier.
 
+
+
 ## Three-tier failure cascade
 
-`server/src/services/chunker.ts::runFfmpeg` retries each chunk on encoder failure, walking down a cascade of fallback strategies:
+`server-rust/src/services/chunker.rs::run_ffmpeg` retries each chunk on encoder failure, walking down a cascade of fallback strategies:
 
 1. **Fast VAAPI** — the filter chain above.
 2. **VAAPI with sw-pad** — HW decode + HW scale, CPU padding (`hwdownload,format=nv12,pad=...,hwupload`). Only attempted for SDR — HDR sources skip this tier because `pad_vaapi` failures tend to mean the whole surface-handling path is unhappy, and sw-pad's `hwupload` fails on the CPU NV12 it produces.
@@ -85,7 +87,9 @@ On `transcode.job`:
 
 ## When touching the VAAPI branch
 
-1. **Always test with an HDR 4K source.** SDR-only smoke tests miss this whole file's worth of gotchas. Use the encode test (`server/src/services/__tests__/chunker.encode.test.ts` — Furiosa fixture) when `XSTREAM_TEST_MEDIA_DIR` is configured.
+1. **Always test with an HDR 4K source.** SDR-only smoke tests miss this whole file's worth of gotchas. Use the encode-pipeline tests (see [`docs/architecture/Testing/01-Encode-Pipeline-Tests.md`](../../architecture/Testing/01-Encode-Pipeline-Tests.md) — Furiosa fixture) when `XSTREAM_TEST_MEDIA_DIR` is configured.
 2. **Never add `-colorspace bt709 -color_primaries bt709 -color_trc bt709` as output flags** even if a forum suggests it. See the symptoms table.
+
+
 3. **Driver requirement**: jellyfin-ffmpeg + Intel iHD driver ≥ 22.x (for `tonemap_vaapi` support). `bun run setup-ffmpeg` installs the pinned jellyfin-ffmpeg which bundles a compatible driver.
 4. **HDR 4K on VAAPI has exactly 2 effective tiers, not 3.** The tier-2 retry is short-circuited for HDR because HDR produces an identical filter chain at both tiers (no pad in either), so retrying would just fail the same way.

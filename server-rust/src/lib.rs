@@ -193,8 +193,7 @@ pub async fn run(config: ServerConfig) -> AppResult<()> {
     }
 
     // OMDb auto-match key resolution. Env wins; the persisted
-    // `omdbApiKey` user setting is the fallback (mirrors
-    // `server/src/services/omdbService.ts:40-43`). `None` is fine — the
+    // `omdbApiKey` user setting is the fallback. `None` is fine — the
     // scanner skips auto-match silently when no key is configured.
     let omdb_key_from_env = std::env::var("OMDB_API_KEY").ok().filter(|s| !s.is_empty());
     let omdb_key_from_db = match db::get_setting(&db, "omdbApiKey") {
@@ -213,10 +212,10 @@ pub async fn run(config: ServerConfig) -> AppResult<()> {
 
     let ctx = AppContext::new(db, app_config, Arc::new(ffmpeg_paths), hw_accel);
 
-    // Background re-scan loop. Mirrors Bun's 30 s `setInterval` at
-    // `server/src/index.ts:63-74`. Re-entry is guarded inside
-    // `scan_libraries` via `ScanState::mark_started`, so two ticks that
-    // overlap a long scan don't double-walk.
+    // Background re-scan loop ticking every `scan.interval_ms` (default
+    // 30 s). Re-entry is guarded inside `scan_libraries` via
+    // `ScanState::mark_started`, so two ticks that overlap a long scan
+    // don't double-walk.
     services::library_scanner::spawn_periodic_scan(ctx.clone());
 
     let state = AppState::new(ctx);

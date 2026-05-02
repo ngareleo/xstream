@@ -134,8 +134,7 @@ pub use queries::watchlist::{
 
 // ── Tests ────────────────────────────────────────────────────────────────────
 //
-// Mirrors `server/src/db/queries/__tests__/pragmas.test.ts`. The two
-// connection-time PRAGMAs are part of the data-correctness contract:
+// The two connection-time PRAGMAs are part of the data-correctness contract:
 //
 // - `journal_mode = wal` keeps reads safe against the writer (chunker /
 //   scanner / mutation handlers all hit the same DB; WAL is what prevents

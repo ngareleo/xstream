@@ -1,26 +1,31 @@
 # xstream
 
-High-resolution web streaming with a full resolution ladder (240p → 4K). The server transcodes video files on demand using ffmpeg and streams fMP4 segments over HTTP. The client renders them using the browser's Media Source Extensions (MSE) API.
+High-resolution media streaming with a full resolution ladder (240p → 4K). The Rust server transcodes video files on demand using ffmpeg and streams fMP4 segments over HTTP. The client renders them using the browser's Media Source Extensions (MSE) API. The whole thing ships as a [Tauri](https://v2.tauri.app/) desktop bundle for Linux, Windows, and macOS — see [`docs/architecture/Deployment/`](docs/architecture/Deployment/README.md).
 
 ## Stack
 
-- **Server (Bun, today):** Bun, graphql-yoga, SQLite (`bun:sqlite`), fluent-ffmpeg
-- **Server (Rust, Step 1 of the migration):** axum + async-graphql 7 + rusqlite — runs side-by-side with Bun on `localhost:3002`. Toggle the `useRustGraphQL` flag in Settings → Flags to route Relay at it. See [`docs/migrations/rust-rewrite/Plan/01-GraphQL-And-Observability.md`](docs/migrations/rust-rewrite/Plan/01-GraphQL-And-Observability.md).
-- **Client:** React, Relay, Griffel (atomic CSS-in-JS), Rsbuild, React Router
+- **Server:** Rust + tokio, axum, async-graphql 7, rusqlite (bundled), `tokio::process` driving bundled jellyfin-ffmpeg.
+- **Desktop shell:** Tauri v2 — system WebView; the Rust server runs as a tokio task in the same process on a free `127.0.0.1:<port>` loopback.
+- **Client:** React 18, Relay, Griffel (atomic CSS-in-JS), Rsbuild, React Router v6.
 
 ---
 
 ## Prerequisites
 
-- [Bun](https://bun.sh) v1.1+
-- [Rust](https://www.rust-lang.org/tools/install) stable (1.75+) via `rustup` — required for the Rust GraphQL server. The `server-rust` workspace's dev script prepends `~/.cargo/bin` to PATH automatically, so once rustup is installed `bun run dev` finds `cargo` even in non-interactive shells.
+- [Rust](https://www.rust-lang.org/tools/install) stable (1.75+) via `rustup` — required for the server. The `server-rust` workspace's dev script prepends `~/.cargo/bin` to PATH automatically, so once rustup is installed `bun run dev` finds `cargo` even in non-interactive shells.
+- [Bun](https://bun.sh) v1.1+ — used for the client toolchain (Rsbuild, Relay compiler, lint-staged) and to invoke `scripts/setup-ffmpeg`.
 - [`mprocs`](https://github.com/pvolok/mprocs) — TUI dev orchestrator. One-time install (~2 min, cached after):
   ```bash
   cargo install --locked mprocs
   ```
   `bun run dev` exits 127 with the install hint above if `mprocs` isn't on PATH. A fallback `bun run dev:plain` exists for headless contexts where you don't want the TUI.
-- `ffmpeg` accessible via `@ffmpeg-installer/ffmpeg` (installed automatically as a dependency — no system ffmpeg required)
-- [Docker](https://docs.docker.com/get-docker/) (required for Seq log management — optional for basic development)
+- [`cargo-tauri`](https://v2.tauri.app/start/prerequisites/) — only required to run / build the desktop shell:
+  ```bash
+  cargo install tauri-cli --version '^2' --locked
+  ```
+- [Docker](https://docs.docker.com/get-docker/) — required for the local Seq log container; optional for basic development.
+
+ffmpeg is provisioned per-project via `bun run setup-ffmpeg`; no system ffmpeg is required and none is used.
 
 ---
 
@@ -30,11 +35,20 @@ High-resolution web streaming with a full resolution ladder (240p → 4K). The s
 
 ```bash
 bun install
+bun run setup-ffmpeg     # downloads + verifies pinned jellyfin-ffmpeg into vendor/ffmpeg/<platform>/
 ```
 
-### 2. Configure media libraries
+### 2. Generate Relay artifacts
 
-Libraries live in the SQLite DB. Add one via the `createLibrary` GraphQL mutation once the server is running, e.g. from a GraphQL client pointed at `http://localhost:3001/graphql`:
+The client uses Relay; compiler artifacts must exist before the client can build. The Rust server's GraphQL schema is fetched live for compilation in dev (or pre-generated for CI):
+
+```bash
+bun run --filter client relay
+```
+
+### 3. Configure media libraries
+
+Libraries live in the SQLite DB. Add one via the `createLibrary` GraphQL mutation once the server is running, e.g. from a GraphQL client pointed at `http://localhost:3002/graphql`:
 
 ```graphql
 mutation {
@@ -52,23 +66,11 @@ mutation {
 
 `path` must be an absolute path to a directory containing video files. Files can be nested in subdirectories. Use `deleteLibrary` / `updateLibrary` to manage entries; the next scan cycle picks up changes automatically.
 
-### 3. Generate Relay artifacts
-
-The client uses Relay for GraphQL queries. The compiler artifacts need to be generated before the client can build.
-
-`server/schema.graphql` is committed to the repository and must be kept in sync with `server/src/graphql/schema.ts` manually whenever the schema changes. Once it is up to date, regenerate the client artifacts:
-
-```bash
-cd client
-bun relay
-cd ..
-```
-
 ---
 
 ## Running in Development
 
-Start the Bun server, the Rust server, and the client in parallel via the `mprocs` TUI:
+Start the Rust server and the client in parallel via the `mprocs` TUI:
 
 ```bash
 bun run dev
@@ -78,11 +80,10 @@ This opens a terminal UI with one pane per workspace:
 
 | Workspace | Port | Purpose |
 |---|---|---|
-| `server` (Bun) | `3001` | Default GraphQL + `/stream/:jobId` (chunker, ffmpeg) |
-| `server-rust` (Rust) | `3002` | Step 1 cutover GraphQL — opt-in via `useRustGraphQL` flag |
-| `client` (Rsbuild) | `5173` | Webview; proxies `/graphql` and `/stream` to Bun |
+| `server-rust` | `3002` | GraphQL + `/stream/:job_id` (chunker, ffmpeg) |
+| `client` (Rsbuild) | `5173` | WebView dev server |
 
-Each pane has independent scrollback so you can debug one process without losing another's output. Keybindings:
+Each pane has independent scrollback. Keybindings:
 
 | Key | Action |
 |---|---|
@@ -93,11 +94,21 @@ Each pane has independent scrollback so you can debug one process without losing
 | `q` | Quit — gracefully stops everything |
 | `?` | In-app help |
 
-Open [http://localhost:5173](http://localhost:5173). The Bun server scans your configured media libraries on startup; you should see your videos within a few seconds. Large libraries with many files take longer to ffprobe.
+Open [http://localhost:5173](http://localhost:5173). The server scans your configured media libraries on startup; you should see your videos within a few seconds. Large libraries with many files take longer to ffprobe.
+
+### Tauri shell
+
+To run the full desktop app (Rust server + client embedded in a Tauri WebView):
+
+```bash
+bun run tauri:dev
+```
+
+The Tauri shell picks a free loopback port, spawns the Rust server in-process on it, and injects the port into the WebView. See [`docs/architecture/Deployment/00-Tauri-Desktop-Shell.md`](docs/architecture/Deployment/00-Tauri-Desktop-Shell.md).
 
 ### Fallback / individual processes
 
-If you don't want the TUI (headless terminal, log capture, scripted contexts), use the plain interleaved variant:
+For headless terminals or scripted contexts:
 
 ```bash
 bun run dev:plain   # bun run --filter '*' dev — colored prefixes, no TUI
@@ -106,40 +117,23 @@ bun run dev:plain   # bun run --filter '*' dev — colored prefixes, no TUI
 Or start workspaces individually in separate terminals:
 
 ```bash
-# Terminal 1 — Bun server on :3001
-cd server && bun run dev
+# Terminal 1 — Rust server on :3002
+cd server-rust && bun run dev
 
-# Terminal 2 — Rust server on :3002 (skip if you don't need the cutover path)
-cd server-rust && cargo run
-
-# Terminal 3 — client on :5173
+# Terminal 2 — client on :5173
 cd client && bun run dev
 ```
-
-### Toggling the Rust GraphQL server
-
-Navigate to **Settings → Flags → Use Rust GraphQL server (Step 1 cutover)**. When ON, Relay points at `http://localhost:3002/graphql` instead of the proxied Bun route. Library / Watchlist / Settings work; **the player page is knowingly broken** because `/stream/:jobId` and the chunker land in Step 2 of the Rust port. The flag is mirrored to `localStorage` (key `flag.useRustGraphQL`); a page reload is required after toggling because the Relay environment initialises before the GraphQL hydration query runs. The two **Bulk actions** buttons in the same tab let you wipe local overrides (server values become authoritative on next reload) or reset every flag back to its registry default.
-
-### SDL parity check
-
-Whenever the Bun schema (`server/src/graphql/schema.ts`) changes, the Rust server's introspection must keep matching. Run the gate from the worktree root with both servers up:
-
-```bash
-RUST_GRAPHQL_URL=http://127.0.0.1:3002/graphql bun run scripts/check-sdl-parity.ts
-```
-
-It exits 0 on parity and 1 with a structural diff on drift (added / removed types, fields, args, defaults, enum variants, union members).
 
 ---
 
 ## Using the App
 
-1. Open the app — your media libraries are listed with all indexed videos
-2. Click **Rescan Libraries** to pick up newly added files without restarting
-3. Click a video to open the player
-4. The player defaults to the highest resolution the source file supports
-5. Use the resolution badges in the control bar to switch quality (240p → 4K)
-6. The first play triggers a transcode job — playback begins after the first 1–2 segments are ready (~2–4 seconds)
+1. Open the app — your media libraries are listed with all indexed videos.
+2. Click **Rescan Libraries** to pick up newly added files without restarting.
+3. Click a video to open the player.
+4. The player defaults to the highest resolution the source file supports.
+5. Use the resolution badges in the control bar to switch quality (240p → 4K).
+6. The first play triggers a transcode job — playback begins after the first 1–2 segments are ready (~2–4 seconds).
 
 ---
 
@@ -147,20 +141,20 @@ It exits 0 on parity and 1 with a structural diff on drift (added / removed type
 
 ```
 xstream/
-├── server/                # Bun server (GraphQL + streaming)
-├── server-rust/           # Rust server — Step 1 of the migration (GraphQL + observability)
+├── server-rust/           # Rust server (GraphQL + streaming + chunker + DB)
+├── src-tauri/             # Tauri shell crate (bundle + updater)
 ├── client/                # React client (Rsbuild)
-├── scripts/               # tooling — incl. check-sdl-parity.ts (the Step 1 gate)
+├── scripts/               # tooling — ffmpeg-manifest.json, setup-ffmpeg.ts, dev shells
 ├── docs/                  # architecture documentation
-│   └── migrations/rust-rewrite/  # the Rust port playbook + layer references
 ├── Cargo.toml             # Rust workspace root
+├── package.json           # Bun workspace root (client + server-rust + scripts)
 ├── mprocs.yaml            # dev orchestrator config — one process per workspace
 └── tmp/                   # generated at runtime (gitignored)
-    ├── xstream.db            # SQLite database (shared between Bun and Rust)
-    └── segments/          # ffmpeg segment cache
+    ├── xstream-rust.db    # SQLite database (dev)
+    └── segments-rust/     # ffmpeg segment cache (dev)
 ```
 
-See [`docs/architecture/00-System-Overview.md`](docs/architecture/00-System-Overview.md) for a full system overview.
+See [`docs/architecture/00-System-Overview.md`](docs/architecture/00-System-Overview.md) for a full system overview, and [`docs/SUMMARY.md`](docs/SUMMARY.md) for the 30-second orientation.
 
 ---
 
@@ -170,11 +164,11 @@ Docs are organised as a nested knowledge base under `docs/` — super-domains (`
 
 | Area | Contents |
 |---|---|
-| [`docs/architecture/`](docs/architecture/README.md) | Streaming protocol, playback scenarios, Relay contract, observability, startup, deployment |
+| [`docs/architecture/`](docs/architecture/README.md) | Streaming protocol, playback scenarios, Relay contract, observability, startup, deployment, sharing, testing |
 | [`docs/client/`](docs/client/README.md) | Client-only topics: feature flags, debugging playbooks |
 | [`docs/server/`](docs/server/README.md) | Server-only topics: config, GraphQL schema, DB schema, hardware acceleration |
-| [`docs/code-style/`](docs/code-style/README.md) | Invariants, naming, conventions, anti-patterns |
-| [`docs/design/`](docs/design/README.md) | UI design spec |
+| [`docs/code-style/`](docs/code-style/README.md) | Invariants, naming, conventions, anti-patterns, testing policy |
+| [`docs/design/`](docs/design/README.md) | UI design spec (Prerelease frozen, Release active) |
 | [`docs/product/`](docs/product/README.md) | Product spec, customers, roadmap |
 
 ---
@@ -221,20 +215,23 @@ See [`docs/architecture/Observability/`](docs/architecture/Observability/README.
 
 ## Production
 
+The release artefact is the Tauri desktop bundle — see [`docs/architecture/Deployment/`](docs/architecture/Deployment/README.md) for the per-OS bundle layouts, code-signing, and auto-update flow.
+
+For a headless / dev-style production run of the Rust server (without the Tauri shell):
+
 ```bash
-NODE_ENV=production \
-  PORT=8080 \
+DB_PATH=/var/xstream/xstream.db \
   SEGMENT_DIR=/var/xstream/segments \
-  DB_PATH=/var/xstream/xstream.db \
-  bun run start
+  RUST_LOG=info \
+  cargo run --release -p xstream-server
 ```
 
-In production, create library entries with `env: "prod"` (the `createLibrary` mutation accepts an `env` arg) and point `SEGMENT_DIR` and `DB_PATH` to persistent storage (not `/tmp`).
+Create library entries with `env: "prod"` (the `createLibrary` mutation accepts an `env` arg) and point `DB_PATH` / `SEGMENT_DIR` at persistent storage (not `/tmp`).
 
 ---
 
 ## Development Notes
 
-- The `tmp/` directory is gitignored. Delete it to reset all cached segments and the database.
-- After any GraphQL schema change, re-run `bun relay` inside `client/` to regenerate Relay artifacts.
-- Transcode jobs are cached by `(videoPath + resolution + timeRange)`. Re-requesting the same combination serves segments from the existing job immediately.
+- The `tmp/` directory is gitignored. Delete it (`bun run clean --all`) to reset all cached segments and the database.
+- After any GraphQL schema change, re-run `bun run --filter client relay` to regenerate Relay artifacts.
+- Transcode jobs are cached by `(video_id + resolution + start_s + end_s)`. Re-requesting the same combination serves segments from the existing job immediately.

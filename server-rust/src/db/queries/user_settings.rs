@@ -1,5 +1,5 @@
 //! Key/value settings (the `user_settings` table backs the client's flag
-//! registry persistence). Mirrors `server/src/db/queries/userSettings.ts`.
+//! registry persistence).
 
 use rusqlite::{params, OptionalExtension};
 
@@ -54,9 +54,9 @@ mod tests {
     #[test]
     fn set_then_get_round_trips_the_value() {
         let db = fresh_db();
-        set_setting(&db, "flag.useRustBackend", "1").expect("set");
+        set_setting(&db, "flag.experimentalBuffer", "1").expect("set");
         assert_eq!(
-            get_setting(&db, "flag.useRustBackend").expect("get"),
+            get_setting(&db, "flag.experimentalBuffer").expect("get"),
             Some("1".to_string())
         );
     }

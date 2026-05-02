@@ -1,5 +1,4 @@
-//! Trace-ID-keyed playback session log. Mirrors
-//! `server/src/db/queries/playbackHistory.ts`.
+//! Trace-ID-keyed playback session log.
 
 use rusqlite::{params, Row};
 

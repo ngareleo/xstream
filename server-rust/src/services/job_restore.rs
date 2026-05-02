@@ -1,4 +1,4 @@
-//! Boot-time job restoration sweep. Mirrors `server/src/services/jobRestore.ts`.
+//! Boot-time job restoration sweep.
 //!
 //! Any job still in `status = 'running'` when the server died was interrupted
 //! mid-encode. Its segment directory may contain a partial (truncated) output

@@ -16,8 +16,8 @@ http = "1"
 async-trait = "0.1"
 futures-util = "0.3"
 
-# Telemetry — Bun ships traces+logs via OTLP/HTTP protobuf to Seq at
-# http://localhost:5341/ingest/otlp; the Rust port matches that.
+# Telemetry — traces + logs over OTLP/HTTP protobuf to Seq at
+# http://localhost:5341/ingest/otlp.
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
 opentelemetry = "0.27"

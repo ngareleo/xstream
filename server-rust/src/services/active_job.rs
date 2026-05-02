@@ -1,5 +1,5 @@
 //! In-memory `ActiveJob` state — the chunker's source of truth for live
-//! transcodes. Mirrors the `ActiveJob` interface in `server/src/types.ts`.
+//! transcodes.
 //!
 //! The DB row (`transcode_jobs` table) is the audit / restart-recovery
 //! mirror; this struct is what the stream route actually reads while
