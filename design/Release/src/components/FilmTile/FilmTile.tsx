@@ -1,5 +1,6 @@
 import { type FC } from "react";
 import { type Film } from "../../data/mock.js";
+import { MediaKindBadge } from "../MediaKindBadge/MediaKindBadge.js";
 import { Poster } from "../Poster/Poster.js";
 import { useFilmTileStyles } from "./FilmTile.styles.js";
 
@@ -13,6 +14,9 @@ interface FilmTileProps {
  * Poster card used by Library carousels and search results. Click sends
  * the parent a notification — the page decides whether to open detail
  * or navigate to the player.
+ *
+ * A small kind badge in the top-left corner distinguishes movies from
+ * TV series at a glance — see `<MediaKindBadge variant="tile">`.
  */
 export const FilmTile: FC<FilmTileProps> = ({ film, progress, onClick }) => {
   const s = useFilmTileStyles();
@@ -24,6 +28,7 @@ export const FilmTile: FC<FilmTileProps> = ({ film, progress, onClick }) => {
           alt={film.title ?? film.filename}
           className={s.image}
         />
+        <MediaKindBadge kind={film.kind} variant="tile" />
         {progress !== undefined && (
           <div className={s.progressTrack}>
             <div

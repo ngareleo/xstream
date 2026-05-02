@@ -8,16 +8,44 @@
  *
  * Mirrors the Profile / Film / WatchlistItem shapes used by the Prerelease
  * lab so future refactors that share types stay trivial.
+ *
+ * TV shows are modelled as `Film` records with `kind: "series"` and a
+ * populated `seasons` array. Per-episode availability lives on
+ * `Episode.available` so the UI can render "12 of 22 on disk" summaries.
  */
+
+export interface Episode {
+  number: number;
+  title: string;
+  duration: string;
+  available: boolean;
+  resolution?: "4K" | "1080p" | "720p";
+  /** True if the user has watched this episode end-to-end. */
+  watched?: boolean;
+  /** 0–100. Set when the user paused mid-episode. Mutually exclusive
+   *  with `watched=true` — a finished episode has progress reset. */
+  progress?: number;
+}
+
+export interface Season {
+  number: number;
+  episodes: Episode[];
+}
+
+export type MediaKind = "movie" | "series";
 
 export interface Film {
   id: string;
+  /** Discriminator for movie vs TV-show entries. Series carry `seasons`. */
+  kind: MediaKind;
   title: string | null;
   year: number | null;
   genre: string | null;
+  /** For series, holds the show's creator(s). */
   director: string | null;
   cast: string[];
   rating: number | null;
+  /** Movie runtime, or representative "~55m / ep" for series. */
   duration: string;
   resolution: "4K" | "1080p" | "720p";
   codec: "HEVC" | "H264" | "AV1";
@@ -33,6 +61,8 @@ export interface Film {
   matched: boolean;
   posterUrl: string | null;
   plot: string | null;
+  /** Populated only when `kind === "series"`. */
+  seasons?: Season[];
 }
 
 export interface Profile {
@@ -76,6 +106,10 @@ const POSTER_URLS = {
   f1: "/posters/f1.jpg",
   superman: "/posters/superman.jpg",
   justiceleague: "/posters/justiceleague.jpg",
+  got: "/posters/got.jpg",
+  insecure: "/posters/insecure.jpg",
+  theoffice: "/posters/theoffice.jpg",
+  community: "/posters/community.jpg",
 } as const;
 
 export type PosterId = keyof typeof POSTER_URLS;
@@ -113,14 +147,14 @@ export const profiles: Profile[] = [
   },
   {
     id: "tv",
-    name: "TV / Limited Series",
+    name: "TV / Series",
     path: "/media/tv",
     type: "tv",
-    showCount: 28,
-    episodeCount: 194,
+    showCount: 4,
+    episodeCount: 173,
     size: "640 GB",
-    matched: 28,
-    total: 28,
+    matched: 4,
+    total: 4,
     unmatched: 0,
     scanning: false,
   },
@@ -141,9 +175,63 @@ export const profiles: Profile[] = [
 
 /* ---------- Films ---------- */
 
+/**
+ * Helper: build a season with `total` episodes where the first
+ * `availableUpTo` are on disk and the rest are flagged missing.
+ * Episode titles default to "Episode N" — overridden via `titles`
+ * for shows where the names are part of the recognisable surface.
+ */
+function makeSeason(
+  number: number,
+  total: number,
+  availableUpTo: number,
+  resolution: "4K" | "1080p" | "720p",
+  durationPerEp: string,
+  titles?: string[],
+): Season {
+  return {
+    number,
+    episodes: Array.from({ length: total }, (_, i) => {
+      const epNumber = i + 1;
+      const available = epNumber <= availableUpTo;
+      const title =
+        titles && i < titles.length ? titles[i] : `Episode ${epNumber}`;
+      return {
+        number: epNumber,
+        title,
+        duration: durationPerEp,
+        available,
+        ...(available ? { resolution } : {}),
+      };
+    }),
+  };
+}
+
+/**
+ * Mutate a season in-place to mark a contiguous run of episodes as
+ * watched and (optionally) the next one as in-progress. Used to seed
+ * realistic resume positions on the test shows. The fields are
+ * mutually exclusive — a watched episode has no `progress`.
+ */
+function markWatched(
+  season: Season,
+  watchedThrough: number,
+  inProgress?: { episode: number; percent: number },
+): Season {
+  for (const ep of season.episodes) {
+    if (ep.number <= watchedThrough) ep.watched = true;
+  }
+  if (inProgress) {
+    const ep = season.episodes.find((e) => e.number === inProgress.episode);
+    if (ep && !ep.watched) ep.progress = inProgress.percent;
+  }
+  return season;
+}
+
 export const films: Film[] = [
   {
     id: "oppenheimer",
+    kind: "movie",
     title: "Oppenheimer",
     year: 2023,
     genre: "Drama · Biography",
@@ -168,6 +256,7 @@ export const films: Film[] = [
   },
   {
     id: "nosferatu",
+    kind: "movie",
     title: "Nosferatu",
     year: 2024,
     genre: "Horror · Gothic",
@@ -192,6 +281,7 @@ export const films: Film[] = [
   },
   {
     id: "barbie",
+    kind: "movie",
     title: "Barbie",
     year: 2023,
     genre: "Comedy · Fantasy",
@@ -216,6 +306,7 @@ export const films: Film[] = [
   },
   {
     id: "civilwar",
+    kind: "movie",
     title: "Civil War",
     year: 2024,
     genre: "Action · Drama",
@@ -240,6 +331,7 @@ export const films: Film[] = [
   },
   {
     id: "furiosa",
+    kind: "movie",
     title: "Furiosa: A Mad Max Saga",
     year: 2024,
     genre: "Action · Adventure",
@@ -264,6 +356,7 @@ export const films: Film[] = [
   },
   {
     id: "madmax",
+    kind: "movie",
     title: "Mad Max: Fury Road",
     year: 2015,
     genre: "Action · Adventure",
@@ -288,6 +381,7 @@ export const films: Film[] = [
   },
   {
     id: "f1",
+    kind: "movie",
     title: "F1",
     year: 2025,
     genre: "Action · Drama · Sport",
@@ -312,6 +406,7 @@ export const films: Film[] = [
   },
   {
     id: "superman",
+    kind: "movie",
     title: "Superman",
     year: 2025,
     genre: "Action · Adventure · Superhero",
@@ -336,6 +431,7 @@ export const films: Film[] = [
   },
   {
     id: "justiceleague",
+    kind: "movie",
     title: "Zack Snyder's Justice League",
     year: 2021,
     genre: "Action · Adventure · Superhero",
@@ -361,6 +457,7 @@ export const films: Film[] = [
   /* ---------- Synthetic entries to populate the library grid ---------- */
   {
     id: "oppenheimer-cut",
+    kind: "movie",
     title: "Oppenheimer (Director's Cut)",
     year: 2023,
     genre: "Drama · Biography",
@@ -385,6 +482,7 @@ export const films: Film[] = [
   },
   {
     id: "nosferatu-bw",
+    kind: "movie",
     title: "Nosferatu (B&W Print)",
     year: 2024,
     genre: "Horror · Gothic",
@@ -409,6 +507,7 @@ export const films: Film[] = [
   },
   {
     id: "barbie-imax",
+    kind: "movie",
     title: "Barbie (IMAX)",
     year: 2023,
     genre: "Comedy · Fantasy",
@@ -433,6 +532,7 @@ export const films: Film[] = [
   },
   {
     id: "civilwar-theatrical",
+    kind: "movie",
     title: "Civil War (Theatrical)",
     year: 2024,
     genre: "Action · Drama",
@@ -457,6 +557,7 @@ export const films: Film[] = [
   },
   {
     id: "unmatched-rip",
+    kind: "movie",
     title: null,
     year: null,
     genre: null,
@@ -478,6 +579,233 @@ export const films: Film[] = [
     matched: false,
     posterUrl: null,
     plot: null,
+  },
+  /* ---------- TV shows (kind: "series") ---------- */
+  {
+    id: "got",
+    kind: "series",
+    title: "Game of Thrones",
+    year: 2011,
+    genre: "Drama · Fantasy · Adventure",
+    director: "David Benioff & D.B. Weiss",
+    cast: [
+      "Emilia Clarke",
+      "Peter Dinklage",
+      "Kit Harington",
+      "Lena Headey",
+      "Sophie Turner",
+    ],
+    rating: 9.2,
+    duration: "~57m / ep",
+    resolution: "4K",
+    codec: "HEVC",
+    audio: "DTS-HD MA",
+    audioChannels: "5.1",
+    size: "412 GB",
+    bitrate: "~38 Mbps",
+    frameRate: "23.976 fps",
+    container: "MKV",
+    hdr: "HDR10",
+    profile: "tv",
+    filename: "Game.of.Thrones/",
+    matched: true,
+    posterUrl: POSTER_URLS.got,
+    plot: "Nine noble families fight for control over the lands of Westeros, while an ancient enemy returns after being dormant for millennia.",
+    seasons: [
+      markWatched(
+        makeSeason(1, 10, 10, "4K", "55m", [
+          "Winter Is Coming",
+          "The Kingsroad",
+          "Lord Snow",
+          "Cripples, Bastards, and Broken Things",
+          "The Wolf and the Lion",
+          "A Golden Crown",
+          "You Win or You Die",
+          "The Pointy End",
+          "Baelor",
+          "Fire and Blood",
+        ]),
+        4, // watched S01E01–E04
+        { episode: 5, percent: 38 }, // resuming "The Wolf and the Lion"
+      ),
+      makeSeason(2, 10, 10, "4K", "55m", [
+        "The North Remembers",
+        "The Night Lands",
+        "What Is Dead May Never Die",
+        "Garden of Bones",
+        "The Ghost of Harrenhal",
+        "The Old Gods and the New",
+        "A Man Without Honor",
+        "The Prince of Winterfell",
+        "Blackwater",
+        "Valar Morghulis",
+      ]),
+      makeSeason(3, 10, 10, "4K", "57m"),
+      makeSeason(4, 10, 10, "4K", "57m"),
+      makeSeason(5, 10, 10, "4K", "57m"),
+      makeSeason(6, 10, 10, "4K", "59m"),
+      makeSeason(7, 7, 4, "4K", "62m"),
+      makeSeason(8, 6, 0, "4K", "65m"),
+    ],
+  },
+  {
+    id: "insecure",
+    kind: "series",
+    title: "Insecure",
+    year: 2016,
+    genre: "Comedy · Drama",
+    director: "Issa Rae & Larry Wilmore",
+    cast: ["Issa Rae", "Yvonne Orji", "Jay Ellis", "Natasha Rothwell"],
+    rating: 8.0,
+    duration: "~30m / ep",
+    resolution: "1080p",
+    codec: "H264",
+    audio: "AAC",
+    audioChannels: "5.1",
+    size: "48 GB",
+    bitrate: "~12 Mbps",
+    frameRate: "23.976 fps",
+    container: "MKV",
+    hdr: "—",
+    profile: "tv",
+    filename: "Insecure/",
+    matched: true,
+    posterUrl: POSTER_URLS.insecure,
+    plot: "Best friends Issa and Molly navigate the complex experiences of being modern-day Black women in Los Angeles.",
+    seasons: [
+      markWatched(
+        makeSeason(1, 8, 8, "1080p", "30m", [
+          "Insecure as F**k",
+          "Messy as F**k",
+          "Racist as F**k",
+          "Thirsty as F**k",
+          "Shady as F**k",
+          "Guilty as F**k",
+          "Real as F**k",
+          "Broken as F**k",
+        ]),
+        2, // watched S01E01–E02
+        { episode: 3, percent: 64 }, // resuming "Racist as F**k"
+      ),
+      makeSeason(2, 8, 8, "1080p", "30m"),
+      makeSeason(3, 8, 8, "1080p", "30m"),
+      makeSeason(4, 10, 10, "1080p", "30m"),
+      makeSeason(5, 10, 10, "1080p", "32m"),
+    ],
+  },
+  {
+    id: "theoffice",
+    kind: "series",
+    title: "The Office",
+    year: 2005,
+    genre: "Comedy · Mockumentary",
+    director: "Greg Daniels (developer)",
+    cast: [
+      "Steve Carell",
+      "Rainn Wilson",
+      "John Krasinski",
+      "Jenna Fischer",
+      "B.J. Novak",
+    ],
+    rating: 9.0,
+    duration: "~22m / ep",
+    resolution: "1080p",
+    codec: "H264",
+    audio: "AC3",
+    audioChannels: "5.1",
+    size: "118 GB",
+    bitrate: "~10 Mbps",
+    frameRate: "23.976 fps",
+    container: "MKV",
+    hdr: "—",
+    profile: "tv",
+    filename: "The.Office.US/",
+    matched: true,
+    posterUrl: POSTER_URLS.theoffice,
+    plot: "A mockumentary on a group of typical office workers, where the workday consists of ego clashes, inappropriate behavior, and tedium.",
+    seasons: [
+      makeSeason(1, 6, 6, "1080p", "22m", [
+        "Pilot",
+        "Diversity Day",
+        "Health Care",
+        "The Alliance",
+        "Basketball",
+        "Hot Girl",
+      ]),
+      makeSeason(2, 22, 22, "1080p", "22m"),
+      makeSeason(3, 25, 25, "1080p", "22m"),
+      makeSeason(4, 19, 19, "1080p", "28m"),
+      makeSeason(5, 28, 28, "1080p", "22m"),
+      makeSeason(6, 26, 14, "1080p", "22m"),
+      makeSeason(7, 26, 0, "1080p", "22m"),
+      makeSeason(8, 24, 0, "1080p", "22m"),
+      makeSeason(9, 25, 0, "1080p", "22m"),
+    ],
+  },
+  {
+    id: "community",
+    kind: "series",
+    title: "Community",
+    year: 2009,
+    genre: "Comedy",
+    director: "Dan Harmon",
+    cast: [
+      "Joel McHale",
+      "Donald Glover",
+      "Alison Brie",
+      "Danny Pudi",
+      "Gillian Jacobs",
+    ],
+    rating: 8.5,
+    duration: "~22m / ep",
+    resolution: "1080p",
+    codec: "H264",
+    audio: "AC3",
+    audioChannels: "5.1",
+    size: "62 GB",
+    bitrate: "~10 Mbps",
+    frameRate: "23.976 fps",
+    container: "MKV",
+    hdr: "—",
+    profile: "tv",
+    filename: "Community/",
+    matched: true,
+    posterUrl: POSTER_URLS.community,
+    plot: "A suspended lawyer is forced to enrol in a community college with an eclectic study group of misfits.",
+    seasons: [
+      makeSeason(1, 25, 25, "1080p", "22m", [
+        "Pilot",
+        "Spanish 101",
+        "Introduction to Film",
+        "Social Psychology",
+        "Advanced Criminal Law",
+        "Football, Feminism and You",
+        "Introduction to Statistics",
+        "Home Economics",
+        "Debate 109",
+        "Environmental Science",
+        "The Politics of Human Sexuality",
+        "Comparative Religion",
+        "Investigative Journalism",
+        "Interpretive Dance",
+        "Romantic Expressionism",
+        "Communication Studies",
+        "Physical Education",
+        "Basic Genealogy",
+        "Beginner Pottery",
+        "The Science of Illusion",
+        "Contemporary American Poultry",
+        "The Art of Discourse",
+        "Modern Warfare",
+        "English as a Second Language",
+        "Pascal's Triangle Revisited",
+      ]),
+      makeSeason(2, 24, 24, "1080p", "22m"),
+      makeSeason(3, 22, 22, "1080p", "22m"),
+      makeSeason(4, 13, 5, "1080p", "22m"),
+      makeSeason(5, 13, 0, "1080p", "22m"),
+      makeSeason(6, 13, 0, "1080p", "22m"),
+    ],
   },
 ];
 
@@ -626,6 +954,28 @@ export const watchlist: WatchlistItem[] = [
     addedAt: "2 days ago",
     progress: 47,
   },
+  {
+    id: "wl-14",
+    filmId: "got",
+    title: "Game of Thrones",
+    year: 2011,
+    genre: "Drama",
+    duration: "S07E04",
+    resolution: "4K",
+    addedAt: "1 week ago",
+    progress: 76,
+  },
+  {
+    id: "wl-15",
+    filmId: "theoffice",
+    title: "The Office",
+    year: 2005,
+    genre: "Comedy",
+    duration: "S06E14",
+    resolution: "1080p",
+    addedAt: "3 days ago",
+    progress: 38,
+  },
 ];
 
 /* ---------- Curated home-page collections ---------- */
@@ -638,6 +988,7 @@ export const newReleaseIds: readonly string[] = [
   "f1",
   "superman",
   "furiosa",
+  "got",
   "justiceleague",
   "madmax",
 ];
@@ -661,4 +1012,69 @@ export function getFilmsForProfile(profileId: string): Film[] {
 
 export function getFilmById(id: string): Film | undefined {
   return films.find((f) => f.id === id);
+}
+
+/**
+ * For a series the user has started, returns the episode they should
+ * resume on next. Priority:
+ *   1. An in-progress episode (any episode with 0 < progress < 100).
+ *   2. The first available, unwatched episode after the last watched one.
+ *   3. `null` — they haven't started yet, or they've finished everything.
+ *
+ * Returns `null` for movies. Used to swap the "Play" CTA for "Continue"
+ * on detail surfaces and to deep-link the player at the right episode.
+ */
+export function getResumeEpisode(
+  film: Film,
+): { season: number; episode: number; partial: boolean } | null {
+  if (film.kind !== "series" || !film.seasons) return null;
+
+  for (const s of film.seasons) {
+    for (const e of s.episodes) {
+      if (
+        e.available &&
+        !e.watched &&
+        typeof e.progress === "number" &&
+        e.progress > 0 &&
+        e.progress < 100
+      ) {
+        return { season: s.number, episode: e.number, partial: true };
+      }
+    }
+  }
+
+  let sawWatched = false;
+  for (const s of film.seasons) {
+    for (const e of s.episodes) {
+      if (e.watched) {
+        sawWatched = true;
+        continue;
+      }
+      if (sawWatched && e.available) {
+        return { season: s.number, episode: e.number, partial: false };
+      }
+    }
+  }
+
+  return null;
+}
+
+/**
+ * For a series, returns `{ available, total }` where `available` is the
+ * count of episodes on disk and `total` is the count across every
+ * scheduled season. Returns `null` for movies.
+ */
+export function getEpisodeStats(
+  film: Film,
+): { available: number; total: number } | null {
+  if (film.kind !== "series" || !film.seasons) return null;
+  let available = 0;
+  let total = 0;
+  for (const s of film.seasons) {
+    for (const e of s.episodes) {
+      total += 1;
+      if (e.available) available += 1;
+    }
+  }
+  return { available, total };
 }

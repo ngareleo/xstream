@@ -16,6 +16,15 @@ interface FilmSeed {
   id: string;
   title: string;
   year: number;
+  /** OMDb `type` filter — defaults to "movie". TV shows must use "series". */
+  type?: "movie" | "series";
+  /**
+   * Skip the OMDb lookup and pull the poster directly from this URL.
+   * Use when OMDb's master image is too low-resolution to upscale (e.g.
+   * `Game of Thrones` returns a 550×824 master that no `_SX1500` modifier
+   * can rescue). Pick a higher-res hash from the IMDb media gallery.
+   */
+  posterOverride?: string;
 }
 
 const FILMS: FilmSeed[] = [
@@ -28,6 +37,19 @@ const FILMS: FilmSeed[] = [
   { id: "f1", title: "F1", year: 2025 },
   { id: "superman", title: "Superman", year: 2025 },
   { id: "justiceleague", title: "Zack Snyder's Justice League", year: 2021 },
+  {
+    id: "got",
+    title: "Game of Thrones",
+    year: 2011,
+    type: "series",
+    // Iron-throne "Complete Series" key art at 1102×1500. OMDb's default
+    // GOT poster master is only 550×824 so we override.
+    posterOverride:
+      "https://m.media-amazon.com/images/M/MV5BYTRiNDQwYzAtMzVlZS00NTI5LWJjYjUtMzkwNTUzMWMxZTllXkEyXkFqcGdeQXVyNDIzMzcwNjc@._V1_SX1500.jpg",
+  },
+  { id: "insecure", title: "Insecure", year: 2016, type: "series" },
+  { id: "theoffice", title: "The Office", year: 2005, type: "series" },
+  { id: "community", title: "Community", year: 2009, type: "series" },
 ];
 
 interface OmdbResponse {
@@ -62,7 +84,7 @@ async function fetchPoster(apiKey: string, film: FilmSeed): Promise<string> {
     t: film.title,
     y: String(film.year),
     apikey: apiKey,
-    type: "movie",
+    type: film.type ?? "movie",
   });
   const res = await fetch(`${OMDB_BASE}?${params.toString()}`);
   if (!res.ok) throw new Error(`OMDb ${film.id}: HTTP ${res.status}`);
@@ -93,10 +115,11 @@ async function main(): Promise<void> {
   await mkdir(OUT_DIR, { recursive: true });
 
   for (const film of FILMS) {
-    const posterUrl = await fetchPoster(apiKey, film);
+    const posterUrl = film.posterOverride ?? (await fetchPoster(apiKey, film));
     const destPath = join(OUT_DIR, `${film.id}.jpg`);
     await downloadPoster(posterUrl, destPath);
-    process.stdout.write(`saved ${film.id} -> ${destPath}\n`);
+    const tag = film.posterOverride ? "(override)" : "";
+    process.stdout.write(`saved ${film.id} ${tag} -> ${destPath}\n`);
   }
 }
 

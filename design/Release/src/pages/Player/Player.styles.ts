@@ -112,49 +112,10 @@ export const usePlayerStyles = makeStyles({
     animationIterationCount: "infinite",
     animationTimingFunction: "linear",
   },
-  bigPlay: {
-    width: "88px",
-    height: "88px",
-    borderRadius: "999px",
-    backgroundColor: "rgba(255,255,255,0.12)",
-    color: "#fff",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    borderTopWidth: "1px",
-    borderRightWidth: "1px",
-    borderBottomWidth: "1px",
-    borderLeftWidth: "1px",
-    borderTopStyle: "solid",
-    borderRightStyle: "solid",
-    borderBottomStyle: "solid",
-    borderLeftStyle: "solid",
-    borderTopColor: "rgba(255,255,255,0.30)",
-    borderRightColor: "rgba(255,255,255,0.18)",
-    borderBottomColor: "rgba(255,255,255,0.10)",
-    borderLeftColor: "rgba(255,255,255,0.18)",
-    backdropFilter: "blur(20px) saturate(180%)",
-    WebkitBackdropFilter: "blur(20px) saturate(180%)",
-    boxShadow:
-      "inset 0 1px 0 rgba(255,255,255,0.35), inset 0 -1px 0 rgba(0,0,0,0.25), 0 12px 40px rgba(0,0,0,0.5)",
-    transitionProperty: "background-color, box-shadow, transform",
-    transitionDuration: "0.2s",
-    transitionTimingFunction: "ease",
-  },
-  bigPlayIcon: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    lineHeight: 0,
-    color: "rgba(255,255,255,0.55)",
-    filter:
-      "drop-shadow(0 1px 0.5px rgba(255,255,255,0.45)) drop-shadow(0 -1px 0.5px rgba(0,0,0,0.55))",
-    "& svg": {
-      width: "40px",
-      height: "40px",
-      display: "block",
-    },
-  },
+  // (`bigPlay` / `bigPlayIcon` removed — the primary play affordance lives
+  // in the bottom control bar now. The video area still catches click-to-
+  // play during idle via the `idleOverlay` scrim, but no center button is
+  // rendered — the user's eye is drawn to the green disc in the controls.)
 
   // Topbar
   topbar: {
@@ -225,6 +186,43 @@ export const usePlayerStyles = makeStyles({
     marginBottom: "6px",
     textShadow: "0 4px 24px rgba(0,0,0,0.6)",
     textTransform: "uppercase",
+  },
+  episodeBadge: {
+    display: "inline-flex",
+    alignItems: "center",
+    columnGap: "10px",
+    marginBottom: "10px",
+    fontFamily: tokens.fontMono,
+    fontSize: "12px",
+    letterSpacing: "0.18em",
+    color: tokens.colorGreen,
+    textTransform: "uppercase",
+    textShadow: "0 2px 8px rgba(0,0,0,0.6)",
+  },
+  episodeBadgeCode: {
+    paddingTop: "3px",
+    paddingBottom: "3px",
+    paddingLeft: "8px",
+    paddingRight: "8px",
+    backgroundColor: "rgba(5, 7, 6, 0.55)",
+    borderTopWidth: "1px",
+    borderRightWidth: "1px",
+    borderBottomWidth: "1px",
+    borderLeftWidth: "1px",
+    borderTopStyle: "solid",
+    borderRightStyle: "solid",
+    borderBottomStyle: "solid",
+    borderLeftStyle: "solid",
+    borderTopColor: tokens.colorGreen,
+    borderRightColor: tokens.colorGreen,
+    borderBottomColor: tokens.colorGreen,
+    borderLeftColor: tokens.colorGreen,
+    borderRadius: tokens.radiusSm,
+    color: tokens.colorGreen,
+    fontWeight: 600,
+  },
+  episodeBadgeTitle: {
+    color: "rgba(255,255,255,0.85)",
   },
   filmMeta: {
     fontFamily: tokens.fontMono,
@@ -314,6 +312,39 @@ export const usePlayerStyles = makeStyles({
     borderRadius: "50%",
     backgroundColor: tokens.colorGreen,
     color: tokens.colorGreenInk,
+    transitionProperty: "transform, box-shadow, background-color",
+    transitionDuration: "0.2s",
+    transitionTimingFunction: "ease",
+    boxShadow: `0 4px 14px ${tokens.colorGreenSoft}`,
+    ":hover": {
+      transform: "scale(1.06)",
+      boxShadow: `0 6px 20px ${tokens.colorGreenGlow}, 0 0 28px ${tokens.colorGreenSoft}`,
+    },
+    ":active": {
+      transform: "scale(0.96)",
+    },
+    "& svg": {
+      width: "20px",
+      height: "20px",
+      display: "block",
+    },
+  },
+  ctrlBtnPlayIdle: {
+    // Pulse the green disc gently while the player is idle so the user's
+    // eye lands on the entry affordance even without a center button.
+    animationName: {
+      "0%, 100%": {
+        boxShadow: `0 4px 14px ${tokens.colorGreenSoft}`,
+        transform: "scale(1)",
+      },
+      "50%": {
+        boxShadow: `0 6px 22px ${tokens.colorGreenGlow}, 0 0 32px ${tokens.colorGreenSoft}`,
+        transform: "scale(1.04)",
+      },
+    },
+    animationDuration: "2.4s",
+    animationIterationCount: "infinite",
+    animationTimingFunction: "ease-in-out",
   },
   volumeBar: {
     width: "80px",
@@ -435,6 +466,31 @@ export const usePlayerStyles = makeStyles({
     WebkitLineClamp: 3,
     WebkitBoxOrient: "vertical",
     overflowY: "hidden",
+  },
+  sideEpisodeRow: {
+    display: "flex",
+    alignItems: "center",
+    columnGap: "10px",
+    marginTop: "10px",
+    fontFamily: tokens.fontMono,
+    fontSize: "11px",
+    letterSpacing: "0.16em",
+    textTransform: "uppercase",
+  },
+  sideEpisodeCode: {
+    paddingTop: "3px",
+    paddingBottom: "3px",
+    paddingLeft: "8px",
+    paddingRight: "8px",
+    backgroundColor: tokens.colorGreenSoft,
+    color: tokens.colorGreen,
+    borderRadius: tokens.radiusSm,
+    fontWeight: 600,
+  },
+  sideEpisodeTitle: {
+    color: tokens.colorText,
+    textTransform: "none",
+    letterSpacing: "0.04em",
   },
   sideBody: {
     paddingTop: "16px",

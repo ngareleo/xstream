@@ -1,6 +1,7 @@
 # Profiles (page)
 
 > Status: **baseline** (Spec) · **not started** (Production)
+> Spec updated: 2026-05-02 — First-mount default: pre-select the first matched movie (`?film=<firstMovie.id>`) and open the DetailPane at **50% of the viewport** so the page lands with a primary detail surface, not an empty rail. `useSplitResize` MAX_PANE_WIDTH raised to 1200 to accommodate the 50% default on wide displays. Skips when `?film` is already set (deep-link / back-nav) or `?empty=1` is on.
 > Spec updated: 2026-05-02 — Added top search bar between breadcrumb and column header. Search input with icon + match count + clear button. Auto-expands all profiles while searching and narrows films to matches. No-matches empty state. `filmMatches` helper checks title / filename / director / genre. FilmRow updated: click poster → player; click body → detail pane; Edit text link only (Play dropped).
 
 ## Files
@@ -47,7 +48,8 @@ Flex column, `overflow: hidden`, `position: relative`.
 - Only rendered when `showEmpty` is false — empty state replaces the entire layout when `?empty=1` is set.
 
 ### Footer
-- Sticky bottom row: `{profiles.length} PROFILES · {totalFilms} FILMS · {totalUnmatched} UNMATCHED` + `+ NEW PROFILE` CTA button (links to `/profiles/new`).
+- Sticky bottom row: `{profiles.length} PROFILES · {totalFilms} FILMS · {totalShows} SHOWS ({totalEpisodes} EPS) · {totalUnmatched} UNMATCHED` + `+ NEW PROFILE` CTA button (links to `/profiles/new`).
+- Episode counts are aggregated across all series in all profiles. If no series are present, the SHOWS section is omitted (or shows "0 SHOWS (0 EPS)").
 
 ### Empty state
 - Gated by `?empty=1` search param in the design lab — previews the no-libraries UX.
@@ -95,7 +97,16 @@ Flex column, `overflow: hidden`, `position: relative`.
 - `toggleProfile(id)` adds/removes from the set.
 
 ### Drag-resize
-- `useSplitResize` hook returns `paneWidth`, `containerRef`, `onResizeMouseDown`. Inline style on `splitBody` overrides the static `splitBodyOpen` columns when the pane is open.
+- `useSplitResize(defaultPaneWidth)` hook returns `paneWidth`, `containerRef`, `onResizeMouseDown`. Inline style on `splitBody` overrides the static `splitBodyOpen` columns when the pane is open.
+- `defaultPaneWidth = Math.floor(window.innerWidth * 0.5)` — computed once via `useMemo([])` so the initial pane is half the viewport. SSR fallback: 720.
+- `MIN_PANE_WIDTH = 240`, `MAX_PANE_WIDTH = 1200` (raised from the prior 640 cap so the 50% default fits on wide displays without being clamped).
+- Drag bounds still apply: the user can shrink to 240px or stretch to 1200px, but cannot exceed either limit.
+
+### First-mount default selection
+- `useEffect` on mount: if `params.get("film")` is unset AND `params.get("empty") !== "1"`, set `?film=<firstMatchedMovie.id>` via `setParams({ film }, { replace: true })`.
+- "First matched movie" = `films.find(f => f.kind === "movie" && f.matched)`. Skips series intentionally — the design lab wants the first surface a user sees on `/profiles` to demonstrate the movie detail pane (the canonical case).
+- The effect runs **once** (`[]` deps with an `eslint-disable-next-line` comment for `react-hooks/exhaustive-deps`) — re-running on URL changes would override an intentional close (clicking the same row again clears `?film`).
+- `replace: true` keeps the no-`?film` URL out of the browser history so back-nav doesn't bounce the user through a transient empty state.
 
 ## Subcomponents
 
@@ -115,7 +126,8 @@ One film inside an expanded ProfileRow. See [`FilmRow.md`](FilmRow.md) for the f
 - **Component name:** OLD — `<Dashboard>` at `pages/Dashboard/`. NEW — `<Profiles>` at `pages/Profiles/`.
 - **Hero:** OLD — a full-width slideshow hero existed above the profile directory in the Dashboard (Prerelease `<Slideshow>` component, cycling 4 images, greeting overlay). NEW — no hero. The page opens directly at the breadcrumb. (A hero slideshow with Ken Burns was added in commit e088fb5, then removed in commit 04ea22b — the final state is no hero.)
 - **URL pane state:** OLD — Dashboard used `?pane=film-detail&filmId=xxx` (two params: `pane` and `filmId`). NEW — Profiles uses `?film=<id>` (single param, matching the Library pattern).
-- **Pane width:** OLD — `useSplitResize(360)` — 360px default pane width. NEW — same hook, pane width unchanged at 360px (Release `useSplitResize` call still passes 360).
+- **Pane width:** OLD — `useSplitResize(360)` — 360px default pane width, MAX_PANE_WIDTH=640. NEW — `useSplitResize(window.innerWidth * 0.5)` — 50% of viewport on first mount, MAX_PANE_WIDTH=1200. The detail pane lands as a primary surface, not a peek.
+- **First-mount selection:** OLD — page opened with no film selected; right rail empty until the user clicked a row. NEW — `useEffect` pre-selects the first matched movie via `setParams({ film }, { replace: true })`, so the DetailPane is already open when the user arrives.
 - **Header clearance:** OLD — the AppShell grid reserved a 52px header row; Dashboard did not need to add any `paddingTop`. NEW — `splitBody` adds `paddingTop: tokens.headerHeight, boxSizing: border-box` because the shell no longer reserves a grid row.
 - **AppHeader rendering:** OLD — Dashboard rendered its own `<AppHeader>` as a direct child, placing it in the `gridArea: head` grid cell. NEW — AppHeader is rendered by `<AppShell>` (absolute layer); Profiles does not render its own header.
 - **NewProfilePane:** OLD — Dashboard had a `<NewProfilePane>` form rendered in the right rail when `?pane=new-profile` was set. NEW — no equivalent in Release Profiles (the `+ NEW PROFILE` footer button exists but has no handler — `TODO(redesign)`).
@@ -130,7 +142,8 @@ None. The `+ NEW PROFILE` footer button now links to `/profiles/new` (CreateProf
 
 ### Layout and container
 - [ ] Split-body grid: `1fr 0px 0px` closed, `1fr 4px <paneWidth>px` open, with `transitionSlow` ease; `paddingTop: tokens.headerHeight`, `boxSizing: border-box` (page manages header clearance)
-- [ ] `useSplitResize` for drag-resize handle + `isResizing` no-transition state
+- [ ] `useSplitResize(defaultPaneWidth)` for drag-resize handle + `isResizing` no-transition state. `defaultPaneWidth = Math.floor(window.innerWidth * 0.5)` via `useMemo([])`. Hook constants: `MIN_PANE_WIDTH=240`, `MAX_PANE_WIDTH=1200`.
+- [ ] First-mount `useEffect` pre-selects the first matched movie (`films.find(f => f.kind === "movie" && f.matched)`) via `setParams({ film }, { replace: true })`. Skip when `?film` is already present or `?empty=1` is set. Run once.
 
 ### Header and search
 - [ ] Breadcrumb path with scanning indicator (page opens here — no hero above it)
@@ -165,7 +178,8 @@ None. The `+ NEW PROFILE` footer button now links to `/profiles/new` (CreateProf
 - [ ] DetailPane `onEditChange` callback syncs URL: `editing=false` removes `edit` param, `editing=true` adds it
 
 ### Footer and empty state
-- [ ] Footer: counts in Mono uppercase + `+ NEW PROFILE` CTA wired to `/profiles/new` (or create-profile mutation in GraphQL)
+- [ ] Footer: counts in Mono uppercase `{profiles} PROFILES · {films} FILMS · {shows} SHOWS ({episodes} EPS) · {unmatched} UNMATCHED` + `+ NEW PROFILE` CTA wired to `/profiles/new` (or create-profile mutation in GraphQL)
+- [ ] Episode counts aggregated across all series in all profiles; SHOWS section omitted if no series present
 - [ ] Empty state: `?empty=1` design-lab toggle renders watermark + content section with headline/rule/body/CTA + hint
 
 ## Extracted components (2026-05-02, PR #48)
@@ -179,5 +193,5 @@ Profiles.tsx owns the split-body grid, `useSplitResize` hook, URL pane state (`?
 
 ## Status
 
-- [x] Designed in `design/Release` lab — components extracted 2026-05-02, PR #48. Profiles became a thinner page shell (~160 lines). **Search bar added (2026-05-02):** input + icon + match count + clear button, between breadcrumb and column header. Auto-expands all profiles while searching; narrows films via `filmMatches` helper (checks title / filename / director / genre). No-matches empty state. ProfileRow handles expansion state, match-bar spinner, EDIT link. FilmRow handles click-target split (poster → player, body → detail pane), hover tints + green border (locked when selected to prevent flicker), Edit text link only (Play button dropped). DetailPane edit mode: OMDb search picker with search input + result cards + Link button. URL contract: `?film=<id>` (view) vs `?film=<id>&edit=1` (edit). Each extracted child component has its own `.tsx` + `.styles.ts` + `.md` spec.
+- [x] Designed in `design/Release` lab — components extracted 2026-05-02, PR #48. Profiles became a thinner page shell (~160 lines). **Search bar added (2026-05-02):** input + icon + match count + clear button, between breadcrumb and column header. Auto-expands all profiles while searching; narrows films via `filmMatches` helper (checks title / filename / director / genre). No-matches empty state. ProfileRow handles expansion state, match-bar spinner, EDIT link. FilmRow handles click-target split (poster → player, body → detail pane), hover tints + green border (locked when selected to prevent flicker), Edit text link only (Play button dropped). DetailPane edit mode: OMDb search picker with search input + result cards + Link button. URL contract: `?film=<id>` (view) vs `?film=<id>&edit=1` (edit). Each extracted child component has its own `.tsx` + `.styles.ts` + `.md` spec. **TV-show support added 2026-05-02, PR #49:** FilmRow now displays kind glyph (Film/TV), series rows show chevron-expand button toggling inline `<SeasonsPanel>`, series metadata shows episode count. Profiles footer counts include shows and episodes: `{profiles} PROFILES · {films} FILMS · {shows} SHOWS ({episodes} EPS) · {unmatched} UNMATCHED`.
 - [ ] Production implementation (`client/src/pages/Profiles/` + `client/src/components/` split)

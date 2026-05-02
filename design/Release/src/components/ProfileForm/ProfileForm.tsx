@@ -190,6 +190,11 @@ export const ProfileForm: FC<ProfileFormProps> = ({
                 TV shows
               </button>
             </div>
+            <div className={s.segmentHint}>
+              {mediaType === "MOVIES"
+                ? "Each video file is matched as a single film."
+                : "Files are grouped by show, then by season folder. Episode numbers are read from filenames (S01E03, 1x03, etc.)."}
+            </div>
           </div>
 
           <div className={s.fieldGroup}>

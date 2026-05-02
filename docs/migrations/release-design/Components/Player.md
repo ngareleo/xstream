@@ -102,6 +102,7 @@ Lives at `design/Release/src/components/EdgeHandle/`. Reusable; props: `cursorX,
   - Full-area `<button onClick={onPlay}>`, `background: rgba(0,0,0,0.35)`.
   - `loading`: 56×56 circular spinner with green top arc, 0.9s linear spin.
   - `idle`: **glass play button** — 88×88 circle, `backgroundColor: rgba(255,255,255,0.12)`, `backdropFilter: blur(20px) saturate(180%)`, white-translucent borders (top brighter than bottom for a beveled-light feel), `boxShadow: inset 0 1px 0 rgba(255,255,255,0.35), inset 0 -1px 0 rgba(0,0,0,0.25), 0 12px 40px rgba(0,0,0,0.5)`. `<IconPlay>` rendered at 40×40px (`& svg` rule, no `scale()`) with **engraved** treatment: `color: rgba(255,255,255,0.55)` + `filter: drop-shadow(0 1px 0.5px rgba(255,255,255,0.45)) drop-shadow(0 -1px 0.5px rgba(0,0,0,0.55))` (paired light-below / dark-above shadows produce a recessed-into-glass illusion). The wrapping `bigPlayIcon` span is `display: flex; align-items: center; justify-content: center; line-height: 0` so the SVG centres on its own box, not on a baseline-laden line-box. iOS-26 "Liquid Glass" inspired.
+  - **Play button idle pulse** (NEW): when `state === "idle"`, the idle play disc gains a `ctrlBtnPlayIdle` class with animation: scale `1 → 1.04 → 1`, `boxShadow` inflates from `4px green-soft` to `22px colorGreenGlow` + `32px colorGreenSoft`, duration `2.4s`, ease-in-out, infinite. On `:hover` (always-on): scale `1.06` + `28px colorGreenSoft` glow. On `:active`: scale `0.96`. Signals to the user that the video is ready to play without forcing interaction.
 - **Topbar** (top, fades with chrome): `padding: 16px 26px`. **Icon-only Back button** on left (`<IconBack>` only — no "BACK" text label, no border, transparent bg). At rest: `color: rgba(255,255,255,0.85)` + `filter: drop-shadow(0 2px 6px rgba(0,0,0,0.6))` for legibility. On `:hover`: `color: #fff` + extra `drop-shadow(0 0 12px rgba(255,255,255,0.65))` glow. `:active` scales to 0.94. Right side: "● PLAYING" / "○ PAUSED" status eyebrow showing resolution + HDR/codec.
 - **Bottom controls** (fade with chrome): `padding: 20px 26px 24px`.
   - Title in Anton 64px / `text-shadow: 0 4px 24px rgba(0,0,0,0.6)` / uppercase.
@@ -121,6 +122,70 @@ Lives at `design/Release/src/components/EdgeHandle/`. Reusable; props: `cursorX,
   - `"FROM YOUR WATCHLIST"` eyebrow.
   - First 3 entries from `watchlist`. Each `watchlistRow`: title + `"● ON DISK"` (green) / `"○ NOT ON DISK YET"` (muted) based on whether a matching film exists in `films`. A `<Link to="/player/{filmId}" replace>` play link shown only if on disk.
 - **Footer (`footerRow`)**: `"OPEN IN VLC"` button + `"← BACK"` button (calls `onBack` → `goBackWithTransition`).
+
+## TV-show variant (series-aware Player)
+
+When `film.kind === "series"`, the Player renders episode metadata everywhere it would otherwise show movie-level information, and the side panel becomes an episode picker driven by `<SeasonsPanel>`.
+
+### URL contract for series
+
+- Route: `/player/<filmId>?s=<season>&e=<episode>` (e.g. `/player/breaking-bad?s=1&e=3`).
+- Both `s` and `e` are optional URL search params (integers, 1-indexed). Missing or out-of-range params resolve via `resolveSeriesPick(film, s, e)`, which returns the first AVAILABLE episode (where `onDisk === true`). If no episodes are available on disk, it falls back to the first episode in the series (regardless of `onDisk` status) so the UI loads deterministically even with an empty library.
+- When the user clicks an episode in the side panel, `setSearchParams({ s, e }, { replace: true })` updates the URL and triggers a loading state re-render so the playback switches visually.
+
+### Top-right status eyebrow (series variant)
+
+Instead of just `"● PLAYING · 4K · HDR10"`, series player shows:
+`"● PLAYING · S01E03 · 4K · HDR10"` — the episode code injected between play state and resolution.
+
+Formats the episode code as `formatEpisodeCode(seasonNumber, episodeNumber)` → `S01E03` (zero-padded 2-digit format).
+
+### Bottom controls (series variant)
+
+- **Show title row** (unchanged from movie): same Anton 64px title rendering the film's display title (show name).
+- **Eyebrow row**: replaces `[year, genre, duration]` with `[Season N, genre, episode duration]`. Mono 11px. Text reads like "SEASON 1 · Drama · 45m".
+- **Episode badge** (NEW): a new row above the show title shows the episode code in a green-bordered chip + episode title. Layout: `<div className="episodeBadge"><div className="episodeBadgeCode">S01E03</div><div className="episodeBadgeTitle">Pilot</div></div>`. The code chip uses `borderColor: var(--green)`, `color: var(--green)`, uppercase mono. The title uses body font, regular weight.
+- **Progress bar & controls**: unchanged from movie variant.
+
+### Side panel (series variant)
+
+For series, the side panel structure changes from UP NEXT + WATCHLIST to EPISODES picker:
+
+- **Header (`sidePanelHeader`)**: 
+  - Eyebrow: `"● NOW PLAYING"` (unchanged).
+  - Title: show name (unchanged).
+  - Meta: "Season N" + first genre segment + episode duration (instead of year · genre · total-show duration).
+  - Plot: episode plot (if available; falls back to show plot).
+  - New: a `sideEpisodeRow` renders below the meta — green episode-code chip (same `episodeBadgeCode` styling) + episode title. Provides a persistent "at a glance" label for the current episode.
+
+- **Body (`sideBody`)**:
+  - Eyebrow: `"EPISODES"` (instead of UP NEXT).
+  - Content: `<SeasonsPanel seasons={film.seasons} activeEpisode={{ seasonNumber, episodeNumber }} onSelectEpisode={selectEpisode} accordion={true} />`.
+  - The `accordion` prop ensures only one season is open at a time, preventing the rail from becoming overwhelmed when browsing across seasons.
+  - No WATCHLIST section for series (movie-specific).
+
+- **Footer**: unchanged (VLC button + BACK button).
+
+### selectEpisode handler
+
+When the user clicks an available episode in the side panel, the Player calls:
+```ts
+const selectEpisode = (seasonNumber: number, episodeNumber: number) => {
+  setSearchParams({ s: seasonNumber, e: episodeNumber }, { replace: true });
+  // URL change triggers re-load state so the playback visually resets
+};
+```
+
+The `replace: true` option ensures the episode switch doesn't pollute browser history (each episode pick is a transient playback state, not a navigation step). On URL change, the component re-runs its loading sequence and re-loads the new episode's stream.
+
+### Styles added for series variant
+
+- `.episodeBadge` — container for the episode code + title row.
+- `.episodeBadgeCode` — mono, green border/text, uppercase, chip styling.
+- `.episodeBadgeTitle` — body font, title text.
+- `.sideEpisodeRow` — row in the side panel header rendering the current episode label.
+- `.sideEpisodeCode` — same as `.episodeBadgeCode` (reused style).
+- `.sideEpisodeTitle` — same as `.episodeBadgeTitle` (reused style).
 
 ## Changes from Prerelease
 
@@ -161,19 +226,27 @@ Lives at `design/Release/src/components/EdgeHandle/`. Reusable; props: `cursorX,
 - [ ] Idle overlay: 80×80 green circle play button with green-glow shadow
 - [ ] Loading overlay: 56×56 circular spinner with green arc
 - [ ] Topbar: **icon-only** Back button (no "BACK" label) with drop-shadow + hover white-glow + status eyebrow showing resolution + HDR/codec
+- [ ] Topbar status eyebrow (series variant): inject episode code (e.g. "S01E03") between play state and resolution — `● PLAYING · S01E03 · 4K · HDR10`
 - [ ] Idle play button: **glass** 88×88 circle (translucent white bg, `backdropFilter: blur(20px) saturate(180%)`, beveled borders, inset highlights + drop shadow) — NOT solid green
-- [ ] Bottom title: Anton 64px with text-shadow
+- [ ] Bottom title: Anton 64px with text-shadow (show name for series, film title for movies)
+- [ ] Bottom eyebrow (movie variant): `[year, genre, duration]` in Mono 11px
+- [ ] Bottom eyebrow (series variant): `[Season N, genre, episode duration]` in Mono 11px
+- [ ] Episode badge (series variant, NEW): row above show title with green-bordered episode code chip (`episodeBadgeCode`) + episode title (`episodeBadgeTitle`). Format code as `S{pad}E{pad}` (zero-padded).
 - [ ] Progress bar: 3px tall, green fill with green-glow shadow
 - [ ] Control row: −10s / play-pause / +10s / volume / resolution chip / fullscreen
 - [ ] SidePanel 290px overlay: `position: absolute, right: 0, top: 0, bottom: 0, zIndex: 20`; slide via `transform: translateX(100%)` ↔ `0`, 0.3s ease. Default closed.
-- [ ] SidePanel content: header (NOW PLAYING eyebrow + title + meta + plot) + body (UP NEXT from same-profile films, up to 3) + watchlist section (FROM YOUR WATCHLIST, first 3 watchlist entries with on-disk indicator) + footer (VLC + BACK)
+- [ ] SidePanel content (movie variant): header (NOW PLAYING eyebrow + title + meta + plot) + body (UP NEXT from same-profile films, up to 3) + watchlist section (FROM YOUR WATCHLIST, first 3 watchlist entries with on-disk indicator) + footer (VLC + BACK)
+- [ ] SidePanel content (series variant, NEW): header (NOW PLAYING eyebrow + title + Season meta + plot + sideEpisodeRow with green code chip + episode title) + body (EPISODES eyebrow + `<SeasonsPanel seasons={film.seasons} activeEpisode={{...}} onSelectEpisode={selectEpisode} accordion={true} />`) + footer (VLC + BACK). No WATCHLIST for series.
+  - [ ] `accordion={true}` ensures single-open behaviour: opening a season closes others, preventing rail clutter
 - [ ] SidePanel top-right `×` close button → `setPanelOpen(false)`
 - [ ] Visible state of SidePanel = `panelOpen && !chromeHidden` — chrome auto-hide slides the panel off but preserves `panelOpen`
 - [ ] All controls wired to actual playback API
 - [ ] Back: `goBackWithTransition()` shared helper on both VideoArea topbar and SidePanel back buttons — wraps `navigate(-1)` in `document.startViewTransition` with plain `navigate(-1)` fallback
+- [ ] **URL contract (series):** `/player/<filmId>?s=<season>&e=<episode>`. Parse URL params; resolve missing/invalid params via `resolveSeriesPick(film, s, e)` → first available episode (or first episode if none available)
+- [ ] **Episode selection handler:** `selectEpisode(seasonNumber, episodeNumber)` → `setSearchParams({ s, e }, { replace: true })`; re-run loading state to visually reset playback
 - [ ] Unknown film ID fallback message
 
 ## Status
 
-- [x] Designed in `design/Release` lab (baseline reflects current state). 2026-05-02 (later): `EdgeHandle` extracted into its own component (`design/Release/src/components/EdgeHandle/`). Detection zone widened 24px → 140px. Bulge animation: smoothstep ease, X stretch + Y squish at peak proximity, vertical position follows cursor Y. Earlier 2026-05-02: SidePanel converted from grid column to overlay; default state hidden; reveals via right-edge handle (then a 24px-edge tab); explicit top-right close button; slide animation via `transform: translateX`. Shell grid removed. View Transitions contract preserved (backdrop unchanged). 2026-05-01: `.backdrop` gains `viewTransitionName: "film-backdrop"`; back navigation wrapped in `goBackWithTransition` at both callsites (VideoArea topbar + SidePanel); cross-cutting View Transitions contract documented (PR #46 commit 73a9cca). 2026-05-01: Shell grid, SidePanel sections (UP NEXT + FROM YOUR WATCHLIST + footer) corrected to match source (PR #46 audit).
+- [x] Designed in `design/Release` lab. 2026-05-02 (third pass): Series side-panel SeasonsPanel now uses `accordion={true}` to ensure single-open behaviour (opening a season closes others). User feedback: prevents the narrow rail from becoming overwhelmed when browsing across seasons. Applies only in Player side panel (DetailPane and FilmDetailsOverlay SeasonsPanel retain multi-open mode). 2026-05-02 (second pass): Series-aware Player variant added. URL contract `?s&e`; `resolveSeriesPick` fallback to first available episode. Episode code injected into top-right status eyebrow (e.g. "S01E03" between play state + resolution). Bottom controls: eyebrow changes to `[Season N, genre, episode duration]`; new episode badge row with green-bordered code chip + title. Side panel: header gains `sideEpisodeRow` (green code chip + episode title); body replaces UP NEXT + WATCHLIST with EPISODES eyebrow + `<SeasonsPanel activeEpisode={{...}} onSelectEpisode={selectEpisode} />`; no WATCHLIST section for series. `selectEpisode` calls `setSearchParams({ s, e }, { replace: true })` to switch playback. Earlier 2026-05-02: `EdgeHandle` extracted into its own component (`design/Release/src/components/EdgeHandle/`). Detection zone widened 24px → 140px. Bulge animation: smoothstep ease, X stretch + Y squish at peak proximity, vertical position follows cursor Y. Earlier 2026-05-02: SidePanel converted from grid column to overlay; default state hidden; reveals via right-edge handle; explicit top-right close button; slide animation via `transform: translateX`. Shell grid removed. View Transitions contract preserved (backdrop unchanged). 2026-05-01: `.backdrop` gains `viewTransitionName: "film-backdrop"`; back navigation wrapped in `goBackWithTransition` at both callsites (VideoArea topbar + SidePanel); cross-cutting View Transitions contract documented (PR #46 commit 73a9cca). 2026-05-01: Shell grid, SidePanel sections (UP NEXT + FROM YOUR WATCHLIST + footer) corrected to match source (PR #46 audit).
 - [ ] Production implementation

@@ -42,21 +42,19 @@ export const EdgeHandle: FC<EdgeHandleProps> = ({
   // Easing — quadratic for a more "wave-like" acceleration as the cursor closes in.
   const eased = bulge * bulge * (3 - 2 * bulge);
 
-  // Vertically follow the cursor, clamped so the lozenge stays inside the viewport.
-  const handleHalfHeight = 54;
+  // Vertically follow the cursor, clamped so the disc stays inside the viewport.
+  const handleHalfHeight = 22;
   const top = Math.max(
     handleHalfHeight + 8,
     Math.min(viewportH - handleHalfHeight - 8, cursorY),
   );
 
-  // Off-screen → flush translation. At eased=0 the handle is fully tucked
-  // behind the right edge; at eased=1 it sits flush against the edge.
-  const translateX = (1 - eased) * 64;
+  // Off-screen → flush translation. At eased=0 the disc is fully tucked
+  // behind the right edge; at eased=1 it sits with half its width visible.
+  const translateX = (1 - eased) * 44;
 
-  // Slight horizontal stretch + vertical squish at peak proximity for the
-  // "wave bulging out" feel.
-  const scaleX = 1 + eased * 0.18;
-  const scaleY = 1 - eased * 0.04;
+  // Uniform scale-in for the circular variant — no horizontal stretch.
+  const scale = 0.92 + eased * 0.08;
 
   const opacity = eased;
   const interactive = eased > 0.08;
@@ -74,7 +72,7 @@ export const EdgeHandle: FC<EdgeHandleProps> = ({
       }}
       style={{
         top: `${top}px`,
-        transform: `translate(${translateX}px, -50%) scale(${scaleX}, ${scaleY})`,
+        transform: `translate(${translateX}px, -50%) scale(${scale})`,
         opacity,
         pointerEvents: interactive ? "auto" : "none",
       }}

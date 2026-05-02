@@ -15,6 +15,20 @@ Entry shape (each entry ends with the divider line described above):
 
 <!-- ENTRIES BELOW — newest first; each ends with a bare `---` line. The architect's next invocation will treat the no-entries state as the first-run case and prepend a bootstrap entry at HEAD. -->
 
+## ac4c7fd — 2026-05-02 (forward note for Rust Step 2/3 nativeResolution field)
+
+**Files:** `docs/server/GraphQL-Schema/00-Surface.md`
+**Why:** forward-note added for upcoming `Video.nativeResolution: Resolution!` field; tracks `06-File-Handling-Layer.md` §5 contract on DB column nullability and ladder-rung mapping
+
+---
+
+## ac4c7fd — 2026-05-02 (icon library standardisation)
+
+**Files:** `docs/code-style/Client-Conventions/00-Patterns.md`, `docs/migrations/release-design/Changes.md`
+**Why:** curator update — both workspaces (design/Release lab + production client) standardised on @heroicons/react@1.0.6 replacing hand-rolled SVG icons; added icon sourcing convention + Figma kit link to client docs; noted change + design-system reference in release-design Changes.md
+
+---
+
 ## f75e3ca — 2026-05-01
 
 **Files:** `docs/INDEX.md`

@@ -233,6 +233,14 @@ export const useProfileFormStyles = makeStyles({
       color: tokens.colorGreenInk,
     },
   },
+  segmentHint: {
+    fontFamily: tokens.fontMono,
+    fontSize: "10px",
+    color: tokens.colorTextFaint,
+    letterSpacing: "0.04em",
+    lineHeight: "1.55",
+    maxWidth: "440px",
+  },
 
   extChips: {
     display: "flex",

@@ -68,6 +68,10 @@ type Video implements Node {
   audioStream: AudioStreamInfo
 }
 
+### Forward note — nativeResolution (Rust Step 2/3)
+
+The `Video` type will gain a `nativeResolution: Resolution!` field sourced from a new `videos.native_resolution` DB column populated at scan time via ffprobe height → closest-ladder-rung mapping (rounds DOWN). The field is non-null at the boundary; the column is nullable in DB for backward compatibility with rows scanned before the column existed. See `docs/migrations/rust-rewrite/06-File-Handling-Layer.md` §5 (Resolution handling) for the full contract.
+
 type VideoStreamInfo {
   codec: String!
   width: Int!

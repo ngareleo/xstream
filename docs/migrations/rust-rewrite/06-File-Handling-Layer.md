@@ -14,6 +14,8 @@ How xstream handles the filesystem: library walk + ffprobe pipeline, segment-dir
 4. `scanLibraryEntry(entry)` — collects all paths first, then dispatches the bounded-concurrency batch (`server/src/services/libraryScanner.ts:157-196`).
 5. `scanLibraries()` — top-level entry; `markScanStarted()` is called synchronously before any `await` so concurrent callers race-safely (`server/src/services/libraryScanner.ts:295-348`).
 
+**Forward note (2026-05-02):** The Release design lab now includes TV-show support. Profiles have a `mediaType: "MOVIES" | "TV_SHOWS"` discriminator. In TV mode, the library scanner must parse season and episode metadata from file paths and folder structure. Expected patterns: `Show Name / Season 1 / S01E03 - Episode Title.mkv`, `Show Name / Season 01 / 1x03 - Episode Title.mkv`, etc. The Rust port must preserve content-addressed caching (same video content → same jobId regardless of show/season metadata), but the scanner layer must extract and index season/episode numbers during the walk phase so the DB can track partial completion per season and the UI can render SeasonsPanel widgets. See [`docs/migrations/release-design/Components/SeasonsPanel.md`](../../release-design/Components/SeasonsPanel.md) for the UI contract and [`docs/migrations/release-design/Components/ProfileForm.md`](../../release-design/Components/ProfileForm.md) for parser semantics.
+
 The **content fingerprint** is the load-bearing identity for a video — every job ID downstream is keyed off it (`server/src/services/chunker.ts:81`). Formula:
 
 ```ts
@@ -421,7 +423,149 @@ Even though no identity tables exist at the time the Rust port lands, the **two-
 
 When sharing ships, an inbound GraphQL request from peer B may carry a `videoId` that maps to a file path under `node A`'s media library. The Rust port must guarantee that no handler ever resolves a wire-supplied string into a filesystem path that escapes the configured library roots — `..`-traversal protection lives in the upsert flow already (paths are stored absolute), but the **lookup flow** must also reject any video row whose `path` does not canonicalize to a child of one of the configured library roots. Today this is implicit (paths are inserted by the local scanner, never user-supplied). Document this as an invariant the moment sharing handlers exist; the Rust port doesn't need to enforce it now beyond preserving the "library-driven inserts only" invariant.
 
-## 5. Open questions
+## 5. Resolution handling — per-job ladder selection
+
+How the system picks which rung of the 240p → 4K ladder to encode at, what stays stable across the rewrite, and what the TV-show work has surfaced as the next concrete change.
+
+### Current Bun shape
+
+Resolution is a **client-chosen, per-job parameter**, not an attribute of the source. The pipeline knows nothing about adaptive bitrate.
+
+- **Ladder definition** — `server/src/config.ts:104-179` exports `RESOLUTION_PROFILES: Record<Resolution, ResolutionProfile>` with six fixed rungs (240p / 360p / 480p / 720p / 1080p / 4k). Each rung pins `width × height`, `videoBitrate`, `audioBitrate`, `h264Level`, and `segmentDuration` (all 2 s today).
+- **Type** — `server/src/types.ts:1` declares `export type Resolution = "240p" | "360p" | "480p" | "720p" | "1080p" | "4k"`. The same union is mirrored in the GraphQL schema (`Resolution` enum) and in the client's Relay-generated types.
+- **Per-session pinning** — the client calls `startTranscode(videoId, resolution, startS, endS)` and the server constructs a `(videoId, resolution, range)` job that lives for the lifetime of that encode. No mid-job switching.
+- **Job ID derivation** (`server/src/services/chunker.ts:81-84`):
+  ```ts
+  function jobId(contentKey: string, resolution: Resolution, start?: number, end?: number): string {
+    return createHash("sha1")
+      .update(`v3|${contentKey}|${resolution}|${start ?? ""}|${end ?? ""}`)
+      .digest("hex");
+  }
+  ```
+  The chosen resolution is part of the cache key — two clients asking for the same `(video, rung, range)` collapse to one segment directory. If the user switches to a different rung, the new request derives a different `jobId` and produces a separate cache entry.
+- **No ABR / no manifest** — the server never advertises a manifest of variant streams. The client picks one rung and lives with it for the session. Switching resolution mid-playback is the **resolution-switch scenario** in [`docs/architecture/Streaming/01-Playback-Scenarios.md`](../../architecture/Streaming/01-Playback-Scenarios.md) §4: tear down the active SourceBuffer, allocate a new `MediaSource`, restart from the same `currentTime`. The MSE single-`SourceBuffer`-per-MIME constraint is the architectural reason — see [`docs/architecture/Streaming/05-Single-SourceBuffer-ADR.md`](../../architecture/Streaming/05-Single-SourceBuffer-ADR.md).
+- **Source resolution today** — discovered at scan time via ffprobe (`width × height` in `video_streams`) but not promoted to a first-class field on the `Video` row. The client cannot ask "what is this video's native resolution?" without joining `video_streams` and inferring from the height.
+
+### Stable contracts the Rust port must preserve
+
+| Contract | Where | Why it must not change |
+|---|---|---|
+| `Resolution` enum values verbatim (`"240p"`, `"360p"`, `"480p"`, `"720p"`, `"1080p"`, `"4k"`) | `server/src/types.ts:1`; mirrored in GraphQL schema, mappers, Relay codegen | The client serialises these strings into `startTranscode` arguments and into URL state; renaming any rung breaks every persisted job ID + every existing watchlist progress entry. |
+| `RESOLUTION_PROFILES[rung]` shape — `width`, `height`, `videoBitrate`, `audioBitrate`, `h264Level`, `segmentDuration` | `server/src/config.ts:104-179` | The encoder argv is composed from these fields; per-rung values are validated against the ffmpeg/VAAPI compatibility matrix in [`docs/server/Hardware-Acceleration/00-Overview.md`](../../server/Hardware-Acceleration/00-Overview.md). Bumping a bitrate changes cache contents but not the cache key — old cached segments stay valid until evicted. |
+| `jobId` hashes the **chosen** resolution, not the source's native resolution | `server/src/services/chunker.ts:81` | Two clients on different displays asking for the same `(video, 1080p, range)` MUST share one encode. Hashing native resolution would split the cache by source and defeat the dedup that makes peer sharing tractable. |
+| Segment duration constant per ladder rung (today: all 2 s) | `server/src/config.ts:104-179` | The chunker's `segment_NNNN.m4s` watcher index counts on a stable cadence; varying the segment duration mid-job would desync the index assignment. Per-rung overrides are allowed (the field exists per-profile) but the rung-level value cannot change between encodes. |
+| Resolution is a per-job argument to `startTranscode`, never inferred server-side | `server/src/graphql/resolvers/mutation.ts` (resolver), `server/src/services/chunker.ts:89` | The client owns the policy. Server-side inference would silently lock users to "the resolution we think they want" and break the scenario where a 4K source plays on a 720p tab. |
+
+### TV-show wrinkle: per-episode native resolution
+
+The Release design lab now treats each episode as its own row with its own `resolution: "4K" | "1080p" | "720p"` (see [`docs/migrations/release-design/Components/SeasonsPanel.md`](../../release-design/Components/SeasonsPanel.md)). For movies this was implicit — one video, one source resolution. Series make the per-episode variability explicit and the UI shows it (the SeasonsPanel renders the episode's native resolution next to the duration).
+
+What changes:
+
+1. **`videos.native_resolution`** — a new column populated from the ffprobe `height` value during the library walk (§1, `processFile`). Maps to the closest ladder rung (≤ ladder height; e.g. ffprobe height = 1088 maps to `"1080p"`, height = 716 maps to `"720p"` — never round up). Nullable for back-compat with rows scanned before this column existed; backfill on next periodic scan.
+2. **GraphQL `Video.nativeResolution: Resolution`** (non-null, populated from the column above; for legacy null rows, derive lazily from `video_streams.height` via the resolver). Lets the SeasonsPanel + DetailPane label episodes accurately ("S01E03 · 1080p · 22m") without joining streams.
+3. **Server-side clamp in `startTranscode`** — reject (or downgrade with a `tracing::warn!` and a returned `clampedResolution` field) any request where `requested > native`. VAAPI cannot upscale cleanly and SW upscale wastes CPU for no quality gain. The clamp is a structural safety net for the client's own UI logic — when the picker shows "available rungs ≤ native" the server still validates.
+4. **Client picker** — when the user opens a series episode in the Player, the resolution dropdown shows `[240p … native]` (capped at the episode's native rung). The picker source of truth is the GraphQL `nativeResolution` field above.
+
+The job ID derivation does **not** change. `jobId` still hashes the **chosen** rung, so a user asking for `(GoT S01E03, 720p, range)` collapses with another user asking the same thing — independent of either client's display capability.
+
+### Rust target
+
+```rust
+// server-rust/src/types.rs
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Resolution {
+    #[serde(rename = "240p")]  R240,
+    #[serde(rename = "360p")]  R360,
+    #[serde(rename = "480p")]  R480,
+    #[serde(rename = "720p")]  R720,
+    #[serde(rename = "1080p")] R1080,
+    #[serde(rename = "4k")]    R4K,
+}
+
+impl Resolution {
+    pub const LADDER: &'static [Resolution] = &[
+        Self::R240, Self::R360, Self::R480, Self::R720, Self::R1080, Self::R4K,
+    ];
+
+    /// Height in pixels for the rung. Used to map ffprobe height → ladder rung.
+    pub fn height(self) -> u32 {
+        match self {
+            Self::R240 => 240, Self::R360 => 360, Self::R480 => 480,
+            Self::R720 => 720, Self::R1080 => 1080, Self::R4K => 2160,
+        }
+    }
+
+    /// Map a probed pixel height to the highest ladder rung that does NOT
+    /// exceed it. Always rounds DOWN — never claim a source is higher-res
+    /// than it actually is.
+    pub fn from_probed_height(probed: u32) -> Self {
+        Self::LADDER.iter().rev().copied()
+            .find(|r| r.height() <= probed)
+            .unwrap_or(Self::R240)
+    }
+
+    /// Clamp `requested` to `<= native`. Returns `(effective_resolution, clamped: bool)`.
+    pub fn clamp_to_native(requested: Self, native: Self) -> (Self, bool) {
+        if requested.height() <= native.height() { (requested, false) }
+        else { (native, true) }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct ResolutionProfile {
+    pub width: u32,
+    pub height: u32,
+    pub video_bitrate: &'static str,
+    pub audio_bitrate: &'static str,
+    pub h264_level: &'static str,
+    pub segment_duration_s: u32,
+}
+
+pub const RESOLUTION_PROFILES: phf::Map<&'static str, ResolutionProfile> = phf::phf_map! { /* … */ };
+```
+
+The `from_probed_height` rule is the same one the Bun scanner needs to learn for the `native_resolution` column — implementing it on the type lets the scanner, the GraphQL resolver, and the clamp helper all share one source of truth.
+
+`startTranscode` resolver path:
+
+```rust
+// server-rust/src/graphql/resolvers/mutation.rs
+async fn start_transcode(ctx: &AppContext, input: StartTranscodeInput) -> Result<TranscodeJob, Error> {
+    let video = db::queries::videos::get(&ctx.cache_db, &input.video_id).await?
+        .ok_or(Error::VideoNotFound)?;
+    let native = video.native_resolution
+        .unwrap_or_else(|| Resolution::from_probed_height(video_streams_max_height(&video)));
+
+    let (effective, clamped) = Resolution::clamp_to_native(input.resolution, native);
+    if clamped {
+        tracing::warn!(
+            video_id = %video.id, requested = ?input.resolution, native = ?native,
+            "Requested resolution exceeds source — clamping to native"
+        );
+    }
+
+    chunker::start(ctx, &video, effective, input.start_s, input.end_s).await
+}
+```
+
+The clamp is also the boundary at which `effective` enters the `jobId` derivation in the chunker — so the cache key always matches the encode that actually ran, never the request that came in.
+
+### Forward constraints for peer-sharing
+
+- **Wire-side clamp** — when sharing ships, an inbound request from peer B carries a `(videoId, requested_resolution)` pair. Peer A must clamp the same way it does for local requests; otherwise the cache lookup could reach for a resolution the source cannot produce. The clamp helper above is the single chokepoint — every entry point to the chunker (local resolver, peer-sharing handler) MUST go through `Resolution::clamp_to_native` before deriving the job ID.
+- **Native resolution is a queryable property** — the sharing protocol must expose `nativeResolution` per shared video so peer B's client can populate its picker against peer A's source, not against peer B's local file. This is purely additive to the GraphQL `Video` type; no schema migration needed beyond the column add.
+- **Ladder rungs and segment durations are cluster-wide constants** — every node MUST agree on the same six rungs and the same per-rung profile. Rolling a new rung (e.g. an "8K" addition) requires a coordinated client+server release; today the Rust port treats `RESOLUTION_PROFILES` as compile-time data for that reason.
+- **Cache index** keyed by `(videoId, resolution, startS, endS)` (see §4 *Content-addressed segment cache index*) — the `resolution` field there is the **clamped, effective** rung, not the raw request. Implementations of `SegmentCacheIndex::lookup` must call `clamp_to_native` on the inbound request before constructing the `SegmentCacheKey`, otherwise sharing requests for `(videoId, 4k)` against a 1080p source would silently miss the existing 1080p cache entry.
+
+### Open items folded into §6
+
+- Does the client's resolution picker need to differ between the in-player swap (active session) and the pre-launch choice (DetailPane / FilmDetailsOverlay)? Today the design lab only shows the picker in the player; the detail surfaces always launch at native (clamped to the highest ladder rung ≤ source). Confirm with design before implementing.
+- Should the server emit a GraphQL `clampedResolution` field on `TranscodeJob` so the client can show a "We rendered this at 1080p — your TV is 4K but the source isn't" hint? Likely yes; defer to whoever owns the player UX.
+- `RESOLUTION_PROFILES` is currently a static `Record` in TS / `phf::Map` in Rust. Sharing surfaces a forward question: should it become user-tunable per-node (e.g. a low-power mini-PC drops the 4K rung)? Out of scope for now; flagging because a `phf` map cannot be runtime-mutated.
+
+## 6. Open questions
 
 These are explicit non-decisions to revisit during implementation.
 
@@ -438,6 +582,41 @@ These are explicit non-decisions to revisit during implementation.
 6. **Concurrency of `pruneLruJobs`**: today this runs inline after each job completes; under heavy churn (10+ concurrent jobs completing within seconds of each other) the loop runs N times in series. Move to a debounced background task (`tokio::sync::Notify` or a periodic 30 s tick) once concurrency is real.
 
 7. **Eviction race against active reads**: `prune_lru_jobs` removes a directory while a future peer-sharing connection might still be reading from it. Today this is impossible because the cache always grows to 20 GB before evicting and connections are short-lived; under sharing it's plausible. Likely needs a per-job read-count guard before `remove_dir_all`. Defer to sharing implementation.
+
+## 7. What landed in PR #44 — Rust library scanner (awaiting user review, not yet merged to main)
+
+> **Merge-gate:** this section reflects what PR #44 (`feat/rust-library-scanner`, +1366/-41) contains. Do not read it as shipped. Flip the language below to past-tense and remove this callout when the PR merges to main and the user confirms the merge.
+
+### What shipped
+
+The scanner described in §3 is now implemented in `server-rust/src/services/library_scanner.rs`. Key points confirmed against the PR summary:
+
+- `walkdir` walk + `futures::stream::iter(...).for_each_concurrent(4, ...)` concurrency cap — matches the `buffer_unordered(SCAN_CONCURRENCY)` shape in §3 above.
+- SHA-1 fingerprint with the exact `<sizeBytes>:<sha1hex>` formula — contract from §2 preserved.
+- ffprobe via the existing `FfmpegFile` abstraction (no new binary-resolution path introduced).
+- DB upserts: `upsert_library`, `upsert_video`, `replace_video_streams` added to `db/queries/{libraries,videos}.rs` with tests (6 DB-query tests, 9 scan-state tests, 16 scanner tests, 1 GraphQL integration test for the `createLibrary → spawned scan → subscription` chain).
+- `scan_state.rs`: `RwLock<ScanSnapshot>` + `tokio::sync::broadcast` actor — powers `libraryScanUpdated` and `libraryScanProgress` subscriptions (previously stubs).
+- `spawn_periodic_scan` boots on server start in `lib.rs::run` (30 s loop). `AppContext` gained `scan_state: ScanState`; `AppConfig` gained `scan: ScanConfig { interval_ms, concurrency }`.
+- `parse_title_from_filename` ported from the Bun side.
+- End-to-end smoke: 5 consecutive 30 s periodic scans confirmed via Seq span tree.
+
+### Items tracked during PR #44 development
+
+| Item | Bun source | Status |
+|---|---|---|
+| OMDb auto-match (`autoMatchLibrary`) | `libraryScanner.ts:240-288` | **In flight on PR #44** (commit `27dea4c`). `OmdbClient` (`server-rust/src/services/omdb.rs`) wraps `reqwest::Client`; `library_scanner::auto_match_library` runs after every `library_scanned` with bounded concurrency 4; `db::get_unmatched_video_ids(library_id)` LEFT-JOIN query walks the unmatched set. `AppConfig.omdb_api_key: Option<String>` + `AppContext.omdb: Option<OmdbClient>` — env var with persisted `omdbApiKey` user setting as fallback (mirrors Bun's `getApiKey()`). `reqwest 0.12` + `rustls-tls` (Tauri portable). 15 omdb + 13 scanner + 2 scan_state + 6 DB new tests (250-test total). OMDB-001 closed in `docs/todo.md`. |
+| `SCAN_INTERVAL_MS` env override | `libraryScanner.ts` + `config.ts` | Interval is a compile-time constant for now; env override not yet wired. |
+
+**Remaining OMDb work (out of scope for PR #44):** two GraphQL surfaces are still stubs and must reuse `OmdbClient`:
+
+- `match_video` mutation — the resolver for the manual-link flow. Currently a stub.
+- `searchOmdb` query — the `/s/` OMDb endpoint used by the client's manual-search modal.
+
+Both are tracked as OMDB-002 in `docs/todo.md` (pointer back to this section). They belong to the GraphQL layer (`03-GraphQL-Layer.md`) and should land before the Step 3 PR closes.
+
+### Test coverage note
+
+Tests are the spec — they travel with the port (per `docs/migrations/README.md` → "Cross-migration principles"). The Bun scanner tests in `server/src/services/__tests__/libraryScanner.*.test.ts` should be confirmed as ported or explicitly skipped with a TODO before this step closes. The PR summary reports 214 tests passing, with 31 new scanner/scan-state/DB tests, and one integration test for the subscription chain. Verify the Bun test checklist is accounted for in the PR description before marking this deliverable done.
 
 ## Cross-references
 

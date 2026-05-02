@@ -54,6 +54,9 @@ Shared form component for creating and editing profiles. Encapsulates the full f
 - Flex row, `columnGap: 8px`.
 - Unselected: `backgroundColor: tokens.colorSurface`, `border: 1px solid tokens.colorBorder`, `color: tokens.colorTextMuted`, Mono 11px, `paddingLeft: 12px`, `paddingRight: 12px`, `height: 40px`, `cursor: pointer`.
 - Selected: `backgroundColor: tokens.colorGreen`, `color: tokens.colorGreenInk`, `borderColor: tokens.colorGreen`.
+- **Segment hint line (`.segmentHint`):** Rendered below the segment buttons, Mono 9px, `color: tokens.colorTextMuted`. Text changes based on selected segment:
+  - **MOVIES:** `"Each video file is matched as a single film."`
+  - **TV_SHOWS:** `"Files are grouped by show, then by season folder. Episode numbers are read from filenames (S01E03, 1x03, etc.)."`
 
 #### Extension chip toggles
 - Label: "File Types" in Mono 10px muted.
@@ -113,6 +116,7 @@ Shared form component for creating and editing profiles. Encapsulates the full f
 - [ ] Browse button: folder icon + "Browse" text, Mono uppercase, transparent bg at rest; green border + green text on hover; green bg when active
 - [ ] DirectoryBrowser popover: `position: absolute` below input, `top: 100%`, `left: 0`, `right: 0`, `zIndex: 20`; renders `<DirectoryBrowser initialPath={path}>` with `onSelect(picked)` updating input and closing popover
 - [ ] Media type segmented control: two segments (MOVIES / TV_SHOWS) with preset buttons
+- [ ] Segment hint line: Mono 9px muted, text changes per segment: MOVIES = "Each video file is matched as a single film." / TV_SHOWS = "Files are grouped by show, then by season folder. Episode numbers are read from filenames (S01E03, 1x03, etc.)."
 - [ ] Extension chip grid: toggles for each extension, preset buttons for standard sets
 - [ ] Form validation: require name and path; show error on submit if validation fails (mock)
 - [ ] Delete confirm panel (edit mode only): red-bordered, inline confirm with message + Delete/Cancel buttons
@@ -123,5 +127,5 @@ Shared form component for creating and editing profiles. Encapsulates the full f
 
 ## Status
 
-- [x] Designed in `design/Release` lab — ProfileForm component extracted for CreateProfile + EditProfile pages, DirectoryBrowser popover integrated into Path field, Browse button toggles popover + fills green when open. 2026-05-02, PR #48.
+- [x] Designed in `design/Release` lab — ProfileForm component extracted for CreateProfile + EditProfile pages, DirectoryBrowser popover integrated into Path field, Browse button toggles popover + fills green when open. 2026-05-02, PR #48. **Segment hint added 2026-05-02, PR #49:** Explanatory line below media-type segments describes parsing semantics per choice (single-film matching for movies vs. show/season/episode grouping for TV with filename pattern reading).
 - [ ] Production implementation

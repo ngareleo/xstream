@@ -21,6 +21,14 @@ Reusable poster card for Library carousels and search results. 200px width, 2:3 
   - **`TILE_GAP = 16`** — gap between tiles in flex row.
   - **`TILE_STRIDE = 216`** — width + gap combined (200 + 16). Used by PosterRow to compute scroll distance; must be a multiple of stride for scroll-snap alignment.
 
+### Kind badge — top-left corner
+
+See [`MediaKindBadge`](MediaKindBadge.md) spec for full visual detail. FilmTile uses the **`tile` variant**:
+
+- **Only rendered for series films** (`film.kind === "series"`).
+- Renders `<MediaKindBadge kind={film.kind} variant="tile" />` as an absolutely-positioned 22×22 corner badge.
+- **For movies** (`film.kind === "movie"`): no badge rendered (MediaKindBadge returns null).
+
 ### Frame (`tileFrame`)
 - `position: relative`, `aspectRatio: 2/3`, 1px solid `colorBorder` all sides, `backgroundColor: colorSurface`.
 - `transitionProperty: box-shadow, transform`, `transitionDuration: tokens.transitionSlow` (0.25s).
@@ -73,6 +81,7 @@ This component is new in Release as an extracted, reusable unit. In Prerelease, 
 
 - [ ] `TILE_WIDTH = 200`, `TILE_GAP = 16`, `TILE_STRIDE = 216` exported as module constants
 - [ ] Button element: `type="button"`, `width: 200px`, `flexShrink: 0`, `textAlign: left`, `color: inherit`, transparent bg, no border
+- [ ] Kind badge: render `<MediaKindBadge kind={film.kind} variant="tile" />` — see [`MediaKindBadge.md`](MediaKindBadge.md) for tile variant detail
 - [ ] Frame: `position: relative`, `aspectRatio: 2/3`, 1px solid `colorBorder`, `backgroundColor: colorSurface`, transition box-shadow + transform (0.25s)
 - [ ] Frame::after border wipe: green border all sides, `clipPath: inset(100% 0 0 0)` → `inset(0 0 0 0)` on hover, ease-out transition
 - [ ] Hover on frame: `translateY(-3px)` + `boxShadow: 0 8px 20px colorGreenGlow, 0 2px 6px colorGreenSoft`
@@ -83,11 +92,11 @@ This component is new in Release as an extracted, reusable unit. In Prerelease, 
 - [ ] Subtitle: Mono 10px, `colorTextMuted`, `letterSpacing: 0.06em`, `marginTop: 3px`, `"{year} · {duration}"` with null filtering
 - [ ] Click handler: calls `onClick()` (parent sets up navigation)
 - [ ] `scrollSnapAlign: start` (carousel alignment constraint)
-- [ ] Wire to real `Film` data model (replace mock data)
+- [ ] Wire to real `Film` data model (replace mock data) including `kind` discriminator
 
 ## Status
 
-- [x] Designed in `design/Release` lab — FilmTile component extracted from inline carousel/grid tile 2026-05-02, PR #48. Constant exports (TILE_WIDTH, TILE_GAP, TILE_STRIDE) for scroll-distance computation. Hover lift + green border wipe. Optional progress bar for continue-watching context.
+- [x] Designed in `design/Release` lab — FilmTile component extracted from inline carousel/grid tile 2026-05-02, PR #48. Constant exports (TILE_WIDTH, TILE_GAP, TILE_STRIDE) for scroll-distance computation. Hover lift + green border wipe. Optional progress bar for continue-watching context. **Kind badge added 2026-05-02, PR #49:** green TV icon badge (top-left corner) for series tiles; movie tiles unchanged.
 - [ ] Production implementation
 
 ## Notes
