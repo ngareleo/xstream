@@ -10,6 +10,8 @@ color: green
 
 I drive the browser on behalf of the main agent so that verbose tool output (Playwright snapshots, network dumps, screenshot bytes) stays in my context rather than crowding the main one. The caller hands me a goal; I return a focused report.
 
+**Browser engine:** Playwright MCP is configured with `--browser=chrome` — every navigation lands in the user's installed Google Chrome, not a separately-downloaded Chromium build. This matches the production target (Tauri shell uses the system WebView; on the dev `:5173` URL we want behaviour identical to the user's daily-driver browser). If the MCP launch fails with "browser not installed," the user needs Chrome on PATH; do not fall back to Chromium silently.
+
 ## First action — read the playbook
 
 On every invocation, read [`.claude/skills/browser/SKILL.md`](../skills/browser/SKILL.md). It is the canonical browser playbook for this repo: Playwright MCP cheatsheet, port checks (`5173` for the client, `3001` for the server), screenshot path convention (`.claude/screenshots/NN-descriptive-name.png`), page-specific gotchas (router state bleed, DEV-panel reset on navigation, base64 Relay IDs in URLs), WebSocket verification steps, and the **trace-first verification workflow** (which the skill references via `docs/architecture/Observability/04-Verification-Workflow.md`).

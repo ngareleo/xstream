@@ -79,6 +79,11 @@ export const Capped1080p: Story = {
       },
     },
   },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByText("Mad Max: Fury Road (2015)")).toBeInTheDocument();
+    await expect(canvasElement.querySelector("video")).toBeInTheDocument();
+  },
 };
 
 /** No video stream metadata available (audio-only or unrecognised format). */
@@ -97,5 +102,10 @@ export const NoStreamInfo: Story = {
         }),
       },
     },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByText("Unknown Format File")).toBeInTheDocument();
+    await expect(canvasElement.querySelector("video")).toBeInTheDocument();
   },
 };

@@ -8,6 +8,8 @@ allowed-tools: mcp__playwright__browser_navigate, mcp__playwright__browser_snaps
 
 Every browser interaction goes through this skill. If the task asks you to verify UI, debug playback, or hit any page in a real browser — invoke this skill first and stay inside it for the whole session.
 
+**Browser engine: Google Chrome.** Playwright MCP is launched with `--browser=chrome` (configured globally in `~/.claude.json`), so all navigation goes through the user's installed Chrome — not a Playwright-bundled Chromium. Rationale: this matches the user's daily-driver and the Tauri shell's WebView feature surface more closely than the pristine Chromium binary. If a navigation fails with "browser not installed," confirm Chrome is on PATH (`which google-chrome` or `which chrome`); do not silently fall back to Chromium.
+
 **Reading Seq logs/traces does NOT belong here.** Use the `seq` skill — its HTTP API is faster, cheaper, and returns parsable JSON. Only drive Seq in a browser if the user explicitly asks to see the live UI.
 
 **Before verifying any code change, read `docs/architecture/Observability/04-Verification-Workflow.md`.** The short form: (1) decide which span/log line proves the change worked before opening the browser; (2) add any missing instrumentation first; (3) query Seq to confirm the expected signal — don't rely on "did the spinner disappear". Visual checks catch symptoms; traces catch invariant breaks.
