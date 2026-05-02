@@ -45,12 +45,17 @@ Keep rows short (≤ ~120 chars). When adding a new topic file to `docs/`, add i
 | Feature-flag registry | `docs/client/Feature-Flags/00-Registry.md` |
 | Client debugging playbooks | `docs/client/Debugging-Playbooks/00-Common-Issues.md` |
 | Rsbuild chunk-split groups, regex anchor, `bun run analyze` | `docs/client/Bundle-Chunks/00-Strategy.md` |
+| Engineering principles (index of the four meta-rules) | `docs/code-style/Principles/README.md` |
+| Fix root causes, not symptoms — reject symptom-masks (bumped constants, forced fallbacks, special-case branches) | `docs/code-style/Principles/00-Fix-Root-Causes.md` |
+| Don't weaken safety timeouts as a bug fix — fix structure, not the timer | `docs/code-style/Principles/01-Safety-Timeouts.md` |
 | Invariants (the full non-negotiables list) | `docs/code-style/Invariants/00-Never-Violate.md` |
 | File naming conventions | `docs/code-style/Naming/00-Conventions.md` |
 | Server conventions | `docs/code-style/Server-Conventions/00-Patterns.md` |
 | Client conventions | `docs/code-style/Client-Conventions/00-Patterns.md` |
 | Anti-patterns (full "don't" list) | `docs/code-style/Anti-Patterns/00-What-Not-To-Do.md` |
 | Tests travel with the port — assertions are the contract across migrations | `docs/code-style/Testing/00-Tests-Travel-With-The-Port.md` |
+| Linting + formatting per language (Rust clippy/fmt, TS ESLint+Prettier, SQL by-hand, Husky pre-commit) | `docs/code-style/Tooling/00-Linting-And-Formatting.md` |
+| Architect narrative history — paired with `docs/Commit.md`, read recent ~5 entries to build familiarity | `docs/History.md` |
 | Design spec (Release / Xstream — active) | `docs/design/UI-Design-Spec/01-Release-Tokens-And-Layout.md` |
 | Design spec (Prerelease / Moran — frozen) | `docs/design/UI-Design-Spec/00-Prerelease-Tokens-And-Layout.md` |
 | Product spec | `docs/product/Product-Spec/00-Scope.md` |

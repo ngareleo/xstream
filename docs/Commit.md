@@ -15,6 +15,13 @@ Entry shape (each entry ends with the divider line described above):
 
 <!-- ENTRIES BELOW — newest first; each ends with a bare `---` line. The architect's next invocation will treat the no-entries state as the first-run case and prepend a bootstrap entry at HEAD. -->
 
+## (pending-commit) — 2026-05-03 (boot-pack reorg + Principles/Tooling sub-trees + History.md)
+
+**Files:** `CLAUDE.md`, `docs/SUMMARY.md`, `docs/INDEX.md`, `docs/code-style/README.md`, `docs/code-style/Principles/README.md`, `docs/code-style/Principles/00-Fix-Root-Causes.md`, `docs/code-style/Principles/01-Safety-Timeouts.md`, `docs/code-style/Tooling/README.md`, `docs/code-style/Tooling/00-Linting-And-Formatting.md`, `docs/History.md`, `.claude/agents/architect.md`
+**Why:** removed inline content from CLAUDE.md (engineering principles, code-quality tooling, observability rules) — replaced with one-line pointers and an upgraded Session-start directive that names the boot pack explicitly. Two new sub-trees: `code-style/Principles/` (fix-root-causes + safety-timeouts now have a canonical home) and `code-style/Tooling/` (linting + formatting per language: Rust, TS/React, SQL). New `docs/History.md` is a narrative log paired with `Commit.md` — Commit.md answers *did the docs sync at this SHA*, History.md answers *what's been changing and why*. Architect prompt updated with the pairing protocol. Added INDEX rows for all new files. Curator step (this entry + INDEX rows + History.md bootstrap) was performed by the main agent because the architect notification produced a fabricated report.
+
+---
+
 ## ac4c7fd — 2026-05-02 (forward note for Rust Step 2/3 nativeResolution field)
 
 **Files:** `docs/server/GraphQL-Schema/00-Surface.md`
