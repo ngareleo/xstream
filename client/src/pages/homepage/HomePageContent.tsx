@@ -208,6 +208,13 @@ export const HomePageContent: FC = () => {
 
   const [search, setSearch] = useState("");
   const [searchFocused, setSearchFocused] = useState(false);
+  const [searchCaretX, setSearchCaretX] = useState(0);
+  const searchMirrorRef = useRef<HTMLSpanElement>(null);
+  useEffect(() => {
+    if (searchMirrorRef.current !== null) {
+      setSearchCaretX(searchMirrorRef.current.offsetWidth);
+    }
+  }, [search, searchFocused]);
   const [filterOpen, setFilterOpen] = useState(false);
   const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS);
   const trimmedQuery = search.trim().toLowerCase();
@@ -325,6 +332,9 @@ export const HomePageContent: FC = () => {
             <IconSearch />
           </span>
           <div className={styles.searchInputWrap}>
+            <span ref={searchMirrorRef} className={styles.searchMirror} aria-hidden="true">
+              {search}
+            </span>
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -336,6 +346,13 @@ export const HomePageContent: FC = () => {
               spellCheck={false}
               autoComplete="off"
             />
+            {searchFocused && (
+              <span
+                className={styles.searchCaret}
+                style={{ left: `${searchCaretX}px` }}
+                aria-hidden="true"
+              />
+            )}
           </div>
           {showFlatResults && (
             <button
