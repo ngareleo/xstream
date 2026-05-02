@@ -1,24 +1,27 @@
 import { mergeClasses } from "@griffel/react";
-import { type CSSProperties, type FC, useMemo, useState } from "react";
+import { type FC, useMemo, useState } from "react";
+import { graphql, useFragment } from "react-relay";
 
-import { IconCheck, IconChevron } from "~/lib/icons";
+import { IconChevron } from "~/lib/icons";
+import type { SeasonsPanel_video$key } from "~/relay/__generated__/SeasonsPanel_video.graphql";
+import { formatDurationHuman } from "~/utils/formatters";
 
 import { strings } from "./SeasonsPanel.strings";
 import { useSeasonsPanelStyles } from "./SeasonsPanel.styles";
 
-export interface EpisodeViewModel {
-  number: number;
-  title: string | null;
-  duration: string | null;
-  available: boolean;
-  watched?: boolean;
-  progress?: number;
-}
-
-export interface SeasonViewModel {
-  number: number;
-  episodes: EpisodeViewModel[];
-}
+const SEASONS_FRAGMENT = graphql`
+  fragment SeasonsPanel_video on Video {
+    seasons {
+      seasonNumber
+      episodes {
+        episodeNumber
+        title
+        durationSeconds
+        onDisk
+      }
+    }
+  }
+`;
 
 export interface ActiveEpisode {
   seasonNumber: number;
@@ -26,7 +29,7 @@ export interface ActiveEpisode {
 }
 
 interface SeasonsPanelProps {
-  seasons: SeasonViewModel[];
+  video: SeasonsPanel_video$key;
   defaultOpenFirst?: boolean;
   activeEpisode?: ActiveEpisode;
   onSelectEpisode?: (seasonNumber: number, episodeNumber: number) => void;
@@ -34,13 +37,16 @@ interface SeasonsPanelProps {
 }
 
 export const SeasonsPanel: FC<SeasonsPanelProps> = ({
-  seasons,
+  video,
   defaultOpenFirst = false,
   activeEpisode,
   onSelectEpisode,
   accordion = false,
 }) => {
+  const data = useFragment(SEASONS_FRAGMENT, video);
   const styles = useSeasonsPanelStyles();
+  const seasons = data.seasons;
+
   const initial = useMemo<Set<number>>(() => {
     const set = new Set<number>();
     if (activeEpisode) {
@@ -49,7 +55,7 @@ export const SeasonsPanel: FC<SeasonsPanelProps> = ({
     }
     if (defaultOpenFirst && seasons.length > 0) {
       const first = seasons[0];
-      if (first) set.add(first.number);
+      if (first) set.add(first.seasonNumber);
     }
     return set;
   }, [defaultOpenFirst, seasons, activeEpisode, accordion]);
@@ -72,17 +78,16 @@ export const SeasonsPanel: FC<SeasonsPanelProps> = ({
     <div className={styles.panel}>
       {seasons.map((season) => {
         const total = season.episodes.length;
-        const available = season.episodes.filter((e) => e.available).length;
-        const watchedCount = season.episodes.filter((e) => e.watched === true).length;
+        const available = season.episodes.filter((e) => e.onDisk).length;
         const pct = total === 0 ? 0 : (available / total) * 100;
         const status = available === total ? "complete" : available === 0 ? "empty" : "partial";
-        const isOpen = expanded.has(season.number);
+        const isOpen = expanded.has(season.seasonNumber);
 
         return (
-          <div key={season.number} className={styles.season}>
+          <div key={season.seasonNumber} className={styles.season}>
             <button
               type="button"
-              onClick={() => toggle(season.number)}
+              onClick={() => toggle(season.seasonNumber)}
               className={mergeClasses(styles.seasonHeader, isOpen && styles.seasonHeaderOpen)}
               aria-expanded={isOpen}
             >
@@ -94,19 +99,13 @@ export const SeasonsPanel: FC<SeasonsPanelProps> = ({
               </span>
               <span className={styles.seasonLabel}>
                 <span className={styles.seasonName}>
-                  {strings.formatString(strings.seasonName, { n: season.number })}
+                  {strings.formatString(strings.seasonName, { n: season.seasonNumber })}
                 </span>
                 <span className={styles.seasonMeta}>
                   {strings.formatString(strings.onDiskFormat, {
                     onDisk: available,
                     total,
                   })}
-                  {watchedCount > 0 && (
-                    <span className={styles.seasonMetaWatched}>
-                      {" "}
-                      · {strings.formatString(strings.watchedFormat, { n: watchedCount })}
-                    </span>
-                  )}
                 </span>
               </span>
               <span className={styles.miniBar} aria-hidden="true">
@@ -137,48 +136,27 @@ export const SeasonsPanel: FC<SeasonsPanelProps> = ({
             {isOpen && (
               <div className={styles.episodes}>
                 {season.episodes.map((ep) => {
-                  const code = `S${String(season.number).padStart(2, "0")}E${String(ep.number).padStart(2, "0")}`;
+                  const code = `S${String(season.seasonNumber).padStart(2, "0")}E${String(ep.episodeNumber).padStart(2, "0")}`;
                   const isActive =
                     activeEpisode !== undefined &&
-                    activeEpisode.seasonNumber === season.number &&
-                    activeEpisode.episodeNumber === ep.number;
-                  const clickable = Boolean(onSelectEpisode) && ep.available;
-                  const isWatched = ep.watched === true && !isActive;
-                  const isInProgress =
-                    !isActive &&
-                    ep.watched !== true &&
-                    typeof ep.progress === "number" &&
-                    ep.progress > 0 &&
-                    ep.progress < 100;
+                    activeEpisode.seasonNumber === season.seasonNumber &&
+                    activeEpisode.episodeNumber === ep.episodeNumber;
+                  const clickable = Boolean(onSelectEpisode) && ep.onDisk;
+                  const duration =
+                    ep.durationSeconds && ep.durationSeconds > 0
+                      ? formatDurationHuman(ep.durationSeconds)
+                      : "";
+                  const titleText =
+                    ep.title ??
+                    (strings.formatString(strings.episodeFallback, {
+                      n: ep.episodeNumber,
+                    }) as string);
 
-                  const statusEl = !ep.available ? (
+                  const statusEl = !ep.onDisk ? (
                     <span
                       className={mergeClasses(styles.episodeDot, styles.episodeDotMissing)}
                       aria-label={strings.dotMissing}
                       title={strings.dotMissing}
-                    />
-                  ) : isWatched ? (
-                    <span
-                      className={mergeClasses(styles.episodeStatus, styles.episodeCheck)}
-                      aria-label={strings.dotWatched}
-                      title={strings.dotWatched}
-                    >
-                      <IconCheck size={12} />
-                    </span>
-                  ) : isInProgress ? (
-                    <span
-                      className={mergeClasses(styles.episodeDot, styles.episodeDotInProgress)}
-                      style={{ "--ep-pct": `${ep.progress}%` } as CSSProperties}
-                      aria-label={
-                        strings.formatString(strings.dotInProgress, {
-                          pct: ep.progress ?? 0,
-                        }) as string
-                      }
-                      title={
-                        strings.formatString(strings.dotInProgress, {
-                          pct: ep.progress ?? 0,
-                        }) as string
-                      }
                     />
                   ) : (
                     <span
@@ -188,49 +166,23 @@ export const SeasonsPanel: FC<SeasonsPanelProps> = ({
                     />
                   );
 
-                  const titleText =
-                    ep.title ??
-                    (strings.formatString(strings.episodeFallback, { n: ep.number }) as string);
-
                   const rowContent = (
                     <>
-                      <span
-                        className={mergeClasses(
-                          styles.episodeCode,
-                          isWatched && styles.episodeWatchedCode
-                        )}
-                      >
-                        {code}
-                      </span>
-                      <span
-                        className={mergeClasses(
-                          styles.episodeTitle,
-                          isWatched && styles.episodeWatchedTitle
-                        )}
-                        title={titleText}
-                      >
+                      <span className={styles.episodeCode}>{code}</span>
+                      <span className={styles.episodeTitle} title={titleText}>
                         {isActive && (
                           <span className={styles.episodePlayingMark}>{strings.playing}</span>
                         )}
                         {titleText}
                       </span>
-                      <span className={styles.episodeDuration}>{ep.duration ?? ""}</span>
+                      <span className={styles.episodeDuration}>{duration}</span>
                       {statusEl}
-                      {isInProgress && (
-                        <span className={styles.episodeInProgressBar} aria-hidden="true">
-                          <span
-                            className={styles.episodeInProgressFill}
-                            style={{ width: `${ep.progress}%` }}
-                          />
-                        </span>
-                      )}
                     </>
                   );
 
                   const rowClass = mergeClasses(
                     styles.episode,
-                    !ep.available && styles.episodeMissing,
-                    isWatched && styles.episodeWatched,
+                    !ep.onDisk && styles.episodeMissing,
                     isActive && styles.episodeActive
                   );
 
@@ -238,8 +190,8 @@ export const SeasonsPanel: FC<SeasonsPanelProps> = ({
                     return (
                       <button
                         type="button"
-                        key={ep.number}
-                        onClick={() => onSelectEpisode(season.number, ep.number)}
+                        key={ep.episodeNumber}
+                        onClick={() => onSelectEpisode(season.seasonNumber, ep.episodeNumber)}
                         aria-current={isActive ? "true" : undefined}
                         className={mergeClasses(
                           rowClass,
@@ -253,7 +205,7 @@ export const SeasonsPanel: FC<SeasonsPanelProps> = ({
                   }
 
                   return (
-                    <div key={ep.number} className={rowClass}>
+                    <div key={ep.episodeNumber} className={rowClass}>
                       {rowContent}
                     </div>
                   );

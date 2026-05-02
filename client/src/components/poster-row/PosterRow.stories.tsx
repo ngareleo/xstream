@@ -1,49 +1,73 @@
+import { graphql } from "react-relay";
 import type { Meta, StoryObj } from "storybook-react-rsbuild";
 
-import { FilmTile, type FilmTileViewModel } from "~/components/film-tile/FilmTile";
+import { FilmTile } from "~/components/film-tile/FilmTile";
+import type { PosterRowStoryQuery } from "~/relay/__generated__/PosterRowStoryQuery.graphql";
+import { withRelay } from "~/storybook/withRelay";
 
 import { PosterRow } from "./PosterRow.js";
 
-const film = (id: number): FilmTileViewModel => ({
-  id: String(id),
-  title: `Film ${id}`,
-  filename: `film-${id}.mkv`,
-  kind: id % 3 === 0 ? "TV_SHOWS" : "MOVIES",
-  posterUrl: `https://picsum.photos/seed/poster${id}/200/300`,
-  year: 2000 + id,
-  durationLabel: "1h 40m",
-});
+const STORY_QUERY = graphql`
+  query PosterRowStoryQuery @relay_test_operation {
+    videos(first: 12) {
+      edges {
+        node {
+          id
+          ...FilmTile_video
+        }
+      }
+    }
+  }
+`;
 
-const meta: Meta<typeof PosterRow> = {
+interface WrapperProps {
+  data: PosterRowStoryQuery["response"];
+  title: string;
+  count: number;
+}
+
+const PosterRowWrapper = ({ data, title, count }: WrapperProps): JSX.Element => (
+  <PosterRow title={title}>
+    {data.videos.edges.slice(0, count).map((edge) => (
+      <FilmTile key={edge.node.id} video={edge.node} onClick={() => {}} />
+    ))}
+  </PosterRow>
+);
+
+const meta: Meta<WrapperProps> = {
   title: "Components/PosterRow",
-  component: PosterRow,
-  parameters: { layout: "padded" },
+  component: PosterRowWrapper,
+  decorators: [withRelay],
+  parameters: {
+    layout: "padded",
+    relay: {
+      query: STORY_QUERY,
+      getReferenceEntry: (result: PosterRowStoryQuery["response"]) => ["data", result],
+      mockResolvers: {
+        VideoConnection: () => ({
+          edges: Array.from({ length: 12 }, (_, i) => ({
+            node: {
+              id: `mock-${i + 1}`,
+              title: `Film ${i + 1}`,
+              filename: `film-${i + 1}.mkv`,
+              mediaType: i % 3 === 0 ? "TV_SHOWS" : "MOVIES",
+              durationSeconds: 6000 + i * 60,
+              metadata: {
+                year: 2000 + i,
+                posterUrl: `https://picsum.photos/seed/poster${i + 1}/200/300`,
+              },
+            },
+          })),
+        }),
+      },
+    },
+  },
+  args: { title: "New releases", count: 3 },
 };
 
 export default meta;
-type Story = StoryObj<typeof PosterRow>;
+type Story = StoryObj<WrapperProps>;
 
-export const Few: Story = {
-  args: {
-    title: "New releases",
-    children: [1, 2, 3].map((i) => <FilmTile key={i} film={film(i)} onClick={() => {}} />),
-  },
-};
-
-export const Overflowing: Story = {
-  args: {
-    title: "Continue watching",
-    children: Array.from({ length: 12 }, (_, i) => (
-      <FilmTile
-        key={i + 1}
-        film={film(i + 1)}
-        progress={i % 4 === 0 ? 35 : undefined}
-        onClick={() => {}}
-      />
-    )),
-  },
-};
-
-export const Empty: Story = {
-  args: { title: "Watchlist", children: null },
-};
+export const Few: Story = { args: { title: "New releases", count: 3 } };
+export const Overflowing: Story = { args: { title: "Continue watching", count: 12 } };
+export const Empty: Story = { args: { title: "Watchlist", count: 0 } };

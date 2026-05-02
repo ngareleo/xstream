@@ -6,7 +6,7 @@ import { IconFilm, IconTv } from "~/lib/icons";
 import { strings } from "./MediaKindBadge.strings";
 import { useMediaKindBadgeStyles } from "./MediaKindBadge.styles";
 
-export type MediaKind = "MOVIES" | "TV_SHOWS";
+export type MediaKind = "MOVIES" | "TV_SHOWS" | "%future added value";
 
 interface MediaKindBadgeProps {
   kind: MediaKind;

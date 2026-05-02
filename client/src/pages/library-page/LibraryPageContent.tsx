@@ -3,17 +3,13 @@ import { type FC, useCallback, useEffect, useMemo, useState } from "react";
 import { graphql, useLazyLoadQuery } from "react-relay";
 import { useSearchParams } from "react-router-dom";
 
-import {
-  FilmDetailsOverlay,
-  type FilmDetailsViewModel,
-} from "~/components/film-details-overlay/FilmDetailsOverlay";
-import { FilmTile, type FilmTileViewModel } from "~/components/film-tile/FilmTile";
+import { FilmDetailsOverlay } from "~/components/film-details-overlay/FilmDetailsOverlay";
+import { FilmTile } from "~/components/film-tile/FilmTile";
 import { FilterSlide } from "~/components/filter-slide/FilterSlide";
 import { PosterRow } from "~/components/poster-row/PosterRow";
 import { SearchSlide } from "~/components/search-slide/SearchSlide";
-import { type SeasonViewModel } from "~/components/seasons-panel/SeasonsPanel";
 import { IconClose, IconSearch } from "~/lib/icons";
-import type { LibraryPageContentQuery } from "~/relay/__generated__/LibraryPageContentQuery.graphql.js";
+import type { LibraryPageContentQuery } from "~/relay/__generated__/LibraryPageContentQuery.graphql";
 import {
   applyFilters,
   type Codec,
@@ -37,28 +33,17 @@ const LIBRARY_QUERY = graphql`
           title
           filename
           mediaType
-          durationSeconds
           nativeResolution
           metadata {
             year
             genre
             director
-            plot
-            posterUrl
-            rating
           }
           videoStream {
             codec
           }
-          seasons {
-            seasonNumber
-            episodes {
-              episodeNumber
-              title
-              durationSeconds
-              onDisk
-            }
-          }
+          ...FilmTile_video
+          ...FilmDetailsOverlay_video
         }
       }
     }
@@ -72,23 +57,16 @@ const LIBRARY_QUERY = graphql`
   }
 `;
 
-interface LibraryFilm extends FilterableFilm {
+type VideoEdge = NonNullable<LibraryPageContentQuery["response"]["videos"]>["edges"][number];
+type VideoNode = VideoEdge["node"];
+
+interface FilterRow extends FilterableFilm {
   id: string;
-  title: string | null;
+  title: string;
   filename: string;
-  kind: "MOVIES" | "TV_SHOWS";
-  posterUrl: string | null;
-  year: number | null;
-  durationLabel: string | null;
-  durationFull: string | null;
-  genre: string | null;
-  director: string | null;
-  plot: string | null;
-  rating: number | null;
-  hdrLabel: string | null;
-  resolutionLabel: string | null;
-  codecLabel: string | null;
-  seasons: SeasonViewModel[];
+  director: string;
+  genre: string;
+  node: VideoNode;
 }
 
 const RESOLUTION_LABEL: Record<string, Resolution> = {
@@ -97,65 +75,40 @@ const RESOLUTION_LABEL: Record<string, Resolution> = {
   RESOLUTION_720P: "720p",
 };
 
-function formatDuration(seconds: number | null | undefined): string | null {
-  if (!seconds || seconds <= 0) return null;
-  const h = Math.floor(seconds / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-  if (h > 0) return `${h}h ${m}m`;
-  return `${m}m`;
-}
-
-function asViewModel(film: LibraryFilm): FilmTileViewModel {
+function toFilterRow(node: VideoNode): FilterRow {
+  const codec = (node.videoStream?.codec ?? "HEVC") as Codec;
+  const resolution: Resolution = node.nativeResolution
+    ? (RESOLUTION_LABEL[node.nativeResolution] ?? "1080p")
+    : "1080p";
   return {
-    id: film.id,
-    title: film.title,
-    filename: film.filename,
-    kind: film.kind,
-    posterUrl: film.posterUrl,
-    year: film.year,
-    durationLabel: film.durationLabel,
+    id: node.id,
+    title: (node.title || "").toLowerCase(),
+    filename: node.filename.toLowerCase(),
+    director: (node.metadata?.director ?? "").toLowerCase(),
+    genre: (node.metadata?.genre ?? "").toLowerCase(),
+    resolution,
+    hdr: null as Hdr | null,
+    codec,
+    year: node.metadata?.year ?? null,
+    node,
   };
 }
 
-function pickSuggestions(film: LibraryFilm, all: LibraryFilm[]): FilmTileViewModel[] {
-  const tokens = (film.genre ?? "")
-    .toLowerCase()
-    .split(/[·\s/]+/)
-    .filter(Boolean);
-  const scored: { film: LibraryFilm; score: number }[] = [];
+function pickSuggestions(film: FilterRow, all: FilterRow[]): VideoNode[] {
+  const tokens = film.genre.split(/[·\s/]+/).filter(Boolean);
+  const scored: { row: FilterRow; score: number }[] = [];
   for (const f of all) {
     if (f.id === film.id) continue;
     let score = 0;
     if (f.director && film.director && f.director === film.director) score += 50;
-    const fGenre = (f.genre ?? "").toLowerCase();
     for (const t of tokens) {
-      if (t.length > 2 && fGenre.includes(t)) score += 12;
+      if (t.length > 2 && f.genre.includes(t)) score += 12;
     }
     if (f.resolution === film.resolution) score += 2;
-    scored.push({ film: f, score });
+    scored.push({ row: f, score });
   }
   scored.sort((a, b) => b.score - a.score);
-  return scored.slice(0, 8).map((s) => asViewModel(s.film));
-}
-
-function toDetailsViewModel(film: LibraryFilm): FilmDetailsViewModel {
-  return {
-    id: film.id,
-    title: film.title,
-    filename: film.filename,
-    posterUrl: film.posterUrl,
-    kind: film.kind,
-    resolution: film.resolutionLabel,
-    hdr: film.hdrLabel,
-    codec: film.codecLabel,
-    year: film.year,
-    genre: film.genre,
-    duration: film.durationFull,
-    director: film.director,
-    plot: film.plot,
-    rating: film.rating,
-    seasons: film.seasons,
-  };
+  return scored.slice(0, 8).map((s) => s.row.node);
 }
 
 export const LibraryPageContent: FC = () => {
@@ -163,62 +116,25 @@ export const LibraryPageContent: FC = () => {
   const data = useLazyLoadQuery<LibraryPageContentQuery>(LIBRARY_QUERY, {});
   const [params, setParams] = useSearchParams();
 
-  const films = useMemo<LibraryFilm[]>(() => {
-    const edges = data.videos?.edges ?? [];
-    return edges.map((edge) => {
-      const node = edge.node;
-      const meta = node.metadata;
-      const codec = (node.videoStream?.codec ?? null) as Codec | null;
-      const resolution = node.nativeResolution
-        ? (RESOLUTION_LABEL[node.nativeResolution] ?? null)
-        : null;
-      const seasons: SeasonViewModel[] = (node.seasons ?? []).map((season) => ({
-        number: season.seasonNumber,
-        episodes: season.episodes.map((ep) => ({
-          number: ep.episodeNumber,
-          title: ep.title ?? null,
-          duration: formatDuration(ep.durationSeconds),
-          available: ep.onDisk,
-        })),
-      }));
-      return {
-        id: node.id,
-        title: node.title,
-        filename: node.filename,
-        kind: node.mediaType as "MOVIES" | "TV_SHOWS",
-        posterUrl: meta?.posterUrl ?? null,
-        year: meta?.year ?? null,
-        durationLabel: formatDuration(node.durationSeconds),
-        durationFull: formatDuration(node.durationSeconds),
-        genre: meta?.genre ?? null,
-        director: meta?.director ?? null,
-        plot: meta?.plot ?? null,
-        rating: meta?.rating ?? null,
-        hdrLabel: null,
-        resolutionLabel: resolution,
-        codecLabel: codec,
-        resolution: resolution ?? "1080p",
-        hdr: null as Hdr | null,
-        codec: (codec ?? "HEVC") as Codec,
-        seasons,
-      };
-    });
-  }, [data]);
+  const rows = useMemo<FilterRow[]>(
+    () => (data.videos?.edges ?? []).map((edge) => toFilterRow(edge.node)),
+    [data]
+  );
 
   const watchlistEntries = useMemo(() => {
     const items = data.watchlist ?? [];
-    const filmsById = new Map(films.map((f) => [f.id, f]));
+    const rowsById = new Map(rows.map((r) => [r.id, r]));
     return items
       .map((item) => {
-        const film = filmsById.get(item.video.id);
-        if (!film) return null;
-        return { id: item.id, film, progressSeconds: item.progressSeconds };
+        const row = rowsById.get(item.video.id);
+        if (!row) return null;
+        return { id: item.id, row, progressSeconds: item.progressSeconds };
       })
-      .filter((x): x is { id: string; film: LibraryFilm; progressSeconds: number } => x !== null);
-  }, [data, films]);
+      .filter((x): x is { id: string; row: FilterRow; progressSeconds: number } => x !== null);
+  }, [data, rows]);
 
   const filmId = params.get("film");
-  const selectedFilm = filmId ? films.find((f) => f.id === filmId) : undefined;
+  const selectedRow = filmId ? rows.find((r) => r.id === filmId) : undefined;
 
   const continueWatching = useMemo(
     () => watchlistEntries.filter((w) => w.progressSeconds > 0),
@@ -228,7 +144,7 @@ export const LibraryPageContent: FC = () => {
     () => watchlistEntries.filter((w) => w.progressSeconds === 0),
     [watchlistEntries]
   );
-  const newReleases = useMemo(() => films.slice(0, 12), [films]);
+  const newReleases = useMemo(() => rows.slice(0, 12), [rows]);
 
   const [search, setSearch] = useState("");
   const [searchFocused, setSearchFocused] = useState(false);
@@ -244,23 +160,18 @@ export const LibraryPageContent: FC = () => {
       ? "searching"
       : "idle";
 
-  const queryMatched = useMemo<LibraryFilm[]>(() => {
-    if (!trimmedQuery) return films;
-    return films.filter((f) => {
-      const title = (f.title ?? "").toLowerCase();
-      const filename = f.filename.toLowerCase();
-      const director = (f.director ?? "").toLowerCase();
-      const genre = (f.genre ?? "").toLowerCase();
-      return (
-        title.includes(trimmedQuery) ||
-        filename.includes(trimmedQuery) ||
-        director.includes(trimmedQuery) ||
-        genre.includes(trimmedQuery)
-      );
-    });
-  }, [films, trimmedQuery]);
+  const queryMatched = useMemo<FilterRow[]>(() => {
+    if (!trimmedQuery) return rows;
+    return rows.filter(
+      (r) =>
+        r.title.includes(trimmedQuery) ||
+        r.filename.includes(trimmedQuery) ||
+        r.director.includes(trimmedQuery) ||
+        r.genre.includes(trimmedQuery)
+    );
+  }, [rows, trimmedQuery]);
 
-  const searchResults = useMemo<LibraryFilm[]>(
+  const searchResults = useMemo<FilterRow[]>(
     () => applyFilters(queryMatched, filters),
     [queryMatched, filters]
   );
@@ -298,11 +209,11 @@ export const LibraryPageContent: FC = () => {
     setParams(next);
   }, [params, setParams]);
 
-  if (selectedFilm) {
-    const suggestions = pickSuggestions(selectedFilm, films);
+  if (selectedRow) {
+    const suggestions = pickSuggestions(selectedRow, rows);
     return (
       <FilmDetailsOverlay
-        film={toDetailsViewModel(selectedFilm)}
+        video={selectedRow.node}
         suggestions={suggestions}
         onSelectSuggestion={openFilm}
         onClose={closeFilm}
@@ -393,16 +304,12 @@ export const LibraryPageContent: FC = () => {
                     }) as string)
                   : (strings.formatString(strings.filteredFormat, {
                       n: searchResults.length,
-                      total: films.length,
+                      total: rows.length,
                     }) as string)}
               </div>
               <div className={styles.searchGrid}>
-                {searchResults.map((film) => (
-                  <FilmTile
-                    key={film.id}
-                    film={asViewModel(film)}
-                    onClick={() => openFilm(film.id)}
-                  />
+                {searchResults.map((r) => (
+                  <FilmTile key={r.id} video={r.node} onClick={openFilm} />
                 ))}
               </div>
             </div>
@@ -419,37 +326,24 @@ export const LibraryPageContent: FC = () => {
           <>
             {continueWatching.length > 0 && (
               <PosterRow title={strings.rowContinueWatching}>
-                {continueWatching.map(({ id, film, progressSeconds }) => {
-                  const total = film.durationLabel ? 1 : 1;
-                  const progress = total > 0 && film.durationLabel ? progressSeconds : undefined;
-                  return (
-                    <FilmTile
-                      key={id}
-                      film={asViewModel(film)}
-                      progress={progress}
-                      onClick={() => openFilm(film.id)}
-                    />
-                  );
-                })}
+                {continueWatching.map(({ id, row }) => (
+                  <FilmTile key={id} video={row.node} onClick={openFilm} />
+                ))}
               </PosterRow>
             )}
 
             {newReleases.length > 0 && (
               <PosterRow title={strings.rowNewReleases}>
-                {newReleases.map((film) => (
-                  <FilmTile
-                    key={film.id}
-                    film={asViewModel(film)}
-                    onClick={() => openFilm(film.id)}
-                  />
+                {newReleases.map((r) => (
+                  <FilmTile key={r.id} video={r.node} onClick={openFilm} />
                 ))}
               </PosterRow>
             )}
 
             {watchlistRest.length > 0 && (
               <PosterRow title={strings.rowWatchlist}>
-                {watchlistRest.map(({ id, film }) => (
-                  <FilmTile key={id} film={asViewModel(film)} onClick={() => openFilm(film.id)} />
+                {watchlistRest.map(({ id, row }) => (
+                  <FilmTile key={id} video={row.node} onClick={openFilm} />
                 ))}
               </PosterRow>
             )}

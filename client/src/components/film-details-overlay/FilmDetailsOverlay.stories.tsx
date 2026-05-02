@@ -1,120 +1,147 @@
+import { graphql } from "react-relay";
 import { MemoryRouter } from "react-router-dom";
 import type { Meta, StoryObj } from "storybook-react-rsbuild";
 
-import type { FilmTileViewModel } from "~/components/film-tile/FilmTile";
-import type { SeasonViewModel } from "~/components/seasons-panel/SeasonsPanel";
+import type { FilmDetailsOverlay_video$key } from "~/relay/__generated__/FilmDetailsOverlay_video.graphql";
+import type { FilmDetailsOverlayStoryQuery } from "~/relay/__generated__/FilmDetailsOverlayStoryQuery.graphql";
+import { withRelay } from "~/storybook/withRelay";
 
-import { FilmDetailsOverlay, type FilmDetailsViewModel } from "./FilmDetailsOverlay.js";
+import { FilmDetailsOverlay } from "./FilmDetailsOverlay.js";
 
-const movie: FilmDetailsViewModel = {
-  id: "1",
+const STORY_QUERY = graphql`
+  query FilmDetailsOverlayStoryQuery($videoId: ID!) @relay_test_operation {
+    video(id: $videoId) {
+      ...FilmDetailsOverlay_video
+    }
+  }
+`;
+
+interface WrapperProps {
+  video: FilmDetailsOverlay_video$key;
+}
+
+const FilmDetailsOverlayWrapper = ({ video }: WrapperProps): JSX.Element => (
+  <MemoryRouter>
+    <div style={{ position: "relative", width: "100vw", height: "100vh" }}>
+      <FilmDetailsOverlay video={video} onClose={() => {}} />
+    </div>
+  </MemoryRouter>
+);
+
+const movie = {
+  id: "mock-movie",
   title: "Blade Runner 2049",
   filename: "blade-runner-2049.mkv",
-  posterUrl: "https://picsum.photos/seed/blade/1920/1080",
-  kind: "MOVIES",
-  resolution: "4K",
-  hdr: "HDR10",
-  codec: "HEVC",
-  year: 2017,
-  genre: "Sci-Fi",
-  duration: "2h 44m",
-  director: "Denis Villeneuve",
-  plot: "Thirty years after the events of the first film, a new blade runner unearths a long-buried secret that has the potential to plunge what's left of society into chaos.",
-  rating: 8.0,
+  mediaType: "MOVIES",
+  durationSeconds: 9840,
+  nativeResolution: "RESOLUTION_4K",
+  metadata: {
+    year: 2017,
+    genre: "Sci-Fi",
+    director: "Denis Villeneuve",
+    plot: "Thirty years after the events of the first film, a new blade runner unearths a long-buried secret.",
+    rating: 8.0,
+    posterUrl: "https://picsum.photos/seed/blade/1920/1080",
+  },
+  videoStream: { codec: "HEVC" },
   seasons: [],
 };
 
-const seasons: SeasonViewModel[] = [
-  {
-    number: 1,
-    episodes: Array.from({ length: 9 }, (_, i) => ({
-      number: i + 1,
-      title: `Episode ${i + 1}`,
-      duration: "47m",
-      available: true,
-    })),
-  },
-  {
-    number: 2,
-    episodes: Array.from({ length: 10 }, (_, i) => ({
-      number: i + 1,
-      title: `Episode ${i + 1}`,
-      duration: "47m",
-      available: i < 4,
-    })),
-  },
-];
-
-const series: FilmDetailsViewModel = {
-  ...movie,
-  id: "2",
+const series = {
+  id: "mock-series",
   title: "Severance",
   filename: "severance/",
-  kind: "TV_SHOWS",
-  duration: null,
-  director: "Ben Stiller",
-  seasons,
+  mediaType: "TV_SHOWS",
+  durationSeconds: 0,
+  nativeResolution: "RESOLUTION_1080P",
+  metadata: {
+    year: 2022,
+    genre: "Drama",
+    director: "Ben Stiller",
+    plot: "Office workers whose memories are surgically divided between work and personal life.",
+    rating: 8.7,
+    posterUrl: "https://picsum.photos/seed/severance/1920/1080",
+  },
+  videoStream: { codec: "HEVC" },
+  seasons: [
+    {
+      seasonNumber: 1,
+      episodes: Array.from({ length: 9 }, (_, i) => ({
+        episodeNumber: i + 1,
+        title: `Episode ${i + 1}`,
+        durationSeconds: 2820,
+        onDisk: true,
+      })),
+    },
+    {
+      seasonNumber: 2,
+      episodes: Array.from({ length: 10 }, (_, i) => ({
+        episodeNumber: i + 1,
+        title: `Episode ${i + 1}`,
+        durationSeconds: 2820,
+        onDisk: i < 4,
+      })),
+    },
+  ],
 };
 
-const suggestion = (id: number): FilmTileViewModel => ({
-  id: String(100 + id),
-  title: `Suggested film ${id}`,
-  filename: `suggested-${id}.mkv`,
-  kind: "MOVIES",
-  posterUrl: `https://picsum.photos/seed/sug${id}/200/300`,
-  year: 2010 + id,
-  durationLabel: "1h 50m",
-});
-
-const meta: Meta<typeof FilmDetailsOverlay> = {
+const meta: Meta<WrapperProps> = {
   title: "Components/FilmDetailsOverlay",
-  component: FilmDetailsOverlay,
-  parameters: { layout: "fullscreen" },
-  decorators: [
-    (Story) => (
-      <MemoryRouter>
-        <div style={{ position: "relative", width: "100vw", height: "100vh" }}>
-          <Story />
-        </div>
-      </MemoryRouter>
-    ),
-  ],
-  args: { onClose: () => {} },
+  component: FilmDetailsOverlayWrapper,
+  decorators: [withRelay],
+  parameters: {
+    layout: "fullscreen",
+    relay: {
+      query: STORY_QUERY,
+      variables: { videoId: "Video:mock-movie" },
+      getReferenceEntry: (result: FilmDetailsOverlayStoryQuery["response"]) => [
+        "video",
+        result.video,
+      ],
+      mockResolvers: { Video: () => movie },
+    },
+  },
 };
 
 export default meta;
-type Story = StoryObj<typeof FilmDetailsOverlay>;
+type Story = StoryObj<WrapperProps>;
 
-export const Movie: Story = { args: { film: movie } };
+export const Movie: Story = {};
 
-export const MovieWithSuggestions: Story = {
-  args: {
-    film: movie,
-    suggestions: Array.from({ length: 6 }, (_, i) => suggestion(i + 1)),
-  },
-};
-
-export const Series: Story = { args: { film: series } };
-
-export const SeriesWithSuggestions: Story = {
-  args: {
-    film: series,
-    suggestions: Array.from({ length: 6 }, (_, i) => suggestion(i + 1)),
+export const Series: Story = {
+  parameters: {
+    relay: {
+      query: STORY_QUERY,
+      variables: { videoId: "Video:mock-series" },
+      getReferenceEntry: (result: FilmDetailsOverlayStoryQuery["response"]) => [
+        "video",
+        result.video,
+      ],
+      mockResolvers: { Video: () => series },
+    },
   },
 };
 
 export const UnmatchedFile: Story = {
-  args: {
-    film: {
-      ...movie,
-      title: null,
-      year: null,
-      genre: null,
-      duration: null,
-      director: null,
-      plot: null,
-      posterUrl: null,
-      rating: null,
+  parameters: {
+    relay: {
+      query: STORY_QUERY,
+      variables: { videoId: "Video:mock-unmatched" },
+      getReferenceEntry: (result: FilmDetailsOverlayStoryQuery["response"]) => [
+        "video",
+        result.video,
+      ],
+      mockResolvers: {
+        Video: () => ({
+          ...movie,
+          id: "mock-unmatched",
+          title: "",
+          filename: "weird.file.mkv",
+          metadata: null,
+          nativeResolution: null,
+          videoStream: null,
+        }),
+      },
     },
   },
 };
