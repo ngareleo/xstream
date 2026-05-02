@@ -94,6 +94,13 @@ function toFilterRow(node: VideoNode): FilterRow {
   };
 }
 
+function timeOfDayGreeting(now: Date): string {
+  const h = now.getHours();
+  if (h < 12) return strings.greetingMorning;
+  if (h < 18) return strings.greetingAfternoon;
+  return strings.greetingEvening;
+}
+
 function pickSuggestions(film: FilterRow, all: FilterRow[]): VideoNode[] {
   const tokens = film.genre.split(/[·\s/]+/).filter(Boolean);
   const scored: { row: FilterRow; score: number }[] = [];
@@ -263,7 +270,7 @@ export const LibraryPageContent: FC = () => {
         <div className={styles.heroBody}>
           {heroMode === "idle" && (
             <div>
-              <div className={styles.greetingEyebrow}>· {strings.libraryEyebrow}</div>
+              <div className={styles.greetingEyebrow}>· {timeOfDayGreeting(new Date())}</div>
               <div className={styles.greeting}>{strings.libraryHeading}</div>
             </div>
           )}
