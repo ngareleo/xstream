@@ -92,6 +92,7 @@ export const useFilmTileStyles = makeStyles({
     height: "100%",
     backgroundColor: tokens.colorGreen,
   },
+  // (kindBadge / kindBadgeSeries migrated into <MediaKindBadge variant="tile">.)
   meta: { marginTop: "10px" },
   title: { fontSize: "13px", color: tokens.colorText },
   subtitle: {

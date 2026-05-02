@@ -3,24 +3,25 @@ import { makeStyles } from "@griffel/react";
 export const useEdgeHandleStyles = makeStyles({
   handle: {
     position: "absolute",
-    right: 0,
-    width: "30px",
-    height: "108px",
+    // Tuck half the disc behind the right edge so the affordance reads as
+    // "something to pull out" rather than a floating button.
+    right: "-22px",
+    width: "44px",
+    height: "44px",
     backgroundColor: "rgba(255,255,255,0.10)",
     borderTopWidth: "1px",
-    borderRightWidth: 0,
+    borderRightWidth: "1px",
     borderBottomWidth: "1px",
     borderLeftWidth: "1px",
     borderTopStyle: "solid",
+    borderRightStyle: "solid",
     borderBottomStyle: "solid",
     borderLeftStyle: "solid",
     borderTopColor: "rgba(255,255,255,0.30)",
+    borderRightColor: "rgba(255,255,255,0.18)",
     borderBottomColor: "rgba(255,255,255,0.10)",
     borderLeftColor: "rgba(255,255,255,0.18)",
-    borderTopLeftRadius: "999px",
-    borderBottomLeftRadius: "999px",
-    borderTopRightRadius: 0,
-    borderBottomRightRadius: 0,
+    borderRadius: "999px",
     color: "#fff",
     display: "flex",
     alignItems: "center",
@@ -46,6 +47,8 @@ export const useEdgeHandleStyles = makeStyles({
     fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
     fontSize: "16px",
     lineHeight: "1",
-    transform: "translateX(-1px)",
+    // Nudge the chevron toward the visible (left) half of the disc so it
+    // reads as pointing inward from the half tucked behind the edge.
+    transform: "translateX(-7px)",
   },
 });

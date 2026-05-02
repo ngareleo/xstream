@@ -5,6 +5,20 @@
 > deltas live in the matching `Components/<Name>.md` files under a
 > `## Changes from Prerelease` section added alongside this document.
 
+## Update log
+
+- **2026-05-02 (Rust-rewrite: resolution handling):** The Rust-port migration plan now formalises per-job resolution handling and native-resolution clamping. Captured in [`docs/migrations/rust-rewrite/06-File-Handling-Layer.md`](../rust-rewrite/06-File-Handling-Layer.md) §5 — includes the TV-show per-episode `native_resolution` column, GraphQL `Video.nativeResolution: Resolution` field, server-side clamp in `startTranscode`, and client picker bounded to `[240p … native]`. The Release design lab's TV-show support (SeasonsPanel + per-episode resolution badges) is the driver for this formalization. No code changes in this pass; the §5 section captures the proposal and Rust sketch code for implementation during Step 2 / Step 3.
+
+- **2026-05-02 (icon library standardisation):** Both `design/Release/` lab and production `client/` standardised on `@heroicons/react@1.0.6` (Outline). Hand-rolled SVG icon libraries in both workspaces have been replaced with a thin wrapper over Heroicons. All existing icon call sites preserved (IconPlay, IconPause, etc.). **Lab files changed:** `package.json` (added dependency), `src/lib/icons.tsx` (full rewrite), `DetailPane.tsx`, `FilmRow.tsx`, `Player.tsx` (text glyphs replaced with icon components). **Client files changed:** `package.json`, `src/lib/icons.tsx` (full rewrite, ~30 exports). Design-system source of truth now: [Figma Admin System UI Kit (Community)](https://www.figma.com/design/zO44HkPod5kUESUofiCn8o/Admin-System-UI-Kit--Community-) "Heroicons Outline" frame. Three hand-rolled exceptions retained: `IconArrowsIn` (v1 has no equivalent — uses v2 path as fallback until major upgrade), `IconSpinner` (CSS animation), `LogoShield` (brand mark).
+
+- **2026-05-02 (third pass):** Two TV-show affordance refinements landed in PR #49:
+  1. **Episode picker shortcut:** Available episodes in DetailPane and FilmDetailsOverlay are now clickable; clicking one navigates straight to `/player/<id>?s&e` to launch playback directly, bypassing the intermediate player open.
+  2. **Player side-panel accordion mode:** SeasonsPanel now accepts `accordion?: boolean` prop (default false, multi-open). When true, opening a season closes any previously-open season; closing the only open season leaves none open. Player side panel uses `accordion={true}` to prevent the narrow rail from becoming overwhelmed when browsing across seasons. DetailPane and FilmDetailsOverlay retain multi-open mode (default).
+  
+  Updated files: `SeasonsPanel.md` (added `accordion` prop + accordion toggle logic), `DetailPane.md` (noted `onSelectEpisode={playEpisode}` wiring in SEASONS & EPISODES), `FilmDetailsOverlay.md` (noted same wiring in seasonsRail), `Player.md` (noted `accordion={true}` in side-panel SeasonsPanel).
+
+- **2026-05-02:** TV-show support added to the design lab and migration specs. See "TV Show Support — new in Release" section below for component changes and specs.
+
 Sources of truth:
 - Prerelease lab: `design/Prerelease/src/`
 - Release lab: `design/Release/src/`
@@ -214,6 +228,46 @@ Full spec: [`Logo.md`](Components/Logo.md).
 No Prerelease counterpart. Lab-only page at `/design-system`. Showcases color tokens, type scale, spacing scale, all 7 logo candidates, app-icon contexts, and the header lockup. Not ported to production.
 
 Full spec: [`DesignSystem.md`](Components/DesignSystem.md). Cross-reference: this document.
+
+---
+
+## TV Show Support — new in Release (2026-05-02, PR #49)
+
+No Prerelease counterpart. Release models TV series as a first-class concept alongside movies. The discriminator lives in the Film model: `kind: "movie" | "series"`. Accompanying `seasons: Season[]` array (only present for series) holds season and episode metadata.
+
+### Data model
+
+- `Film.kind` — discriminator: `"movie"` or `"series"`.
+- `Film.seasons` — array of Season objects (only when `kind === "series"`).
+  - `Season.seasonNumber` — 1-indexed.
+  - `Season.episodes[]` — array of Episode objects.
+    - `Episode.episodeNumber` — 1-indexed.
+    - `Episode.title` — optional; placeholder if null.
+    - `Episode.onDisk` — boolean; true if file exists.
+
+### UI surfaces affected
+
+- **FilmTile:** Kind badge (green TV icon, top-left corner) appears only on series tiles. Movies unchanged.
+- **FilmRow:** Kind glyph (Film icon for movies, TV icon for series in green) next to title. Series rows show a chevron-expand button that toggles an inline `<SeasonsPanel>` below the row. Series metadata line shows `X/Y EPISODES` instead of duration. Movies unchanged.
+- **DetailPane:** New "SEASONS & EPISODES" section below CAST for series films. Bordered card with header showing total episode count (green). Body contains `<SeasonsPanel defaultOpenFirst={true} />` so season 1 opens by default.
+- **FilmDetailsOverlay:** Right-side glass `seasonsRail` for series (380px wide). Header shows total episode count. Body contains scrollable `<SeasonsPanel>`. Main content max-width reduces from 720px → 560px when rail is present to prevent title collision.
+- **Player (NEW series variant):** URL contract `/player/:filmId?s=<season>&e=<episode>`. Top-right status eyebrow injects episode code (e.g. "● PLAYING · S01E03 · 4K · HDR10"). Bottom controls eyebrow changes from `[year, genre, duration]` to `[Season N, genre, episode duration]`. New episode badge row above the show title displays green-bordered episode code + episode title. Side panel header gains a `sideEpisodeRow` showing the current episode with green code chip + title. Side panel body replaces UP NEXT + WATCHLIST sections with EPISODES picker: `<SeasonsPanel seasons={...} activeEpisode={{...}} onSelectEpisode={selectEpisode} />`. Missing episodes are read-only; available episodes are clickable buttons. Episode selection updates URL params and re-runs the loading state.
+- **Profiles footer:** Counts now include shows and episodes: `{shows} SHOWS ({episodes} EPS)` aggregated across all series.
+- **ProfileForm:** New media-type segment hint explains parsing semantics: "Each video file is matched as a single film" (MOVIES) vs. "Files are grouped by show, then by season folder. Episode numbers are read from filenames (S01E03, 1x03, etc.)" (TV_SHOWS).
+
+### New component: SeasonsPanel (extended in second 2026-05-02 pass)
+
+Reusable accordion widget for season/episode browsing. Props: `seasons: Season[]`, `defaultOpenFirst?: boolean`, `activeEpisode?: { seasonNumber; episodeNumber }`, `onSelectEpisode?: (s, e) => void`. Season headers collapse/expand with progress indicators (green complete, yellow partial, grey missing). Episode rows show code (S01E03), title, duration, and on-disk dot (filled green or outlined grey). 
+
+When `activeEpisode` and `onSelectEpisode` are provided (Player variant only):
+- Available episodes render as `<button>` elements; missing episodes render as non-interactive `<div>`.
+- The active episode row displays "● PLAYING" eyebrow + green left-rail styling + `aria-current="true"`.
+- The season containing the active episode auto-expands on mount.
+- Clicking an available episode calls `onSelectEpisode(seasonNumber, episodeNumber)`.
+
+Used by FilmRow inline expansion, DetailPane series section, FilmDetailsOverlay seasons rail (read-only), and Player side panel (interactive) — single source of truth for consistency across all entry points.
+
+Full spec: [`SeasonsPanel.md`](Components/SeasonsPanel.md).
 
 ---
 

@@ -18,6 +18,7 @@ Full-bleed overlay covering the entire viewport when a user selects a film from 
 - `position: absolute`, `inset: 0`, `overflow-y: auto`, `backgroundColor: tokens.colorBg0`.
 - Scrollable — when suggestions are present below the hero, the page scrolls vertically to reveal them.
 - Replaces the full page output (not rendered inside the page container) when active.
+- Supports scroll-to-top on suggestion click: when `onSelectSuggestion` is called, the overlay smoothly scrolls to `top: 0`.
 
 ### Hero section (`.hero`)
 - `position: relative`, `width: 100%`, `height: 100vh`, `overflow: hidden`.
@@ -81,10 +82,22 @@ Full-bleed overlay covering the entire viewport when a user selects a film from 
 - **15px** / **`lineHeight: 1.55`** / `color: colorTextDim` / **`maxWidth: 640px`**.
 - Rendered only when `film.plot` is truthy.
 
+#### Seasons rail (`.seasonsRail`) — right side, series only
+- **Only rendered when `film.kind === "series"` and `film.seasons` is truthy.**
+- `position: absolute`, `top: 84px`, `right: 60px`, `bottom: 72px`, `width: 380px`, `zIndex: 2`.
+- `display: flex`, `flexDirection: column`.
+- **Glass treatment:** `backgroundColor: rgba(20,28,24,0.55)` (green-tinted glass, similar to header), `backdropFilter: blur(20px) saturate(1.6)`, `borderRadius: 3px`, `border: 1px solid rgba(37,48,42,0.45)`, `boxShadow: inset 0 1px 0 rgba(255,255,255,0.05)`.
+- **Header row (`seasonsRailHeader`):** `paddingTop: 12px`, `paddingBottom: 12px`, `paddingLeft: 16px`, `paddingRight: 16px`, `borderBottom: 1px solid rgba(37,48,42,0.45)`, `display: flex`, `justifyContent: space-between`, `alignItems: center`.
+  - Left: `"SEASONS"` label (Mono 10px, uppercase, `colorTextDim`).
+  - Right: `"{episodesOnDisk}/{totalEpisodes} ON DISK"` (Mono 10px, uppercase, `colorGreen`).
+- **Body scroll area:** `flex: 1`, `overflow-y: auto`, `paddingTop: 12px`, `paddingBottom: 12px`, `paddingLeft: 12px`, `paddingRight: 12px`.
+- Renders `<SeasonsPanel seasons={film.seasons} defaultOpenFirst={true} onSelectEpisode={playEpisode} />` — season 1 opens by default. Available episodes are clickable; clicking one calls `playEpisode(seasonNumber, episodeNumber)` which navigates to `/player/{filmId}?s={seasonNumber}&e={episodeNumber}`.
+- **Content max-width adjustment** (`contentWithRail` on the main content stack): when the rail is present, the overlay's content stack shrinks from `maxWidth: 720px` to `maxWidth: 560px` so the title block does not collide visually with the glass rail.
+
 #### Actions row (`.overlayActions`)
 - `display: flex`, `alignItems: center`, `columnGap: 20px`, `marginTop: 8px`.
 
-##### Play CTA (glass pill, Liquid Glass with green "neon sign" hover)
+##### Play CTA (glass pill, Liquid Glass with dimmed green hover)
 - **Glass pill (iOS-26 Liquid Glass inspired):**
   - `backgroundColor: rgba(255,255,255,0.12)`.
   - `color: #fff`.
@@ -94,13 +107,13 @@ Full-bleed overlay covering the entire viewport when a user selects a film from 
   - Beveled-light borders: `boxShadow: inset 0 1px 0 rgba(255,255,255,0.35), inset 0 -1px 0 rgba(0,0,0,0.20), 0 10px 32px rgba(0,0,0,0.45)`.
   - Mono 12px / 0.18em / uppercase / 600 weight.
   - Transition: `transitionProperty: transform, box-shadow, background-color, color, border-color, text-shadow`, `transitionDuration: 0.18s`, `transitionTimingFunction: ease-out`.
-- **Hover:** "Lighted sign" effect — the glass lights up green as if a neon sign is activating.
+- **Hover:** Dimmed "lighted sign" effect — reduced glow compared to earlier sessions.
   - `transform: translateY(-1px)`.
   - `backgroundColor: oklch(0.78 0.20 150 / 0.18)` (green-tinted glass).
   - Border colours (alpha-gradient): `borderTopColor: oklch(0.78 0.20 150 / 0.55)` (bright top), `borderRightColor: oklch(0.78 0.20 150 / 0.4)`, `borderBottomColor: oklch(0.78 0.20 150 / 0.25)` (dim bottom), `borderLeftColor: oklch(0.78 0.20 150 / 0.4)`.
   - `color: tokens.colorGreen`.
-  - `textShadow: 0 0 6px ${tokens.colorGreenGlow}, 0 0 18px ${tokens.colorGreen}` (two-layer green text glow).
-  - `boxShadow: inset 0 1px 0 oklch(0.78 0.20 150 / 0.55), inset 0 -1px 0 rgba(0,0,0,0.20), 0 14px 40px rgba(0,0,0,0.55), 0 0 32px ${tokens.colorGreenGlow}, 0 0 80px oklch(0.78 0.20 150 / 0.30)` (inset green highlight + outer green halos at 32px and 80px).
+  - **Dimmed text-shadow:** `textShadow: 0 0 4px ${tokens.colorGreenGlow / 0.35}, 0 0 18px ${tokens.colorGreen}` — reduced from the bright variant (outer halo ambient from 80px → suppressed; inner focus narrowed). The text glows softly without the aggressive outer corona.
+  - **Dimmed outer box-shadow:** `boxShadow: inset 0 1px 0 oklch(0.78 0.20 150 / 0.55), inset 0 -1px 0 rgba(0,0,0,0.20), 0 14px 40px rgba(0,0,0,0.55), 0 0 14px ${tokens.colorGreenGlow / 0.18}` — ambient glow reduced to 14px with 0.18 alpha (from earlier 32px + 80px dual halos).
 - **Active (`:active`):** `transform: translateY(0) scale(0.98)`.
 - **Inner icon (`& svg`):** **engraved treatment at rest** — `color: rgba(255,255,255,0.55)`, `filter: drop-shadow(0 1px 0.5px rgba(255,255,255,0.45)) drop-shadow(0 -1px 0.5px rgba(0,0,0,0.55))` (recessed-into-glass illusion). **On hover (`:hover svg`):** `color: tokens.colorGreen`, `filter: drop-shadow(0 0 4px ${tokens.colorGreen}) drop-shadow(0 0 12px ${tokens.colorGreenGlow})` (green glow on icon).
 - Contents: `<IconPlay>` + `<span>Play</span>`.
@@ -121,7 +134,7 @@ Full-bleed overlay covering the entire viewport when a user selects a film from 
 - Rendered **after** the hero section, only when `suggestions.length > 0`.
 - `paddingTop: 40px`, `paddingBottom: 60px`, `backgroundColor: tokens.colorBg0`.
 - Contains a `<PosterRow title="You might also like">` component wrapping `<FilmTile>` cards for each suggestion.
-- Click handler on each tile: calls `onSelectSuggestion(id)` if provided, else navigates to `/player/{id}`.
+- Click handler on each tile: calls `onSelectSuggestion(id)` if provided, which also triggers a scroll-to-top animation on the overlay (`overlayRef.current?.scrollTo({ top: 0, behavior: "smooth" })`), OR navigates to `/player/{id}` if callback not provided.
 
 ### Suggestion scoring (from Library page)
 
@@ -174,15 +187,21 @@ The `.overlayPoster` element has **`viewTransitionName: "film-backdrop"`**. This
 - [ ] Meta row: Mono 13px uppercase, `{year} · {genre} · {duration}`, null filtering
 - [ ] Director: 13px, `"Directed by "` + name in white (only when `film.director` present)
 - [ ] Plot: 15px, `lineHeight: 1.55`, `maxWidth: 640px`, `colorTextDim` (only when `film.plot` present)
+- [ ] **Seasons rail (`.seasonsRail`, series only):** `position: absolute`, `top: 84px`, `right: 60px`, `bottom: 72px`, `width: 380px`, `zIndex: 2` (rendered only when `film.kind === "series"` && `film.seasons` truthy)
+  - [ ] Glass treatment: `backgroundColor: rgba(20,28,24,0.55)`, `backdropFilter: blur(20px) saturate(1.6)`, `borderRadius: 3px`, `border: 1px solid rgba(37,48,42,0.45)`, subtle inset highlight
+  - [ ] Header row: `display: flex`, `justifyContent: space-between`, "SEASONS" label (left, muted Mono 10px) + episode count (right, green Mono 10px) `"{onDisk}/{total} ON DISK"`
+  - [ ] Body: `flex: 1`, `overflow-y: auto`, render `<SeasonsPanel seasons={film.seasons} defaultOpenFirst={true} onSelectEpisode={playEpisode} />`
+  - [ ] `playEpisode(s, e)` helper: calls `navigate(\`/player/\${film.id}?s=\${s}&e=\${e}\`)`
+  - [ ] Content max-width adjustment: when rail is present, reduce overlay content max-width from 720px → 560px (`contentWithRail` class) to prevent title collision
 - [ ] Play CTA glass pill (at rest): `backgroundColor: rgba(255,255,255,0.12)`, `borderRadius: 999px`, `backdropFilter: blur(20px) saturate(180%)`, beveled-light borders, Mono 12px uppercase
 - [ ] Play CTA transition: `transitionProperty: transform, box-shadow, background-color, color, border-color, text-shadow`, `0.18s`, `ease-out`
-- [ ] Play CTA **hover — "lighted sign" effect:**
+- [ ] Play CTA **hover — dimmed "lighted sign" effect:**
   - [ ] `transform: translateY(-1px)`
   - [ ] `backgroundColor: oklch(0.78 0.20 150 / 0.18)` (green-tinted glass)
   - [ ] Borders: alpha-gradient from top bright (0.55) → left/right (0.4) → bottom dim (0.25) in green (`oklch(0.78 0.20 150 / α)`)
   - [ ] `color: tokens.colorGreen`
-  - [ ] `textShadow: 0 0 6px colorGreenGlow, 0 0 18px colorGreen` (two-layer green glow)
-  - [ ] `boxShadow: inset green top highlight + amplified shadow + outer green halos at 32px + 80px`
+  - [ ] `textShadow: 0 0 4px (colorGreenGlow / 0.35), 0 0 18px colorGreen` (dimmed two-layer: tight inner focus, soft ambient — NOT the bright variant)
+  - [ ] `boxShadow: inset green top highlight + shadow + 14px ambient glow (colorGreenGlow / 0.18)` (narrower halo; NOT the earlier 32px + 80px dual halos)
 - [ ] Play CTA icon (at rest): engraved — `color: rgba(255,255,255,0.55)`, `filter: drop-shadow(0 1px ...) drop-shadow(0 -1px ...)` (white recessed shadows)
 - [ ] Play CTA icon **hover:** `color: tokens.colorGreen`, `filter: drop-shadow(0 0 4px colorGreen) drop-shadow(0 0 12px colorGreenGlow)` (green glowing)
 - [ ] Play CTA active: `transform: translateY(0) scale(0.98)`
@@ -196,7 +215,7 @@ The `.overlayPoster` element has **`viewTransitionName: "film-backdrop"`**. This
 - [ ] Padding: `paddingTop: 40px`, `paddingBottom: 60px`, `backgroundColor: colorBg0` (matches overlay bg)
 - [ ] `<PosterRow title="You might also like">` container
 - [ ] Map suggestions to `<FilmTile>` components
-- [ ] FilmTile click handler: calls `onSelectSuggestion(id)` if provided, else navigates to `/player/{id}`
+- [ ] FilmTile click handler: calls `onSelectSuggestion(id)` if provided (and scrolls overlay to top via `overlayRef.current?.scrollTo({ top: 0, behavior: "smooth" })`), else navigates to `/player/{id}`
 
 ### Props and wiring
 - [ ] Accept props: `film: FilmShape`, `suggestions?: Film[]` (default: []), `onClose: () => void`, `onSelectSuggestion?: (id: string) => void`
@@ -209,7 +228,7 @@ None. The design is finalized as of 2026-05-02, PR #48.
 
 ## Status
 
-- [x] Designed in `design/Release` lab — FilmDetailsOverlay extracted from Library 2026-05-02 PR #48. Hero section: 100vh fixed container with poster + gradients + content stack. Play CTA glass pill with **green "lighted sign" hover** (oklch(0.78 0.20 150 / α) bg + alpha-gradient borders + two-layer text-shadow glow + outer green box-shadow halos; icon gets green drop-shadow filters). Scroll hint animates below action row when suggestions present. Suggestions carousel (`.suggestions` section, 40/60px padding) renders below hero with `<PosterRow>` + `<FilmTile>` tiles; click handler calls `onSelectSuggestion(id)` (or navigates to player if not provided). Overlay scrollable when suggestions extend below viewport. View-transition naming (`viewTransitionName: "film-backdrop"`) for coordinated morphing with Player.
+- [x] Designed in `design/Release` lab — FilmDetailsOverlay extracted from Library 2026-05-02 PR #48. Hero section: 100vh fixed container with poster + gradients + content stack. Play CTA glass pill with **green "lighted sign" hover** (oklch(0.78 0.20 150 / α) bg + alpha-gradient borders + two-layer text-shadow glow + outer green box-shadow halos; icon gets green drop-shadow filters). Scroll hint animates below action row when suggestions present. Suggestions carousel (`.suggestions` section, 40/60px padding) renders below hero with `<PosterRow>` + `<FilmTile>` tiles; click handler calls `onSelectSuggestion(id)` (or navigates to player if not provided). Overlay scrollable when suggestions extend below viewport. View-transition naming (`viewTransitionName: "film-backdrop"`) for coordinated morphing with Player. **TV-show support added 2026-05-02, PR #49:** Right-side glass `seasonsRail` (380px wide, top:84 / right:60 / bottom:72) renders for series films. Header shows total episode count (green, right-aligned). Body contains `<SeasonsPanel defaultOpenFirst={true} />` for scrollable season/episode browsing. When rail is present, main content stack max-width reduces from 720px → 560px (`contentWithRail` class) to prevent title collision.
 - [ ] Production implementation
 
 ## Notes

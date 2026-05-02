@@ -1,9 +1,10 @@
-import { type FC, useMemo, useState } from "react";
+import { type FC, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { mergeClasses } from "@griffel/react";
 import {
   type Film,
   type Profile,
+  films,
   getFilmById,
   getFilmsForProfile,
   profiles,
@@ -35,7 +36,28 @@ export const Profiles: FC = () => {
   const selectedFilm = filmId ? getFilmById(filmId) : undefined;
   const paneOpen = Boolean(selectedFilm);
 
-  const { paneWidth, containerRef, onResizeMouseDown } = useSplitResize();
+  // The DetailPane opens to 50% of the viewport on first mount so the
+  // pre-selected film (see effect below) reads as a primary surface, not
+  // a peek. The user can still drag-resize within [MIN, MAX].
+  const defaultPaneWidth = useMemo(() => {
+    if (typeof window === "undefined") return 720;
+    return Math.floor(window.innerWidth * 0.5);
+  }, []);
+  const { paneWidth, containerRef, onResizeMouseDown } =
+    useSplitResize(defaultPaneWidth);
+
+  // First-mount default: pre-select the first movie so the page lands
+  // with the DetailPane already open. Skips when the URL already carries
+  // a `?film=` (deep-link / back-nav) or the design-lab `?empty=1`
+  // preview flag is set.
+  useEffect(() => {
+    if (params.get("film") || params.get("empty") === "1") return;
+    const firstMovie = films.find((f) => f.kind === "movie" && f.matched);
+    if (firstMovie) setParams({ film: firstMovie.id }, { replace: true });
+    // Run once on mount; the effect must not re-fire when params change
+    // because the user might have intentionally cleared the selection.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const initialExpanded = useMemo(() => {
     const set = new Set<string>([profiles[0].id]);
@@ -71,6 +93,11 @@ export const Profiles: FC = () => {
   const closePane = (): void => setParams({});
 
   const totalFilms = profiles.reduce((acc, p) => acc + (p.filmCount ?? 0), 0);
+  const totalShows = profiles.reduce((acc, p) => acc + (p.showCount ?? 0), 0);
+  const totalEpisodes = profiles.reduce(
+    (acc, p) => acc + (p.episodeCount ?? 0),
+    0,
+  );
   const totalUnmatched = profiles.reduce((acc, p) => acc + p.unmatched, 0);
   const scanningCount = profiles.filter((p) => p.scanning).length;
 
@@ -222,7 +249,7 @@ export const Profiles: FC = () => {
 
         <div className={s.footer}>
           <span>
-            {profiles.length} PROFILES · {totalFilms} FILMS · {totalUnmatched} UNMATCHED
+            {profiles.length} PROFILES · {totalFilms} FILMS · {totalShows} SHOWS ({totalEpisodes} EPS) · {totalUnmatched} UNMATCHED
           </span>
           <button
             type="button"

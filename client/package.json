@@ -19,6 +19,7 @@
   },
   "dependencies": {
     "@griffel/react": "^1.6.1",
+    "@heroicons/react": "1.0.6",
     "@nova/react": "^2.9.2",
     "@nova/types": "^1.7.1",
     "@opentelemetry/api": "^1.9.1",

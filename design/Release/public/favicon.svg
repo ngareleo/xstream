@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!--
+    xstream favicon — derived from Logo02 (the stacked X monogram).
+    Filled accent-green circle background with the X glyph in black.
+    The X uses square caps + a chunky stroke to read at 16px and stay
+    legible against the green disc.
+  -->
+  <circle cx="32" cy="32" r="31" fill="oklch(0.78 0.20 150)" />
+  <path
+    d="M16 16 L48 48 M48 16 L16 48"
+    stroke="#050706"
+    stroke-width="7"
+    stroke-linecap="square"
+  />
+  <circle cx="32" cy="32" r="3.4" fill="oklch(0.78 0.20 150)" stroke="#050706" stroke-width="1.6" />
+</svg>

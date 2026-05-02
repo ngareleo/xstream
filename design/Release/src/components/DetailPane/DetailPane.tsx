@@ -1,10 +1,17 @@
 import { type FC, useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { mergeClasses } from "@griffel/react";
-import { ImdbBadge, IconClose, IconSearch } from "../../lib/icons.js";
-import { type Film } from "../../data/mock.js";
+import {
+  IconClose,
+  IconExpand,
+  IconPlay,
+  IconSearch,
+  ImdbBadge,
+} from "../../lib/icons.js";
+import { type Film, getEpisodeStats, getResumeEpisode } from "../../data/mock.js";
 import { type OmdbResult, searchOmdb } from "../../data/omdb.js";
 import { Poster } from "../Poster/Poster.js";
+import { SeasonsPanel } from "../SeasonsPanel/SeasonsPanel.js";
 import { useDetailPaneStyles } from "./DetailPane.styles.js";
 
 interface DetailPaneProps {
@@ -32,8 +39,27 @@ export const DetailPane: FC<DetailPaneProps> = ({
   onEditChange,
 }) => {
   const styles = useDetailPaneStyles();
+  const navigate = useNavigate();
   const hdrLabel = film.hdr && film.hdr !== "—" ? film.hdr.toUpperCase() : null;
   const [editing, setEditing] = useState(initialEdit);
+  const resume = getResumeEpisode(film);
+  const playHref = resume
+    ? `/player/${film.id}?s=${resume.season}&e=${resume.episode}`
+    : `/player/${film.id}`;
+  const playLabel = resume ? "Continue" : "Play";
+
+  const playEpisode = (seasonNumber: number, episodeNumber: number): void => {
+    navigate(`/player/${film.id}?s=${seasonNumber}&e=${episodeNumber}`);
+  };
+
+  const expandToOverlay = (): void => {
+    const target = `/?film=${encodeURIComponent(film.id)}`;
+    if (typeof document.startViewTransition === "function") {
+      document.startViewTransition(() => navigate(target));
+    } else {
+      navigate(target);
+    }
+  };
 
   useEffect(() => {
     setEditing(initialEdit);
@@ -73,8 +99,9 @@ export const DetailPane: FC<DetailPaneProps> = ({
         ) : (
           <>
             <div className={styles.actionRow}>
-              <Link to={`/player/${film.id}`} className={styles.playAction}>
-                ▶ Play
+              <Link to={playHref} className={styles.playAction}>
+                <IconPlay width={11} height={11} />
+                <span>{playLabel}</span>
               </Link>
               <button
                 type="button"
@@ -82,6 +109,15 @@ export const DetailPane: FC<DetailPaneProps> = ({
                 className={styles.editAction}
               >
                 Edit
+              </button>
+              <button
+                type="button"
+                onClick={expandToOverlay}
+                aria-label="Expand to full details view"
+                title="Expand"
+                className={styles.expandAction}
+              >
+                <IconExpand width={16} height={16} />
               </button>
             </div>
 
@@ -128,6 +164,32 @@ export const DetailPane: FC<DetailPaneProps> = ({
                 </div>
               </>
             )}
+
+            {film.kind === "series" && film.seasons && (() => {
+              const stats = getEpisodeStats(film);
+              return (
+                <>
+                  <div className={styles.sectionLabel}>SEASONS &amp; EPISODES</div>
+                  <div className={styles.seasonsSection}>
+                    <div className={styles.seasonsHeader}>
+                      <span className={styles.seasonsHeaderLabel}>
+                        {film.seasons.length} season{film.seasons.length === 1 ? "" : "s"}
+                      </span>
+                      {stats && (
+                        <span className={styles.seasonsHeaderStat}>
+                          {stats.available} / {stats.total} on disk
+                        </span>
+                      )}
+                    </div>
+                    <SeasonsPanel
+                      seasons={film.seasons}
+                      defaultOpenFirst
+                      onSelectEpisode={playEpisode}
+                    />
+                  </div>
+                </>
+              );
+            })()}
 
             <div className={styles.sectionLabel}>FILE</div>
             <div className={styles.fileBlock}>

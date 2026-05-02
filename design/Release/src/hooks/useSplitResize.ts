@@ -9,7 +9,10 @@
 import React, { useCallback, useRef, useState } from "react";
 
 const MIN_PANE_WIDTH = 240;
-const MAX_PANE_WIDTH = 640;
+// Generous upper bound — Profiles defaults to ~50% of viewport for the
+// first-movie auto-open, which on wide displays exceeds the old 640 cap.
+// Anything wider than this and the pane stops feeling like a side rail.
+const MAX_PANE_WIDTH = 1200;
 
 export interface SplitResizeResult {
   paneWidth: number;

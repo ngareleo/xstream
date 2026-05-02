@@ -31,6 +31,8 @@ Inline subcomponents (ProfileRow, FilmRow, ProfileChip, PosterCard, ListRow, Vid
 | [PosterRow component](PosterRow.md) | `components/PosterRow/PosterRow.{tsx,styles.ts}` | baseline | not started |
 | [FilmTile component](FilmTile.md) | `components/FilmTile/FilmTile.{tsx,styles.ts}` | baseline | not started |
 | [FilmDetailsOverlay component](FilmDetailsOverlay.md) | `components/FilmDetailsOverlay/FilmDetailsOverlay.{tsx,styles.ts}` | baseline | not started |
+| [SeasonsPanel component](SeasonsPanel.md) | `components/SeasonsPanel/SeasonsPanel.{tsx,styles.ts}` | baseline | not started |
+| [MediaKindBadge component](MediaKindBadge.md) | `components/MediaKindBadge/MediaKindBadge.{tsx,styles.ts}` | done | not started |
 | [Watchlist page](Watchlist.md) | `pages/Watchlist/Watchlist.{tsx,styles.ts}` | done | not started |
 | [Player page](Player.md) | `pages/Player/Player.tsx` | done | not started |
 | [Settings page](Settings.md) | `pages/Settings/Settings.tsx` | baseline | not started |

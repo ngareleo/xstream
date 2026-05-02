@@ -22,7 +22,7 @@ Right-rail film detail card. Identical structure on the Profiles and Library pag
 
 ### Hero block (`<Poster>` wrapper, top of pane)
 - 220px tall, `flex-shrink: 0`, `position: relative`.
-- `<Poster>` fills via `width/height: 100%`, `object-fit: cover`.
+- `<Poster>` fills via `width/height: 100%`, `object-fit: cover`, **`viewTransitionName: "film-backdrop"`** — shared naming contract with FilmDetailsOverlay's poster and Player's backdrop for coordinated view-transition morphing.
 - Bottom-fade gradient overlay: `linear-gradient(180deg, transparent 50%, var(--bg-1))`.
 - Close button (`onClose` callback): 26×26, `top: 12, right: 12`, `border: 1px solid var(--border)`, `background: rgba(0,0,0,0.6)`, `color: var(--text-dim)`, `borderRadius: 3px`, hosts `<IconClose>`. `aria-label="Close detail pane"`.
 
@@ -36,6 +36,14 @@ Right-rail film detail card. Identical structure on the Profiles and Library pag
   - `color: tokens.colorGreen`, `textDecorationLine: underline`, `textDecorationColor: tokens.colorGreen`, `textDecorationThickness: 1px`, `textUnderlineOffset: 4px`.
   - Transition `color, text-decoration-color, opacity` on `0.15s`.
   - On `:hover`: `color: tokens.colorText`, `textDecorationColor: tokens.colorText` (green underline + text both flip to white).
+  - **Series variant:** label becomes `"Continue"` when `getResumeEpisode(film)` returns non-null, and `href` targets `/player/{filmId}?s={seasonNumber}&e={episodeNumber}`.
+- **Expand button** (`expandAction`) — icon-only button (series only, NEW).
+  - 26×26 square, `backgroundColor: transparent`, no border, `paddingTop/Bottom/Left/Right: 0`.
+  - Contains `<IconExpand>` (16×16 arrow-expand icon, green, `color: tokens.colorGreen`).
+  - `borderRadius: 2px`, `color: tokens.colorGreen` at rest; hover: `boxShadow: 0 0 8px ${tokens.colorGreenGlow}`, `backgroundColor: rgba(0,0,0,0.3)`.
+  - `aria-label="Expand to fullscreen detail"`.
+  - On click (`handleExpand`): calls `navigate(\`/?film=\${film.id}\`)` (opens the full-bleed overlay on Library home). Uses `document.startViewTransition` wrapper if available.
+  - **View-transition contract:** the DetailPane's poster hero carries `viewTransitionName: "film-backdrop"`, which matches the FilmDetailsOverlay's poster and the Player's backdrop. When the Expand button is clicked, the view transition morphs the 220px thumbnail to the full-bleed hero.
 - **Edit button** (`editAction`) — `<button>` with label `Edit`.
   - Same font as Play: Mono 11px, `letterSpacing: 0.18em`, uppercase, no border, padding `0 0 2px 0`.
   - `color: tokens.colorText` (white), `textDecorationLine: underline`, `textDecorationColor: rgba(232, 238, 232, 0.35)` (faint white), `textDecorationThickness: 1px`, `textUnderlineOffset: 4px`.
@@ -70,6 +78,14 @@ Right-rail film detail card. Identical structure on the Profiles and Library pag
 - Eyebrow `CAST` (Mono 9px / 0.22em / faint).
 - Chip per cast member.
 
+#### Seasons & Episodes (conditional — only for series)
+- Rendered only when `film.kind === "series"` and `film.seasons` is truthy.
+- **Card container:** bordered box, `background: transparent` or `rgba(232, 238, 232, 0.02)`, `border: 1px solid var(--border-soft)`, `borderRadius: 3px`, `padding: 0` (content handles padding).
+- **Header row (`seasonsHeader`):** `display: flex`, `justifyContent: space-between`, `alignItems: center`, `paddingTop: 10px`, `paddingBottom: 10px`, `paddingLeft: 12px`, `paddingRight: 12px`, `borderBottom: 1px solid var(--border-soft)`.
+  - **Left:** Mono 10px, uppercase, dimmed, text `"SEASONS"`.
+  - **Right:** Mono 10px, uppercase, green, text `"{episodesOnDisk}/{totalEpisodes} ON DISK"` (aggregated across all seasons).
+- **Body:** Renders `<SeasonsPanel seasons={film.seasons} defaultOpenFirst={true} onSelectEpisode={playEpisode} />` — season 1 opens expanded by default. Available episodes are clickable; clicking one calls `playEpisode(seasonNumber, episodeNumber)` which navigates to `/player/{filmId}?s={seasonNumber}&e={episodeNumber}`.
+
 #### File info box
 - Eyebrow `FILE`.
 - Box: `background: var(--surface)`, `border: 1px solid var(--border-soft)`, `padding: 12px`, JetBrains Mono 10px, `color: var(--text-dim)`, `line-height: 1.7`.
@@ -82,7 +98,11 @@ The DetailPane has two internal modes: **view** (default) and **editing** (trigg
 
 ### View mode (default)
 
-Rendered when `editing === false`. Shows the standard action row (Play + Edit buttons), title, metadata sections, plot, cast, and file info — exactly as described above.
+Rendered when `editing === false`. Shows the standard action row (Play + Edit + Expand buttons for series), title, metadata sections, plot, cast, SEASONS & EPISODES (for series), and file info — exactly as described above.
+
+### Episode selection (series only)
+
+When the SEASONS & EPISODES section is rendered and the user clicks an available episode, the component calls `onSelectEpisode(seasonNumber, episodeNumber)` (the `playEpisode` helper wired by the parent). This navigates to `/player/{filmId}?s={seasonNumber}&e={episodeNumber}` and launches playback directly.
 
 ### Edit mode — OMDb search picker
 
@@ -174,17 +194,23 @@ See the Edit mode section above. A sub-component rendered only when `editing ===
 ## Porting checklist (`client/src/components/DetailPane/`)
 
 ### View mode
-- [ ] 220px hero with Poster + bottom-fade gradient + 26×26 close button
+- [ ] 220px hero with Poster (carry `viewTransitionName: "film-backdrop"`) + bottom-fade gradient + 26×26 close button
 - [ ] `border-left: 1px solid border`, `background: bg-1`, full-height column
-- [ ] Action row with two `textAction`-styled links in flex row `columnGap: 18px` — Play link (`<Link>` to `/player/:id`) + Edit button
-- [ ] Play link: green Mono underline text with white-on-hover transition
-- [ ] Edit button: white Mono underline text with hover-to-green transition; click calls `onEditChange(true)`
+- [ ] Action row with three elements in flex row `columnGap: 18px`:
+  - [ ] Play link: `<Link>` to `/player/:id}` (or `/player/:id?s=X&e=Y` for series when `getResumeEpisode` returns match), green Mono underline text with white-on-hover transition. Label: `"Play"` (or `"Continue"` for series with resume point)
+  - [ ] Expand button (series only): 26×26 icon-only button, `<IconExpand>` green, hover with glow. Click: `navigate(\`/?film=\${film.id}\`)` wrapped in `document.startViewTransition` (opens full-bleed overlay). `aria-label="Expand to fullscreen detail"`
+  - [ ] Edit button: white Mono underline text with hover-to-green transition; click calls `onEditChange(true)`
 - [ ] Title in Anton 32px uppercase (with `"Unmatched file"` fallback)
 - [ ] Eyebrow row: year · genre · duration in Mono uppercase
 - [ ] Chip row: resolution (green chip) + HDR + codec + audio chips
 - [ ] IMDb badge + rating + on-disk dot
 - [ ] Plot paragraph (when present)
 - [ ] CAST section (when present) using `chip` utility
+- [ ] **SEASONS & EPISODES section (series only):** rendered only when `film.kind === "series"` && `film.seasons` truthy
+  - [ ] Bordered card container, `borderRadius: 3px`, subtle background
+  - [ ] Header row: `SEASONS` label (left, muted Mono) + episode count (right, green Mono) `"{onDisk}/{total} ON DISK"`
+  - [ ] Body: render `<SeasonsPanel seasons={film.seasons} defaultOpenFirst={true} onSelectEpisode={playEpisode} />` (season 1 expands by default; available episodes are clickable)
+  - [ ] `playEpisode(s, e)` helper: calls `navigate(\`/player/\${film.id}?s=\${s}&e=\${e}\`)`
 - [ ] FILE info box: filename + size · bitrate · frameRate · container in Mono
 - [ ] Body scrolls (`overflow-y: auto`) when content exceeds pane height in view mode
 - [ ] Close button calls `onClose` (parent clears `?film` URL param)
@@ -221,5 +247,5 @@ See the Edit mode section above. A sub-component rendered only when `editing ===
 
 ## Status
 
-- [x] Designed in `design/Release` lab — OMDb search picker added 2026-05-02 (PR #48). View mode action row has Play + Edit buttons (distinct text-link styles: green for Play, faint white with green hover for Edit). Edit mode replaces entire content with `<DetailPaneEdit>` search picker: search input (prefilled + autofocused) + results list + footer with `[ESC] Cancel` + `[↩] Link` buttons. Results use `searchOmdb(query, limit=8)` scoring: IMDb-id-prefix=100, title-prefix=80, title-contains=60, director-contains=40. Link button enabled only when a result is selected. Form state resets when `film.id` changes. Mode toggled via `initialEdit` prop + `onEditChange` callback.
+- [x] Designed in `design/Release` lab — OMDb search picker added 2026-05-02 (PR #48). View mode action row has Play + Edit buttons (distinct text-link styles: green for Play, faint white with green hover for Edit). Edit mode replaces entire content with `<DetailPaneEdit>` search picker: search input (prefilled + autofocused) + results list + footer with `[ESC] Cancel` + `[↩] Link` buttons. Results use `searchOmdb(query, limit=8)` scoring: IMDb-id-prefix=100, title-prefix=80, title-contains=60, director-contains=40. Link button enabled only when a result is selected. Form state resets when `film.id` changes. Mode toggled via `initialEdit` prop + `onEditChange` callback. **TV-show support added 2026-05-02, PR #49:** New SEASONS & EPISODES section for series films, rendered below CAST as a bordered card. Header shows total episode count aggregated across all seasons (green, right-aligned). Body contains `<SeasonsPanel defaultOpenFirst={true} />` so season 1 opens expanded on first view.
 - [ ] Production implementation

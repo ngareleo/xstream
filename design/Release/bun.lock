@@ -6,6 +6,7 @@
       "name": "@xstream/design-release",
       "dependencies": {
         "@griffel/react": "^1.6.1",
+        "@heroicons/react": "1.0.6",
         "playwright": "^1.59.1",
         "react": "^18.3.1",
         "react-dom": "^18.3.1",
@@ -114,6 +115,8 @@
     "@griffel/react": ["@griffel/react@1.7.1", "", { "dependencies": { "@griffel/core": "^1.20.3", "tslib": "^2.1.0" }, "peerDependencies": { "react": ">=16.14.0 <20.0.0" } }, "sha512-QJXjOi+U0JbgD5LaI0XcpTWLBXM6nSbCL+XmRuPHQWXoteMqJnjrb5Na8EUtf4xk0be8pcE34mY7CnxpfnQ6rw=="],
 
     "@griffel/style-types": ["@griffel/style-types@1.4.0", "", { "dependencies": { "csstype": "^3.1.3" } }, "sha512-vNDfOGV7RN/XkA7vxgf7Z5HgW8eiBm5cHT9wQPhsKB4pxWom5u6eQ9CkYE5mCCTSPl9H6Nd1NBai04d4P6BD7Q=="],
+
+    "@heroicons/react": ["@heroicons/react@1.0.6", "", { "peerDependencies": { "react": ">= 16" } }, "sha512-JJCXydOFWMDpCP4q13iEplA503MQO3xLoZiKum+955ZCtHINWnx26CUxVxxFQu/uLb4LW3ge15ZpzIkXKkJ8oQ=="],
 
     "@jridgewell/gen-mapping": ["@jridgewell/gen-mapping@0.3.13", "", { "dependencies": { "@jridgewell/sourcemap-codec": "^1.5.0", "@jridgewell/trace-mapping": "^0.3.24" } }, "sha512-2kkt/7niJ6MgEPxF0bYdQ6etZaA+fQvDcLKckhy1yIQOzaoKjBBjSj63/aLVjYE3qhRt5dvM+uUyfCg6UKCBbA=="],
 
