@@ -40,6 +40,8 @@ xstream is split into two workspaces: a Rust server and an Rsbuild/React client.
 
 ### Server
 
+Paths in this table are relative to `server-rust/`.
+
 | Component | File | Responsibility |
 |---|---|---|
 | Entry point | `src/main.rs` | Startup sequence, axum server bind, route dispatch |
@@ -58,6 +60,8 @@ xstream is split into two workspaces: a Rust server and an Rsbuild/React client.
 | Resolvers | `src/graphql/query.rs`, `src/graphql/mutation.rs`, `src/graphql/subscription.rs` | Query, Mutation, Subscription implementations |
 
 ### Client
+
+Paths in this table are relative to `client/`.
 
 | Component | File | Responsibility |
 |---|---|---|

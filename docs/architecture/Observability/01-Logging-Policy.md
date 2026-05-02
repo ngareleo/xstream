@@ -122,19 +122,19 @@ Rust async-graphql resolvers receive the extracted context via the axum request 
 
 When killing or stopping a pipeline component, always log WHY, not just that it stopped.
 
-```ts
+```rust
 // Bad
-log.info("Killing job", { job_id: id });
+info!(job.id = %id, "Killing job");
 
 // Good — reason propagated from the call site
-killJob(id, "client_disconnected");
+pool.kill_job(&id, KillReason::ClientDisconnected);
 // → logs: "Killing ffmpeg — client_disconnected"
 // → span event: transcode_killed { kill_reason: "client_disconnected" }
 ```
 
-Standard kill reasons: `client_disconnected`, `stream_idle_timeout`, `orphan_no_connection`, `server_shutdown`, `max_encode_timeout`.
+Standard kill reasons (the full `KillReason` enum in `server-rust/src/services/kill_reason.rs`): `client_request`, `client_disconnected`, `stream_idle_timeout`, `orphan_no_connection`, `max_encode_timeout`, `cascade_retry`, `server_shutdown`. The wire-format strings are pinned by `KillReason::as_wire_str` and the round-trip mapper test — Seq dashboards filter on these literals.
 
-`max_encode_timeout` fires when the server's wall-clock budget for a single ffmpeg process is exceeded. Budget = `(endTime - startTime) × 3 × 1000` ms (3× the chunk's nominal duration, covering SW-1080p worst-case). An absolute 1-hour cap applies for full-video transcodes where `endTime = videoDuration`. This kill runs alongside (not instead of) the `orphan_no_connection` 30 s kill — the orphan guard covers abandoned jobs, this covers stuck encodes that still have a live connection. Implemented via `maxEncodeTimer` in `chunker.ts`.
+`max_encode_timeout` is reserved for the wall-clock budget kill: budget = `(end_time_seconds - start_time_seconds) × TranscodeConfig::max_encode_rate_multiplier × 1_000` ms (multiplier defaults to 3 — see `server-rust/src/config.rs` — covering SW-1080p worst-case). It runs alongside (not instead of) the `orphan_no_connection` 30 s kill: the orphan guard covers abandoned jobs, this covers stuck encodes that still have a live connection. The Rust port preserves the wire string and config field; the timer wiring itself is pending (the Bun-era `maxEncodeTimer` in `chunker.ts` has not been ported yet — tracked alongside the rest of the chunker port).
 
 For stream cleanup on the client side, log the segment count at the point of teardown so the message tells the whole story:
 

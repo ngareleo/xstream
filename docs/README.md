@@ -16,6 +16,7 @@ This tree is the project's single source of truth. Each super-domain has its own
 
 - [`SUMMARY.md`](SUMMARY.md) — ≤120-line orientation read by the `architect` subagent at the start of every invocation. Maintained by `/groom-knowledge-base`.
 - [`INDEX.md`](INDEX.md) — topic → file retrieval table used by the `architect` subagent. Add a row when you add a top-level-routable topic file.
+- [`Commit.md`](Commit.md) — append-only log of doc updates made by the `architect` subagent. Newest entry on top; each terminated by a bare `---` divider. The architect reads the top entry on every invocation and re-syncs docs to any commits that landed since.
 - [`todo.md`](todo.md) — project todo list, owned by the `todo` skill.
 
 ## Placement rule (for curators)
