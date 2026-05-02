@@ -1,0 +1,8 @@
+export const RESOLUTION_LABEL: Record<string, string> = {
+  RESOLUTION_4K: "4K",
+  RESOLUTION_1080P: "1080p",
+  RESOLUTION_720P: "720p",
+  RESOLUTION_480P: "480p",
+  RESOLUTION_360P: "360p",
+  RESOLUTION_240P: "240p",
+};
