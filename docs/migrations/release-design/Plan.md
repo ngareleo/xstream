@@ -140,7 +140,7 @@ The exact column types, NULLability, and indexes live in the M0 doc.
 | M0 | Foundations: Plan + Porting-Guide + Schema-Changes + worktree setup | Opus 4.7 (2026-05-02) | done | Commit `262c57d`. Schema-Changes.md captures the discovery that the existing GQL surface is far more complete than the plan first assumed — the real M2 deltas are seasons/episodes + `Video.nativeResolution`. The design's `Film.kind` maps onto existing `Video.mediaType`. |
 | M1 | Tokens, fonts, shared CSS, icon sweep | Opus 4.7 (2026-05-02) | done | Commit `7612343`. Wholesale-replaced tokens.ts (Kenyan red palette → Release green/oklch + four text tiers + Bytesized/Anton/Science Gothic). Added Google Fonts link to index.html, created shared.css (CSS-var mirror + .eyebrow/.chip/.dot/.grain-layer), updated global.css body bg/text + scrollbar to match new tokens, removed stale Bebas Neue @import. Added IconCheck + Release-named icon aliases (IconBack/IconChevron/IconFullscreen/IconExpand/IconVolume/IconWarn) + ImdbBadge. Created withViewTransition helper. Type-check fails on ~289 call sites consuming removed tokens (colorMuted, colorWhite, colorRedDim, etc.) — expected; these are M3+ to-dos. Spec sync clean — no Components/*.md cite removed tokens. |
 | M2 | GraphQL + SQLite schema migration + TV-show discovery | Opus 4.7 (2026-05-02) | done | Schema commit `1a0c0d6`; SHA-record `4ee2723`; TV-discovery commit `4c56db6`. **Backend pivot:** M2 lands in `server-rust/` only; Bun is retired for new feature work as of 2026-05-02. Migration docs swapped to Rust paths. Adds `videos.native_resolution` column + `seasons`/`episodes` composite-PK tables, `Video.nativeResolution` + `Video.seasons` GraphQL fields, plus new `Season` + `Episode` types. **TV-show OMDb-driven discovery shipped in same PR:** `services/tv_discovery.rs` walks `<library>/<Show>/<Season>/<Episode>` layout, queries OMDb (`?s=<title>&type=series` → `?i=<imdbID>` → per-season `?i=<imdbID>&Season=N`), merges canonical episode list with local files, persists to seasons + episodes (matched/OMDb-only/local-only). `AppConfig.omdb_daily_budget` (default 800/1000) protects the free-tier quota with a soft-warn at <50 remaining. `LibraryScanProgress` extended additively with `phase` + `current_item` so the client UI can show granular per-OMDb-call progress. Tests: 270 unit + 12 integration, +23 net new vs M1 baseline. |
-| M3 | AppShell + AppHeader + AccountMenu + Router cutover | Opus 4.7 (2026-05-02) | done | M3 commit pending. App boots with new shell (positioned-layer model: `<AppShell>` is `position: relative` 100vw×100vh, header floats absolute over `<main>`). Sidebar + sign-out-dialog + dashboard-page + dashboard-hero + feedback-page + film-detail-loader deleted. AppHeader is green-glass three-column grid (Bytesized brand "Xstream" + Science Gothic 12px nav + scan icon + circular avatar with AccountMenu dropdown). Router cutover: `/` → Library placeholder (M4), `/profiles`, `/profiles/new`, `/profiles/:profileId/edit` → placeholders (M5), `/watchlist` → placeholder (M6); `/settings`, `/player/:videoId`, `/goodbye` kept as-is; `/feedback` and `/play/:videoId` legacy alias removed. New shared `<PagePlaceholder>` component (`client/src/components/page-placeholder/`) used by all M4–M6 stub pages. Lint went from 289 token errors (M1) → 227 (M3 baseline) due to deleted dead code; zero non-token errors. 16/16 storybook tests passing across new AppShell/AppHeader/AccountMenu + Poster + PagePlaceholder. |
+| M3 | AppShell + AppHeader + AccountMenu + Router cutover | Opus 4.7 (2026-05-02) | done | Commit `135962e` (50 files, +775/-3112). App boots with new shell (positioned-layer model: `<AppShell>` is `position: relative` 100vw×100vh, header floats absolute over `<main>`). Sidebar + sign-out-dialog + dashboard-page + dashboard-hero + feedback-page + film-detail-loader deleted. AppHeader is green-glass three-column grid (Bytesized brand "Xstream" + Science Gothic 12px nav + scan icon + circular avatar with AccountMenu dropdown). Router cutover: `/` → Library placeholder (M4), `/profiles`, `/profiles/new`, `/profiles/:profileId/edit` → placeholders (M5), `/watchlist` → placeholder (M6); `/settings`, `/player/:videoId`, `/goodbye` kept as-is; `/feedback` and `/play/:videoId` legacy alias removed. New shared `<PagePlaceholder>` component (`client/src/components/page-placeholder/`) used by all M4–M6 stub pages. Lint went from 289 token errors (M1) → 227 (M3 baseline) due to deleted dead code; zero non-token errors. 16/16 storybook tests passing across new AppShell/AppHeader/AccountMenu + Poster + PagePlaceholder. |
 | M4 | Library page + dependencies (FilmDetailsOverlay, SearchSlide, FilterSlide, PosterRow, FilmTile, MediaKindBadge, Poster) | _waiting on M3_ | in progress | `/` is now Library. Dashboard + film-detail-loader deleted. **Note:** Poster shipped out-of-order before M4 starts (commit `79493bf`); porting checklist ticked, spec status updated to Production `done`. |
 | M5 | Profiles ecosystem (Profiles, ProfileRow, FilmRow, EdgeHandle, DetailPane, CreateProfile, EditProfile, ProfileForm, DirectoryBrowser) | _waiting on M4_ | not started | `/profiles`, `/profiles/new`, `/profiles/:profileId/edit`. |
 | M6 | Watchlist | _waiting on M5_ | not started | `/watchlist` final form. |
@@ -998,6 +998,28 @@ Append to this section as decisions are made mid-port. Format:
   upfront pass). Cross-page sync notes go in this plan.
 - `2026-05-02 (M0)` — Porting-Guide doc lives at
   `docs/migrations/release-design/Porting-Guide.md`.
+- `2026-05-02 (M3)` — Scan-mutation wiring deferred from M3 → M4. Lab-style
+  2s mock timer kept in AppHeader for visual feedback; `AppHeader.events.ts`
+  declares `AppHeader.ScanRequested` for an M4 interceptor in LibraryPage.
+  Rationale: deleting `dashboard-page` removed the prior consumer; bringing
+  the mutation back without a page that subscribes to scan progress would
+  create a dead path.
+- `2026-05-02 (M3)` — User identity hardcoded in AppHeader's `USER` const
+  with TODO. A Relay viewer fragment is the proper fix but no schema/query
+  exists for it yet; deferring to a later milestone (M5+ when account
+  context naturally surfaces) is cheaper than designing a one-off query.
+- `2026-05-02 (M3)` — `pages/film-detail-loader/` deleted in M3 instead of
+  M4. Sole remaining consumer (the previous LibraryPage) was replaced with
+  a placeholder in this same commit, so leaving it would have created a
+  dead-code window between M3 and M4.
+- `2026-05-02 (M3)` — `components/sign-out-dialog/` deleted alongside
+  Sidebar (its sole consumer). The Release design has no sign-out
+  confirmation dialog — AccountMenu's "Sign out" item navigates straight to
+  `/goodbye`.
+- `2026-05-02 (M3)` — Shared `<PagePlaceholder name milestone />` component
+  added at `client/src/components/page-placeholder/` to avoid duplicating
+  Griffel rules across 5 throwaway page files. M4–M6 each delete their
+  placeholder when porting the real page; M7+ never need this component.
 
 ## Cross-page sync notes {#sync}
 
