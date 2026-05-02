@@ -104,7 +104,7 @@ export const FilmRow: FC<FilmRowProps> = ({ video, selected, onOpen, onEdit }) =
           aria-label={strings.formatString(strings.playAriaFormat, { title: titleText }) as string}
           className={styles.thumbBtn}
         >
-          <Poster url={posterUrl} alt={titleText} className={styles.thumb} />
+          <Poster url={posterUrl} alt={titleText} className={styles.thumb} width={120} />
           <span className={styles.thumbHover} aria-hidden="true">
             <IconPlay width={14} height={14} />
           </span>

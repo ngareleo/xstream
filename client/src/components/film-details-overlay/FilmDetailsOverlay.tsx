@@ -103,7 +103,12 @@ export const FilmDetailsOverlay: FC<FilmDetailsOverlayProps> = ({
   return (
     <div ref={overlayRef} className={styles.overlay}>
       <div className={styles.hero}>
-        <Poster url={data.metadata?.posterUrl ?? null} alt={altText} className={styles.poster} />
+        <Poster
+          url={data.metadata?.posterUrl ?? null}
+          alt={altText}
+          className={styles.poster}
+          width={1600}
+        />
         <div className={styles.gradient} />
         <button
           type="button"

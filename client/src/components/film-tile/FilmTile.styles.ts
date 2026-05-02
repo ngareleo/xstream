@@ -93,8 +93,26 @@ export const useFilmTileStyles = makeStyles({
     height: "100%",
     backgroundColor: tokens.colorGreen,
   },
-  meta: { marginTop: "10px" },
-  title: { fontSize: "13px", color: tokens.colorText },
+  meta: {
+    marginTop: "10px",
+    // Reserve room for two title lines (≈18px each at 13px font * 1.4
+    // line-height) + 3px gap + 12px subtitle, so adjacent tiles in a row
+    // line up at the bottom regardless of title length.
+    minHeight: "60px",
+  },
+  title: {
+    fontSize: "13px",
+    color: tokens.colorText,
+    lineHeight: "1.4",
+    // Two-line clamp prevents long titles / unmatched filenames from
+    // pushing the subtitle (and therefore neighbouring rows) out of
+    // alignment.
+    display: "-webkit-box",
+    WebkitLineClamp: 2,
+    WebkitBoxOrient: "vertical",
+    overflow: "hidden",
+    wordBreak: "break-word",
+  },
   subtitle: {
     fontSize: "10px",
     color: tokens.colorTextMuted,

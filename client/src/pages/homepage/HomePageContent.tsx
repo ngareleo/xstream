@@ -21,6 +21,7 @@ import {
   type Hdr,
   type Resolution,
 } from "~/utils/filters";
+import { upgradePosterUrl } from "~/utils/formatters";
 
 import { strings } from "./HomePage.strings";
 import { useHomePageStyles } from "./HomePage.styles";
@@ -297,7 +298,7 @@ export const HomePageContent: FC = () => {
                 return (
                   <img
                     key={film.id}
-                    src={url}
+                    src={upgradePosterUrl(url, 1600)}
                     alt=""
                     className={mergeClasses(
                       styles.heroImg,

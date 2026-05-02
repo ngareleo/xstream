@@ -164,7 +164,7 @@ export const DetailPane: FC<DetailPaneProps> = ({
   return (
     <div className={styles.pane}>
       <div className={styles.posterFrame}>
-        <Poster url={posterUrl} alt={altText} className={styles.posterImage} />
+        <Poster url={posterUrl} alt={altText} className={styles.posterImage} width={1200} />
         <div className={styles.posterFade} />
         <button
           type="button"
@@ -407,7 +407,12 @@ const DetailPaneEdit: FC<DetailPaneEditProps> = ({ videoId, initialQuery, onDone
               )}
               aria-pressed={selected === r.imdbId}
             >
-              <Poster url={r.posterUrl ?? null} alt={r.title} className={styles.editResultPoster} />
+              <Poster
+                url={r.posterUrl ?? null}
+                alt={r.title}
+                className={styles.editResultPoster}
+                width={120}
+              />
               <div className={styles.editResultText}>
                 <div className={styles.editResultTitle}>
                   {r.title}
