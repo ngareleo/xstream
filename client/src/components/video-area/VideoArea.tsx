@@ -1,5 +1,5 @@
 import { mergeClasses } from "@griffel/react";
-import { type FC, Suspense } from "react";
+import { type FC, Suspense, useState } from "react";
 import { graphql, useFragment } from "react-relay";
 
 import { Poster } from "~/components/poster/Poster.js";
@@ -10,6 +10,8 @@ import { formatDuration } from "~/utils/formatters.js";
 
 import { strings } from "./VideoArea.strings.js";
 import { useVideoAreaStyles } from "./VideoArea.styles.js";
+
+type PlayStatus = "idle" | "loading" | "playing";
 
 export interface SeriesPick {
   seasonNumber: number;
@@ -59,8 +61,13 @@ function resolutionLabel(height: number | null | undefined): string | null {
 export const VideoArea: FC<Props> = ({ video, seriesPick, controlsHidden, onBack }) => {
   const styles = useVideoAreaStyles();
   const data = useFragment(VIDEO_FRAGMENT, video);
+  const [playStatus, setPlayStatus] = useState<PlayStatus>("idle");
 
   const fadeClass = mergeClasses(styles.fade, controlsHidden && styles.fadeHidden);
+  const backdropClass = mergeClasses(
+    styles.backdrop,
+    playStatus === "playing" && styles.backdropHidden
+  );
   const meta = data.metadata;
   const displayTitle = meta?.title ?? data.title ?? strings.untitled;
   const posterUrl = meta?.posterUrl ?? null;
@@ -88,11 +95,11 @@ export const VideoArea: FC<Props> = ({ video, seriesPick, controlsHidden, onBack
 
   return (
     <div className={styles.root}>
-      <Poster url={posterUrl} alt={displayTitle} className={styles.backdrop} width={1600} />
+      <Poster url={posterUrl} alt={displayTitle} className={backdropClass} width={1600} />
 
       <div className={styles.videoWrapper}>
         <Suspense fallback={null}>
-          <VideoPlayerAsync video={data} />
+          <VideoPlayerAsync video={data} onStatusChange={setPlayStatus} />
         </Suspense>
       </div>
 

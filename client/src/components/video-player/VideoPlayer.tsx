@@ -39,13 +39,22 @@ const VIDEO_FRAGMENT = graphql`
   }
 `;
 
+type PlayStatus = "idle" | "loading" | "playing";
+
 interface Props {
   video: VideoPlayer_video$key;
+  /**
+   * Fired when the playback state machine transitions. The Player chrome
+   * uses this to fade out the backdrop poster once real video frames start
+   * arriving — without it, letterbox bars (`objectFit: contain`) expose
+   * the dimmed backdrop during playback.
+   */
+  onStatusChange?: (status: PlayStatus) => void;
 }
 
 const HIDE_DELAY_MS = 3000;
 
-export const VideoPlayer: FC<Props> = ({ video }) => {
+export const VideoPlayer: FC<Props> = ({ video, onStatusChange }) => {
   const data = useFragment(VIDEO_FRAGMENT, video);
   const styles = useVideoPlayerStyles();
 
@@ -119,6 +128,12 @@ export const VideoPlayer: FC<Props> = ({ video }) => {
   useEffect(() => {
     setIsEnded(false);
   }, [data.id]);
+
+  // Notify parent on play-state transitions so the backdrop can fade out once
+  // real video frames start arriving.
+  useEffect(() => {
+    onStatusChange?.(status);
+  }, [status, onStatusChange]);
 
   // Track fullscreen state from the browser.
   useEffect(() => {

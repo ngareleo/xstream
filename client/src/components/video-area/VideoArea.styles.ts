@@ -29,6 +29,13 @@ export const useVideoAreaStyles = makeStyles({
     filter: "brightness(0.85) contrast(1.05)",
     viewTransitionName: "film-backdrop",
     zIndex: 0,
+    opacity: 1,
+    transitionProperty: "opacity",
+    transitionDuration: "0.4s",
+    transitionTimingFunction: "ease",
+  },
+  backdropHidden: {
+    opacity: 0,
   },
 
   grain: {
