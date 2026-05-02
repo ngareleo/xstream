@@ -6,6 +6,11 @@ export const strings = new LocalizedStrings({
     greetingAfternoon: "Good afternoon",
     greetingEvening: "Good evening",
     libraryHeading: "Tonight's library.",
+    emptyEyebrow: "No libraries yet",
+    emptyHeading: "Add your first library.",
+    emptyBody:
+      "Point xstream at a folder of films or shows and we'll match it against OMDb, build the carousel, and surface posters here.",
+    emptyCta: "Create a library",
     searchPlaceholder: "Search films, directors, genres…",
     searchAriaLabel: "Search the library",
     clearAriaLabel: "Clear search",

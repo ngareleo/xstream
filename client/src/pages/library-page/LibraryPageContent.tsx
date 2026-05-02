@@ -1,7 +1,7 @@
 import { mergeClasses } from "@griffel/react";
 import { type FC, useCallback, useEffect, useMemo, useState } from "react";
 import { graphql, useLazyLoadQuery } from "react-relay";
-import { useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 
 import { FilmDetailsOverlay } from "~/components/film-details-overlay/FilmDetailsOverlay";
 import { FilmTile } from "~/components/film-tile/FilmTile";
@@ -26,6 +26,9 @@ import { useLibraryStyles } from "./LibraryPage.styles";
 
 const LIBRARY_QUERY = graphql`
   query LibraryPageContentQuery {
+    libraries {
+      id
+    }
     videos(first: 200) {
       edges {
         node {
@@ -122,6 +125,8 @@ export const LibraryPageContent: FC = () => {
   const styles = useLibraryStyles();
   const data = useLazyLoadQuery<LibraryPageContentQuery>(LIBRARY_QUERY, {});
   const [params, setParams] = useSearchParams();
+  const navigate = useNavigate();
+  const hasLibraries = (data.libraries ?? []).length > 0;
 
   const rows = useMemo<FilterRow[]>(
     () => (data.videos?.edges ?? []).map((edge) => toFilterRow(edge.node)),
@@ -215,6 +220,28 @@ export const LibraryPageContent: FC = () => {
     next.delete("film");
     setParams(next);
   }, [params, setParams]);
+
+  if (!hasLibraries) {
+    return (
+      <div className={styles.page}>
+        <div className={mergeClasses(styles.hero, styles.heroActive)}>
+          <div className={styles.heroPanelBg} />
+          <div className={styles.emptyHero}>
+            <div className={styles.greetingEyebrow}>· {strings.emptyEyebrow}</div>
+            <div className={styles.greeting}>{strings.emptyHeading}</div>
+            <div className={styles.emptyBody}>{strings.emptyBody}</div>
+            <button
+              type="button"
+              onClick={() => navigate("/profiles/new")}
+              className={styles.emptyCta}
+            >
+              {strings.emptyCta}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (selectedRow) {
     const suggestions = pickSuggestions(selectedRow, rows);
