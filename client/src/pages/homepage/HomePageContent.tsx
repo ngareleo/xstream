@@ -1,5 +1,5 @@
 import { mergeClasses } from "@griffel/react";
-import { type FC, useCallback, useEffect, useMemo, useState } from "react";
+import { type FC, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { graphql, useLazyLoadQuery } from "react-relay";
 import { useSearchParams } from "react-router-dom";
 
@@ -42,6 +42,7 @@ const HOMEPAGE_QUERY = graphql`
             year
             genre
             director
+            posterUrl
           }
           videoStream {
             codec
@@ -148,6 +149,52 @@ export const HomePageContent: FC = () => {
   const filmId = params.get("film");
   const selectedRow = filmId ? rows.find((r) => r.id === filmId) : undefined;
 
+  // Hero slideshow: cycle up to 4 movies that have posters. Lab spec uses
+  // 7s interval + 0.7s crossfade + Ken Burns; matched here.
+  const heroFilms = useMemo(() => {
+    return rows
+      .filter((r) => r.node.mediaType === "MOVIES" && Boolean(r.node.metadata?.posterUrl))
+      .slice(0, 4);
+  }, [rows]);
+  const [heroIndex, setHeroIndex] = useState(0);
+  const [heroFading, setHeroFading] = useState(false);
+  const heroFadeTimerRef = useRef<number | null>(null);
+  const HERO_INTERVAL_MS = 7000;
+  const HERO_FADE_MS = 700;
+
+  useEffect(() => {
+    // No cycling when overlay is open or there's nothing to cycle.
+    if (selectedRow || heroFilms.length <= 1) return;
+    const id = window.setInterval(() => {
+      setHeroFading(true);
+      heroFadeTimerRef.current = window.setTimeout(() => {
+        setHeroIndex((i) => (i + 1) % heroFilms.length);
+        setHeroFading(false);
+      }, HERO_FADE_MS);
+    }, HERO_INTERVAL_MS);
+    return () => {
+      window.clearInterval(id);
+      if (heroFadeTimerRef.current !== null) window.clearTimeout(heroFadeTimerRef.current);
+    };
+  }, [heroFilms.length, selectedRow]);
+
+  // Clamp the index when the film list shrinks (e.g. library filter changes).
+  useEffect(() => {
+    if (heroIndex >= heroFilms.length && heroFilms.length > 0) setHeroIndex(0);
+  }, [heroFilms.length, heroIndex]);
+
+  const goToHero = useCallback(
+    (idx: number): void => {
+      if (idx === heroIndex) return;
+      setHeroFading(true);
+      window.setTimeout(() => {
+        setHeroIndex(idx);
+        setHeroFading(false);
+      }, HERO_FADE_MS / 2);
+    },
+    [heroIndex]
+  );
+
   const continueWatching = useMemo(
     () => watchlistEntries.filter((w) => w.progressSeconds > 0),
     [watchlistEntries]
@@ -240,6 +287,31 @@ export const HomePageContent: FC = () => {
   return (
     <div className={styles.page}>
       <div className={mergeClasses(styles.hero, heroMode !== "idle" && styles.heroActive)}>
+        {heroMode === "idle" && heroFilms.length > 0 && (
+          <>
+            <div className={styles.heroSlides} aria-hidden="true">
+              {heroFilms.map((film, i) => {
+                const url = film.node.metadata?.posterUrl;
+                if (!url) return null;
+                const active = i === heroIndex;
+                return (
+                  <img
+                    key={film.id}
+                    src={url}
+                    alt=""
+                    className={mergeClasses(
+                      styles.heroImg,
+                      active && styles.heroImgActive,
+                      active && heroFading && styles.heroImgFading
+                    )}
+                  />
+                );
+              })}
+            </div>
+            <div className={styles.heroEdgeFade} aria-hidden="true" />
+            <div className={styles.heroBottomFade} aria-hidden="true" />
+          </>
+        )}
         {heroMode !== "idle" && <div className={styles.heroPanelBg} />}
 
         <div
@@ -278,10 +350,28 @@ export const HomePageContent: FC = () => {
 
         <div className={styles.heroBody}>
           {heroMode === "idle" && (
-            <div>
-              <div className={styles.greetingEyebrow}>· {timeOfDayGreeting(new Date())}</div>
-              <div className={styles.greeting}>{strings.libraryHeading}</div>
-            </div>
+            <>
+              <div>
+                <div className={styles.greetingEyebrow}>· {timeOfDayGreeting(new Date())}</div>
+                <div className={styles.greeting}>{strings.libraryHeading}</div>
+              </div>
+              {heroFilms.length > 1 && (
+                <div className={styles.slideDots}>
+                  {heroFilms.map((film, i) => (
+                    <button
+                      key={film.id}
+                      type="button"
+                      onClick={() => goToHero(i)}
+                      aria-label={`Show ${film.node.title ?? film.node.filename}`}
+                      className={mergeClasses(
+                        styles.slideDot,
+                        i === heroIndex ? styles.slideDotActive : styles.slideDotInactive
+                      )}
+                    />
+                  ))}
+                </div>
+              )}
+            </>
           )}
           {heroMode === "searching" && (
             <SearchSlide
