@@ -1,16 +1,34 @@
 ---
 name: groom-knowledge-base
-description: Mechanical hygiene pass over docs/ — verify README TOCs, detect stale file paths, reconcile code↔doc literal values (code wins), report undocumented symbols, regenerate docs/SUMMARY.md, and refresh the architect's index. Use on demand (`/groom-knowledge-base`) after significant code or docs churn.
+description: Hygiene pass over docs/ — verify README TOCs, detect stale file paths, reconcile code↔doc literals AND prose drift (code always wins), regenerate docs/SUMMARY.md, refresh the architect's index, refresh CLAUDE.md when its stack/repo-layout/literal lists drift. Reports only what truly needs human judgement (undocumented symbols, structural splits, prose deep enough to need replacement). Use on demand (`/groom-knowledge-base`) after significant code or docs churn.
 allowed-tools: Read Write Edit Glob Grep Bash(git *) Bash(rg *) Bash(find *) Bash(ls *) Bash(wc *) Bash(test *) Bash(sort *) Bash(uniq *) Bash(head *) Bash(diff *)
 ---
 
 # Groom the Knowledge Base
 
-Mechanical pass that keeps the `docs/` RAG tree coherent with the code. Fixes what it can; reports what needs human or architect judgement.
+Mechanical pass that keeps the `docs/` RAG tree coherent with the code. Fixes everything it safely can — including conceptual prose drift — and reports only what truly needs human judgement.
 
-**Policy: code is authoritative.** When doc and code disagree on a literal (number, path, enum), the skill rewrites the doc to match the code — never the other way. Conceptual/prose mismatches are *reported*, not auto-rewritten.
+**Policy: code is authoritative.** When doc and code disagree on anything (literal value, path, enum, or the surrounding prose that names retired files / wrong runtime / outdated APIs), the skill rewrites the doc to match the code. *Never* the other way around.
 
-**What it doesn't do:** drafting new prose, adding new concepts, restructuring folders, editing source code. All those remain human or architect decisions.
+**Scope of doc edits — what's fair game:**
+
+- **Stale file paths and extensions** (`chunker.ts` → `chunker.rs` after a port). Fix even when the file was renamed AND moved AND has a different language extension, as long as the basename's new home is unambiguous.
+- **Conceptual prose drift** caused by code reality changing — examples: `Promise<T>` references when the function is now Rust `async fn ... -> T`, `Map<string, X>` JS-isms when the type is a Rust enum, `Bun server` mentions when the server is Rust.
+- **CLAUDE.md** stack table, repo-layout tree, observability rules, agent routing, and any literal lists (kill_reason values, paths, enum members) that have drifted from code.
+- **README TOC mismatches** (add missing files with a placeholder hook, remove dangling rows).
+- **`docs/SUMMARY.md` regen** when content drifted or line cap exceeded.
+- **`docs/INDEX.md` row removals** when a path no longer exists.
+
+**Scope of doc edits — what's still off-limits (report only):**
+
+- **`docs/code-style/Invariants/00-Never-Violate.md` rationale prose.** You may correct a literal value the rule quotes (a constant, an enum) but never reword the *why*. The file is the safety net; rewording it risks losing the force.
+- **`docs/migrations/**`** — *all of it*. `migrations-lead` owns those files. If a stale link or claim lives under `docs/migrations/**`, route it to that subagent (notify protocol below) rather than auto-rewriting.
+- **`design/Release/**`** — same migrations-lead boundary.
+- **New prose for undocumented symbols.** Step 4 still detects coverage gaps but never invents prose to fill them. Architect or the feature author decides if a symbol deserves a doc and where it lives.
+- **Structural splits.** Step 7 still reports oversized files and overcrowded folders but never executes a split. Natural seams are architect's call.
+- **Source code edits** — never. The skill rewrites `docs/`, `docs/INDEX.md`, `docs/SUMMARY.md`, `CLAUDE.md`, and the root `README.md`. Nothing under `client/`, `server-rust/`, `src-tauri/`, `design/`, or `scripts/`.
+
+The boundary in one line: **don't invent new concepts or narratives; rewrite existing ones to match reality.**
 
 ## Invocation
 
@@ -57,19 +75,32 @@ For each extracted path, check `test -e <path>`. If the path doesn't resolve:
 
 ### 3. Contradiction scan (code wins)
 
-Look for doc claims that embed code-side literals. Common patterns:
+Look for doc claims that disagree with code. Two layers:
 
-- **Backticked numbers with units:** `60s`, `20 s`, `300s`, `30_000ms`, `2 s`.
+**Literals** — backticked numbers/enums/constants:
+
+- **Numbers with units:** `60s`, `20 s`, `300s`, `30_000ms`, `2 s`.
 - **Enum string values:** `"hw_unsafe"`, `"needs_sw_pad"`, `"software"`, `"vaapi"`.
-- **Threshold constants:** references like `STARTUP_BUFFER_S`, `FORWARD_TARGET_S`, `ORPHAN_TIMEOUT_MS`.
+- **Threshold constants:** `STARTUP_BUFFER_S`, `FORWARD_TARGET_S`, `ORPHAN_TIMEOUT_MS`, `BACKPRESSURE_BUFFER`, etc.
 
-For each such claim:
+For each: grep the named constant in source, compare values, **auto-fix the doc** if they differ.
 
-- Search the named constant in source (`rg -n "CONSTANT_NAME\s*=" client/ server/`).
-- Compare the source value against what the doc asserts.
-- If they differ → **auto-fix the doc** to match the source. Add to the report with old → new.
+**Conceptual drift** — prose that describes a retired runtime, language, or API surface. Examples encountered in past runs:
 
-The skill is conservative here: if the constant name is ambiguous (multiple definitions) or the doc's literal isn't cleanly extractable via regex, skip and keep moving. This scan is a safety net, not a compiler.
+- `chunker.ts` referenced after the chunker was ported to Rust (`server-rust/src/services/chunker.rs`).
+- `Promise<StartJobResult>` claimed when the signature is `async fn start_transcode_job(...) -> StartJobResult`.
+- `Map<string, "needs_sw_pad" | "hw_unsafe">` JS-isms when the type is a Rust `enum VaapiVideoState` in `server-rust/src/config.rs`.
+- `Bun server` / `bun:sqlite` / `fluent-ffmpeg` / `graphql-yoga` mentions when the actual stack is Rust + tokio + rusqlite + axum + async-graphql (per `Cargo.toml` and `server-rust/`).
+- `kill_reason` enums quoting fewer values than the source enum defines.
+
+For conceptual drift: read the surrounding paragraph(s), rewrite to match current code reality, preserve the doc's structure (headings, lists, link targets that still resolve). When the prose change is more than a sentence or two, leave a brief inline note (`<!-- updated: <YYYY-MM-DD> for Rust port -->`) only if the section is load-bearing for retrieval. Most rewrites need no marker.
+
+**Off-limits even here:**
+
+- Don't reword the *rationale* prose in `docs/code-style/Invariants/00-Never-Violate.md`. Fix only literals it quotes.
+- Don't touch `docs/migrations/**` or `design/Release/**` — route those findings to `migrations-lead` instead.
+
+If the drift is so deep that the section needs *replacement* rather than rewriting (e.g., an entire architecture doc was written for the wrong stack), report it for architect rather than rewriting in place.
 
 ### 4. Coverage gap scan (report-only)
 
@@ -77,9 +108,9 @@ List public exports that likely deserve a doc mention:
 
 ```sh
 rg -n "^export (async )?(function|const|class) [A-Z][A-Za-z0-9_]+" \
-   client/src/services/ server-rust/src/services/ \
-   client/src/hooks/ server-rust/src/routes/ \
-   server-rust/src/graphql/ \
+   client/src/services/ server/src/services/ \
+   client/src/hooks/ server/src/routes/ \
+   server/src/graphql/resolvers/ \
    --no-heading
 ```
 
@@ -163,9 +194,12 @@ If no items in any section, say so explicitly — an all-clean run should be eas
 
 ## Rules
 
-- **Never edit source code.** This skill operates on docs only, including `docs/INDEX.md` and `docs/SUMMARY.md`.
-- **Never guess on ambiguity.** If a fix candidate isn't exactly one file, skip and report.
-- **Preserve section structure.** When patching a README, add rows in alphabetical or `NN-` order to match sibling tables.
+- **Never edit source code.** Skill writes inside `docs/`, plus `docs/INDEX.md`, `docs/SUMMARY.md`, `CLAUDE.md`, and the root `README.md`. Nothing under `client/`, `server-rust/`, `src-tauri/`, `design/`, or `scripts/`.
+- **Don't touch `docs/migrations/**` or `design/Release/**`.** Those belong to `migrations-lead`. Findings inside that subtree get routed to that subagent (see notify protocol).
+- **Don't reword the rationale prose in `docs/code-style/Invariants/00-Never-Violate.md`.** Fix only literals it quotes (constants, enum values). The rules' force depends on the wording — leave the wording alone.
+- **Don't invent new prose.** If a symbol is undocumented (step 4), report it. Don't fabricate a doc entry. If a doc is missing an entire concept, report it. Don't write the missing concept.
+- **Don't guess on ambiguity.** If a fix candidate isn't exactly one file (path scan) or one canonical replacement (constant scan), skip and report.
+- **Preserve section structure.** When patching a README, add rows in alphabetical or `NN-` order to match sibling tables. When rewriting prose, keep headings, list shape, and link anchors stable.
 - **Don't touch `docs/diagrams/`** — those filenames are stable and owned by `update-docs`.
 - **Groom is idempotent.** A second run immediately after a first run should produce an empty auto-fix list.
 

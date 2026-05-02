@@ -12,7 +12,7 @@ The client drives transcoding in **300-second chunks** for steady-state playback
 
 1. **`buffer.init` and the `startTranscode` mutation run in parallel via `Promise.all`.** `BufferManager.init(mimeType)` creates a `MediaSource` and arms a `SourceBuffer`; simultaneously `PlaybackController.requestChunk` fires the `startTranscode` GraphQL mutation for the `(videoId, resolution, 0, clientConfig.playback.firstChunkDurationS)` = `(…, 0, 30)` window. This means ffmpeg's cold-start overlaps with the `sourceopen` handshake rather than waiting behind it.
 2. `PlaybackController.requestChunk` opens a `transcode.request` span (with `chunk.is_prefetch = false`) around the mutation. The auto-generated `graphql.request` HTTP span nests underneath via `context.with`. The span closes when the mutation resolves and records `chunk.job_id`. The pre-issued `jobId` is plumbed directly into `pipeline.startForeground` — no second mutation fires when the pipeline opens.
-3. `chunker.startTranscodeJob` computes a deterministic `jobId = SHA-1(fingerprint + res + start + end)`. If `tmp/segments/<jobId>/init.mp4` exists the job is restored from cache; otherwise a new ffmpeg process spawns and `fs.watch` starts tracking segment files. The `transcode.job` span covers the full ffmpeg lifetime (probe + encode) and closes on `transcode_complete`, `transcode_error`, or `transcode_killed`.
+3. `chunker::start_transcode_job` (in `server-rust/src/services/chunker.rs`) computes a deterministic `job_id = SHA-1(fingerprint + res + start + end)`. If `tmp/segments-rust/<job_id>/init.mp4` exists the job is restored from cache; otherwise a new ffmpeg process spawns and a `notify::RecommendedWatcher` starts tracking segment files. The `transcode.job` span covers the full ffmpeg lifetime (probe + encode) and closes on `transcode_complete`, `transcode_error`, or `transcode_killed`.
 4. The client opens a `chunk.stream` span and calls `StreamingService.start(jobId, …, ctx)`. `ctx` is propagated as `traceparent`, so the server's `stream.request` span nests under the client's `chunk.stream`. On span end it records `chunk.bytes_streamed` and `chunk.segments_received` — giving per-chunk bandwidth in a single Seq query.
 5. `GET /stream/<jobId>` waits up to 60 s for `init.mp4`, writes it length-prefixed, then loops over newly-appearing `segment_NNNN.m4s` files.
 6. `StreamingService` accumulates bytes, extracts complete frames by the 4-byte length prefix, and calls `onSegment(data, isInit)` back into `BufferManager`.
@@ -27,9 +27,9 @@ When the current chunk stream finishes, `startChunkSeries` chains to the next on
 
 `ActiveJob.connections` tracks open `/stream/:jobId` HTTP connections:
 
-- `addConnection(id)` increments on stream open.
-- `removeConnection(id)` decrements on disconnect, stream completion, or the 90 s idle timeout.
-- When `connections` drops to `0` while the job is still `running`, `killJob(id)` sends `SIGTERM` to ffmpeg.
+- `add_connection(id)` increments on stream open.
+- `remove_connection(id)` decrements on disconnect, stream completion, or the 90 s idle timeout.
+- When `connections` drops to `0` while the job is still `running`, `pool.kill_job(id, KillReason::OrphanNoConnection)` sends `SIGTERM` to ffmpeg.
 
 ffmpeg dies within seconds of the last tab closing — no zombies. `chunker::start_transcode_job` also enforces `config.transcode.max_concurrent_jobs` (default 3); a fourth simultaneous transcode returns a `CAPACITY_EXHAUSTED` typed error, surfaced as a playback error. Cap accounting (live, dying, inflight) lives in `server-rust/src/services/ffmpeg_pool.rs` — see [`06-FfmpegPool.md`](06-FfmpegPool.md).
 

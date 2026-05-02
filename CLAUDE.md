@@ -48,7 +48,7 @@ xstream/
 │   ├── telemetry.rs                # tracing-subscriber + opentelemetry-otlp setup
 │   ├── db/                         # mod.rs, migrate.rs, queries/ (one file per table)
 │   ├── graphql/                    # schema, scalars, query, mutation, subscription, types, error_logger
-│   ├── services/                   # libraryScanner, omdb, scanState, chunker, jobStore, jobRestore, ffmpegFile, ffmpegPath, ffmpegPool, hwAccel, activeJob, cacheIndex, killReason
+│   ├── services/                   # library_scanner, omdb, scan_state, chunker, job_store, job_restore, ffmpeg_file, ffmpeg_path, ffmpeg_pool, hw_accel, active_job, cache_index, kill_reason
 │   └── routes/                     # graphql.rs (async-graphql-axum) + stream.rs (GET /stream/:job_id)
 │
 ├── src-tauri/                      # Tauri shell crate
@@ -146,7 +146,7 @@ Full policy: [`docs/architecture/Observability/01-Logging-Policy.md`](docs/archi
 - Prefer `span.add_event()` on an existing span over a new span for instantaneous transitions.
 - Message bodies must be self-describing — `tracing::info!("Stream paused — 23.4s buffered ahead (target: 20s)", …)`.
 - Levels: `info` = normal lifecycle, `warn` = recoverable, `error` = UX-affecting or a bug.
-- Always log WHY on cleanup/kill (standard `kill_reason`: `client_disconnected`, `stream_idle_timeout`, `orphan_no_connection`, `server_shutdown`).
+- Always log WHY on cleanup/kill (standard `kill_reason` wire values, source of truth `server-rust/src/services/kill_reason.rs`: `client_request`, `client_disconnected`, `stream_idle_timeout`, `orphan_no_connection`, `max_encode_timeout`, `cascade_retry`, `server_shutdown`).
 - No duplicate lifecycle logs: one owner per state change.
 - Don't cascade errors. Log once, break the loop.
 - Client: `getClientLogger` + wrap playback-path fetches with `context.with(getSessionContext(), () => fetch(…))`.

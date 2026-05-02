@@ -16,7 +16,7 @@ The original title of this file was "HDR Pad Artifact" because the first symptom
 
 ## Current implementation
 
-Two filter-chain variants (`vaapi_video_options` in `server-rust/src/services/ffmpeg_file.rs`), selected by the `isHdr` flag from `ffprobe` metadata:
+Two filter-chain variants (`vaapi_video_options` in `server-rust/src/services/ffmpeg_file.rs`), selected by the `is_hdr` flag from `ffprobe` metadata (`FfmpegFile::is_hdr`):
 
 **SDR path:**
 ```
@@ -39,7 +39,7 @@ Key differences for HDR:
 
 ## VAAPI silent-success failures — outside the cascade
 
-The three-tier cascade in `chunker.ts` only catches **encoder errors with non-zero exit codes**. There is a second class of VAAPI failure that bypasses it entirely: ffmpeg exits zero, `transcode_complete` fires, but `segment_count: 0`. No error event, no fallback, no retry.
+The three-tier cascade in `server-rust/src/services/chunker.rs` only catches **encoder errors with non-zero exit codes**. There is a second class of VAAPI failure that bypasses it entirely: ffmpeg exits zero, `transcode_complete` fires, but `segment_count: 0`. No error event, no fallback, no retry.
 
 Known instance: `-ss 0 -t 30` on VAAPI HDR 4K (reproduced traces `1bac05bd…`, `b3dbbc34…`, `3d0f0d6f…`). The same file works at `-ss 0 -t 300` and at `-ss N -t 30` for N > 0. Root cause is unknown — likely a flush/pipeline-depth interaction between `tonemap_vaapi` + `scale_vaapi` + H.264 VAAPI encoder on a short window starting at the file head. ffmpeg stderr is not captured in OTel today, so the cause remains opaque.
 
@@ -67,21 +67,21 @@ The span for the failed tier ends at the failure event; a fresh `transcode.job` 
 
 ## Per-source VAAPI-state cache
 
-`chunker.ts` keeps an in-memory `vaapiVideoState: Map<string, "needs_sw_pad" | "hw_unsafe">` keyed by `video_id`:
+`server-rust/src/config.rs` defines `enum VaapiVideoState { NeedsSwPad, HwUnsafe }` and exposes `VaapiVideoStateMap = Arc<DashMap<String, VaapiVideoState>>` on the `AppContext` as `vaapi_state`. `chunker.rs` reads and writes it:
 
-- **First failure** on a source → state becomes `needs_sw_pad`. Subsequent chunks of that video **skip tier 1** and start at tier 2.
-- **Second failure** (sw-pad also fails, or HDR source which skips tier 2) → state becomes `hw_unsafe`. Subsequent chunks **skip VAAPI entirely** and go straight to software.
+- **First failure** on a source → state becomes `VaapiVideoState::NeedsSwPad`. Subsequent chunks of that video **skip tier 1** and start at tier 2.
+- **Second failure** (sw-pad also fails, or HDR source which skips tier 2) → state becomes `VaapiVideoState::HwUnsafe`. Subsequent chunks **skip VAAPI entirely** and go straight to software.
 
 Wiped on server restart so a driver/ffmpeg upgrade gets re-evaluated.
 
-Events: `vaapi_marked_needs_sw_pad`, `vaapi_marked_unsafe` on the `transcode.job` span.
+Events: `vaapi_marked_needs_sw_pad`, `vaapi_marked_unsafe` on the `transcode.job` span (wire strings unchanged across the Bun → Rust port).
 
 ## Span attributes to inspect when debugging
 
 On `transcode.job`:
 
 - `hwaccel`: the backend actually used (`software` / `vaapi` / `videotoolbox` / …). If an HDR 4K span shows `software`, the cascade fell through.
-- `hwaccel.hdr_tonemap`: boolean, `true` when `tonemap_vaapi` was in the filter chain. If it's `false` on an HDR source, the source-detection logic (`FFmpegFile.isHdr`) missed it.
+- `hwaccel.hdr_tonemap`: boolean, `true` when `tonemap_vaapi` was in the filter chain. If it's `false` on an HDR source, the source-detection logic (`FfmpegFile::is_hdr`) missed it.
 - `hwaccel.vaapi_sw_pad`: boolean, `true` for tier-2 retries (SDR only).
 - `hwaccel.forced_software`: boolean, `true` for tier-3 retries.
 
