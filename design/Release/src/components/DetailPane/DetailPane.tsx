@@ -1,8 +1,9 @@
-import { type FC, useEffect, useState } from "react";
+import { type FC, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { mergeClasses } from "@griffel/react";
-import { ImdbBadge, IconClose } from "../../lib/icons.js";
+import { ImdbBadge, IconClose, IconSearch } from "../../lib/icons.js";
 import { type Film } from "../../data/mock.js";
+import { type OmdbResult, searchOmdb } from "../../data/omdb.js";
 import { Poster } from "../Poster/Poster.js";
 import { useDetailPaneStyles } from "./DetailPane.styles.js";
 
@@ -33,23 +34,6 @@ export const DetailPane: FC<DetailPaneProps> = ({
   const styles = useDetailPaneStyles();
   const hdrLabel = film.hdr && film.hdr !== "—" ? film.hdr.toUpperCase() : null;
   const [editing, setEditing] = useState(initialEdit);
-
-  // Editable field state — primed from the film whenever the pane swaps
-  // films or re-enters edit mode.
-  const [title, setTitle] = useState(film.title ?? "");
-  const [year, setYear] = useState(film.year !== null ? String(film.year) : "");
-  const [imdbId, setImdbId] = useState("");
-  const [plot, setPlot] = useState(film.plot ?? "");
-
-  // When the parent swaps the active film while the pane is mounted, or
-  // the URL flips between view/edit, re-prime the form so stale edits
-  // don't leak between films.
-  useEffect(() => {
-    setTitle(film.title ?? "");
-    setYear(film.year !== null ? String(film.year) : "");
-    setImdbId("");
-    setPlot(film.plot ?? "");
-  }, [film.id]);
 
   useEffect(() => {
     setEditing(initialEdit);
@@ -85,18 +69,7 @@ export const DetailPane: FC<DetailPaneProps> = ({
 
       <div className={styles.body}>
         {editing ? (
-          <DetailPaneEdit
-            title={title}
-            year={year}
-            imdbId={imdbId}
-            plot={plot}
-            onTitle={setTitle}
-            onYear={setYear}
-            onImdbId={setImdbId}
-            onPlot={setPlot}
-            onSave={exitEdit}
-            onCancel={exitEdit}
-          />
+          <DetailPaneEdit film={film} onSave={exitEdit} onCancel={exitEdit} />
         ) : (
           <>
             <div className={styles.actionRow}>
@@ -177,83 +150,141 @@ export const DetailPane: FC<DetailPaneProps> = ({
 };
 
 interface EditProps {
-  title: string;
-  year: string;
-  imdbId: string;
-  plot: string;
-  onTitle: (v: string) => void;
-  onYear: (v: string) => void;
-  onImdbId: (v: string) => void;
-  onPlot: (v: string) => void;
+  film: Film;
   onSave: () => void;
   onCancel: () => void;
 }
 
-const DetailPaneEdit: FC<EditProps> = ({
-  title,
-  year,
-  imdbId,
-  plot,
-  onTitle,
-  onYear,
-  onImdbId,
-  onPlot,
-  onSave,
-  onCancel,
-}) => {
+/**
+ * Edit mode = re-link the film to an OMDb entry. The user types a
+ * search query, picks a candidate from the results list, and Save
+ * commits the link. Mirrors the production "Re-link" flow at the data
+ * level (`searchOmdb` mock has the same shape as the real fetch).
+ */
+const DetailPaneEdit: FC<EditProps> = ({ film, onSave, onCancel }) => {
   const s = useDetailPaneStyles();
+  const initialQuery = film.title ?? film.filename;
+  const [query, setQuery] = useState(initialQuery);
+  const [selected, setSelected] = useState<string | null>(null);
+
+  const results = useMemo(() => searchOmdb(query), [query]);
+  const trimmed = query.trim();
+
+  // Re-prime when the active film changes — a stale selection from a
+  // previous film must not bleed into the next.
+  useEffect(() => {
+    setQuery(film.title ?? film.filename);
+    setSelected(null);
+  }, [film.id]);
+
+  const canSave = selected !== null;
+
   return (
     <>
       <div className={s.editEyebrow}>· edit · re-link to OMDb</div>
-      <div className={s.editFields}>
-        <label className={s.editField}>
-          <span className={s.editLabel}>Title</span>
-          <input
-            className={s.editInput}
-            value={title}
-            onChange={(e) => onTitle(e.target.value)}
-            placeholder="Oppenheimer"
-          />
-        </label>
-        <label className={s.editField}>
-          <span className={s.editLabel}>Year</span>
-          <input
-            className={s.editInput}
-            value={year}
-            onChange={(e) => onYear(e.target.value)}
-            placeholder="2023"
-            inputMode="numeric"
-          />
-        </label>
-        <label className={s.editField}>
-          <span className={s.editLabel}>IMDb ID</span>
-          <input
-            className={s.editInput}
-            value={imdbId}
-            onChange={(e) => onImdbId(e.target.value)}
-            placeholder="tt15398776"
-          />
-        </label>
-        <label className={s.editField}>
-          <span className={s.editLabel}>Plot</span>
-          <textarea
-            className={mergeClasses(s.editInput, s.editTextarea)}
-            value={plot}
-            onChange={(e) => onPlot(e.target.value)}
-            rows={4}
-            placeholder="Short synopsis…"
-          />
-        </label>
+
+      <div className={s.editSearchRow}>
+        <span className={s.editSearchIcon} aria-hidden="true">
+          <IconSearch />
+        </span>
+        <input
+          className={s.editSearchInput}
+          value={query}
+          onChange={(e) => {
+            setQuery(e.target.value);
+            setSelected(null);
+          }}
+          placeholder="Search OMDb by title, director, or IMDb ID…"
+          autoFocus
+          spellCheck={false}
+          autoComplete="off"
+        />
+      </div>
+
+      <div className={s.editResults}>
+        {trimmed.length === 0 ? (
+          <div className={s.editEmpty}>
+            Type to search OMDb. Pick a result to link to.
+          </div>
+        ) : results.length === 0 ? (
+          <div className={s.editEmpty}>
+            No matches for &ldquo;{trimmed}&rdquo;.
+          </div>
+        ) : (
+          results.map((r) => (
+            <OmdbResultRow
+              key={r.imdbId}
+              result={r}
+              selected={selected === r.imdbId}
+              onSelect={() => setSelected(r.imdbId)}
+            />
+          ))
+        )}
       </div>
 
       <div className={s.editFooter}>
         <button type="button" className={s.editCancel} onClick={onCancel}>
           [ESC] Cancel
         </button>
-        <button type="button" className={s.editSave} onClick={onSave}>
-          [↩] Save
+        <button
+          type="button"
+          className={mergeClasses(
+            s.editSave,
+            !canSave && s.editSaveDisabled,
+          )}
+          onClick={onSave}
+          disabled={!canSave}
+          aria-disabled={!canSave}
+        >
+          [↩] Link
         </button>
       </div>
     </>
+  );
+};
+
+const OmdbResultRow: FC<{
+  result: OmdbResult;
+  selected: boolean;
+  onSelect: () => void;
+}> = ({ result, selected, onSelect }) => {
+  const s = useDetailPaneStyles();
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      className={mergeClasses(
+        s.editResult,
+        selected && s.editResultSelected,
+      )}
+      aria-pressed={selected}
+    >
+      {result.posterUrl ? (
+        <Poster
+          url={result.posterUrl}
+          alt={result.title}
+          className={s.editResultPoster}
+        />
+      ) : (
+        <div className={mergeClasses(s.editResultPoster, s.editResultPosterFallback)}>
+          ·
+        </div>
+      )}
+      <div className={s.editResultText}>
+        <div className={s.editResultTitle}>
+          {result.title}
+          <span className={s.editResultYear}>· {result.year}</span>
+        </div>
+        <div className={s.editResultMeta}>
+          {result.genre} · {result.runtime}
+        </div>
+        <div className={s.editResultId}>
+          {result.imdbId} · dir. {result.director}
+        </div>
+      </div>
+      <span className={s.editResultMark} aria-hidden="true">
+        {selected ? "[x]" : "[ ]"}
+      </span>
+    </button>
   );
 };

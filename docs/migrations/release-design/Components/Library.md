@@ -558,8 +558,10 @@ Fallback on browsers without View Transitions support (e.g., Safari < 18): plain
 
 ### Overlay view (`FilmDetailsOverlay`)
 
+#### Hero section
 - [ ] Replaces entire Library page output (not rendered inside page container)
-- [ ] `.overlay`: `position: absolute`, `inset: 0`, `overflow: hidden`, `backgroundColor: colorBg0`
+- [ ] `.overlay`: `position: absolute`, `inset: 0`, `overflow-y: auto`, `backgroundColor: colorBg0` (scrollable for suggestions carousel below)
+- [ ] `.hero`: `position: relative`, `width: 100%`, `height: 100vh`, `overflow: hidden` (fixed viewport container)
 - [ ] `.overlayPoster`: `position: absolute`, `inset: 0`, `width/height: 100%`, `objectFit: cover`, **`viewTransitionName: "film-backdrop"`** (MUST match Player `.backdrop`). Ken Burns: `scale(1.04) translate(-0.4%, -0.3%)` → `scale(1.04) translate(0.4%, 0.3%)`, 26s, ease-in-out, alternate, infinite. Full-color (no filter)
 - [ ] `.overlayGradient`: `position: absolute`, `inset: 0`, `pointerEvents: none`. `backgroundImage: linear-gradient(180deg, rgba(5,7,6,0.45) 0%, transparent 25%, transparent 38%, rgba(5,7,6,0.85) 72%, colorBg0 100%), linear-gradient(90deg, rgba(5,7,6,0.5) 0%, transparent 35%)`
 - [ ] `.overlayBack` (top-left pill): `position: absolute`, `top: 24px`, `left: 28px`, `zIndex: 4`. `<IconBack>` + `"Back"` in inline-flex `columnGap: 8px`. `paddingTop/Bottom: 8px`, `paddingLeft: 12px`, `paddingRight: 16px`. `backgroundColor: rgba(0,0,0,0.45)`, border `colorBorder`, `borderRadius: 999px`. Mono 11px, `letterSpacing: 0.16em`, uppercase. Hover: `rgba(0,0,0,0.7)`, border → `colorGreen`, `color: colorGreen`. `aria-label="Back to home"`. Calls `onClose`
@@ -570,9 +572,28 @@ Fallback on browsers without View Transitions support (e.g., Safari < 18): plain
 - [ ] Meta row: Mono 13px, `letterSpacing: 0.08em`, `colorTextDim`, uppercase. `{year} · {genre} · {duration}`
 - [ ] Director: 13px, `colorTextMuted`, `"Directed by "` + `<span colorText>{director}</span>`. Only when `film.director`
 - [ ] Plot: 15px, `lineHeight: 1.55`, `colorTextDim`, `maxWidth: 640px`. Only when `film.plot`
-- [ ] Actions row: flex, `columnGap: 20px`, `marginTop: 8px`. **Play CTA (glass pill, Liquid Glass): translucent white bg, `borderRadius: 999px`, `backdrop-filter: blur(20px) saturate(180%)`, beveled-light borders, inset highlights + drop shadow + on-hover lift, Mono 12px uppercase, `paddingTop/Bottom: 14px`, `paddingLeft: 26px`, `paddingRight: 30px`** + filename (Mono 10px, `colorTextFaint`)
+- [ ] Actions row: flex, `columnGap: 20px`, `marginTop: 8px`. **Play CTA glass pill: translucent white bg, `borderRadius: 999px`, `backdrop-filter: blur(20px) saturate(180%)`, beveled-light borders, Mono 12px uppercase, `paddingTop/Bottom: 14px`, `paddingLeft: 26px`, `paddingRight: 30px`. Hover: glass lights up green (oklch(0.78 0.20 150 / 0.18) bg, alpha-gradient green borders, green text + two-layer text-shadow glow, amplified outer shadows + 32px + 80px green halos; icon gets green drop-shadow filters). Active: lift release + scale 0.98.** Plus filename (Mono 10px, `colorTextFaint`)
 - [ ] Play CTA: `<button onClick={playWithTransition}>` — wraps `document.startViewTransition(() => navigate("/player/{id}"))` with plain `navigate` fallback. NOT a `<Link>`
+- [ ] Scroll hint (`.scrollHint`): Mono 10px, positioned `bottom: -44px`, renders `"▾ scroll for suggestions"` when suggestions present, pulsing animation (1.8s, 0.4 → 0.85 opacity), `aria-hidden="true"`
 - [ ] View Transitions invariant: `.overlayPoster` `viewTransitionName: "film-backdrop"` must match Player `.backdrop` — if they diverge, the morph silently breaks
+
+#### Suggestions carousel (below hero, optional)
+- [ ] `.suggestions` section: rendered only when `suggestions.length > 0`, **after** the `.hero` closes (siblings under `.overlay`, not nested)
+- [ ] Padding: `paddingTop: 40px`, `paddingBottom: 60px`, `backgroundColor: colorBg0` (same as overlay)
+- [ ] `<PosterRow title="You might also like">` component containing `<FilmTile>` cards per suggestion
+- [ ] FilmTile click: calls `onSelectSuggestion(id)` if provided, else navigates to `/player/{id}`
+
+#### `pickSuggestions` helper function
+- [ ] Called by Library page when rendering overlay: `const suggestions = pickSuggestions(selectedFilm, films)`
+- [ ] Signature: `function pickSuggestions(film: Film, all: Film[]): Film[]`
+- [ ] Algorithm: ranks all films except the input by score:
+  - [ ] Self-exclusion: skip the input film
+  - [ ] Director match: same director, +50
+  - [ ] Profile match: same library, +8
+  - [ ] Genre overlap: for each token > 2 chars in the film's genre, +12 if found in candidate's genre
+  - [ ] Resolution match: same resolution, +2
+  - [ ] Sort descending by score, cap at 8 results
+- [ ] Usage: `<FilmDetailsOverlay ... suggestions={pickSuggestions(selectedFilm, films)} onSelectSuggestion={(id) => openFilm(id)} />`
 
 ### Data + backend
 
@@ -584,5 +605,5 @@ Fallback on browsers without View Transitions support (e.g., Safari < 18): plain
 
 ## Status
 
-- [x] Designed in `design/Release` lab — hero+rows+overlay layout (2026-05-01, PR #46 commit 04ea22b). Search bar between hero and rows added (787f136). Page-level padding + hero downsized to 340px card + spacing tightened (9cc6d48). Hero made full-bleed (5301df6). Hero shrunk to 280px; dots stack under greeting (45d1097). Hero grown to 300px; search bar refactored to centered pill (773681e). Search bar moved inside hero top-right; gradient strip style; custom green caret + mirror span (6fd44e4). Hero height → 420px; search grid restructured; `.overlayPoster` gets `viewTransitionName: "film-backdrop"`; Play CTA → `<button onClick={playWithTransition}>` (73a9cca). Hero changed to `75vh` + `borderRadius: 6px` + page inset (40px); RAF-eased row scroll (720ms easeInOutCubic); three rows (Continue Watching + New Releases + Watchlist); greeting eyebrow line; heroBody `paddingLeft/Right: 44px`, `paddingBottom: 20px`; `searchGrid` → 200px columns; overlay Back pill (top-left) added alongside Close button (907c331). PR #46 on `feat/release-design-omdb-griffel`, merged to main 2026-05-01. **Latest (2026-05-02, PR #48):** hero modes (idle / searching / filtering); SearchSlide + FilterSlide TUI panels; `heroPanelBg` dark backdrop with dot-grid + subtle green glow; ESC keybind for mode exit; filter dimensions (resolution / HDR / codec / decade) with checkbox toggles; **active-mode visual updates: `.heroActive` now sets `borderRadius: 0` (flush with page edges) + `backgroundColor: colorBg0` (continuous with page bg); `heroPanelBg` radial mask: `radial-gradient(ellipse 92% 88% at 50% 48%, #000 55%, transparent 100%)` fades dot grid + green glow into transparency at edges**.
+- [x] Designed in `design/Release` lab — hero+rows+overlay layout (2026-05-01, PR #46 commit 04ea22b). Search bar between hero and rows added (787f136). Page-level padding + hero downsized to 340px card + spacing tightened (9cc6d48). Hero made full-bleed (5301df6). Hero shrunk to 280px; dots stack under greeting (45d1097). Hero grown to 300px; search bar refactored to centered pill (773681e). Search bar moved inside hero top-right; gradient strip style; custom green caret + mirror span (6fd44e4). Hero height → 420px; search grid restructured; `.overlayPoster` gets `viewTransitionName: "film-backdrop"`; Play CTA → `<button onClick={playWithTransition}>` (73a9cca). Hero changed to `75vh` + `borderRadius: 6px` + page inset (40px); RAF-eased row scroll (720ms easeInOutCubic); three rows (Continue Watching + New Releases + Watchlist); greeting eyebrow line; heroBody `paddingLeft/Right: 44px`, `paddingBottom: 20px`; `searchGrid` → 200px columns; overlay Back pill (top-left) added alongside Close button (907c331). PR #46 on `feat/release-design-omdb-griffel`, merged to main 2026-05-01. **Latest (2026-05-02, PR #48):** hero modes (idle / searching / filtering); SearchSlide + FilterSlide TUI panels; `heroPanelBg` dark backdrop with dot-grid + subtle green glow; ESC keybind for mode exit; filter dimensions (resolution / HDR / codec / decade) with checkbox toggles; active-mode visual updates: `.heroActive` sets `borderRadius: 0` (flush) + `backgroundColor: colorBg0` (continuous); `heroPanelBg` radial mask fades edges; **FilmDetailsOverlay restructured with `.hero` (100vh) + `.suggestions` (carousel below): Play CTA glass pill lights up green on hover (oklch(0.78 0.20 150 / α) with alpha-gradient borders, text + box-shadow glows, icon drop-shadow filters); scroll hint animates below action row; `pickSuggestions` helper scores by director (+50) / profile (+8) / genre (+12 per token) / resolution (+2), caps at 8 tiles. `.overlay` now `overflow-y: auto` for scrollable content. Suggestions wired: `<FilmDetailsOverlay suggestions={pickSuggestions(selectedFilm, films)} onSelectSuggestion={(id) => openFilm(id)} />`.**
 - [ ] Production implementation

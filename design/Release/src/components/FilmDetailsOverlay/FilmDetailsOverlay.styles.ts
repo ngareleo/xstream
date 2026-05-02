@@ -8,8 +8,15 @@ export const useFilmDetailsOverlayStyles = makeStyles({
     right: 0,
     bottom: 0,
     left: 0,
-    overflow: "hidden",
+    overflowX: "hidden",
+    overflowY: "auto",
     backgroundColor: tokens.colorBg0,
+  },
+  hero: {
+    position: "relative",
+    width: "100%",
+    height: "100vh",
+    overflow: "hidden",
   },
   poster: {
     position: "absolute",
@@ -210,19 +217,35 @@ export const useFilmDetailsOverlayStyles = makeStyles({
     WebkitBackdropFilter: "blur(20px) saturate(180%)",
     boxShadow:
       "inset 0 1px 0 rgba(255,255,255,0.35), inset 0 -1px 0 rgba(0,0,0,0.20), 0 10px 32px rgba(0,0,0,0.45)",
-    transitionProperty: "transform, box-shadow, background-color",
-    transitionDuration: tokens.transition,
+    transitionProperty:
+      "transform, box-shadow, background-color, color, border-color, text-shadow",
+    transitionDuration: "0.18s",
+    transitionTimingFunction: "ease-out",
     "& svg": {
       display: "block",
       color: "rgba(255,255,255,0.55)",
       filter:
         "drop-shadow(0 1px 0.5px rgba(255,255,255,0.45)) drop-shadow(0 -1px 0.5px rgba(0,0,0,0.55))",
+      transitionProperty: "color, filter",
+      transitionDuration: "0.18s",
     },
+    // Hover lights up the glass with the green accent — reads like a
+    // neon sign coming on. The glow + saturated inner shadows + green
+    // text-shadow give the lit-from-within feel.
     ":hover": {
       transform: "translateY(-1px)",
-      backgroundColor: "rgba(255,255,255,0.18)",
-      boxShadow:
-        "inset 0 1px 0 rgba(255,255,255,0.45), inset 0 -1px 0 rgba(0,0,0,0.20), 0 14px 40px rgba(0,0,0,0.55), 0 0 28px rgba(255,255,255,0.12)",
+      backgroundColor: "oklch(0.78 0.20 150 / 0.18)",
+      borderTopColor: "oklch(0.78 0.20 150 / 0.55)",
+      borderRightColor: "oklch(0.78 0.20 150 / 0.4)",
+      borderBottomColor: "oklch(0.78 0.20 150 / 0.25)",
+      borderLeftColor: "oklch(0.78 0.20 150 / 0.4)",
+      color: tokens.colorGreen,
+      textShadow: `0 0 6px ${tokens.colorGreenGlow}, 0 0 18px ${tokens.colorGreen}`,
+      boxShadow: `inset 0 1px 0 oklch(0.78 0.20 150 / 0.55), inset 0 -1px 0 rgba(0,0,0,0.20), 0 14px 40px rgba(0,0,0,0.55), 0 0 32px ${tokens.colorGreenGlow}, 0 0 80px oklch(0.78 0.20 150 / 0.30)`,
+    },
+    ":hover svg": {
+      color: tokens.colorGreen,
+      filter: `drop-shadow(0 0 4px ${tokens.colorGreen}) drop-shadow(0 0 12px ${tokens.colorGreenGlow})`,
     },
     ":active": {
       transform: "translateY(0) scale(0.98)",
@@ -233,5 +256,29 @@ export const useFilmDetailsOverlayStyles = makeStyles({
     fontSize: "10px",
     letterSpacing: "0.06em",
     color: tokens.colorTextFaint,
+  },
+  scrollHint: {
+    position: "absolute",
+    right: 0,
+    bottom: "-44px",
+    fontFamily: tokens.fontMono,
+    fontSize: "10px",
+    letterSpacing: "0.18em",
+    color: tokens.colorTextFaint,
+    textTransform: "uppercase",
+    animationName: {
+      "0%, 100%": { opacity: 0.4, transform: "translateY(0)" },
+      "50%": { opacity: 0.85, transform: "translateY(3px)" },
+    },
+    animationDuration: "1.8s",
+    animationIterationCount: "infinite",
+    animationTimingFunction: "ease-in-out",
+  },
+  suggestions: {
+    paddingTop: "40px",
+    paddingBottom: "60px",
+    paddingLeft: "60px",
+    paddingRight: "60px",
+    backgroundColor: tokens.colorBg0,
   },
 });

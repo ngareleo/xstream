@@ -1,10 +1,17 @@
 import { type FC, useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { mergeClasses } from "@griffel/react";
-import { getFilmById, getFilmsForProfile, profiles } from "../../data/mock.js";
+import {
+  type Film,
+  type Profile,
+  getFilmById,
+  getFilmsForProfile,
+  profiles,
+} from "../../data/mock.js";
 import { DetailPane } from "../../components/DetailPane/DetailPane.js";
 import { FilmRow } from "../../components/FilmRow/FilmRow.js";
 import { ProfileRow } from "../../components/ProfileRow/ProfileRow.js";
+import { IconClose, IconSearch } from "../../lib/icons.js";
 import { useSplitResize } from "../../hooks/useSplitResize.js";
 import { useProfilesStyles } from "./Profiles.styles.js";
 
@@ -67,6 +74,32 @@ export const Profiles: FC = () => {
   const totalUnmatched = profiles.reduce((acc, p) => acc + p.unmatched, 0);
   const scanningCount = profiles.filter((p) => p.scanning).length;
 
+  const [search, setSearch] = useState("");
+  const trimmedSearch = search.trim().toLowerCase();
+  const isSearching = trimmedSearch.length > 0;
+
+  // When the user is searching, narrow each profile to its matching films
+  // and drop profiles that have no hits. Otherwise show every profile
+  // with its full list.
+  const visibleProfiles = useMemo<{ profile: Profile; films: Film[] }[]>(() => {
+    const all = profiles.map((p) => ({
+      profile: p,
+      films: getFilmsForProfile(p.id),
+    }));
+    if (!isSearching) return all;
+    return all
+      .map(({ profile, films }) => ({
+        profile,
+        films: films.filter((f) => filmMatches(f, trimmedSearch)),
+      }))
+      .filter(({ films }) => films.length > 0);
+  }, [trimmedSearch, isSearching]);
+
+  const matchCount = useMemo(
+    () => visibleProfiles.reduce((acc, p) => acc + p.films.length, 0),
+    [visibleProfiles],
+  );
+
   // Design-lab toggle: `/profiles?empty=1` previews the no-libraries state.
   if (params.get("empty") === "1") {
     return (
@@ -118,6 +151,38 @@ export const Profiles: FC = () => {
           </span>
         </div>
 
+        <div className={s.searchBar}>
+          <span className={s.searchPrompt} aria-hidden="true">
+            <IconSearch />
+          </span>
+          <input
+            className={s.searchInput}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search films, directors, genres in every profile…"
+            aria-label="Search profiles"
+            spellCheck={false}
+            autoComplete="off"
+          />
+          {isSearching && (
+            <>
+              <span className={s.searchCount}>
+                {matchCount} {matchCount === 1 ? "match" : "matches"} ·{" "}
+                {visibleProfiles.length}{" "}
+                {visibleProfiles.length === 1 ? "profile" : "profiles"}
+              </span>
+              <button
+                type="button"
+                className={s.searchClear}
+                onClick={() => setSearch("")}
+                aria-label="Clear search"
+              >
+                <IconClose width={12} height={12} />
+              </button>
+            </>
+          )}
+        </div>
+
         <div className={s.colHeader}>
           <div />
           <div>Profile / File</div>
@@ -127,14 +192,19 @@ export const Profiles: FC = () => {
         </div>
 
         <div className={s.rowsScroll}>
-          {profiles.map((p) => {
-            const filmsInProfile = getFilmsForProfile(p.id);
-            return (
+          {visibleProfiles.length === 0 ? (
+            <div className={s.noMatches}>
+              No films match &ldquo;{search.trim()}&rdquo;
+            </div>
+          ) : (
+            visibleProfiles.map(({ profile: p, films: filmsInProfile }) => (
               <ProfileRow
                 key={p.id}
                 profile={p}
-                expanded={expandedIds.has(p.id)}
-                onToggle={() => toggleProfile(p.id)}
+                expanded={isSearching || expandedIds.has(p.id)}
+                onToggle={() => {
+                  if (!isSearching) toggleProfile(p.id);
+                }}
               >
                 {filmsInProfile.map((f) => (
                   <FilmRow
@@ -146,8 +216,8 @@ export const Profiles: FC = () => {
                   />
                 ))}
               </ProfileRow>
-            );
-          })}
+            ))
+          )}
         </div>
 
         <div className={s.footer}>
@@ -180,3 +250,16 @@ export const Profiles: FC = () => {
     </div>
   );
 };
+
+function filmMatches(f: Film, query: string): boolean {
+  const title = (f.title ?? "").toLowerCase();
+  const filename = f.filename.toLowerCase();
+  const director = (f.director ?? "").toLowerCase();
+  const genre = (f.genre ?? "").toLowerCase();
+  return (
+    title.includes(query) ||
+    filename.includes(query) ||
+    director.includes(query) ||
+    genre.includes(query)
+  );
+}

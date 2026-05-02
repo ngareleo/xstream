@@ -1,7 +1,7 @@
 # Profiles (page)
 
 > Status: **baseline** (Spec) · **not started** (Production)
-> Spec updated: 2026-05-02 — FilmRow split into three click targets: poster → player page; row body → opens DetailPane; Play/Edit text links in right cell. FilmRow hover adds background tint + 2px green border (except when selected, which locks the green state). Poster thumbnail wraps in a `<button>` with green-tinted hover overlay (▶ Play icon) + scale effect.
+> Spec updated: 2026-05-02 — Added top search bar between breadcrumb and column header. Search input with icon + match count + clear button. Auto-expands all profiles while searching and narrows films to matches. No-matches empty state. `filmMatches` helper checks title / filename / director / genre. FilmRow updated: click poster → player; click body → detail pane; Edit text link only (Play dropped).
 
 ## Files
 
@@ -29,6 +29,16 @@ Flex column, `overflow: hidden`, `position: relative`.
 - Path-style breadcrumb: `~ / media / films` with the leaf in `var(--text)`, others muted.
 - Trailing `breadcrumbScanning` chunk: `● scanning {scanningCount} of {profiles.length}` (when any profile is currently scanning).
 
+### Search bar (`searchBar`)
+- Positioned between breadcrumb and column header, full-width of the left column.
+- Layout: `display: flex`, `alignItems: center`, `columnGap: 12px`, `paddingTop/Bottom: 8px`, `paddingLeft/Right: 16px`.
+- `focus-within` styling: `borderColor: tokens.colorGreen` (1px border all sides, rounded corners 3px).
+- **Search icon (`searchPrompt`):** `<IconSearch>` at `color: tokens.colorGreen`, `flexShrink: 0`.
+- **Input (`searchInput`):** `type="text"`, `backgroundColor: transparent`, no border. JetBrains Mono 12px, `color: tokens.colorText`. Placeholder: `"Search films, directors, genres in every profile…"` (muted text). `aria-label="Search profiles"`, `spellCheck={false}`, `autoComplete="off"`.
+- **Match count and clear button (shown only when `isSearching`):**
+  - **Count (`searchCount`):** Mono 10px, `color: tokens.colorGreen`, uppercase. Text: `"{matchCount} {matchCount === 1 ? 'match' : 'matches'} · {visibleProfiles.length} {visibleProfiles.length === 1 ? 'profile' : 'profiles'}"`. Flex-shrink for word wrapping.
+  - **Clear button (`searchClear`):** 20×20 button, `<IconClose 12×12>`, `color: colorTextMuted` at rest, hover `color: colorText`. `aria-label="Clear search"`. Click: `setSearch("")` (resets query and rebuilds filtered view).
+
 ### Column header (`colHeader`)
 - 5-column grid header row: `[chevron] · Profile / File · Match · Size · [actions]`.
 
@@ -55,6 +65,18 @@ Flex column, `overflow: hidden`, `position: relative`.
 - Visible only when `paneOpen`. `<div onMouseDown={onResizeMouseDown}>` with `backgroundColor: tokens.colorBorder`, `cursor: col-resize`, `:hover` flips to `tokens.colorGreen`.
 
 ## Behaviour
+
+### Search state and filtering
+
+- **Local state:** `[search, setSearch]` — the query string (raw, not trimmed).
+- **Derived values:**
+  - `trimmedSearch = search.trim().toLowerCase()` — for matching logic.
+  - `isSearching = trimmedSearch.length > 0` — flag to show match counts and clear button.
+  - `visibleProfiles` computed via `useMemo`: when `isSearching`, map each profile to its matching films (filtered via `filmMatches`), then drop profiles with zero hits. When not searching, show every profile with its full film list.
+  - `matchCount` — total films across all visible profiles.
+- **Film matching:** `filmMatches(film, query)` helper checks title, filename, director, genre (all `.toLowerCase()`) for substring inclusion. Example: `filmMatches(oppenheimer, "nolan")` → true (director contains "nolan").
+- **Auto-expand while searching:** when `isSearching`, every profile is force-expanded (toggle disabled). When search clears, expansion state reverts to manual control. This ensures users always see matching films without needing to expand each profile.
+- **No-matches state:** when `isSearching && visibleProfiles.length === 0`, show `noMatches` message: `"No films match "{search.trim()}""` (Mono, dimmed, centred).
 
 ### URL pane state
 - `?film=<id>` — selected film in view mode. `useSearchParams()` reads/writes.
@@ -106,9 +128,22 @@ None. The `+ NEW PROFILE` footer button now links to `/profiles/new` (CreateProf
 
 ## Porting checklist (`client/src/pages/Profiles/`)
 
+### Layout and container
 - [ ] Split-body grid: `1fr 0px 0px` closed, `1fr 4px <paneWidth>px` open, with `transitionSlow` ease; `paddingTop: tokens.headerHeight`, `boxSizing: border-box` (page manages header clearance)
 - [ ] `useSplitResize` for drag-resize handle + `isResizing` no-transition state
+
+### Header and search
 - [ ] Breadcrumb path with scanning indicator (page opens here — no hero above it)
+- [ ] Search bar: `display: flex`, `columnGap: 12px`, `paddingTop/Bottom: 8px`, `paddingLeft/Right: 16px`, `focus-within borderColor: colorGreen`
+- [ ] `<IconSearch>` icon at `colorGreen`, `flexShrink: 0`
+- [ ] Search input: Mono 12px, transparent bg, placeholder `"Search films, directors, genres in every profile…"`, `aria-label="Search profiles"`
+- [ ] Match count display (shown when `isSearching`): Mono 10px green uppercase, `"{matchCount} {match/matches} · {visibleProfiles.length} {profile/profiles}"`
+- [ ] Clear button (shown when `isSearching`): 20×20, `<IconClose 12×12>`, click resets `search` state
+- [ ] **Auto-expand behavior:** when `isSearching`, force-expand all profiles (toggle disabled); when not searching, revert to manual control
+- [ ] **No-matches state:** when `isSearching && visibleProfiles.length === 0`, show `"No films match "{search.trim()}""`
+- [ ] `filmMatches(film, query)` helper: checks title / filename / director / genre (case-insensitive substring match)
+
+### ProfileRow and FilmRow
 - [ ] 5-column ProfileRow: chevron / name+path / match-bar / size / actions
 - [ ] Match bar: green (or yellow if unmatched) progress fill OR spinner during scan
 - [ ] Expanded ProfileRow shows nested FilmRow children with `bg-1` background
@@ -117,17 +152,21 @@ None. The `+ NEW PROFILE` footer button now links to `/profiles/new` (CreateProf
 - [ ] Poster thumbnail (`filmThumbBtn`): 26×38 button, no visible bg; contains image + hover overlay; `:hover` adds `scale(1.05)` + green shadow
 - [ ] Hover overlay (`filmThumbHover`): absolute fill, flexed center, displays `▶` in green, `backgroundColor: rgba(5, 7, 6, 0.55)`, `opacity: 0` → `1` on parent `:hover`
 - [ ] Poster button navigates to `/player/:id` on click
-- [ ] Right cell: one text-link button (`filmEditAction`) 
+- [ ] Right cell: one text-link button (`filmEditAction`, Edit only — no Play link)
 - [ ] `filmEditAction`: white Mono 9px underline text, faint white underline; hover white → green; calls `onEdit(film.id)`
 - [ ] Edit button uses `e.stopPropagation()` so click doesn't toggle row selection
+
+### Detail pane and URL state
 - [ ] URL pane state: `?film=<id>` (view mode) or `?film=<id>&edit=1` (edit mode); toggle off on second click in view mode
 - [ ] Pre-expand profile containing the deep-linked film
 - [ ] Pass FilmRow props: `onOpen={(id) => openFilm(id)}`, `onEdit={(id) => editFilm(id)}`
-- [ ] Pass DetailPane props: `initialEdit={editParamSet}`, `onEditChange={handleEditModeChange}`, `onSave={saveMutation}`
-- [ ] Footer: counts in Mono uppercase + `+ NEW PROFILE` CTA wired to `/profiles/new` (or create-profile mutation in GraphQL)
-- [ ] Empty state: `?empty=1` design-lab toggle renders watermark + content section with headline/rule/body/CTA + hint
+- [ ] Pass DetailPane props: `initialEdit={editParamSet}`, `onEditChange={handleEditModeChange}`, `onClose={closePane}`
 - [ ] `editFilm(id)` helper sets URL params to `{ film: id, edit: "1" }` → DetailPane mounts in edit mode
 - [ ] DetailPane `onEditChange` callback syncs URL: `editing=false` removes `edit` param, `editing=true` adds it
+
+### Footer and empty state
+- [ ] Footer: counts in Mono uppercase + `+ NEW PROFILE` CTA wired to `/profiles/new` (or create-profile mutation in GraphQL)
+- [ ] Empty state: `?empty=1` design-lab toggle renders watermark + content section with headline/rule/body/CTA + hint
 
 ## Extracted components (2026-05-02, PR #48)
 
@@ -140,5 +179,5 @@ Profiles.tsx owns the split-body grid, `useSplitResize` hook, URL pane state (`?
 
 ## Status
 
-- [x] Designed in `design/Release` lab — components extracted 2026-05-02, PR #48. Profiles became a thinner page shell (~160 lines). ProfileRow handles expansion state, match-bar spinner, EDIT link. FilmRow handles click-target split (poster → player, body → detail pane), hover tints + green border (locked when selected to prevent flicker), Edit text link only (Play button dropped). DetailPane edit mode added in follow-up 2026-05-02: form with Title / Year / IMDb ID / Plot fields. URL contract: `?film=<id>` (view) vs `?film=<id>&edit=1` (edit). Each extracted child component has its own `.tsx` + `.styles.ts` + `.md` spec.
+- [x] Designed in `design/Release` lab — components extracted 2026-05-02, PR #48. Profiles became a thinner page shell (~160 lines). **Search bar added (2026-05-02):** input + icon + match count + clear button, between breadcrumb and column header. Auto-expands all profiles while searching; narrows films via `filmMatches` helper (checks title / filename / director / genre). No-matches empty state. ProfileRow handles expansion state, match-bar spinner, EDIT link. FilmRow handles click-target split (poster → player, body → detail pane), hover tints + green border (locked when selected to prevent flicker), Edit text link only (Play button dropped). DetailPane edit mode: OMDb search picker with search input + result cards + Link button. URL contract: `?film=<id>` (view) vs `?film=<id>&edit=1` (edit). Each extracted child component has its own `.tsx` + `.styles.ts` + `.md` spec.
 - [ ] Production implementation (`client/src/pages/Profiles/` + `client/src/components/` split)

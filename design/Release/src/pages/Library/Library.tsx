@@ -51,6 +51,31 @@ function rowEntries(items: WatchlistItem[]): RowEntry[] {
 }
 
 /**
+ * Films to surface in the FilmDetailsOverlay "You might also like" row.
+ * Genre / director overlap rank highest, then anything else from the
+ * same profile, then the rest of the catalog. Self is always excluded
+ * and the result caps at 8 tiles.
+ */
+function pickSuggestions(film: Film, all: Film[]): Film[] {
+  const tokens = (film.genre ?? "").toLowerCase().split(/[·\s\/]+/).filter(Boolean);
+  const scored: { film: Film; score: number }[] = [];
+  for (const f of all) {
+    if (f.id === film.id) continue;
+    let score = 0;
+    if (f.director && film.director && f.director === film.director) score += 50;
+    if (f.profile === film.profile) score += 8;
+    const fGenre = (f.genre ?? "").toLowerCase();
+    for (const t of tokens) {
+      if (t.length > 2 && fGenre.includes(t)) score += 12;
+    }
+    if (f.resolution === film.resolution) score += 2;
+    scored.push({ film: f, score });
+  }
+  scored.sort((a, b) => b.score - a.score);
+  return scored.slice(0, 8).map((s) => s.film);
+}
+
+/**
  * Library home. Owns:
  *  - the rotating hero / SearchSlide / FilterSlide tri-state machine
  *  - the search query + filter state
@@ -217,7 +242,15 @@ export const Library: FC = () => {
   const onGreetingMouseLeave = (): void => setGreetingTilt({ rx: 0, ry: 0 });
 
   if (selectedFilm) {
-    return <FilmDetailsOverlay film={selectedFilm} onClose={closeFilm} />;
+    const suggestions = pickSuggestions(selectedFilm, films);
+    return (
+      <FilmDetailsOverlay
+        film={selectedFilm}
+        suggestions={suggestions}
+        onSelectSuggestion={(id) => openFilm(id)}
+        onClose={closeFilm}
+      />
+    );
   }
 
   return (
