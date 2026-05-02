@@ -1,4 +1,9 @@
 //! Idempotent schema setup. Mirrors `server/src/db/migrate.ts`.
+//!
+//! No migration versioning + no `ALTER TABLE` retro-fits: the schema is
+//! whatever this file says it is on a fresh DB. While we're pre-prod the
+//! cost of "delete `tmp/xstream-rust.db` and re-create" is tiny, and the
+//! payoff is one place to read the canonical column set per table.
 
 use rusqlite::Connection;
 
@@ -24,7 +29,8 @@ pub fn run(conn: &Connection) -> rusqlite::Result<()> {
           file_size_bytes      INTEGER NOT NULL,
           bitrate              INTEGER NOT NULL,
           scanned_at           TEXT NOT NULL,
-          content_fingerprint  TEXT NOT NULL
+          content_fingerprint  TEXT NOT NULL,
+          native_resolution    TEXT
         );
         CREATE INDEX IF NOT EXISTS videos_library_id ON videos(library_id);
         CREATE TABLE IF NOT EXISTS video_streams (
@@ -117,23 +123,5 @@ pub fn run(conn: &Connection) -> rusqlite::Result<()> {
         CREATE INDEX IF NOT EXISTS idx_episodes_video ON episodes(episode_video_id);
         COMMIT;
         "#,
-    )?;
-
-    if !column_exists(conn, "videos", "native_resolution")? {
-        conn.execute("ALTER TABLE videos ADD COLUMN native_resolution TEXT", [])?;
-    }
-
-    Ok(())
-}
-
-fn column_exists(conn: &Connection, table: &str, column: &str) -> rusqlite::Result<bool> {
-    let mut stmt = conn.prepare(&format!("PRAGMA table_info({table})"))?;
-    let mut rows = stmt.query([])?;
-    while let Some(row) = rows.next()? {
-        let name: String = row.get("name")?;
-        if name == column {
-            return Ok(true);
-        }
-    }
-    Ok(false)
+    )
 }
