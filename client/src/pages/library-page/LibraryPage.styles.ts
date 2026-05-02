@@ -194,7 +194,12 @@ export const useLibraryStyles = makeStyles({
   },
 
   emptyHero: {
-    flexGrow: 1,
+    position: "absolute",
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    zIndex: 2,
     display: "flex",
     flexDirection: "column",
     rowGap: "20px",
