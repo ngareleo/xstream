@@ -4,8 +4,8 @@ import { createBrowserRouter, Outlet } from "react-router-dom";
 import { AppShell } from "~/components/app-shell/AppShell.js";
 import { ErrorBoundary } from "~/components/error-boundary/ErrorBoundary.js";
 
-const LibraryPage = lazy(
-  () => import(/* webpackChunkName: "LibraryPage" */ "./pages/library-page/LibraryPage.js")
+const HomePage = lazy(
+  () => import(/* webpackChunkName: "HomePage" */ "./pages/homepage/HomePage.js")
 );
 const ProfilesPage = lazy(
   () => import(/* webpackChunkName: "ProfilesPage" */ "./pages/profiles-page/ProfilesPage.js")
@@ -56,7 +56,7 @@ export const router: ReturnType<typeof createBrowserRouter> = createBrowserRoute
   {
     element: <ShellLayout />,
     children: [
-      { path: "/", element: <LibraryPage /> },
+      { path: "/", element: <HomePage /> },
       { path: "/profiles", element: <ProfilesPage /> },
       { path: "/profiles/new", element: <CreateProfilePage /> },
       { path: "/profiles/:profileId/edit", element: <EditProfilePage /> },

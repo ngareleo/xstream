@@ -2,7 +2,7 @@ import { makeStyles } from "@griffel/react";
 
 import { tokens } from "~/styles/tokens";
 
-export const useLibraryStyles = makeStyles({
+export const useHomePageStyles = makeStyles({
   page: {
     display: "flex",
     flexDirection: "column",

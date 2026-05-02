@@ -10,7 +10,7 @@ import { FilterSlide } from "~/components/filter-slide/FilterSlide";
 import { PosterRow } from "~/components/poster-row/PosterRow";
 import { SearchSlide } from "~/components/search-slide/SearchSlide";
 import { IconClose, IconSearch } from "~/lib/icons";
-import type { LibraryPageContentQuery } from "~/relay/__generated__/LibraryPageContentQuery.graphql";
+import type { HomePageContentQuery } from "~/relay/__generated__/HomePageContentQuery.graphql";
 import {
   applyFilters,
   type Codec,
@@ -22,11 +22,11 @@ import {
   type Resolution,
 } from "~/utils/filters";
 
-import { strings } from "./LibraryPage.strings";
-import { useLibraryStyles } from "./LibraryPage.styles";
+import { strings } from "./HomePage.strings";
+import { useHomePageStyles } from "./HomePage.styles";
 
-const LIBRARY_QUERY = graphql`
-  query LibraryPageContentQuery {
+const HOMEPAGE_QUERY = graphql`
+  query HomePageContentQuery {
     libraries {
       id
     }
@@ -61,7 +61,7 @@ const LIBRARY_QUERY = graphql`
   }
 `;
 
-type VideoEdge = NonNullable<LibraryPageContentQuery["response"]["videos"]>["edges"][number];
+type VideoEdge = NonNullable<HomePageContentQuery["response"]["videos"]>["edges"][number];
 type VideoNode = VideoEdge["node"];
 
 interface FilterRow extends FilterableFilm {
@@ -122,9 +122,9 @@ function pickSuggestions(film: FilterRow, all: FilterRow[]): VideoNode[] {
   return scored.slice(0, 8).map((s) => s.row.node);
 }
 
-export const LibraryPageContent: FC = () => {
-  const styles = useLibraryStyles();
-  const data = useLazyLoadQuery<LibraryPageContentQuery>(LIBRARY_QUERY, {});
+export const HomePageContent: FC = () => {
+  const styles = useHomePageStyles();
+  const data = useLazyLoadQuery<HomePageContentQuery>(HOMEPAGE_QUERY, {});
   const [params, setParams] = useSearchParams();
   const hasLibraries = (data.libraries ?? []).length > 0;
 

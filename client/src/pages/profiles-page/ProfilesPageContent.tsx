@@ -185,10 +185,9 @@ export const ProfilesPageContent: FC = () => {
       if (!e.node.title) totalUnmatched += 1;
     }
   }
-  // TODO(release-design): wire episode counts from the seasons subselection
-  // and scanningCount from the libraryScanProgress subscription.
+  // TODO(release-design): wire episode counts from the seasons subselection.
   const totalEpisodes = 0;
-  const scanningCount = 0;
+  const scanningCount = scanByLibrary.size;
 
   // Empty state preview: `/profiles?empty=1` for the design lab. Production
   // also falls back here when there are no libraries at all.
