@@ -2,7 +2,13 @@
 
 High-resolution media streaming. A Rust server transcodes video files to fMP4 segments with ffmpeg and streams them over HTTP as length-prefixed binary chunks; a React client renders them via Media Source Extensions. The Rust server runs **in-process** inside a Tauri desktop bundle for Linux, Windows, and macOS. Current phase: 4K/1080p fixed-resolution playback with a full 240p → 4K ladder.
 
-> **Session-start directive:** Before doing task work, read [`docs/SUMMARY.md`](docs/SUMMARY.md) for the shared architecture + coding-style orientation. It's ≤120 lines, owned and maintained by the `architect` subagent.
+> **Session-start directive — read the boot pack before any code or design work:**
+>
+> 1. [`docs/SUMMARY.md`](docs/SUMMARY.md) — ≤120-line architecture orientation. Surfaces the four engineering principles (fix root causes, don't weaken safety timeouts, never swallow errors, tests travel with the port) as one-liners and links to the deep rationale.
+> 2. [`docs/code-style/README.md`](docs/code-style/README.md) — canonical home for conventions, per language (Rust, TS/React, SQL). Engineering principles live in `Principles/`; tooling (linters, formatters, pre-commit) in `Tooling/`.
+> 3. [`docs/architecture/Observability/01-Logging-Policy.md`](docs/architecture/Observability/01-Logging-Policy.md) — logging discipline (span vs log decision tree, levels, `kill_reason` literal values, request-context threading).
+>
+> The architect subagent owns and maintains all three.
 
 ## Stack
 
@@ -71,27 +77,9 @@ xstream/
     └── utils/                      # pure helpers — formatters, lazy
 ```
 
-## Engineering principles
+## Engineering principles + code style
 
-Three non-negotiables that govern how bugs, unknowns, and error paths are approached:
-
-- **Fix root causes, not symptoms.** When a bug's cause is unknown, the plan starts with *find the cause* — usually by adding the diagnostic instrumentation that's currently missing. Do not propose a behavioural workaround in the same plan. If a workaround already exists in production, the plan to address the underlying bug must include removing it, not leave it indefinitely. Reject patterns like *bump the constant past the failing threshold*, *force the fallback path that's worse*, *add a special-case branch that sidesteps the broken code* — each wins time-to-recovery at the cost of permanent debt. "If we don't know, we investigate" is the default.
-- **Don't weaken safety timeouts as a bug fix.** Safety timeouts encode intent; if a legit case looks like an abandonment, fix the structural reason — don't bump the timer. Same shape as the rule above, narrower domain.
-- **Never swallow errors. Both happy and unhappy paths are part of the design.** In Rust, that means **no `expect`, no `unwrap`, no `let _ = fallible_call()`** in production code (`#[cfg(test)]` blocks may use `.expect("clear message")`). Every fallible operation propagates via `Result<T, E>`; `main()` returns `AppResult<()>`; mutex poisoning becomes a typed error, not a panic; silent JSON-parse fallbacks on data that was supposed to be well-formed log a warning with the row id. **And every error is also emitted through `tracing::error!`** — propagation alone is invisible to operators; the error must hit Seq with the request TraceId attached (the `ErrorLogger` async-graphql extension does this for resolver errors; `main()` does it for startup failures). Picking Rust is picking the type system as the safety net — `expect` opts out of it. Full rationale + the matching JS/TS rule lives in [`docs/code-style/Invariants/00-Never-Violate.md`](docs/code-style/Invariants/00-Never-Violate.md) §14.
-- **Tests are the spec — they travel with the port.** When porting a subsystem from one stack to another, every test that documents an expectation about its surface must be reproduced in the new stack. The implementation can be a rewrite; the assertions are the contract. Out-of-scope tests are skipped with a TODO comment pointing at the migration step that will reinstate them, never with silence. Negative paths (missing-row → None, malformed input → typed error) carry over too — a port that only covers the happy path is the same trap as `unwrap()`. Detail: [`docs/code-style/Testing/00-Tests-Travel-With-The-Port.md`](docs/code-style/Testing/00-Tests-Travel-With-The-Port.md).
-
-All three rules pair with the existing `docs/code-style/Anti-Patterns/00-What-Not-To-Do.md` list. When a plan or PR seems to violate any of them, surface that fact before shipping.
-
-## Code style and invariants
-
-Full content lives under `docs/code-style/`. Agents working on code MUST respect these — they are the non-negotiables, not suggestions.
-
-- [`docs/code-style/Invariants/00-Never-Violate.md`](docs/code-style/Invariants/00-Never-Violate.md) — the structural rules that, if broken, silently corrupt runtime behaviour (SQL routing, MSE state, init-segment order, URL-encoded Relay IDs, one-resolver-per-field, typed-error contract, pull-based streaming, …).
-- [`docs/code-style/Naming/00-Conventions.md`](docs/code-style/Naming/00-Conventions.md) — React components vs camelCase everything else.
-- [`docs/code-style/Server-Conventions/00-Patterns.md`](docs/code-style/Server-Conventions/00-Patterns.md) — resolver shape, presenter layer, ffmpeg path resolution discipline.
-- [`docs/code-style/Client-Conventions/00-Patterns.md`](docs/code-style/Client-Conventions/00-Patterns.md) — Relay fragment contract, Griffel, Nova eventing, localization.
-- [`docs/code-style/Testing/00-Tests-Travel-With-The-Port.md`](docs/code-style/Testing/00-Tests-Travel-With-The-Port.md) — assertions are the contract; ports preserve them.
-- [`docs/code-style/Anti-Patterns/00-What-Not-To-Do.md`](docs/code-style/Anti-Patterns/00-What-Not-To-Do.md) — the full "don't" list.
+The four engineering meta-rules and every per-language convention live under [`docs/code-style/`](docs/code-style/README.md). Agents reading the boot pack already have them; this section is just the routing pointer.
 
 ## Where to read / who to ask
 
@@ -125,32 +113,11 @@ Most domain knowledge lives in skills, subagents, or `docs/`. The main agent sho
 
 ## Code Quality Tooling
 
-- **Client linting:** ESLint v10 + `typescript-eslint` + `eslint-plugin-react-hooks`. `bun run --filter client lint` → `tsc --noEmit && eslint src`.
-- **Server linting:** `cargo clippy --workspace --exclude xstream-tauri --all-targets -- -D warnings` (xstream-tauri requires GTK/webkit2gtk apt deps and is linted by the dedicated `tauri-build` CI job).
-- **Formatting:** Prettier v3 for TS/TSX/JSON (`bun run format` / `format:check`); `cargo fmt --all` for Rust.
-- **Pre-commit:** Husky v9 + lint-staged auto-fix staged `.ts`/`.tsx` (Rust files are checked in CI, not the pre-commit hook).
-
-Key client-side enforced rules:
-
-- Explicit return types on exported functions (`explicit-module-boundary-types`)
-- Floating promises must use `void` or be awaited (`no-floating-promises`)
-- Type-only imports use `import type` (`consistent-type-imports`)
-- Non-null assertions (`!`) forbidden (`no-non-null-assertion`) — use `?.` or explicit guards (tests post-`expect` excepted)
-- React hook rules enforced (`rules-of-hooks: error`, `exhaustive-deps: warn`)
-- Cross-module imports use the `~/` alias; `../` is banned via `no-restricted-imports` — same-directory `./` for colocated files is fine
+Linting, formatting, and pre-commit hooks per language: [`docs/code-style/Tooling/`](docs/code-style/Tooling/README.md).
 
 ## Observability agent rules
 
-Full policy: [`docs/architecture/Observability/01-Logging-Policy.md`](docs/architecture/Observability/01-Logging-Policy.md). The load-bearing rules:
-
-- Prefer `span.add_event()` on an existing span over a new span for instantaneous transitions.
-- Message bodies must be self-describing — `tracing::info!("Stream paused — 23.4s buffered ahead (target: 20s)", …)`.
-- Levels: `info` = normal lifecycle, `warn` = recoverable, `error` = UX-affecting or a bug.
-- Always log WHY on cleanup/kill (standard `kill_reason` wire values, source of truth `server-rust/src/services/kill_reason.rs`: `client_request`, `client_disconnected`, `stream_idle_timeout`, `orphan_no_connection`, `max_encode_timeout`, `cascade_retry`, `server_shutdown`).
-- No duplicate lifecycle logs: one owner per state change.
-- Don't cascade errors. Log once, break the loop.
-- Client: `getClientLogger` + wrap playback-path fetches with `context.with(getSessionContext(), () => fetch(…))`.
-- Server: `extract_request_context` middleware reads `traceparent` from headers and threads it as an axum extension; resolvers read it via `ctx.data::<RequestContext>()`.
+Full policy and load-bearing rules: [`docs/architecture/Observability/01-Logging-Policy.md`](docs/architecture/Observability/01-Logging-Policy.md). `kill_reason` literal values are sourced from `server-rust/src/services/kill_reason.rs`.
 
 ## Update protocol — notify the curator after changes
 
