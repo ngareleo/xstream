@@ -1,7 +1,11 @@
-import { type FC } from "react";
+import { type FC, Suspense } from "react";
 
-import { PagePlaceholder } from "~/components/page-placeholder/PagePlaceholder.js";
+import { EditProfilePageContent } from "./EditProfilePageContent.js";
 
-const EditProfilePage: FC = () => <PagePlaceholder name="Edit Profile" milestone="M5" />;
+const EditProfilePage: FC = () => (
+  <Suspense fallback={null}>
+    <EditProfilePageContent />
+  </Suspense>
+);
 
 export default EditProfilePage;
