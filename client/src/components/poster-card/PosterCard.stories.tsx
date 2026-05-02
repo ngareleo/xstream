@@ -82,6 +82,11 @@ export const MatchedHD: Story = {
       },
     },
   },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByText("Oppenheimer")).toBeInTheDocument();
+    await expect(canvas.getByText("HD")).toBeInTheDocument();
+  },
 };
 
 export const Unmatched: Story = {
@@ -102,10 +107,18 @@ export const Unmatched: Story = {
       },
     },
   },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByText("unknown_movie_2023.mkv")).toBeInTheDocument();
+  },
 };
 
 export const Selected: Story = {
   args: { isSelected: true },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByText("Dune: Part Two")).toBeInTheDocument();
+  },
 };
 
 export const NoRating: Story = {
@@ -125,5 +138,10 @@ export const NoRating: Story = {
         }),
       },
     },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByText("Interstellar")).toBeInTheDocument();
+    await expect(canvas.getByText("4K")).toBeInTheDocument();
   },
 };

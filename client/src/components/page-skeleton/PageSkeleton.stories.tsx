@@ -41,6 +41,11 @@ export const Library: StoryObj = {
       <LibrarySkeleton />
     </div>
   ),
+  play: async ({ canvasElement }) => {
+    // Skeleton renders shimmer divs but no progressbar; assert at least one
+    // child element exists so a shrunk-to-empty skeleton fails the test.
+    await expect(canvasElement.querySelectorAll("div").length).toBeGreaterThan(1);
+  },
 };
 
 export const Watchlist: StoryObj = {
@@ -49,6 +54,9 @@ export const Watchlist: StoryObj = {
       <WatchlistSkeleton />
     </div>
   ),
+  play: async ({ canvasElement }) => {
+    await expect(canvasElement.querySelectorAll("div").length).toBeGreaterThan(1);
+  },
 };
 
 export const Settings: StoryObj = {
@@ -57,4 +65,7 @@ export const Settings: StoryObj = {
       <SettingsSkeleton />
     </div>
   ),
+  play: async ({ canvasElement }) => {
+    await expect(canvasElement.querySelectorAll("div").length).toBeGreaterThan(1);
+  },
 };

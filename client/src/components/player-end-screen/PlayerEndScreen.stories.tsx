@@ -2,6 +2,7 @@ import { mapEventMetadata, NovaEventingProvider } from "@nova/react";
 import type { EventWrapper } from "@nova/types";
 import React from "react";
 import { graphql } from "react-relay";
+import { expect, within } from "storybook/test";
 import type { Meta, StoryObj } from "storybook-react-rsbuild";
 
 import type { PlayerEndScreen_video$key } from "~/relay/__generated__/PlayerEndScreen_video.graphql.js";
@@ -44,6 +45,37 @@ function PlayerEndScreenWrapper({ video }: WrapperProps): JSX.Element {
   );
 }
 
+// Relay's MockPayloadGenerator applies the `Video` resolver to every Video in
+// the response — including nested suggestion edges. `context.path` is the same
+// for every nested edge, so we use a per-resolver-pass counter to give each
+// edge a distinct id (otherwise React warns about duplicate keys when the
+// component renders multiple cards with the same id). The counter resets
+// whenever a root resolver call comes in, so the addon's repeated mock-resolver
+// invocations across renders stay deterministic.
+const SUGGESTION_TITLES = ["Mad Max: Fury Road", "Dune: Part Two", "Oppenheimer", "The Batman"];
+let suggestionCounter = 0;
+
+const withSuggestionsResolvers = {
+  Video: (context: { path?: readonly string[] }) => {
+    const isUpNext = (context.path ?? []).includes("edges");
+    if (!isUpNext) {
+      suggestionCounter = 0;
+      return {
+        id: "Video:mock-current",
+        library: {
+          videos: { edges: SUGGESTION_TITLES.map(() => ({ node: {} })) },
+        },
+      };
+    }
+    const idx = suggestionCounter++ % SUGGESTION_TITLES.length;
+    return {
+      id: `Video:suggestion-${idx}`,
+      title: SUGGESTION_TITLES[idx],
+      metadata: { year: 2015 + idx, posterUrl: null },
+    };
+  },
+};
+
 const meta: Meta<WrapperProps> = {
   title: "Components/PlayerEndScreen",
   component: PlayerEndScreenWrapper,
@@ -53,53 +85,7 @@ const meta: Meta<WrapperProps> = {
       query: STORY_QUERY,
       variables: { videoId: "Video:mock-current" },
       getReferenceEntry: (result: PlayerEndScreenStoryQuery["response"]) => ["video", result.video],
-      mockResolvers: {
-        Video: () => ({
-          id: "Video:mock-current",
-          library: {
-            videos: {
-              edges: [
-                {
-                  node: {
-                    id: "Video:mock-1",
-                    title: "Mad Max: Fury Road",
-                    metadata: { year: 2015, posterUrl: null },
-                  },
-                },
-                {
-                  node: {
-                    id: "Video:mock-2",
-                    title: "Dune: Part Two",
-                    metadata: { year: 2024, posterUrl: null },
-                  },
-                },
-                {
-                  node: {
-                    id: "Video:mock-3",
-                    title: "Oppenheimer",
-                    metadata: { year: 2023, posterUrl: null },
-                  },
-                },
-                {
-                  node: {
-                    id: "Video:mock-4",
-                    title: "The Batman",
-                    metadata: { year: 2022, posterUrl: null },
-                  },
-                },
-                // Same ID as videoId — should be filtered out
-                {
-                  node: {
-                    id: "Video:mock-current",
-                    title: "Current Video",
-                    metadata: { year: 2025, posterUrl: null },
-                  },
-                },
-              ],
-            },
-          },
-        }),
-      },
+      mockResolvers: withSuggestionsResolvers,
     },
   },
 };
@@ -107,8 +93,15 @@ const meta: Meta<WrapperProps> = {
 export default meta;
 type Story = StoryObj<WrapperProps>;
 
-/** Four suggestion cards plus a Replay button. */
-export const WithSuggestions: Story = {};
+/** Suggestion card (Relay deduplicates by id) plus the Replay button. */
+export const WithSuggestions: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByText("Up Next")).toBeInTheDocument();
+    await expect(canvas.getByRole("button", { name: "Replay" })).toBeInTheDocument();
+    await expect(canvas.getByText("Mad Max: Fury Road")).toBeInTheDocument();
+  },
+};
 
 /** No other videos in the library — only the Replay button is shown. */
 export const NoSuggestions: Story = {
@@ -124,5 +117,11 @@ export const NoSuggestions: Story = {
         }),
       },
     },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByRole("button", { name: "Replay" })).toBeInTheDocument();
+    // No suggestion cards → no "Up Next" header.
+    await expect(canvas.queryByText("Up Next")).toBeNull();
   },
 };

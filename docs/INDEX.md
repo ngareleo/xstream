@@ -52,6 +52,7 @@ Keep rows short (≤ ~120 chars). When adding a new topic file to `docs/`, add i
 | File naming conventions | `docs/code-style/Naming/00-Conventions.md` |
 | Server conventions | `docs/code-style/Server-Conventions/00-Patterns.md` |
 | Client conventions | `docs/code-style/Client-Conventions/00-Patterns.md` |
+| Storybook testing (assertions, console.error policy, resolver patterns) | `docs/code-style/Client-Conventions/01-Storybook-Testing.md` |
 | Anti-patterns (full "don't" list) | `docs/code-style/Anti-Patterns/00-What-Not-To-Do.md` |
 | Tests travel with the port — assertions are the contract across migrations | `docs/code-style/Testing/00-Tests-Travel-With-The-Port.md` |
 | Linting + formatting per language (Rust clippy/fmt, TS ESLint+Prettier, SQL by-hand, Husky pre-commit) | `docs/code-style/Tooling/00-Linting-And-Formatting.md` |

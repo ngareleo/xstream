@@ -102,6 +102,10 @@ export const Unmatched: Story = {
       },
     },
   },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByText("unknown_movie_2024.mkv")).toBeInTheDocument();
+  },
 };
 
 export const NoCast: Story = {
@@ -136,5 +140,12 @@ export const NoCast: Story = {
         }),
       },
     },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByText("Interstellar")).toBeInTheDocument();
+    await expect(canvas.getByText("Synopsis")).toBeInTheDocument();
+    // Cast section is skipped when cast is empty.
+    await expect(canvas.queryByText("Cast")).toBeNull();
   },
 };

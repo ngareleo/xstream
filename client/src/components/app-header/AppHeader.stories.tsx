@@ -29,8 +29,16 @@ export const ProfilesActive: Story = {
 
 export const SetupActive: Story = {
   parameters: { router: { initialEntries: ["/setup"] } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByText("MORAN")).toBeInTheDocument();
+  },
 };
 
 export const LibraryActive: Story = {
   parameters: { router: { initialEntries: ["/library"] } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByText("MORAN")).toBeInTheDocument();
+  },
 };

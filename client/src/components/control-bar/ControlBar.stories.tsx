@@ -111,9 +111,22 @@ export const Playing: Story = {
   },
 };
 
-export const Idle: Story = { args: { status: "idle" } };
+export const Idle: Story = {
+  args: { status: "idle" },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByText("Mad Max: Fury Road (2015)")).toBeInTheDocument();
+    await expect(canvas.getByRole("button", { name: /play|pause/i })).toBeInTheDocument();
+  },
+};
 
-export const Loading: Story = { args: { status: "loading" } };
+export const Loading: Story = {
+  args: { status: "loading" },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByText("Mad Max: Fury Road (2015)")).toBeInTheDocument();
+  },
+};
 
 export const CappedAt1080p: Story = {
   args: { resolution: "1080p" },
@@ -130,6 +143,11 @@ export const CappedAt1080p: Story = {
         }),
       },
     },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByText("Mad Max: Fury Road (2015)")).toBeInTheDocument();
+    await expect(canvas.getByText("1080p")).toBeInTheDocument();
   },
 };
 
@@ -149,6 +167,11 @@ export const CappedAt720p: Story = {
       },
     },
   },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByText("Mad Max: Fury Road (2015)")).toBeInTheDocument();
+    await expect(canvas.getByText("720p")).toBeInTheDocument();
+  },
 };
 
 export const LongTitle: Story = {
@@ -166,6 +189,12 @@ export const LongTitle: Story = {
       },
     },
   },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(
+      canvas.getByText(/One Battle After Another: The Director's Cut Extended Edition/)
+    ).toBeInTheDocument();
+  },
 };
 
 export const ShortVideo: Story = {
@@ -182,5 +211,11 @@ export const ShortVideo: Story = {
         }),
       },
     },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByText("Mad Max: Fury Road (2015)")).toBeInTheDocument();
+    // 90s = 1:30 — confirms the durationSeconds=90 mock made it through.
+    await expect(canvas.getByText(/1:30/)).toBeInTheDocument();
   },
 };

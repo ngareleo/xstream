@@ -121,6 +121,13 @@ export const NoUpNext: Story = {
       },
     },
   },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByText("Lone Film")).toBeInTheDocument();
+    await expect(canvas.getByText("Now Playing")).toBeInTheDocument();
+    // Library has no other videos → Up Next section is hidden.
+    await expect(canvas.queryByText("Up Next")).toBeNull();
+  },
 };
 
 export const NoMetadata: Story = {
@@ -129,18 +136,41 @@ export const NoMetadata: Story = {
       query: STORY_QUERY,
       variables: { videoId: "Video:mock" },
       getReferenceEntry: (result: PlayerSidebarStoryQuery["response"]) => ["video", result.video],
+      // Path-aware resolver — see WithMetadata for rationale. A static Video
+      // resolver collapses every Up Next node to id "v-1", which the component
+      // then filters out, hiding the section.
       mockResolvers: {
-        Video: () => ({
-          id: "v-1",
-          title: "unmatched.file.2024.mkv",
-          durationSeconds: 3600,
-          metadata: null,
-          library: {
-            videos: { edges: MOCK_UP_NEXT.map((v) => ({ node: v })) },
-          },
-          videoStream: { height: 1080, width: 1920 },
-        }),
+        Video: (context: { path?: readonly (string | number)[] }) => {
+          const isUpNext = (context.path ?? []).includes("edges");
+          if (!isUpNext) {
+            return {
+              id: "v-1",
+              title: "unmatched.file.2024.mkv",
+              durationSeconds: 3600,
+              metadata: null,
+              library: {
+                videos: { edges: MOCK_UP_NEXT.map((v) => ({ node: v })) },
+              },
+              videoStream: { height: 1080, width: 1920 },
+            };
+          }
+          const pathKey = (context.path ?? []).join("_");
+          return {
+            id: `up-${pathKey}`,
+            title: "Up Next Film",
+            durationSeconds: 5400,
+            metadata: { title: null, year: 2020, genre: null, plot: null, posterUrl: null },
+            library: { videos: { edges: [] } },
+            videoStream: { height: 1080, width: 1920 },
+          };
+        },
       },
     },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    // No OMDb metadata → falls back to filename.
+    await expect(canvas.getByText("unmatched.file.2024.mkv")).toBeInTheDocument();
+    await expect(canvas.getByText("Up Next")).toBeInTheDocument();
   },
 };

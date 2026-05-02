@@ -76,4 +76,9 @@ export const Collapsed: Story = {
 export const LibraryActive: Story = {
   args: { initialCollapsed: false },
   parameters: { router: { initialEntries: ["/library"] } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByText("Library")).toBeInTheDocument();
+    await expect(canvas.getByText("Profiles")).toBeInTheDocument();
+  },
 };

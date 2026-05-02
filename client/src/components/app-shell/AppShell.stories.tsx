@@ -50,7 +50,10 @@ export const Default: Story = {
   ),
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    // AppShell renders the brand name in the header and the sidebar nav.
+    // AppShell mounts two lazy chunks (SidebarAsync, DevPanelAsync) that both
+    // need to commit inside the test's act() window — see LibraryRoute.
+    await canvas.findByText("Profiles"); // from SidebarAsync
+    await canvas.findByText("DEV"); // from DevPanelAsync (collapsed pill button)
     await expect(canvas.getByText("MORAN")).toBeInTheDocument();
   },
 };
@@ -64,4 +67,15 @@ export const LibraryRoute: Story = {
     </div>
   ),
   parameters: { router: { initialEntries: ["/library"] } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    // AppShell mounts two lazy chunks: SidebarAsync (wrapped in <Suspense>)
+    // and DevPanelAsync (top-level). Both must resolve inside the test's
+    // act() window or React logs a "suspended resource finished loading"
+    // warning that flips the console.error shim red. Awaiting one piece of
+    // text from each chunk waits for both to commit.
+    await canvas.findByText("Library"); // from SidebarAsync
+    await canvas.findByText("DEV"); // from DevPanelAsync (collapsed pill button)
+    await expect(canvas.getByText("MORAN")).toBeInTheDocument();
+  },
 };
