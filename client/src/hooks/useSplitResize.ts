@@ -28,7 +28,7 @@ import type React from "react";
 import { useCallback, useRef, useState } from "react";
 
 const MIN_PANE_WIDTH = 240;
-const MAX_PANE_WIDTH = 640;
+const MAX_PANE_WIDTH = 1200;
 const MIN_LEFT_WIDTH = 280;
 const STORAGE_KEY = "xstream:pane-width";
 

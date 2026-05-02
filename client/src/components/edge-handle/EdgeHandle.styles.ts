@@ -1,0 +1,50 @@
+import { makeStyles } from "@griffel/react";
+
+export const useEdgeHandleStyles = makeStyles({
+  handle: {
+    position: "absolute",
+    right: "-22px",
+    width: "44px",
+    height: "44px",
+    backgroundColor: "rgba(255,255,255,0.10)",
+    borderTopWidth: "1px",
+    borderRightWidth: "1px",
+    borderBottomWidth: "1px",
+    borderLeftWidth: "1px",
+    borderTopStyle: "solid",
+    borderRightStyle: "solid",
+    borderBottomStyle: "solid",
+    borderLeftStyle: "solid",
+    borderTopColor: "rgba(255,255,255,0.30)",
+    borderRightColor: "rgba(255,255,255,0.18)",
+    borderBottomColor: "rgba(255,255,255,0.10)",
+    borderLeftColor: "rgba(255,255,255,0.18)",
+    borderRadius: "999px",
+    color: "#fff",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    cursor: "pointer",
+    zIndex: 15,
+    backdropFilter: "blur(20px) saturate(180%)",
+    WebkitBackdropFilter: "blur(20px) saturate(180%)",
+    boxShadow:
+      "inset 0 1px 0 rgba(255,255,255,0.30), inset 0 -1px 0 rgba(0,0,0,0.20), -8px 0 28px rgba(0,0,0,0.45)",
+    transformOrigin: "right center",
+    transitionProperty: "background-color, box-shadow",
+    transitionDuration: "0.18s",
+    transitionTimingFunction: "ease",
+    willChange: "transform, top, opacity",
+    ":hover": {
+      backgroundColor: "rgba(255,255,255,0.18)",
+      boxShadow:
+        "inset 0 1px 0 rgba(255,255,255,0.40), inset 0 -1px 0 rgba(0,0,0,0.20), -10px 0 36px rgba(0,0,0,0.55), 0 0 24px rgba(255,255,255,0.10)",
+    },
+  },
+  chevron: {
+    fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+    fontSize: "16px",
+    lineHeight: "1",
+    transform: "translateX(-7px)",
+  },
+});
