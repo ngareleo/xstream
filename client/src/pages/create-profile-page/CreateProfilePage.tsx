@@ -1,6 +1,6 @@
 import { type FC } from "react";
 import { fetchQuery, graphql, useMutation, useRelayEnvironment } from "react-relay";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 
 import { ProfileForm, type ProfileFormValues } from "~/components/profile-form/ProfileForm.js";
 import { PROFILES_QUERY } from "~/pages/profiles-page/ProfilesPageContent.js";
@@ -22,10 +22,21 @@ const CREATE_LIBRARY = graphql`
   }
 `;
 
+interface LocationState {
+  from?: string;
+}
+
 const CreateProfilePage: FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const environment = useRelayEnvironment();
   const [commit, isInFlight] = useMutation<CreateProfilePageMutation>(CREATE_LIBRARY);
+
+  // Callers pass `state: { from: <path> }` when navigating here so that
+  // post-create we land back where the user started instead of always
+  // dropping them at /profiles. Falls back to /profiles for direct URL
+  // visits.
+  const returnTo = (location.state as LocationState | null)?.from ?? "/profiles";
 
   const handleSubmit = (values: ProfileFormValues): void => {
     commit({
@@ -37,11 +48,11 @@ const CreateProfilePage: FC = () => {
       },
       onCompleted: (_data, errors) => {
         if (errors && errors.length > 0) return;
-        // Refetch the profiles list so /profiles renders the new library
-        // immediately on navigation, without a manual refresh.
+        // Refetch the profiles list so the destination renders the new
+        // library immediately on navigation, without a manual refresh.
         fetchQuery<ProfilesPageContentQuery>(environment, PROFILES_QUERY, {}).subscribe({
-          complete: () => navigate("/profiles"),
-          error: () => navigate("/profiles"),
+          complete: () => navigate(returnTo),
+          error: () => navigate(returnTo),
         });
       },
     });

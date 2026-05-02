@@ -313,7 +313,11 @@ export const ProfilesPageContent: FC = () => {
           <button
             type="button"
             className={styles.footerCta}
-            onClick={() => navigate("/profiles/new")}
+            onClick={() =>
+              navigate("/profiles/new", {
+                state: { from: window.location.pathname + window.location.search },
+              })
+            }
           >
             {strings.footerCta}
           </button>

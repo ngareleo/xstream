@@ -1,5 +1,5 @@
 import { type FC } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 
 import { strings } from "./EmptyLibrariesHero.strings.js";
 import { useEmptyLibrariesHeroStyles } from "./EmptyLibrariesHero.styles.js";
@@ -16,6 +16,11 @@ interface EmptyLibrariesHeroProps {
 
 export const EmptyLibrariesHero: FC<EmptyLibrariesHeroProps> = ({ watermark }) => {
   const styles = useEmptyLibrariesHeroStyles();
+  const location = useLocation();
+  // Pass the current path as `from` so CreateProfilePage can route the
+  // user back here after the mutation lands instead of dumping them on
+  // /profiles.
+  const fromState = { from: location.pathname + location.search };
 
   return (
     <div className={styles.root}>
@@ -29,7 +34,7 @@ export const EmptyLibrariesHero: FC<EmptyLibrariesHeroProps> = ({ watermark }) =
         <div className={styles.rule} />
         <p className={styles.body}>{strings.body}</p>
         <div className={styles.actions}>
-          <Link to="/profiles/new" className={styles.cta}>
+          <Link to="/profiles/new" state={fromState} className={styles.cta}>
             {strings.cta}
           </Link>
           <span className={styles.hint}>{strings.hint}</span>
