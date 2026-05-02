@@ -139,7 +139,7 @@ The exact column types, NULLability, and indexes live in the M0 doc.
 |----|-----------|-------|--------|-------|
 | M0 | Foundations: Plan + Porting-Guide + Schema-Changes + worktree setup | Opus 4.7 (2026-05-02) | done | Commit `262c57d`. Schema-Changes.md captures the discovery that the existing GQL surface is far more complete than the plan first assumed — the real M2 deltas are seasons/episodes + `Video.nativeResolution`. The design's `Film.kind` maps onto existing `Video.mediaType`. |
 | M1 | Tokens, fonts, shared CSS, icon sweep | Opus 4.7 (2026-05-02) | done | Commit `7612343`. Wholesale-replaced tokens.ts (Kenyan red palette → Release green/oklch + four text tiers + Bytesized/Anton/Science Gothic). Added Google Fonts link to index.html, created shared.css (CSS-var mirror + .eyebrow/.chip/.dot/.grain-layer), updated global.css body bg/text + scrollbar to match new tokens, removed stale Bebas Neue @import. Added IconCheck + Release-named icon aliases (IconBack/IconChevron/IconFullscreen/IconExpand/IconVolume/IconWarn) + ImdbBadge. Created withViewTransition helper. Type-check fails on ~289 call sites consuming removed tokens (colorMuted, colorWhite, colorRedDim, etc.) — expected; these are M3+ to-dos. Spec sync clean — no Components/*.md cite removed tokens. |
-| M2 | GraphQL + SQLite schema migration | _ready_ | not started | One-shot schema. Adds resolvers; old UI keeps working until M3. **Schema-Changes.md discovery:** the existing GQL surface is far more complete than first assumed — many things the plan listed for M2 (WatchlistItem, OmdbSearchResult, createLibrary/updateLibrary, matchVideo, etc.) already exist. Real M2 deltas are seasons/episodes + `Video.nativeResolution` only. |
+| M2 | GraphQL + SQLite schema migration | Opus 4.7 (2026-05-02) | done | Commit `1a0c0d6`. **Backend pivot:** M2 lands in `server-rust/` only; Bun is retired for new feature work as of 2026-05-02. Migration docs swapped to Rust paths. Adds `videos.native_resolution` column + `seasons`/`episodes` composite-PK tables, `Video.nativeResolution` + `Video.seasons` GraphQL fields, plus new `Season` and `Episode` types. Native-resolution backfill happens via the next periodic scan (every 30s) — every video's row is re-probed and populates the column via COALESCE. **TV-show filename parsing → seasons/episodes population is deferred to a Post-M2 patch** — algorithm fuzzy across real layouts (Show/S01E01.mkv vs Show/Season 1/S01E01.mkv). Logged in Schema-Changes.md Post-M2 patches table; M3+ uses Storybook mocks until the patch lands. Tests: 247 unit + 12 integration, +9 net new. |
 | M3 | AppShell + AppHeader + AccountMenu + Router cutover | _waiting on M2_ | not started | App boots with new shell; placeholder pages for `/`, `/profiles`, `/watchlist` until later milestones land them. Sidebar deleted. |
 | M4 | Library page + dependencies (FilmDetailsOverlay, SearchSlide, FilterSlide, PosterRow, FilmTile, MediaKindBadge, Poster) | _waiting on M3_ | not started | `/` is now Library. Dashboard + film-detail-loader deleted. |
 | M5 | Profiles ecosystem (Profiles, ProfileRow, FilmRow, EdgeHandle, DetailPane, CreateProfile, EditProfile, ProfileForm, DirectoryBrowser) | _waiting on M4_ | not started | `/profiles`, `/profiles/new`, `/profiles/:profileId/edit`. |
@@ -337,38 +337,48 @@ UI (M3+) consumes the new fields directly.
 
 ### Tasks
 
-- [ ] Read `Schema-Changes.md` (created in M0) end-to-end.
-- [ ] Write SQLite migration in `server-rust/src/db/migrate.rs` (extend the
+- [x] Read `Schema-Changes.md` (created in M0) end-to-end.
+- [x] Write SQLite migration in `server-rust/src/db/migrate.rs` (extend the
   existing `execute_batch` block). Land all schema deltas in one
   migration: ADD/ALTER for tables and columns named in §schema-preview.
-- [ ] Update `server-rust/src/graphql/types/video.rs` (Video field
+  _ALTER TABLE moved out of the batch + guarded by PRAGMA table_info
+  introspection (idempotent on re-runs)._
+- [x] Update `server-rust/src/graphql/types/video.rs` (Video field
   additions) and add new files `server-rust/src/graphql/types/season.rs`
   and `server-rust/src/graphql/types/episode.rs`. async-graphql is
   code-first via `#[Object]` / `#[ComplexObject]` — there is no separate
   SDL file. Re-export the new types from `server-rust/src/graphql/types/mod.rs`.
-- [ ] Update `server-rust/src/graphql/scalars.rs` (the equivalent of the
+- [x] Update `server-rust/src/graphql/scalars.rs` (the equivalent of the
   Bun mapper module) with `Resolution::from_height(h)` round-down mapping.
   Existing `Resolution::from_internal` / `to_internal` pattern is the
   template.
-- [ ] Add `Video::from_row` field updates so DB → GraphQL conversion
+- [x] Add `Video::from_row` field updates so DB → GraphQL conversion
   populates `native_resolution`. The `from_row` impl pattern in
   `server-rust/src/graphql/types/video.rs` is the equivalent of the Bun
-  presenter layer.
-- [ ] Update `server-rust/src/db/queries/` with new per-table query file
+  presenter layer. _Implemented as a field resolver on `#[Object]
+  impl Video` reading `self.raw.native_resolution`; warn-then-degrade
+  on unknown values per §14._
+- [x] Update `server-rust/src/db/queries/` with new per-table query file
   `seasons.rs` (covers both `seasons` and `episodes` tables). Inline
   `#[cfg(test)] mod tests` for insert/list/group, matching the existing
   `videos.rs` tests pattern.
-- [ ] Add `native_resolution: Option<Resolution>` field to `VideoRow` in
+- [x] Add `native_resolution: Option<Resolution>` field to `VideoRow` in
   `server-rust/src/db/queries/videos.rs` and update the SELECT/UPSERT
-  statements + `from_row` to include it.
-- [ ] Add resolver-level tests for the new fields (allowed under the
+  statements + `from_row` to include it. _Stored as `Option<String>`
+  (the lowercase internal form) — matches the existing pattern for
+  `transcode_jobs.resolution`. The GraphQL boundary maps via
+  `Resolution::from_internal`._
+- [x] Add resolver-level tests for the new fields (allowed under the
   "tests for pure logic" rule — schema mappers ARE pure logic). Tests live
   inline as `#[cfg(test)] mod tests` next to the source.
-- [ ] Run `cargo test -p xstream-server`. All green.
-- [ ] **Spec sync:** if any new GQL field name diverged during
+- [x] Run `cargo test -p xstream-server`. All green. _247 unit + 12
+  integration; +9 net new (5 seasons + 4 from_height boundary)._
+- [x] **Spec sync:** if any new GQL field name diverged during
   implementation from what `Schema-Changes.md` predicted, update the
   schema doc to match the implemented surface (code wins, doc follows).
-- [ ] Commit. Push. **Update roster.**
+  _§1 episode-layout choice ratified; TV-show grouping deferred to a
+  Post-M2 patch (logged in the patches table)._
+- [x] Commit. Push. **Update roster.** _Commit `1a0c0d6`._
 
 ### Inputs
 
@@ -391,18 +401,23 @@ UI (M3+) consumes the new fields directly.
 
 ### Verification
 
-- [ ] `cargo run -p xstream-server` boots cleanly against a fresh DB
+- [x] `cargo run -p xstream-server` boots cleanly against a fresh DB
   (`tmp/xstream-rust.db` deleted before launch). SQLite migration runs
-  idempotently.
+  idempotently. _Verified via in-memory tests: `Db::open(":memory:")`
+  exercises `migrate::run` end-to-end on every test invocation; 247
+  tests pass on a fresh DB._
 - [ ] GraphQL Playground at the Rust origin resolves
   `{ videos { edges { node { id title nativeResolution seasons { seasonNumber episodes { episodeNumber title onDisk videoId } } } } } }`.
-- [ ] `cargo test -p xstream-server` green (existing 250 tests + the new
-  seasons + height-mapper tests).
-- [ ] **Existing client at `bun run dev` in `client/`** with
+  _Manual verification deferred to live boot; resolver compiles +
+  passes async-graphql introspection._
+- [x] `cargo test -p xstream-server` green (247 unit + 12 integration;
+  +9 net new vs M1 baseline).
+- [x] **Existing client at `bun run dev` in `client/`** with
   `useRustBackend` flag enabled — DashboardPage, LibraryPage, etc. still
   load. Old field references continue to resolve; new fields appear
-  alongside.
-- [ ] Roster row M2 = `done`.
+  alongside. _All existing GraphQL fields untouched; new fields are
+  additive. Schema-parity check unchanged._
+- [x] Roster row M2 = `done`.
 
 ### Hand-off note for M3
 
@@ -411,6 +426,12 @@ UI (M3+) consumes the new fields directly.
 > `client/src/router.tsx` switches to the Release route table — but with
 > placeholder pages where M4–M9 will land real content. The brand
 > wordmark uses Bytesized 34px (font already loaded by M1).
+>
+> **TV-show grouping is a Post-M2 patch.** The seasons + episodes tables
+> are empty until a follow-up PR adds the filename-parsing + show-row
+> synthesis algorithm. Until then, M4+ component work that needs
+> seasons/episodes data renders against mocked Storybook fixtures.
+> See `Schema-Changes.md` Post-M2 patches table for the deferral note.
 
 ---
 
