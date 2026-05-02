@@ -19,8 +19,9 @@ Migrate the xstream client from the **Prerelease** identity (codename Moran — 
 Documentation updated via PR #46 audit (2026-05-01), PR #48 sync (2026-05-02, hero modes + SearchSlide + FilterSlide TUI panels + component decomposition). 
 
 **Spec completion:**
-- **`done`** (5 components): **AppShell**, **AppHeader**, **Library**, **Watchlist**, **Player** — fully fleshed, zero `TODO(redesign)` placeholders.
-- **`baseline`** (26 components): all values visible in source; open design questions marked `TODO(redesign)`.
+- **`done`** (7 components): **AppShell**, **AppHeader**, **AccountMenu**, **EdgeHandle**, **Library**, **Watchlist**, **Player** — fully fleshed, zero `TODO(redesign)` placeholders.
+- **`baseline`** (21 components): all values visible in source; open design questions marked `TODO(redesign)`.
+- **Lab-only** (2 components, `n/a` production status): **DevPanel**, **DesignSystem**.
 
 **Recently added** (2026-05-02, PR #48):
 - **Eight extracted components:** SearchSlide, FilterSlide, PosterRow, FilmTile, FilmDetailsOverlay (from Library); ProfileRow, FilmRow (from Profiles). Each now has its own `.tsx` + `.styles.ts` in the design lab and a dedicated `.md` spec with porting checklist. Parent pages (Library, Profiles) became thin shells (~160–260 lines) delegating to extracted components. Shared `PROFILE_GRID_COLUMNS` constant (`pages/Profiles/grid.ts`) locks column widths across ProfileRow and FilmRow.
