@@ -194,11 +194,14 @@ export const useProfilesPageStyles = makeStyles({
   emptyRoot: {
     position: "relative",
     flexGrow: 1,
+    height: "100%",
     display: "flex",
     alignItems: "center",
     justifyContent: "flex-start",
     paddingLeft: "80px",
-    paddingTop: tokens.headerHeight,
+    // Header floats absolute over the page; clear it plus leave breathing
+    // room above the eyebrow so it doesn't crowd the AppHeader chrome.
+    paddingTop: `calc(${tokens.headerHeight} + 48px)`,
     boxSizing: "border-box",
     overflow: "hidden",
     backgroundImage: "radial-gradient(circle, rgba(255,255,255,0.045) 1px, transparent 1px)",
