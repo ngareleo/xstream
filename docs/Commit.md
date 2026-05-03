@@ -15,6 +15,20 @@ Entry shape (each entry ends with the divider line described above):
 
 <!-- ENTRIES BELOW — newest first; each ends with a bare `---` line. The architect's next invocation will treat the no-entries state as the first-run case and prepend a bootstrap entry at HEAD. -->
 
+## 29b5c41 — 2026-05-03
+
+**Files:** `docs/architecture/Streaming/06-FfmpegPool.md`, `docs/server/FFmpeg-Caveats/00-Overview.md`
+**Why:** Pool permit moved into `LivePid` and released on kill, not at reap. Decouples "slot claimed" from "kernel reaped child" so post-seek transcode requests don't hit `CAPACITY_EXHAUSTED` during zombie grace window.
+
+---
+
+## fc6fda9 — 2026-05-03 (final)
+
+**Files:** `docs/server/FFmpeg-Caveats/00-Overview.md`, `docs/server/FFmpeg-Caveats/01-Negative-DTS.md`, `docs/server/FFmpeg-Caveats/02-Tfdt-Sample-Mismatch.md`, `docs/server/FFmpeg-Caveats/README.md`, `docs/INDEX.md`, `server-rust/src/services/fmp4_tail_reader.rs`, `server-rust/src/services/mod.rs`, `server-rust/src/services/ffmpeg_file.rs`, `server-rust/src/services/chunker.rs`
+**Why:** FFmpeg negative-DTS and tfdt-mismatch bugs are both fixed by dropping HLS muxer for direct `-f mp4 + tail-reader`. The `-bf 0` interim workaround is removed; B-frames re-enabled. New `02-Tfdt-Sample-Mismatch.md` documents the deeper bug (elst empty-edit causes fragment tfdt to disagree with first-sample DTS by 504 ticks; offset accumulates and kills playback at 2–5 s). E2E verified: Furiosa 4K plays cleanly to 41.97 s buffered_end=74 s.
+
+---
+
 ## (pending) — 2026-05-03
 
 **Files:** `docs/SUMMARY.md`, `docs/INDEX.md`, `docs/README.md`, `docs/release/README.md`, `docs/client/Components/README.md`, `docs/design/README.md`, `docs/design/UI-Design-Spec/README.md`, `.claude/agents/migrations-lead.md`, `CLAUDE.md`, `README.md`, `docs/Commit.md`, `docs/History.md`

@@ -136,6 +136,12 @@ export const useHomePageStyles = makeStyles({
     backgroundColor: tokens.colorBg0,
     borderRadius: 0,
     overflow: "visible",
+    // Idle mode pins the hero at 75vh so the rotating poster fills it.
+    // In search/filter mode there's no poster, just the panel + a
+    // gradient-noise backdrop — let the hero collapse to the panel's
+    // natural height so the action buttons sit close to the rows
+    // header rather than floating at 75vh.
+    height: "auto",
   },
   heroPanelBg: {
     position: "absolute",
@@ -164,6 +170,19 @@ export const useHomePageStyles = makeStyles({
     flexDirection: "column",
     rowGap: "20px",
     zIndex: 2,
+  },
+  // In search/filter mode the hero is auto-height (heroActive). Pull
+  // heroBody into normal flow so its content height drives the hero
+  // height instead of stretching to fill an absolute box. Stay
+  // `relative` (not `static`) so heroBody's `z-index: 2` keeps
+  // applying — otherwise heroPanelBg (the absolute backdrop) paints
+  // over the SearchSlide / FilterSlide content.
+  heroBodyFlow: {
+    position: "relative",
+    top: "auto",
+    right: "auto",
+    bottom: "auto",
+    left: "auto",
   },
   greetingEyebrow: {
     fontFamily: tokens.fontMono,
@@ -329,6 +348,15 @@ export const useHomePageStyles = makeStyles({
     display: "flex",
     flexDirection: "column",
     rowGap: "28px",
+  },
+  // The negative marginTop bleeds the rows up under the hero in idle
+  // mode for the magazine seam. In search/filter mode the hero hosts
+  // the SearchSlide / FilterSlide whose action buttons sit at the
+  // bottom — the lift-and-stack would cover them with the results
+  // grid. Reset both so the hero owns its full 75vh in non-idle mode.
+  rowsScrollFlat: {
+    marginTop: 0,
+    zIndex: "auto",
   },
   rowHeader: {
     fontFamily: tokens.fontMono,

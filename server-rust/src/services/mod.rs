@@ -14,6 +14,7 @@ pub mod chunker;
 pub mod ffmpeg_file;
 pub mod ffmpeg_path;
 pub mod ffmpeg_pool;
+pub mod fmp4_tail_reader;
 pub mod hw_accel;
 pub mod job_restore;
 pub mod job_store;

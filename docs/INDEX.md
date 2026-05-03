@@ -41,6 +41,9 @@ Keep rows short (≤ ~120 chars). When adding a new topic file to `docs/`, add i
 | HW-accel overview, tagged union, adding a backend | `docs/server/Hardware-Acceleration/00-Overview.md` |
 | HDR pad artifact + workarounds | `docs/server/Hardware-Acceleration/01-HDR-Pad-Artifact.md` |
 | ffmpeg invocation patterns (argv reproducibility, in-band SPS/PPS, segment validation) | `docs/server/Hardware-Acceleration/02-FFmpeg-Invocation-Patterns.md` |
+| ffmpeg / MSE incompatibilities overview (rolling catalogue, how-to-add) | `docs/server/FFmpeg-Caveats/00-Overview.md` |
+| ffmpeg negative-DTS caveat (B-frame reorder; HLS muxer flag-dropping; direct fmp4 + tail-reader fix) | `docs/server/FFmpeg-Caveats/01-Negative-DTS.md` |
+| ffmpeg tfdt vs first-sample DTS mismatch (empty elst offset accumulates; diagnostic walkthrough) | `docs/server/FFmpeg-Caveats/02-Tfdt-Sample-Mismatch.md` |
 | Client compile-time tunables (`clientConfig`), two-layer config model | `docs/client/Config/00-ClientConfig.md` |
 | Feature-flag registry | `docs/client/Feature-Flags/00-Registry.md` |
 | Client debugging playbooks | `docs/client/Debugging-Playbooks/00-Common-Issues.md` |

@@ -42,7 +42,11 @@ export const PROFILES_QUERY = graphql`
 `;
 
 export const ProfilesPageContent: FC = () => {
-  const data = useLazyLoadQuery<ProfilesPageContentQuery>(PROFILES_QUERY, {});
+  const data = useLazyLoadQuery<ProfilesPageContentQuery>(
+    PROFILES_QUERY,
+    {},
+    { fetchPolicy: "store-and-network" }
+  );
   const styles = useProfilesPageStyles();
   const navigate = useNavigate();
   const environment = useRelayEnvironment();

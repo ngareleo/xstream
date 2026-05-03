@@ -394,7 +394,7 @@ pub fn build_encode_argv(
     metadata: &FileMetadata,
     hw_accel: &HwAccelConfig,
     profile: &ResolutionProfile,
-    segment_pattern: &str,
+    output_path: &str,
     vaapi_sw_pad: bool,
 ) -> EncodeArgv {
     let mut argv = EncodeArgv::empty_pre();
@@ -414,7 +414,7 @@ pub fn build_encode_argv(
             argv.post_input.push("aac".into());
             argv.extend_post(audio_codec_options(profile));
             argv.extend_post(in_band_sps_pps());
-            argv.extend_post(hls_muxer_options(profile, segment_pattern));
+            argv.extend_post(fmp4_muxer_options(profile, output_path));
         }
         HwAccelConfig::Vaapi { device } => {
             let (input, output) =
@@ -428,7 +428,7 @@ pub fn build_encode_argv(
             argv.post_input.push("aac".into());
             argv.extend_post(audio_codec_options(profile));
             argv.extend_post(in_band_sps_pps());
-            argv.extend_post(hls_muxer_options(profile, segment_pattern));
+            argv.extend_post(fmp4_muxer_options(profile, output_path));
         }
         HwAccelConfig::VideoToolbox
         | HwAccelConfig::Qsv
@@ -503,22 +503,42 @@ fn in_band_sps_pps() -> Vec<String> {
     vec!["-bsf:v".into(), "dump_extra=keyframe".into()]
 }
 
-fn hls_muxer_options(profile: &ResolutionProfile, segment_pattern: &str) -> Vec<String> {
+/// Direct fragmented-MP4 muxer options. Writes a single growing
+/// `chunk.fmp4` file; the `fmp4_tail_reader` task splits it into
+/// `init.mp4` + `segment_NNNN.m4s`.
+///
+/// Why not `-f hls`? The HLS-fmp4 muxer wraps an internal fmp4 muxer
+/// and silently ignores muxer-level flags like `-avoid_negative_ts`
+/// and `-movflags +negative_cts_offsets`. Without those flags ffmpeg
+/// writes an `elst` (edit list) and a `tfdt` value that disagrees
+/// with the actual sample DTS by ~21 ms; MSE ignores `elst` and the
+/// mismatch eventually trips the demuxer. See
+/// `docs/server/FFmpeg-Caveats/02-Tfdt-Sample-Mismatch.md`.
+fn fmp4_muxer_options(profile: &ResolutionProfile, output_path: &str) -> Vec<String> {
     vec![
+        // Shift any negative DTS up so the stream's first DTS is exactly 0.
+        // With direct fmp4 (vs HLS), this flag actually reaches the muxer.
+        "-avoid_negative_ts".into(),
+        "make_zero".into(),
         "-f".into(),
-        "hls".into(),
-        "-hls_time".into(),
-        profile.segment_duration.to_string(),
-        "-hls_segment_type".into(),
-        "fmp4".into(),
-        "-hls_fmp4_init_filename".into(),
-        "init.mp4".into(),
-        "-hls_segment_filename".into(),
-        segment_pattern.to_string(),
-        "-hls_list_size".into(),
-        "0".into(),
-        "-hls_flags".into(),
-        "omit_endlist".into(),
+        "mp4".into(),
+        // `+frag_keyframe`: cut a fragment at every keyframe.
+        // `+empty_moov`: leading moov has no sample tables (fragmented).
+        // `+separate_moof`: each fragment has its own moof (one moof per mdat).
+        // `+default_base_moof`: tfhd uses default-base-is-moof so byte offsets
+        //                       are relative to each moof — required for CMAF / MSE.
+        // `+negative_cts_offsets`: write CTS offsets in CTTS v1 instead of
+        //                          adding an empty `elst`. This is the key
+        //                          fix that lets `tfdt` line up with the
+        //                          actual first-sample DTS.
+        "-movflags".into(),
+        "+frag_keyframe+empty_moov+separate_moof+default_base_moof+negative_cts_offsets".into(),
+        // Force a fragment boundary every `segment_duration` seconds even
+        // if the encoder's keyframes don't land there. The encoder's
+        // `-g`/`-keyint_min` are aligned anyway, but this is the safety net.
+        "-frag_duration".into(),
+        ((profile.segment_duration as u64) * 1_000_000).to_string(),
+        output_path.to_string(),
     ]
 }
 
@@ -824,16 +844,12 @@ mod tests {
         assert!(vf.starts_with("scale=1920:1080:force_original_aspect_ratio=decrease,pad="));
         // In-band SPS/PPS bsf is applied.
         assert_window_eq(&argv.post_input, &["-bsf:v", "dump_extra=keyframe"]);
-        // HLS fmp4 muxer with the requested segment pattern.
-        assert_window_eq(&argv.post_input, &["-f", "hls"]);
-        assert_window_eq(
-            &argv.post_input,
-            &[
-                "-hls_segment_filename",
-                "/tmp/segments-rust/jjj/segment_%04d.m4s",
-            ],
+        // Direct fmp4 muxer with the requested chunk output path.
+        assert_window_eq(&argv.post_input, &["-f", "mp4"]);
+        assert_eq!(
+            argv.post_input.last().map(String::as_str),
+            Some("/tmp/segments-rust/jjj/segment_%04d.m4s")
         );
-        assert_window_eq(&argv.post_input, &["-hls_segment_type", "fmp4"]);
     }
 
     #[test]
@@ -996,20 +1012,31 @@ mod tests {
     }
 
     #[test]
-    fn hls_muxer_options_include_init_filename_and_segment_pattern() {
+    fn fmp4_muxer_options_emit_correct_movflags_and_output() {
         let p = profile_for(Resolution::R1080p);
-        let opts = hls_muxer_options(&p, "/abs/path/segment_%04d.m4s");
-        // Window assertions remain order-stable across changes.
-        assert_window_eq(&opts, &["-f", "hls"]);
-        assert_window_eq(&opts, &["-hls_time", "2"]);
-        assert_window_eq(&opts, &["-hls_segment_type", "fmp4"]);
-        assert_window_eq(&opts, &["-hls_fmp4_init_filename", "init.mp4"]);
+        let opts = fmp4_muxer_options(&p, "/abs/path/chunk.fmp4");
+        // -f mp4 (direct fmp4, NOT -f hls — see comment on the fn).
+        assert_window_eq(&opts, &["-f", "mp4"]);
+        // The four movflags load-bearing for CMAF + the
+        // negative_cts_offsets fix that drops the elst.
         assert_window_eq(
             &opts,
-            &["-hls_segment_filename", "/abs/path/segment_%04d.m4s"],
+            &[
+                "-movflags",
+                "+frag_keyframe+empty_moov+separate_moof+default_base_moof+negative_cts_offsets",
+            ],
         );
-        assert_window_eq(&opts, &["-hls_list_size", "0"]);
-        assert_window_eq(&opts, &["-hls_flags", "omit_endlist"]);
+        // Timestamp-shift flag actually applies in the direct fmp4
+        // muxer (HLS-fmp4 wraps fmp4 and silently drops it).
+        assert_window_eq(&opts, &["-avoid_negative_ts", "make_zero"]);
+        // Fragment cadence aligned to the resolution profile's
+        // segment_duration (1080p uses 2 s = 2_000_000 µs).
+        assert_window_eq(&opts, &["-frag_duration", "2000000"]);
+        // The growing-file output path is the LAST positional arg.
+        assert_eq!(
+            opts.last().map(String::as_str),
+            Some("/abs/path/chunk.fmp4")
+        );
     }
 
     #[test]

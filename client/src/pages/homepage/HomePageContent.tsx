@@ -63,7 +63,11 @@ const HOMEPAGE_QUERY = graphql`
 
 export const HomePageContent: FC = () => {
   const styles = useHomePageStyles();
-  const data = useLazyLoadQuery<HomePageContentQuery>(HOMEPAGE_QUERY, {});
+  const data = useLazyLoadQuery<HomePageContentQuery>(
+    HOMEPAGE_QUERY,
+    {},
+    { fetchPolicy: "store-and-network" }
+  );
   const [params, setParams] = useSearchParams();
   const hasLibraries = (data.libraries ?? []).length > 0;
 
@@ -273,7 +277,7 @@ export const HomePageContent: FC = () => {
           )}
         </div>
 
-        <div className={styles.heroBody}>
+        <div className={mergeClasses(styles.heroBody, heroMode !== "idle" && styles.heroBodyFlow)}>
           {heroMode === "idle" && (
             <>
               <div>
@@ -338,7 +342,9 @@ export const HomePageContent: FC = () => {
         </div>
       </div>
 
-      <div className={styles.rowsScroll}>
+      <div
+        className={mergeClasses(styles.rowsScroll, heroMode !== "idle" && styles.rowsScrollFlat)}
+      >
         {showFlatResults ? (
           searchResults.length > 0 ? (
             <div className={styles.searchResults}>

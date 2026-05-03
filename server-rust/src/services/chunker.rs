@@ -40,6 +40,7 @@ use crate::services::active_job::{job_status_wire, ActiveJob, ActiveJobInner};
 use crate::services::cache_index::{self, SegmentCacheKey};
 use crate::services::ffmpeg_file::{build_encode_argv, FfmpegFile, HwAccelConfig};
 use crate::services::ffmpeg_pool::{ExitOutcome, Reservation};
+use crate::services::fmp4_tail_reader;
 
 /// Discriminated result for `start_transcode_job`. The mutation resolver
 /// maps `Ok` to `TranscodeJob` and the `Err` variants to `PlaybackError`
@@ -452,16 +453,25 @@ async fn run_cascade(
         };
         let use_sw_pad = matches!(tier, CascadeTier::SwPadVaapi);
 
-        let segment_pattern = segment_dir
-            .join("segment_%04d.m4s")
-            .to_string_lossy()
-            .to_string();
+        // Direct fmp4 output: ffmpeg writes a single growing
+        // `chunk.fmp4`; the tail-reader splits it into init.mp4 +
+        // segment_NNNN.m4s so the segment watcher upstream sees the
+        // shape it always has.
+        let chunk_path = segment_dir.join("chunk.fmp4");
+        // Wipe any prior tier's `chunk.fmp4` (and any stale split
+        // artifacts) so a retry produces clean files. The notify
+        // watcher only fires on Create/Modify so a residual file
+        // would not re-trigger handlers — but it would confuse the
+        // tail-reader's parser.
+        let _ = tokio::fs::remove_file(&chunk_path).await;
+        let _ = tokio::fs::remove_file(segment_dir.join("init.mp4")).await;
+        let chunk_path_str = chunk_path.to_string_lossy().to_string();
         let profile = profile_for(resolution);
         let argv_struct = build_encode_argv(
             &metadata,
             &hw_for_tier,
             &profile,
-            &segment_pattern,
+            &chunk_path_str,
             use_sw_pad,
         );
 
@@ -485,7 +495,6 @@ async fn run_cascade(
         for s in argv_struct.post_input {
             full_args.push(s.into());
         }
-        full_args.push(segment_dir.join("playlist.m3u8").into_os_string());
 
         info!(
             tier = ?tier,
@@ -493,10 +502,45 @@ async fn run_cascade(
             "transcode_started"
         );
 
+        // Spawn the fmp4 tail-reader alongside ffmpeg. It opens the
+        // growing `chunk.fmp4`, parses MP4 box headers, and writes
+        // split files atomically. The oneshot tells it ffmpeg has
+        // exited so it can drain the trailing bytes and return.
+        let (tail_done_tx, tail_done_rx) = tokio::sync::oneshot::channel();
+        let tail_source = chunk_path.clone();
+        let tail_output_dir = segment_dir.clone();
+        let tail_handle = tokio::spawn(async move {
+            fmp4_tail_reader::run(tail_source, tail_output_dir, tail_done_rx).await
+        });
+
         let outcome = ctx
             .pool
             .run_to_completion(reservation, &ctx.ffmpeg_paths.ffmpeg, &full_args)
             .await;
+        // Tell the tail-reader ffmpeg is done, then wait for it to
+        // drain. Errors here aren't fatal to the cascade — the
+        // segments already written are usable; we just log.
+        let _ = tail_done_tx.send(());
+        match tail_handle.await {
+            Ok(Ok(stats)) => {
+                info!(
+                    init_bytes = stats.init_bytes,
+                    segments = stats.segments_written,
+                    total_bytes = stats.total_bytes,
+                    "fmp4_tail.complete"
+                );
+            }
+            Ok(Err(err)) => {
+                warn!(error = %err, "fmp4_tail.error");
+            }
+            Err(err) => {
+                warn!(error = %err, "fmp4_tail.join_error");
+            }
+        }
+        // Best-effort cleanup of the source file. The split files
+        // (init.mp4 + segment_NNNN.m4s) are what the rest of the
+        // pipeline needs; chunk.fmp4 has served its purpose.
+        let _ = tokio::fs::remove_file(&chunk_path).await;
 
         let outcome = match outcome {
             Ok(o) => o,

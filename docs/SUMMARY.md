@@ -70,7 +70,7 @@ Full rationale: [`code-style/Principles/`](code-style/Principles/README.md). The
 | Relay / GraphQL contract | [`architecture/Relay/`](architecture/Relay/README.md) |
 | Test side-effects policy + encode-pipeline tests + encoder edge-case policy | [`architecture/Testing/`](architecture/Testing/README.md) |
 | Tauri bundling, code-signing, auto-updates, ffmpeg distribution | [`architecture/Deployment/`](architecture/Deployment/README.md) |
-| Server config, ladder, schema, DB, HW-accel | [`server/`](server/README.md) |
+| Server config, ladder, schema, DB, HW-accel, ffmpeg / MSE caveats | [`server/`](server/README.md) |
 | Client feature flags, debugging playbooks | [`client/`](client/README.md) |
 | Invariants, naming, conventions, anti-patterns, testing policy | [`code-style/`](code-style/README.md) |
 | UI design spec (tokens, grid, typography) | [`design/`](design/README.md) |
