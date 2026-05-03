@@ -197,6 +197,7 @@ function baseOpts(overrides: Partial<ChunkOpts> = {}): ChunkOpts {
   return {
     jobId: "job-1",
     chunkStartS: 0,
+    chunkEndS: 10,
     isFirstChunk: false,
     resolution: "4k",
     onStreamEnded: vi.fn(),

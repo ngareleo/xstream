@@ -38,11 +38,9 @@ Flags are grouped by `category` in the Settings → Flags tab.
 
 For the full tradeoff explainer (mental model, memory table per resolution, chunks vs segments vs buffer), see [`Streaming Protocol → Hysteresis: tuning the gap`](./Streaming%20Protocol.md#hysteresis-tuning-the-gap).
 
-### telemetry, ui, experimental
+### telemetry, ui
 
-| Key | Type | Default | Category | Purpose |
-|---|---|---|---|---|
-| `flag.devForceShortChunkAtZero` | boolean | `false` | `experimental` | Dev-only escape hatch. When on, bypasses the three `startS === 0` guards in `PlaybackController` (`startPlayback`, `startChunkSeries`, `handleSeeking`) so a cold-start or seek-to-0 issues a short (30 s) first chunk even at position 0. Used to reproduce the VAAPI HDR silent-zero-output bug (`-ss 0 -t 30` exits cleanly with `segmentCount: 0`) and capture its stderr. Ships off by default; remove when the root-cause fix lands. |
+(No experimental flags currently active. Removed `flag.devForceShortChunkAtZero` in PR #59 when the ramp-controller landed — the new model's cold-start parity across all anchor points renders the escape hatch obsolete.)
 
 **Convention — `experimental` category:** flags in this category are dev-only escape hatches that ship off by default. They exist to reproduce or diagnose specific bugs and are expected to be removed once the root-cause fix lands. Do not surface them in release builds; they bypass production safety guards.
 

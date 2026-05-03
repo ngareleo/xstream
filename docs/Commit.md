@@ -15,6 +15,13 @@ Entry shape (each entry ends with the divider line described above):
 
 <!-- ENTRIES BELOW — newest first; each ends with a bare `---` line. The architect's next invocation will treat the no-entries state as the first-run case and prepend a bootstrap entry at HEAD. -->
 
+## bf710b6 — 2026-05-04 — Chunk-duration ramp controller (same-session curation)
+
+**Files:** `docs/SUMMARY.md`, `docs/architecture/Streaming/00-Protocol.md`, `docs/architecture/Streaming/01-Playback-Scenarios.md`, `docs/architecture/Streaming/02-Chunk-Pipeline-Invariants.md`, `docs/client/Config/00-ClientConfig.md`, `docs/client/Feature-Flags/00-Registry.md`, `docs/architecture/Observability/client/00-Spans.md`, `docs/server/Hardware-Acceleration/01-HDR-Pad-Artifact.md`, `docs/todo.md`
+**Why:** Curator sync for feat/library-film-entity branch: ramp-controller PR (#59) landed a per-session chunk-duration ramp (`[10, 15, 20, 30, 45, 60]` seconds, then 60 s steady-state), replacing the old fixed 300 s / 30 s two-tier model. Ramp resets at session start, every seek, MSE recovery, and resolution switch, so all anchor points enjoy fast cold-start parity. Removed VAAPI HDR workaround (the ramp reaches the bug surface; OBS-STDERR-001 is the escalation). Removed `flag.devForceShortChunkAtZero` (obsolete under ramp model). Updated nine doc files: SUMMARY (streaming paragraph), Streaming protocol & scenarios & invariants (chunk descriptions), ClientConfig (chunkRampS / chunkSteadyStateS replace chunkDurationS / firstChunkDurationS), Feature Flags (removed flag), Observability client spans (chunk.end_s replaces chunk.number), HDR-Pad-Artifact (ramp model section), todo.md (CHUNK-001 reframed for per-resolution calibration post-ramp).
+
+---
+
 ## a7479d5 — 2026-05-03 — Show entity + profile availability + local poster cache (sync)
 
 **Files:** `docs/architecture/Library-Scan/03-Show-Entity.md` (NEW), `docs/architecture/Library-Scan/04-Profile-Availability.md` (NEW), `docs/architecture/Library-Scan/05-Poster-Caching.md` (NEW), `docs/architecture/Library-Scan/README.md`, `docs/architecture/Observability/server/00-Spans.md`, `docs/server/DB-Schema/00-Tables.md`, `docs/server/GraphQL-Schema/00-Surface.md`, `docs/server/Config/00-AppConfig.md`, `docs/client/Components/ShowTile.md` (NEW), `docs/client/Components/ShowDetailsOverlay.md` (NEW), `docs/client/Components/README.md`, `docs/client/Components/Poster.md`, `docs/client/Components/ProfileRow.md`, `docs/client/Components/SeasonsPanel.md`, `docs/client/Components/FilmDetailsOverlay.md`, `docs/client/Components/PlayerContent.md`, `docs/INDEX.md`, `docs/SUMMARY.md`, `docs/todo.md`

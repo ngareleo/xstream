@@ -382,30 +382,28 @@ describe("PlaybackController.handleSeeking (slider snap-back + stale-prefetch fi
     expect(buf.seekCalls).toEqual([720]);
   });
 
-  it("sets chunkEnd to the small seek-chunk window so RAF prefetch fires immediately", () => {
+  it("sets chunkEnd to the ramp[0] seek-chunk window so RAF prefetch fires immediately", () => {
     // Pre-fix: chunkEnd was reset to 0 to gate out a stale prefetch race
-    // (trace 5d5b5137…). Then chunkEnd was set to nextSnap synchronously,
-    // which works but leaves the seek chunk up to 300s long. Now chunkEnd is
-    // clamped to seekTime + FIRST_CHUNK_DURATION_S (capped by nextSnap) so
-    // the prefetch RAF threshold (PREFETCH_THRESHOLD_S = 90) trips immediately
-    // and a continuation chunk eager-warms ffmpeg in parallel.
+    // (trace 5d5b5137…). Now chunkEnd is clamped to seekTime + ramp[0] so
+    // the prefetch RAF threshold (`prefetchThresholdS = 90`) trips
+    // immediately and a continuation chunk eager-warms ffmpeg in parallel.
+    // Seek resets the ramp index, so we always start from `chunkRampS[0]`.
     const { controller, priv } = setUpSeekable(1500);
     expect(priv.chunkEnd).toBe(900); // baseline: stale value from prior chunk
 
     controller.seekTo(1500);
     priv.handleSeeking();
 
-    // seekChunkEnd = min(1500 + 30, nextSnap=1800, dur) = 1530
-    expect(priv.chunkEnd).toBe(1530);
+    // seekChunkEnd = min(1500 + chunkRampS[0]=10, dur) = 1510
+    expect(priv.chunkEnd).toBe(1510);
   });
 
-  it("anchors the chunk REQUEST at seekTime — no longer snaps to chunk boundary", () => {
-    // Inversion of the previous "snap-aligned cache key" assertion. The 300s
-    // grid was forcing ffmpeg to encode segments 0..K-1 the user didn't need
-    // before reaching their first useful one (16-60s wall-clock for fresh
-    // 4K seeks, trace 9da5539d…). Now the chunk request anchors at seekTime
-    // directly so ffmpeg's `-ss seekTime` produces the user's first segment
-    // in ~1-2s. Continuation chunks return to the canonical grid.
+  it("anchors the chunk REQUEST at seekTime — no chunk-grid snapping", () => {
+    // The 300s grid was forcing ffmpeg to encode segments 0..K-1 the user
+    // didn't need before reaching their first useful one (16-60s wall-clock
+    // for fresh 4K seeks, trace 9da5539d…). The ramp model has no canonical
+    // grid; the chunk anchors at seekTime so ffmpeg's `-ss seekTime`
+    // produces the user's first segment in ~1-2s.
     const { controller, priv, buf } = setUpSeekable(720);
 
     controller.seekTo(720);
@@ -417,14 +415,14 @@ describe("PlaybackController.handleSeeking (slider snap-back + stale-prefetch fi
       expect(priv.startChunkSeries).toHaveBeenCalledTimes(1);
       const call = (priv.startChunkSeries as ReturnType<typeof vi.fn>).mock.calls[0];
       // call args: (res, chunkStartS, buf, isFirstChunk, override)
-      expect(call[1]).toBe(720); // chunkStartS = seekTime, not snapTime (600)
+      expect(call[1]).toBe(720); // chunkStartS = seekTime
     });
   });
 
-  it("anchors at seekTime even when it lands exactly on a chunk boundary", () => {
-    // Edge case: with the +0.001 nudge in nextSnap derivation, a seek to
-    // exactly 600 still produces a non-degenerate seek chunk
-    // (NOT [600, 600) zero-length).
+  it("anchors at seekTime even when it lands exactly on a chunk-multiple", () => {
+    // Edge case: a seek to a round number still produces a non-degenerate
+    // chunk under the ramp model (no `seekTime === chunkBoundary` pitfall
+    // because there is no boundary).
     const { controller, priv, buf } = setUpSeekable(600);
 
     controller.seekTo(600);
@@ -434,8 +432,8 @@ describe("PlaybackController.handleSeeking (slider snap-back + stale-prefetch fi
     return Promise.resolve().then(() => {
       const call = (priv.startChunkSeries as ReturnType<typeof vi.fn>).mock.calls[0];
       expect(call[1]).toBe(600); // chunkStartS = seekTime
-      // seekChunkEnd = min(600 + 30, nextSnap=900, dur) = 630
-      expect(priv.chunkEnd).toBe(630);
+      // seekChunkEnd = min(600 + chunkRampS[0]=10, dur) = 610
+      expect(priv.chunkEnd).toBe(610);
     });
   });
 

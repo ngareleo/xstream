@@ -13,16 +13,19 @@ import type { Resolution } from "~/types.js";
 
 export interface ClientConfig {
   playback: {
-    /** Encoded-segment window for steady-state forward play. Each chunk
-     *  mutation requests this many seconds of media. */
-    chunkDurationS: number;
-    /** Window length for the first chunk after a mid-file seek (startS > 0).
-     *  Picked short enough that the prefetch RAF (`prefetchThresholdS = 90`)
-     *  trips immediately and eager-warms ffmpeg for the next chunk. NOT used
-     *  at startS = 0 — `-ss 0 -t 30` on VAAPI HDR 4K silently produces zero
-     *  segments (trace 1bac05bd…). See
-     *  `docs/server/Hardware-Acceleration/01-HDR-Pad-Artifact.md`. */
-    firstChunkDurationS: number;
+    /** Per-chunk duration ramp (seconds). Each new playback session — and
+     *  every seek — re-enters this sequence at index 0, advancing one step
+     *  per chunk request until the tail is reached. Smaller initial chunks
+     *  cut time-to-first-frame; the steady growth keeps the buffer filling
+     *  without producing the giant orphan ffmpeg jobs a fixed 300 s window
+     *  left behind on pause/seek. After the tail, every subsequent request
+     *  uses `chunkSteadyStateS`. */
+    chunkRampS: readonly number[];
+    /** Steady-state chunk size after the ramp tail (seconds). Applied to
+     *  every chunk past `chunkRampS.length`. Tunable separately from the
+     *  ramp tail so the steady state can be widened later without changing
+     *  the cold-start curve. */
+    chunkSteadyStateS: number;
     /** How close to the end of the current chunk (in seconds) we start
      *  prefetching the next one. Sized to absorb ffmpeg cold-start (~25-30 s
      *  on 4K VAAPI) plus a HW→SW fallback (~30 s of failed VAAPI before the
@@ -52,10 +55,6 @@ export interface ClientConfig {
      *  false positives right at the buffered-end edge where the decoder may
      *  still stall briefly. */
     seekBufferedToleranceS: number;
-    /** Nudge added to seekTime when computing the next snap boundary, so
-     *  seeks that land exactly on a 300 s grid boundary still produce a
-     *  non-degenerate chunk (NOT [N, N) zero-length). */
-    seekSnapNudgeS: number;
     /** Poller interval driving the BufferManager backpressure check while
      *  the user is paused (`timeupdate` is silent during pause, so we tick
      *  manually). */
@@ -89,8 +88,8 @@ export interface ClientConfig {
 
 export const clientConfig: ClientConfig = {
   playback: {
-    chunkDurationS: 300,
-    firstChunkDurationS: 30,
+    chunkRampS: [10, 15, 20, 30, 45, 60] as const,
+    chunkSteadyStateS: 60,
     prefetchThresholdS: 90,
     startupBufferS: {
       "240p": 2,
@@ -104,7 +103,6 @@ export const clientConfig: ClientConfig = {
     minRealChunkBytes: 1024,
     firstRenderGraceMs: 5000,
     seekBufferedToleranceS: 0.5,
-    seekSnapNudgeS: 0.001,
     userPausePollIntervalMs: 1000,
     maxRecoveryAttempts: 3,
     defaultBackoffMs: [500, 1000, 2000] as const,

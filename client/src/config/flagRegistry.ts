@@ -39,14 +39,6 @@ export const FLAG_KEYS = {
   experimentalBuffer: "flag.experimentalBuffer",
   bufferForwardTargetS: "config.bufferForwardTargetS",
   bufferForwardResumeS: "config.bufferForwardResumeS",
-  /** Dev-only escape hatch for reproducing the VAAPI HDR 4K silent-failure
-   *  bug (`-ss 0 -t 30` produces zero segments — see
-   *  `docs/server/Hardware-Acceleration/01-HDR-Pad-Artifact.md`). When ON,
-   *  the client uses `FIRST_CHUNK_DURATION_S` even at `startS === 0` so the
-   *  bug fires and `transcode_silent_failure` events land in Seq with
-   *  ffmpeg stderr captured. Default OFF; remove once the root cause is
-   *  fixed (Phase 5 of the plan). */
-  devForceShortChunkAtZero: "flag.devForceShortChunkAtZero",
 } as const;
 
 export const FLAG_REGISTRY: readonly FlagDescriptor[] = [
@@ -81,14 +73,5 @@ export const FLAG_REGISTRY: readonly FlagDescriptor[] = [
     min: 0,
     max: 60,
     step: 1,
-  },
-  {
-    key: FLAG_KEYS.devForceShortChunkAtZero,
-    name: "Dev: force short first chunk at startS=0",
-    description:
-      "Reproduces the VAAPI HDR 4K silent-failure bug. When ON, cold-start uses FIRST_CHUNK_DURATION_S=30 instead of the safe 300s window, so the failure mode triggers and `transcode_silent_failure` events land in Seq for diagnosis. Leave OFF unless investigating.",
-    valueType: "boolean",
-    defaultValue: false,
-    category: "experimental",
   },
 ];

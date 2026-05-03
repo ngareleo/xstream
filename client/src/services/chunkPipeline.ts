@@ -35,6 +35,12 @@ export type StreamOutcome =
 export interface ChunkOpts {
   jobId: string;
   chunkStartS: number;
+  /** End of the requested transcode window (seconds, exclusive). Stored on
+   *  the slot so a lookahead's bounds can be retrieved on promotion without
+   *  the controller having to track them in parallel — important under the
+   *  ramp, where the duration is consumed once at request time and isn't
+   *  re-derivable from a fixed steady-state. */
+  chunkEndS: number;
   /** True only for the very first chunk of a session (or a fresh background buffer
    *  during resolution switch). Continuation chunks must NOT re-append the init
    *  segment — would clobber the SourceBuffer's existing init and stall the decoder. */
@@ -64,6 +70,7 @@ interface QueuedSegment {
 interface Slot {
   jobId: string;
   chunkStartS: number;
+  chunkEndS: number;
   isFirstChunk: boolean;
   svc: StreamingService;
   span: Span;
@@ -134,11 +141,14 @@ export class ChunkPipeline {
 
   /** Promotes the lookahead slot to foreground (called by PlaybackController
    *  when the foreground stream's onStreamEnded fires). Returns the new
-   *  foreground's chunkStartS so the controller can update its chunkEnd
-   *  synchronously, and a `drain` promise for callers that need to wait
-   *  until the queued segments are appended + any deferred outcome is
-   *  dispatched. Production callers can ignore `drain`; tests await it. */
-  promoteLookahead(): { chunkStartS: number; drain: Promise<void> } {
+   *  foreground's `[chunkStartS, chunkEndS)` bounds so the controller can
+   *  update its `chunkEnd` and timeline state synchronously without
+   *  re-deriving them (under the ramp, durations aren't recomputable from a
+   *  fixed steady-state). Also returns a `drain` promise for callers that
+   *  need to wait until the queued segments are appended + any deferred
+   *  outcome is dispatched. Production callers can ignore `drain`; tests
+   *  await it. */
+  promoteLookahead(): { chunkStartS: number; chunkEndS: number; drain: Promise<void> } {
     if (!this.lookahead) {
       throw new Error("ChunkPipeline.promoteLookahead: no lookahead to promote");
     }
@@ -151,7 +161,7 @@ export class ChunkPipeline {
     // the drain finishes would race the buffer-state check that
     // PlaybackController.handleChunkEnded does.
     const drain = this.drainAndDispatch(slot);
-    return { chunkStartS: slot.chunkStartS, drain };
+    return { chunkStartS: slot.chunkStartS, chunkEndS: slot.chunkEndS, drain };
   }
 
   /** Drains a slot's queued lookahead segments through the same per-segment
@@ -268,6 +278,7 @@ export class ChunkPipeline {
     const slot: Slot = {
       jobId: opts.jobId,
       chunkStartS: opts.chunkStartS,
+      chunkEndS: opts.chunkEndS,
       isFirstChunk: opts.isFirstChunk,
       svc: new StreamingService(),
       span,
@@ -376,10 +387,8 @@ export class ChunkPipeline {
         {
           attributes: {
             "chunk.job_id": slot.opts.jobId,
-            "chunk.number": Math.floor(
-              slot.opts.chunkStartS / clientConfig.playback.chunkDurationS
-            ),
             "chunk.start_s": slot.opts.chunkStartS,
+            "chunk.end_s": slot.opts.chunkEndS,
             "chunk.segment_bytes": segData.byteLength,
             "playback.current_time_s_at_arrival": parseFloat(arrivalCurrentTime.toFixed(2)),
             "playback.buffered_ahead_s_at_arrival": parseFloat(arrivalBufferedAhead.toFixed(2)),

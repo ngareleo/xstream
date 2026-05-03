@@ -43,11 +43,11 @@ The three-tier cascade in `server-rust/src/services/chunker.rs` only catches **e
 
 Known instance: `-ss 0 -t 30` on VAAPI HDR 4K (reproduced traces `1bac05bd…`, `b3dbbc34…`, `3d0f0d6f…`). The same file works at `-ss 0 -t 300` and at `-ss N -t 30` for N > 0. Root cause is unknown — likely a flush/pipeline-depth interaction between `tonemap_vaapi` + `scale_vaapi` + H.264 VAAPI encoder on a short window starting at the file head. ffmpeg stderr is not captured in OTel today, so the cause remains opaque.
 
-**Current workaround (client-side):** `playbackController.ts` forces `clientConfig.playback.chunkDurationS` (300 s) instead of `clientConfig.playback.firstChunkDurationS` (30 s) whenever `startS === 0` — i.e. cold start, MSE recovery at `currentTime < 300`, and seek-to-0. Mid-file seeks (`startS > 0`) keep the small-window optimization.
+**Current status (post-ramp-controller):** The ramp-controller model now reaches the bug surface directly — the first chunk uses `chunkRampS[0]` = 10 s by default, which is as short or shorter than the old 30 s workaround. The user explicitly accepted this trade-off during the ramp design (pre-prod phase allows breaking changes; embrace them). **Verification required before merge:** test on a 4K HDR fixture to confirm no regression.
 
-**Cost of the workaround:** cold-start eager-prefetch is disabled; chunk N+1 won't fire until ~210 s into chunk N. Mid-file seeks are unaffected.
+**If 4K HDR regresses:** The declared tech-debt escalation is **OBS-STDERR-001** (see `docs/todo.md`). Capture ffmpeg stderr in the `transcode.job` span (a `stderr_tail` attribute already exists for cascade-error events but not for `transcode_complete`), then detect `segment_count == 0` after a clean exit and force the cascade to fall through to the next tier (software fallback). This provides structural recovery without special-casing the ramp logic and without weakening the cold-start win.
 
-**Structural fix (tracked as OBS-STDERR-001 in `docs/todo.md`):** capture ffmpeg stderr in the `transcode.job` span (a `stderr_tail` attribute already exists for cascade-error events but not for `transcode_complete`), then detect `segment_count == 0` after a clean exit and force the cascade to fall through to the next tier.
+**Why not revert to the old workaround:** The old 300 s / 30 s two-tier model disabled eager-prefetch on cold-start (chunk N+1 wouldn't fire until ~210 s into chunk N), costing tens of seconds of seek latency. The ramp model's cold-start parity across all anchor points (session start, seek, MSE recovery, resolution switch) is the load-bearing design. Reverting would sacrifice the seek UX to work around a driver edge-case; instead we fix it structurally via OBS-STDERR-001.
 
 
 
