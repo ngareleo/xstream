@@ -25,7 +25,7 @@ featureFlags (featureFlags.ts)     ← runtime per-user overrides, some knobs on
 | `chunkRampS` | `[10, 15, 20, 30, 45, 60]` | Per-session cold-start ramp (seconds). Each `RampController.next()` call returns the next duration and advances the cursor. Resets at session start, every seek, MSE-detached recovery, and resolution switch so every fresh playhead gets the fast first-chunk curve. Replaces the old fixed 300 s / 30 s two-tier model. |
 | `chunkSteadyStateS` | 60 | Steady-state chunk window after the ramp tail is exhausted (seconds of media per `startTranscode` mutation). Tuned separately from the ramp so steady-state can be widened later without changing the cold-start curve. |
 | `prefetchThresholdS` | 90 | Seconds before chunk-end at which the next chunk's mutation fires. |
-| `startupBufferS` | per-resolution map | Minimum buffered seconds before `video.play()` is called on initial load. |
+| `startupBufferS` | 2 | Minimum buffered seconds before `video.play()` is called on initial load. Uniform across all resolutions because the chunk ramp's 10 s first chunk provides an 8 s safety margin against post-play decoder stalls; per-resolution stratification is no longer load-bearing. |
 | `bufferingSpinnerDelayMs` | 2000 | Continuous-stall threshold before the mid-playback spinner appears. |
 | `minRealChunkBytes` | 1024 | Byte floor; chunks below this had no real frames (ffmpeg placeholder). |
 | `firstRenderGraceMs` | 5000 | Suppresses StallTracker spinner during the post-`play()` first-frame decode window. |

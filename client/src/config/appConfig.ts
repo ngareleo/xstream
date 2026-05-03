@@ -33,10 +33,15 @@ export interface ClientConfig {
      *  tail near 20 s. */
     prefetchThresholdS: number;
     /** Minimum buffered seconds before `video.play()` is called on initial
-     *  load. Larger resolutions need more lead-time because the first frames
-     *  take longer to decode/render. The 4K value was reduced from 10 s after
-     *  a Seq cold-start trace showed the startup-buffer fill phase accounted
-     *  for ~69 % of TTFF (~2.1 s of a ~3.1 s total). */
+     *  load. Held uniformly low across resolutions: the ramp's 10 s first
+     *  chunk gives an 8 s safety margin against post-play decoder stalls
+     *  even at 4K, since the playhead can only catch the buffer if ffmpeg
+     *  falls below realtime — which is itself a stall worth surfacing
+     *  rather than hiding behind a deeper gate. Earlier per-resolution
+     *  values (4 s @ 720p, 6 s @ 1080p, 5 s @ 4K) were rooted in the
+     *  pre-ramp 30 s first-chunk window and the assumption that a higher
+     *  resolution implied a longer cold start; under the ramp + the
+     *  page-mount prewarm, that's no longer the dominant variable. */
     startupBufferS: Record<Resolution, number>;
     /** Show the mid-playback buffering spinner only after this much continuous
      *  stall. Brief decoder hiccups under the threshold are swallowed. */
@@ -94,10 +99,10 @@ export const clientConfig: ClientConfig = {
     startupBufferS: {
       "240p": 2,
       "360p": 2,
-      "480p": 3,
-      "720p": 4,
-      "1080p": 6,
-      "4k": 5,
+      "480p": 2,
+      "720p": 2,
+      "1080p": 2,
+      "4k": 2,
     },
     bufferingSpinnerDelayMs: 2000,
     minRealChunkBytes: 1024,

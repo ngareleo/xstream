@@ -15,6 +15,13 @@ Entry shape (each entry ends with the divider line described above):
 
 <!-- ENTRIES BELOW — newest first; each ends with a bare `---` line. The architect's next invocation will treat the no-entries state as the first-run case and prepend a bootstrap entry at HEAD. -->
 
+## [pending-commit] — 2026-05-04 — TTFF reduction: page-mount prewarm + uniform startup buffer (same-session curation)
+
+**Files:** `docs/SUMMARY.md`, `docs/client/Config/00-ClientConfig.md`, `docs/architecture/Streaming/00-Protocol.md`, `docs/architecture/Streaming/01-Playback-Scenarios.md`, `docs/client/Components/VideoPlayer.md`, `docs/architecture/Observability/client/00-Spans.md`
+**Why:** Curator sync for feat/library-film-entity PR #59 (second slice): two TTFF-reduction changes landed. (1) Page-mount prewarm pattern: `VideoPlayer` fires `startTranscode(videoId, nativeMax, 0, 10)` on mount with errors swallowed; ffmpeg silently encodes chunk 0 while the user views the poster. Click-path cache-hits if resolution is unchanged; orphan-timeout (30 s) safety-kills unclaimed warmups. (2) Uniform startup buffer: `startupBufferS` is now 2 seconds for all resolutions (was per-resolution 2–6 s); the ramp's 10 s first chunk provides an 8 s safety margin. Updated six doc files: SUMMARY (streaming paragraph mentions prewarm + uniform buffer), ClientConfig (startupBufferS row changed to 2s with rationale), Streaming protocol (Startup Buffer section rewritten), Playback-Scenarios (prewarm phase section added, initial-playback flow updated, startupBufferS references changed), VideoPlayer spec (Mount-time prewarm subsection + safety invariants added), Observability client spans (transcode.request row documented with prewarm pattern note).
+
+---
+
 ## [pending-commit] — 2026-05-04 — OBS-STDERR-001: silent-failure detection + cascade (same-session curation)
 
 **Files:** `docs/architecture/Observability/server/00-Spans.md`, `docs/server/Hardware-Acceleration/01-HDR-Pad-Artifact.md`, `docs/todo.md`

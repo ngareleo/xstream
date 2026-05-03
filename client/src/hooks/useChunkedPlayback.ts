@@ -1,6 +1,7 @@
 import { type RefObject, useCallback, useEffect, useRef, useState } from "react";
 import { graphql, useMutation } from "react-relay";
 
+import { clientConfig } from "~/config/appConfig.js";
 import type { useChunkedPlaybackRecordSessionMutation } from "~/relay/__generated__/useChunkedPlaybackRecordSessionMutation.graphql.js";
 import type { useChunkedPlaybackStartChunkMutation } from "~/relay/__generated__/useChunkedPlaybackStartChunkMutation.graphql.js";
 import {
@@ -22,6 +23,17 @@ export interface UseChunkedPlaybackResult {
   /** Start (or restart) playback at the given resolution. While playing, this
    * triggers a background-buffer resolution switch instead of a full teardown. */
   startPlayback: (res: Resolution) => void;
+  /** Fire-and-forget warm-up of chunk 0 at the given resolution. Issues the
+   * `startTranscode` mutation for `[0, chunkRampS[0])` without setting up
+   * MSE / a stream connection, so ffmpeg starts encoding the moment the
+   * player page mounts — by the time the user clicks Play, init.mp4 is
+   * usually already on disk and the click-path mutation hits the
+   * deterministic job-id cache. The server's `orphan_timeout_ms = 30 s`
+   * cleans up the encode if the user never clicks Play. Resolution mismatch
+   * (e.g. the user toggles 4k → 1080p before playing) is acceptable: the
+   * click-path mutation simply spawns fresh, identical to today's
+   * behaviour. */
+  prewarm: (res: Resolution) => void;
   /** Seek to an absolute position. Stores the intended target before triggering
    * the seeking DOM event so the controller reads the unclamped value. */
   seekTo: (targetSeconds: number) => void;
@@ -211,9 +223,36 @@ export function useChunkedPlayback(
     controllerRef.current?.startPlayback(res);
   }, []);
 
+  const prewarm = useCallback((res: Resolution): void => {
+    // Fire just the GraphQL mutation — no MSE init, no stream connection,
+    // no PlaybackController state. The server creates the job, ffmpeg
+    // starts encoding chunk 0 to disk. When the user clicks Play, the
+    // click-path mutation produces the same job-id (deterministic SHA1 of
+    // content_fp + res + 0 + ramp[0]) and the server returns the cached
+    // job — segments already written are pulled immediately.
+    //
+    // Errors are swallowed: if the warmup fails (network blip, server
+    // restart) the click-path mutation will retry from scratch via
+    // PlaybackController's three-tier retry, identical to today's
+    // behaviour. Re-surfacing the failure here would only add noise.
+    startChunkRef.current({
+      variables: {
+        videoId: videoIdRef.current,
+        resolution: DISPLAY_TO_GQL[res] as Parameters<
+          typeof startChunk
+        >[0]["variables"]["resolution"],
+        startTimeSeconds: 0,
+        endTimeSeconds:
+          clientConfig.playback.chunkRampS[0] ?? clientConfig.playback.chunkSteadyStateS,
+      },
+      onCompleted: () => {},
+      onError: () => {},
+    });
+  }, []);
+
   const seekTo = useCallback((targetSeconds: number): void => {
     controllerRef.current?.seekTo(targetSeconds);
   }, []);
 
-  return { status, error, startPlayback, seekTo };
+  return { status, error, startPlayback, prewarm, seekTo };
 }

@@ -144,18 +144,7 @@ Trade-off: seek chunks may not cache across re-seeks (the ramp duration model me
 
 ## Startup Buffer
 
-`useChunkedPlayback` waits until `bufferedEnd >= clientConfig.playback.startupBufferS[res]` before calling `video.play()`. This keeps the loading spinner up long enough for smooth initial playback, calibrated per resolution:
-
-| Resolution | Startup threshold |
-|---|---|
-| `240p` | 2s |
-| `360p` | 2s |
-| `480p` | 3s |
-| `720p` | 4s |
-| `1080p` | 6s |
-| `4k` | 5s |
-
-The 4K threshold was lowered from 10 s after a Seq cold-start trace showed the startup-buffer fill phase accounted for ~69 % of TTFF (~2.1 s of a ~3.1 s total). 5 s gives ~1 s back to the user; immediate post-`play()` stalls are surfaced by the existing `playback.stalled` span.
+`BufferManager` waits until `bufferedEnd >= clientConfig.playback.startupBufferS` before calling `video.play()`. The threshold is **uniform across all resolutions: 2 seconds**. This simplification is safe because `clientConfig.playback.chunkRampS[0]` = 10 seconds — the first chunk of every session (and seek, MSE recovery, resolution switch) is 10 seconds of encoded media. Once the buffer holds 2 seconds, the playhead would have to fall **more than 8 seconds behind** the encoding rate for the decoder to starve. That 8 s window is itself a signal worth surfacing via `playback.stalled` rather than masking with a larger startup-buffer gate. The uniform 2 s value was previously per-resolution (2–6 s for 240p–4K); per-resolution stratification was driven by the old fixed 300 s chunk grid and is no longer load-bearing under the ramp model.
 
 Detection is driven by `BufferManager.setAfterAppend(tryStart)` — a callback that fires synchronously inside `drainQueue` after every real `appendBuffer` call. This works correctly in headless environments (Playwright, CI) where `requestAnimationFrame` fires slowly or not at all between segment appends. A RAF loop is also started as a fallback for slow live-transcode paths where no new segment arrives for several seconds.
 

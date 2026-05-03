@@ -74,12 +74,30 @@ export const VideoPlayer: FC<Props> = ({ video, onStatusChange }) => {
   const [isEnded, setIsEnded] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
 
-  const { status, error, startPlayback, seekTo } = useVideoPlayback(
+  const { status, error, startPlayback, prewarm, seekTo } = useVideoPlayback(
     videoRef,
     data.id,
     data.durationSeconds,
     setActiveJobId
   );
+
+  // Kick off chunk 0's transcode the moment the player page mounts, so
+  // ffmpeg encodes init.mp4 + the first segments while the user looks at
+  // the poster. By the time they click Play, the deterministic job-id
+  // cache hits and TTFF collapses to the buffer-fill cost. We warm at the
+  // resolution we'll start with (`nativeMax`); if the user toggles
+  // resolution before pressing Play, the click-path mutation simply
+  // produces a different job-id and spawns fresh — identical to today.
+  // Mount-only by design: re-warming on resolution change would double
+  // ffmpeg load on every selector toggle, with the abandoned warmup
+  // tearing itself down via the server's 30 s orphan-no-connection
+  // timer. eslint-disable-next-line: data.id is captured in the hook's
+  // own ref so we depend only on it, not on `prewarm` (stable callback)
+  // or `nativeMax` (derived).
+  useEffect(() => {
+    prewarm(nativeMax);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-per-video, see comment above
+  }, [data.id]);
 
   useJobSubscription(activeJobId, (progress) => {
     setJobProgress(progress);

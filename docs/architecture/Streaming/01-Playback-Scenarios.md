@@ -8,16 +8,18 @@ The client drives transcoding via a **per-session chunk-duration ramp** (`client
 
 > Source: [`streaming-01-initial-playback.mmd`](../../diagrams/streaming-01-initial-playback.mmd)
 
-`PlaybackController.startPlayback(res)` opens the `playback.session` span and drives the boot sequence:
+**Prewarm phase (page mount → user click Play):** When `VideoPlayer` mounts, `useChunkedPlayback.prewarm(nativeMax)` issues a `startTranscode(videoId, nativeMax, 0, 10)` mutation. Errors are swallowed; ffmpeg spins up silently in the background for 1–5 seconds while the user looks at the poster + Play button. The job's deterministic `job_id` (computed from `SHA1(fingerprint + res + 0 + 10)`) is cached — when the user clicks Play and the click-path mutation fires with the same parameters, it cache-hits immediately. If the user takes >30 s to click (the `orphan_timeout_ms`), the warmup ffmpeg is killed automatically; the user clicking afterward re-spawns fresh (equivalent to no prewarm). If the user toggles resolution before clicking, the prewarm is discarded and the click path proceeds with the new resolution.
 
-1. **`buffer.init` and the `startTranscode` mutation run in parallel via `Promise.all`.** `BufferManager.init(mimeType)` creates a `MediaSource` and arms a `SourceBuffer`; simultaneously `PlaybackController.requestChunk` fires the `startTranscode` GraphQL mutation using the first duration from the ramp (e.g., `clientConfig.playback.chunkRampS[0]` = `10` seconds). This means ffmpeg's cold-start overlaps with the `sourceopen` handshake rather than waiting behind it.
+**Playback phase (user clicks Play):** When the user clicks the Play button, `PlaybackController.startPlayback(res)` opens the `playback.session` span and drives the boot sequence:
+
+1. **`buffer.init` and the `startTranscode` mutation run in parallel via `Promise.all`.** `BufferManager.init(mimeType)` creates a `MediaSource` and arms a `SourceBuffer`; simultaneously `PlaybackController.requestChunk` fires the `startTranscode` GraphQL mutation using the first duration from the ramp (e.g., `clientConfig.playback.chunkRampS[0]` = `10` seconds). If the prewarm matched (same resolution), the mutation returns the cached `ActiveJob` and this step is a cache hit. If not (prewarm was discarded or timed out), ffmpeg spawns fresh. Either way, ffmpeg's encode is overlapped with the `sourceopen` handshake rather than waiting behind it.
 2. `PlaybackController.requestChunk` opens a `transcode.request` span (with `chunk.is_prefetch = false`) around the mutation. The auto-generated `graphql.request` HTTP span nests underneath via `context.with`. The span closes when the mutation resolves and records `chunk.job_id`. The pre-issued `jobId` is plumbed directly into `pipeline.startForeground` — no second mutation fires when the pipeline opens.
 3. `chunker::start_transcode_job` (in `server-rust/src/services/chunker.rs`) computes a deterministic `job_id = SHA-1(fingerprint + res + start + end)`. If `tmp/segments-rust/<job_id>/init.mp4` exists the job is restored from cache; otherwise a new ffmpeg process spawns and a `notify::RecommendedWatcher` starts tracking segment files. The `transcode.job` span covers the full ffmpeg lifetime (probe + encode) and closes on `transcode_complete`, `transcode_error`, or `transcode_killed`.
 4. The client opens a `chunk.stream` span and calls `StreamingService.start(jobId, …, ctx)`. `ctx` is propagated as `traceparent`, so the server's `stream.request` span nests under the client's `chunk.stream`. On span end it records `chunk.bytes_streamed` and `chunk.segments_received` — giving per-chunk bandwidth in a single Seq query.
 5. `GET /stream/<jobId>` waits up to 60 s for `init.mp4`, writes it length-prefixed, then loops over newly-appearing `segment_NNNN.m4s` files.
 6. `StreamingService` accumulates bytes, extracts complete frames by the 4-byte length prefix, and calls `onSegment(data, isInit)` back into `BufferManager`.
 7. `BufferManager.appendSegment` serialises `SourceBuffer.appendBuffer` calls through a queue. After each append it runs `evictBackBuffer()`, `checkForwardBuffer()`, and the `afterAppendCb`.
-8. Once `bufferedEnd >= clientConfig.playback.startupBufferS[res]`, `video.play()` is called and `status` flips to `playing`.
+8. Once `bufferedEnd >= clientConfig.playback.startupBufferS (2s)`, `video.play()` is called and `status` flips to `playing`.
 
 ### Chunk chaining
 
@@ -72,7 +74,7 @@ MSE's `SourceBuffer` can only be initialised with one MIME type / resolution pro
 1. `PlaybackController.switchResolution(newRes)` snaps the current playhead to the nearest chunk boundary (`chunkStart`).
 2. `bgBuffer.initBackground()` creates a `MediaSource` attached to an offscreen `<video>`, returning a `bgObjectUrl`. `sourceopen` fires and the background `SourceBuffer` is armed without disturbing the visible `<video>`.
 3. A new transcode job starts at `(videoId, newRes, chunkStart, chunkStart + 300)` and streams silently into `bgBuffer`.
-4. A RAF loop polls `bgBuffer.bufferedEnd`. When it clears `clientConfig.playback.startupBufferS[newRes]`:
+4. A RAF loop polls `bgBuffer.bufferedEnd`. When it clears `clientConfig.playback.startupBufferS (2s)`:
    - The foreground stream is cancelled and its `BufferManager` torn down (releasing the foreground object URL).
    - `video.src = bgObjectUrl`, `video.currentTime = playhead`, `video.play()`.
    - The background buffer is promoted to foreground.
