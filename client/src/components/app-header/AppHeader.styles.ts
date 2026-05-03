@@ -15,6 +15,11 @@ export const useAppHeaderStyles = makeStyles({
     display: "grid",
     gridTemplateColumns: "1fr auto 1fr",
     alignItems: "center",
+    // The bottom 32px is a decorative gradient fade-out — let clicks fall
+    // through to whatever is below (e.g. the DetailPane close button on
+    // /profiles). The grid cells re-enable pointer events for the
+    // interactive parts of the header.
+    pointerEvents: "none",
   },
   headerBg: {
     position: "absolute",
@@ -39,6 +44,7 @@ export const useAppHeaderStyles = makeStyles({
     paddingLeft: "24px",
     paddingRight: "24px",
     justifySelf: "start",
+    pointerEvents: "auto",
   },
   brand: {
     display: "inline-flex",
@@ -60,6 +66,7 @@ export const useAppHeaderStyles = makeStyles({
     alignItems: "center",
     columnGap: "32px",
     justifySelf: "center",
+    pointerEvents: "auto",
   },
   navLink: {
     fontFamily: tokens.fontNav,
@@ -105,6 +112,7 @@ export const useAppHeaderStyles = makeStyles({
     paddingLeft: "24px",
     paddingRight: "24px",
     justifySelf: "end",
+    pointerEvents: "auto",
   },
 
   scanBtn: {
