@@ -165,10 +165,11 @@ Docs are organised as a nested knowledge base under `docs/` — super-domains (`
 | Area | Contents |
 |---|---|
 | [`docs/architecture/`](docs/architecture/README.md) | Streaming protocol, playback scenarios, Relay contract, observability, startup, deployment, sharing, testing |
-| [`docs/client/`](docs/client/README.md) | Client-only topics: feature flags, debugging playbooks |
+| [`docs/client/`](docs/client/README.md) | Client-only topics: per-component design specs, feature flags, debugging playbooks |
 | [`docs/server/`](docs/server/README.md) | Server-only topics: config, GraphQL schema, DB schema, hardware acceleration |
 | [`docs/code-style/`](docs/code-style/README.md) | Invariants, naming, conventions, anti-patterns, testing policy |
-| [`docs/design/`](docs/design/README.md) | UI design spec (Prerelease frozen, Release active) |
+| [`docs/design/`](docs/design/README.md) | UI design spec — tokens, type, spacing, behavioural contracts |
+| [`docs/release/`](docs/release/README.md) | Outstanding redesign work (working document) |
 | [`docs/product/`](docs/product/README.md) | Product spec, customers, roadmap |
 
 ---

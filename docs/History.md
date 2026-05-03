@@ -35,6 +35,24 @@ Entry shape (the entry ends with a single line containing exactly three hyphens 
 
 <!-- ENTRIES BELOW — newest first; each ends with a bare three-hyphen divider line. -->
 
+## 2026-05-03 — Release-design migration retirement: component specs promoted, Outstanding-Work audit created
+
+The Prerelease → Release client redesign migration shipped in April 2026 and was declared complete. The migration tree (`docs/migrations/release-design/`) had outlived its purpose — it was a temporary artifact holding 300+ ported specifications and checklists, all framed as "OLD → NEW" diffs and porting status. But the specs themselves were valuable and durable; they document the contract for every component in the client. Three structural moves solved this: (1) Per-component specs moved from `docs/migrations/release-design/Components/` to `docs/client/Components/` with Moran-era framing stripped; added 26 new specs for components that never had one (player subcomponents, settings primitives, dev infrastructure). Total: 53 stable per-component references. (2) Created `docs/release/Outstanding-Work.md` as a working document for unfinished items — 300+ unchecked checkboxes scattered across 53 migration spec files were consolidated into one audit point, grouped by component, so the next redesign sweep doesn't have to re-mine 30 files. (3) Strict-purged "Moran" / "Prerelease" / "Bebas Neue" framing from every active doc — the Prerelease era is historical fact but not a current concept in the docs. Paths in append-only logs (Commit.md, History.md) are preserved as historical accuracy. Updated `migrations-lead` agent scope: it now owns `design/Release/` + `docs/client/Components/` (the design lab and its contract specs), separate from `architect`'s cross-cutting knowledge base. This keeps the curator disciplines orthogonal — component specs are design, not architecture. Updated CLAUDE.md routing (lines ~92, ~134) to map design-lab questions directly to migrations-lead; architect stays focused on cross-cutting structure and INDEX/SUMMARY updates.
+
+**Files:** `docs/SUMMARY.md`, `docs/INDEX.md`, `docs/README.md`, `docs/release/README.md`, `docs/client/Components/README.md`, `docs/design/README.md`, `docs/design/UI-Design-Spec/README.md`, `.claude/agents/migrations-lead.md`, `CLAUDE.md`, `README.md`, `docs/Commit.md`, `docs/History.md`
+**Related Commit.md entry:** `(pending)`
+
+---
+
+## 2026-05-03 — Mutation + cache invalidation: declarative-first pattern established
+
+Creating a library affects multiple pages (homepage, profiles, …), but the old code pre-fetched only the `PROFILES_QUERY` before navigating. This left the homepage query cached as empty on the create-and-redirect flow. The initial fix attempted Relay's `store.invalidateStore()` in the mutation's `updater` callback, but the user expressed a preference: "I have reservations about manually dealing with the relay store. Instead, can we try to trigger a query refetch." This prompted a pattern shift to **declarative-first React-Relay**: mutations just commit and navigate; destination pages express data freshness via `fetchPolicy: "store-and-network"` on their `useLazyLoadQuery`. This is simpler (no cache knowledge needed at the mutation site), more testable (intent is local to the query, not hidden in an updater callback), and aligns with React's functional paradigm — data properties are declared, not imperatively forced. The new pattern applies to all mutations affecting shared collections (`createLibrary`, `deleteLibrary`, `addToWatchlist`, …). Updated `docs/architecture/Relay/00-Fragment-Contract.md` with code examples (CreateProfilePage.tsx slim mutation + HomePageContent.tsx pattern) and moved the old `invalidateStore()` approach to a historical note. Cross-linked to `docs/code-style/Client-Conventions/00-Patterns.md` §2 ("Prefer the declarative React-Relay surface").
+
+**Files:** `docs/architecture/Relay/00-Fragment-Contract.md`, `docs/code-style/Client-Conventions/00-Patterns.md`
+**Related Commit.md entry:** `6a875fd`
+
+---
+
 ## 2026-05-03 — M8 Settings: section-tab Relay exception
 
 The Settings page originally fetched data from multiple section components at the page level (`SettingsPageContentQuery` spreading fragments from every tab). This created an upfront cost even when the user navigated directly to Library or Metadata — the Trace section's history data was fetched but unused. M8 pushes the trace query down into `TraceHistoryTab` itself via `useLazyLoadQuery`, wrapping the section in a `<Suspense>` boundary at the page level. This breaks the documented "pages only" rule for `useLazyLoadQuery`, so the exception was formally documented in `Client-Conventions/00-Patterns.md` with the preconditions (dispatched tab/section components, data needed by only one section, section wrapped in Suspense). The rule change is narrow and intentional: it solves the "fetch on entry, don't use" antipattern by making data ownership precise. No other Settings sections are affected; this pattern is expected to be rare. Updated SUMMARY.md pointer to flag the exception so future agents don't see a blanket "pages only" rule that later surprises them.
@@ -116,11 +134,11 @@ Two design-lab cleanups. (1) Replaced live `m.media-amazon.com` poster URLs with
 
 ---
 
-## 2026-05-01 — PR #45 — Release lab split + Xstream identity + per-component spec migration
+## 2026-05-01 — PR #45 — Xstream design lab + per-component spec scaffold
 
-Split `design/` into `design/Prerelease/` (frozen Moran) and `design/Release/` (active Xstream). Full page parity in Release — Profiles, Library, Player, Settings, DesignSystem, Goodbye, NotFound — seeded from Figma handoff. AppHeader iterated to glass treatment with custom green pulsing caret (mirror-span pinned to end-of-text), hover-breathing, functional search with film/library suggestions + keyboard nav, Prerelease-idiom scan button. Scaffolded `docs/migrations/release-design/` — portable per-component spec for porting Release into `client/src/`. Wired the migration through `migrations-lead`: agent definition extended with the new domain + Release-design migration section + `design/Release/**` routing branch. CLAUDE.md routing now sends `design/Release/**` edits to `migrations-lead`; Prerelease stays on architect, frozen.
+Stood up `design/Release/` — the live Xstream design lab — with full page parity (Profiles, Library, Player, Settings, DesignSystem, Goodbye, NotFound) seeded from Figma handoff. AppHeader iterated to glass treatment with custom green pulsing caret (mirror-span pinned to end-of-text), hover-breathing, functional search with film/library suggestions + keyboard nav, scan button. Scaffolded a portable per-component spec sub-tree for porting the lab into `client/src/`. Wired the porting effort through `migrations-lead`: agent definition extended with the new domain + redesign section + `design/Release/**` routing branch. CLAUDE.md routing sends `design/Release/**` edits to `migrations-lead`.
 
-**Files:** `design/Prerelease/`, `design/Release/`, `docs/migrations/release-design/`, `.claude/agents/migrations-lead.md`, `CLAUDE.md`
+**Files:** `design/Release/`, redesign component-spec sub-tree, `.claude/agents/migrations-lead.md`, `CLAUDE.md`
 **Related Commit.md entry:** `92da4bc`
 
 ---
@@ -413,9 +431,9 @@ CSS → Griffel migration: deleted all per-component `.css` files; every compone
 
 ---
 
-## 2026-04-12 — PR #8 — Moran design system implementation
+## 2026-04-12 — PR #8 — initial design system implementation
 
-Full Moran design implementation across the client: design tokens (`styles/tokens.ts`), AppShell CSS grid (sidebar 220px + header 56px + main), Sidebar with Nova eventing toggle, AppHeader with `actions` slot rendered by pages, Dashboard page with hero slideshow + ProfileRow + ProfileExplorer + FilmDetailPane + URL-driven pane state, Library page with PosterCard grid + LibraryFilterBar + LibraryChips, Player page Griffel layout + inactivity hide (3s) + PlayerSidebar, Watchlist + Settings + Feedback pages. Server side: `video_metadata`, `watchlist_items`, `user_settings` tables; OMDb service; `matchVideo` / `unmatchVideo` mutations.
+Full design-system implementation across the client: design tokens (`styles/tokens.ts`), AppShell CSS grid (sidebar 220px + header 56px + main), Sidebar with Nova eventing toggle, AppHeader with `actions` slot rendered by pages, Dashboard page with hero slideshow + ProfileRow + ProfileExplorer + FilmDetailPane + URL-driven pane state, Library page with PosterCard grid + LibraryFilterBar + LibraryChips, Player page Griffel layout + inactivity hide (3s) + PlayerSidebar, Watchlist + Settings + Feedback pages. Server side: `video_metadata`, `watchlist_items`, `user_settings` tables; OMDb service; `matchVideo` / `unmatchVideo` mutations.
 
 **Files:** `client/src/{pages,components,styles,services}/`, `server/src/{db,services,graphql}/`
 **Related Commit.md entry:** _pre-Commit.md era; merge SHA `16f0e3f`_
@@ -433,7 +451,7 @@ Sidebar user row opens a popover profile menu (profiles list, Go to home, Accoun
 
 ## 2026-04-11 — PR #9 — design lab: 404 + ErrorBoundary + tooltips + DevTools + split panes
 
-NotFound page (atmospheric grain + radial red-black gradient, ghost "404" in Bebas Neue, Go-back + Browse-library actions). ErrorBoundary wraps full app above `<BrowserRouter>` — dev mode with full stack trace + copy-to-clipboard, prod mode with friendly "Something went wrong". Global loading bar (3px fixed, three-phase state machine `loading → completing → idle`, `transform: scaleX()` no-reflow animation, `LoadingBarProvider` counts active loaders). DevTools kill switch — `DevPanel` floating panel that force-throws render errors from registered targets; correctly handles React 18 concurrent-mode retry. Resizable split panes via `useSplitResize` hook.
+NotFound page (atmospheric grain + radial gradient, ghost "404" in display font, Go-back + Browse-library actions). ErrorBoundary wraps full app above `<BrowserRouter>` — dev mode with full stack trace + copy-to-clipboard, prod mode with friendly "Something went wrong". Global loading bar (3px fixed, three-phase state machine `loading → completing → idle`, `transform: scaleX()` no-reflow animation, `LoadingBarProvider` counts active loaders). DevTools kill switch — `DevPanel` floating panel that force-throws render errors from registered targets; correctly handles React 18 concurrent-mode retry. Resizable split panes via `useSplitResize` hook.
 
 **Files:** `design/src/pages/{NotFound,ErrorBoundary}/`, `design/src/components/{LoadingBar,DevPanel}/`, `design/src/hooks/useSplitResize.ts`
 **Related Commit.md entry:** _pre-Commit.md era; merge SHA `b395b2c`_
@@ -451,7 +469,7 @@ NotFound page (atmospheric grain + radial red-black gradient, ghost "404" in Beb
 
 ## 2026-04-11 — PR #6 — design lab: UI spec + implement-design skill + annotated source
 
-Authoritative UI spec for the Moran client UI authored as a runnable React prototype using mock data. `design/README.md` covers page layouts, pane routing scheme, player state machine, inactivity hide, visual details, component-to-production mapping. `docs/ui-design-spec.md` is the implementation reference for the main repo. New `/implement-design` skill — step-by-step guide for porting design lab pages to production with data-layer mapping tables, UX invariants checklist, visual detail verification list. Three pages prototyped: Profiles (pane routing via `useSearchParams`), Library (poster grid, search, pane), Player (idle → loading → playing state machine, 3s inactivity hide, `navigate(-1)` back).
+Authoritative UI spec for the xstream client authored as a runnable React prototype using mock data. `design/README.md` covers page layouts, pane routing scheme, player state machine, inactivity hide, visual details, component-to-production mapping. `docs/ui-design-spec.md` is the implementation reference for the main repo. New `/implement-design` skill — step-by-step guide for porting design lab pages to production with data-layer mapping tables, UX invariants checklist, visual detail verification list. Three pages prototyped: Profiles (pane routing via `useSearchParams`), Library (poster grid, search, pane), Player (idle → loading → playing state machine, 3s inactivity hide, `navigate(-1)` back).
 
 **Files:** `design/`, `docs/ui-design-spec.md`, `.claude/commands/implement-design.md`
 **Related Commit.md entry:** _pre-Commit.md era; merge SHA `cbdc5f4`_

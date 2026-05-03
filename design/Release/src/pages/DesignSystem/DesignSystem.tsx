@@ -30,7 +30,7 @@ export const DesignSystem: FC = () => {
       <div className={styles.hero}>Xstream — visual language.</div>
       <div className={styles.intro}>
         Token map, type scale, spacing, and seven candidate logos for the
-        post-Moran identity. Pick a logo and update <code>Logo02</code> in{" "}
+        Xstream identity. Pick a logo and update <code>Logo02</code> in{" "}
         <code>components/Logo/index.tsx</code> + the AppHeader brand glyph
         once you are ready to standardize.
       </div>
