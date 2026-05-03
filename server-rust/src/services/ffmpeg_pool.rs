@@ -104,9 +104,15 @@ pub struct CapSnapshot {
     pub dying_job_ids: Vec<String>,
 }
 
-#[derive(Clone)]
 struct LivePid {
     pid: u32,
+    /// Held while the job occupies a concurrency slot. Taken out in
+    /// `kill_job` when the job is moved to `dying` so the slot is
+    /// released the moment we decide to kill — not when the kernel
+    /// finally reaps the child (~100–500 ms later). Without this,
+    /// post-seek transcode requests can hit `CAPACITY_EXHAUSTED`
+    /// while the dying jobs' slots are nominally still held.
+    permit: Option<OwnedSemaphorePermit>,
 }
 
 #[derive(Clone)]
@@ -227,7 +233,15 @@ impl FfmpegPool {
         let pid = child.id().unwrap_or(0);
 
         // Register before we start the wait so kill_job can find it.
-        self.inner.live.insert(job_id.clone(), LivePid { pid });
+        // The permit moves into LivePid so kill_job can release the
+        // slot immediately when the job's last consumer disconnects.
+        self.inner.live.insert(
+            job_id.clone(),
+            LivePid {
+                pid,
+                permit: Some(permit),
+            },
+        );
 
         let stderr_buf: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
         let stderr_task = if let Some(stderr) = child.stderr.take() {
@@ -259,8 +273,10 @@ impl FfmpegPool {
         }
         let was_dying = self.inner.dying.remove(&job_id).is_some();
         let kill_reason = self.inner.kill_reasons.remove(&job_id).map(|(_, v)| v);
+        // Drops whatever permit is still in LivePid. If `kill_job`
+        // already released the slot (the seek-during-playback path),
+        // permit is None; otherwise it drops here at natural exit.
         self.inner.live.remove(&job_id);
-        drop(permit);
 
         let stderr_tail = stderr_tail(&stderr_buf);
         let status = exit_status?;
@@ -297,7 +313,19 @@ impl FfmpegPool {
         info!(job_id = %id, kill_reason = reason.as_wire_str(),
               "Killing ffmpeg — {}", reason.as_wire_str());
 
-        let pid = self.inner.live.get(id).map(|r| r.pid);
+        // Take the permit out of LivePid and drop it RIGHT NOW. The
+        // ffmpeg child still runs until SIGTERM/SIGKILL and the
+        // kernel reaps it, but the dying job no longer occupies a
+        // concurrency slot. New post-seek requests can succeed
+        // immediately instead of bouncing on `CAPACITY_EXHAUSTED`
+        // for ~300 ms while waitpid resolves. See trace
+        // `ca1a1bf525b5f123836979e9d631f6a3` for the symptom.
+        let pid = if let Some(mut entry) = self.inner.live.get_mut(id) {
+            let _ = entry.permit.take();
+            Some(entry.pid)
+        } else {
+            None
+        };
         if let Some(pid) = pid {
             send_signal(pid, Signal::Term);
         }
@@ -310,11 +338,14 @@ impl FfmpegPool {
             .insert(id.to_string(), cancel.clone());
         let force_kill_ms = self.inner.config.force_kill_timeout_ms;
         let id_owned = id.to_string();
-        let live = self.inner.live.clone();
+        // Cloning the inner Arc keeps the spawned task's reference
+        // cheap. We can't clone the DashMap directly any more —
+        // LivePid holds an `OwnedSemaphorePermit` which isn't Clone.
+        let inner = self.inner.clone();
         tokio::spawn(async move {
             tokio::select! {
                 _ = sleep(Duration::from_millis(force_kill_ms)) => {
-                    if let Some(r) = live.get(&id_owned) {
+                    if let Some(r) = inner.live.get(&id_owned) {
                         warn!(
                             job_id = %id_owned,
                             sigterm_timeout_ms = force_kill_ms,
@@ -504,6 +535,50 @@ mod tests {
             ExitOutcome::Killed { reason, .. } => {
                 assert_eq!(reason, KillReason::ClientDisconnected);
             }
+            other => panic!("expected Killed, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn kill_job_releases_slot_immediately_for_post_seek_reuse() {
+        // Regression for trace ca1a1bf5… — when a user seeks during
+        // playback, the old foreground+prefetch jobs receive
+        // `client_disconnected` and `kill_job` is called. Before this
+        // fix the slot stayed claimed until ffmpeg's child fully exited
+        // (~hundreds of ms post-SIGKILL), so a fresh post-seek
+        // transcode request could hit `CAPACITY_EXHAUSTED`. Now
+        // `kill_job` drops the permit immediately; the slot is free as
+        // soon as we decide to kill, even though `run_to_completion`
+        // is still waiting on waitpid.
+        let pool = FfmpegPool::new(cfg(1));
+        let reservation = pool.try_reserve_slot("sleeper".into()).expect("slot");
+        // Cap is 1; second reservation while the sleeper is "live" is
+        // expected to fail.
+        let pool_for_run = pool.clone();
+        let pool_for_kill = pool.clone();
+        let pool_for_check = pool.clone();
+        let args = [OsStr::new("30").to_owned()];
+        let run_fut = pool_for_run.run_to_completion(reservation, Path::new("/bin/sleep"), &args);
+        let kill_and_reuse_fut = async move {
+            // Let the sleeper register as live.
+            tokio::time::sleep(Duration::from_millis(80)).await;
+            assert!(
+                pool_for_check.try_reserve_slot("blocked".into()).is_none(),
+                "while sleeper is live, second reservation must fail (cap=1)"
+            );
+            pool_for_kill.kill_job("sleeper", KillReason::ClientDisconnected);
+            // Slot must be free immediately after kill_job returns —
+            // not after the child reaps. The sleeper's run_to_completion
+            // task is still alive in the background; that's fine.
+            let r = pool_for_check
+                .try_reserve_slot("postseek".into())
+                .expect("slot must be free immediately after kill_job");
+            // Drop without spawning so we don't block the test.
+            drop(r);
+        };
+        let (result, _) = tokio::join!(run_fut, kill_and_reuse_fut);
+        match result.expect("run") {
+            ExitOutcome::Killed { .. } => {}
             other => panic!("expected Killed, got {other:?}"),
         }
     }
