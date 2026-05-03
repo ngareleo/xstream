@@ -277,17 +277,13 @@ fn parse_box_header(bytes: &[u8]) -> Result<(usize, [u8; 4], usize), TailError> 
 /// rename. The segment watcher upstream filters by exact filename, so
 /// only the rename's CREATE event is observed.
 async fn write_atomic(final_path: &Path, bytes: &[u8]) -> Result<(), TailError> {
-    let tmp_path = final_path.with_extension(
-        format!(
-            "{}.tmp",
-            final_path
-                .extension()
-                .map(|e| e.to_string_lossy().into_owned())
-                .unwrap_or_default()
-        )
-        .trim_start_matches('.')
-        .to_string(),
-    );
+    // Append `.tmp` to the full filename — so `init.mp4` → `init.mp4.tmp`.
+    // Cheaper and more obvious than `with_extension` juggling, and the
+    // segment watcher's exact-filename filter ignores anything ending in
+    // `.tmp` either way.
+    let mut tmp_os = final_path.as_os_str().to_owned();
+    tmp_os.push(".tmp");
+    let tmp_path = PathBuf::from(tmp_os);
     let mut f = File::create(&tmp_path).await.map_err(TailError::Io)?;
     f.write_all(bytes).await.map_err(TailError::Io)?;
     f.sync_data().await.map_err(TailError::Io)?;
