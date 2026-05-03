@@ -8,8 +8,8 @@
  *            Includes a "Preview customer view" toggle so devs can see exactly
  *            what a customer would see without switching to prod.
  *
- *   PROD  — customer-facing help page: friendly guidance, actionable steps,
- *            and a support contact. No internal details exposed.
+ *   PROD  — renders the M9 ErrorPage (red-bordered identity, optional stack
+ *            details, "← Back to library" + "Retry" CTAs).
  *
  * Usage — wrap the entire app in main.tsx:
  *   <ErrorBoundary>
@@ -20,7 +20,8 @@
 import { mergeClasses } from "@griffel/react";
 import { Component, type ErrorInfo, type FC, type ReactNode, useState } from "react";
 
-import { IconBug, IconChat, IconClose, IconRefresh, LogoShield } from "~/lib/icons.js";
+import { IconBug, IconRefresh } from "~/lib/icons.js";
+import ErrorPage from "~/pages/error-page/ErrorPage.js";
 import { getClientLogger } from "~/telemetry.js";
 
 import { strings } from "./ErrorBoundary.strings.js";
@@ -69,7 +70,11 @@ const DevErrorScreen: FC<{
             {strings.devPreviewBack}
           </button>
         </div>
-        <ProdErrorScreen onReset={onReset} />
+        <ErrorPage
+          error={error}
+          componentStack={errorInfo.componentStack ?? null}
+          onRetry={onReset}
+        />
       </div>
     );
   }
@@ -130,63 +135,6 @@ const DevErrorScreen: FC<{
   );
 };
 
-// ── ProdErrorScreen ───────────────────────────────────────────────────────────
-
-const ProdErrorScreen: FC<{ onReset: () => void }> = ({ onReset }) => {
-  const styles = useErrorBoundaryStyles();
-  return (
-    <div className={mergeClasses(styles.root, styles.prodRoot)}>
-      <div className={styles.grain} />
-      <div className={styles.prodBody}>
-        <LogoShield />
-        <div className={styles.prodTitle}>{strings.prodTitle}</div>
-        <div className={styles.prodSub}>{strings.prodSub}</div>
-
-        <div className={styles.prodSteps}>
-          <div className={styles.prodStepLabel}>{strings.prodThingsToTry}</div>
-          <div className={styles.prodStep}>
-            <span className={styles.prodStepNum}>1</span>
-            <div className={styles.prodStepBody}>
-              <span className={styles.prodStepEmphasis}>{strings.prodStep1Label}</span>{" "}
-              {strings.prodStep1Body}
-            </div>
-          </div>
-          <div className={styles.prodStep}>
-            <span className={styles.prodStepNum}>2</span>
-            <div className={styles.prodStepBody}>
-              <span className={styles.prodStepEmphasis}>{strings.prodStep2Label}</span>{" "}
-              {strings.prodStep2Body}
-            </div>
-          </div>
-          <div className={styles.prodStep}>
-            <span className={styles.prodStepNum}>3</span>
-            <div className={styles.prodStepBody}>
-              <span className={styles.prodStepEmphasis}>{strings.prodStep3Label}</span>{" "}
-              {strings.prodStep3Body}
-            </div>
-          </div>
-        </div>
-
-        <div className={styles.prodActions}>
-          <button className={styles.btnPrimary} onClick={onReset}>
-            <IconRefresh size={14} />
-            {strings.prodTryAgain}
-          </button>
-          <button className={styles.btnGhost} onClick={() => window.location.reload()}>
-            <IconClose size={14} />
-            {strings.prodReloadPage}
-          </button>
-        </div>
-
-        <div className={styles.prodContact}>
-          <IconChat size={13} />
-          <span>{strings.prodContact}</span>
-        </div>
-      </div>
-    </div>
-  );
-};
-
 // ── ErrorBoundary (class) ─────────────────────────────────────────────────────
 
 interface State {
@@ -235,6 +183,12 @@ export class ErrorBoundary extends Component<Props, State> {
       );
     }
 
-    return <ProdErrorScreen onReset={this.handleReset} />;
+    return (
+      <ErrorPage
+        error={error}
+        componentStack={errorInfo?.componentStack ?? null}
+        onRetry={this.handleReset}
+      />
+    );
   }
 }

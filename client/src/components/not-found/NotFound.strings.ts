@@ -3,8 +3,10 @@ import LocalizedStrings from "react-localization";
 export const strings = new LocalizedStrings({
   en: {
     code: "404",
-    title: "Page not found",
-    subtitle: "The page you\u2019re looking for doesn\u2019t exist or has been moved.",
+    eyebrow: "· NOT FOUND",
+    title: "Nothing here.",
+    subtitle:
+      "The page you tried to reach has moved or never existed. Head back to the library to keep browsing.",
     goBack: "Go back",
     browseLibrary: "Browse library",
   },

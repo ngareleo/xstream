@@ -41,6 +41,9 @@ const NotFoundPage = lazy(() =>
 const GoodbyePage = lazy(
   () => import(/* webpackChunkName: "GoodbyePage" */ "./pages/goodbye-page/GoodbyePage.js")
 );
+const ErrorPage = lazy(
+  () => import(/* webpackChunkName: "ErrorPage" */ "./pages/error-page/ErrorPage.js")
+);
 
 const ShellLayout: FC = () => (
   <AppShell>
@@ -83,6 +86,14 @@ export const router: ReturnType<typeof createBrowserRouter> = createBrowserRoute
           <GoodbyePage />
         </Suspense>
       </ErrorBoundary>
+    ),
+  },
+  {
+    path: "/error",
+    element: (
+      <Suspense fallback={null}>
+        <ErrorPage />
+      </Suspense>
     ),
   },
 ]);
