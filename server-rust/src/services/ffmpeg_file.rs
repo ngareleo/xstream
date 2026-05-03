@@ -1033,7 +1033,10 @@ mod tests {
         // segment_duration (1080p uses 2 s = 2_000_000 µs).
         assert_window_eq(&opts, &["-frag_duration", "2000000"]);
         // The growing-file output path is the LAST positional arg.
-        assert_eq!(opts.last().map(String::as_str), Some("/abs/path/chunk.fmp4"));
+        assert_eq!(
+            opts.last().map(String::as_str),
+            Some("/abs/path/chunk.fmp4")
+        );
     }
 
     #[test]

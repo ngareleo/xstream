@@ -87,7 +87,9 @@ pub async fn run(
     loop {
         // Drain whatever has been written since last read.
         loop {
-            file.seek(SeekFrom::Start(read_pos)).await.map_err(TailError::Io)?;
+            file.seek(SeekFrom::Start(read_pos))
+                .await
+                .map_err(TailError::Io)?;
             let n = file.read(&mut buf).await.map_err(TailError::Io)?;
             if n == 0 {
                 break;
@@ -103,7 +105,9 @@ pub async fn run(
         // last read and the signal, then exit.
         match done.try_recv() {
             Ok(()) | Err(oneshot::error::TryRecvError::Closed) => {
-                file.seek(SeekFrom::Start(read_pos)).await.map_err(TailError::Io)?;
+                file.seek(SeekFrom::Start(read_pos))
+                    .await
+                    .map_err(TailError::Io)?;
                 let n = file.read(&mut buf).await.map_err(TailError::Io)?;
                 if n > 0 {
                     state.feed(&buf[..n]);
