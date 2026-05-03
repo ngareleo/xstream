@@ -15,6 +15,13 @@ Entry shape (each entry ends with the divider line described above):
 
 <!-- ENTRIES BELOW — newest first; each ends with a bare `---` line. The architect's next invocation will treat the no-entries state as the first-run case and prepend a bootstrap entry at HEAD. -->
 
+## [pending-commit] — 2026-05-04 — OBS-STDERR-001: silent-failure detection + cascade (same-session curation)
+
+**Files:** `docs/architecture/Observability/server/00-Spans.md`, `docs/server/Hardware-Acceleration/01-HDR-Pad-Artifact.md`, `docs/todo.md`
+**Why:** Curator sync: OBS-STDERR-001 landed on feat/library-film-entity. Silent-failure detection (ffmpeg clean exit + zero segments) now triggers cascade fallback; per-tier `transcode_silent_failure` events carry `tier`, `ffmpeg_stderr` tail, `chunk_start_s`, `chunk_end_s` for Seq filterability; cascade exhaustion emits distinct `transcode_silent_failure_cascade_exhausted` event. HDR-Pad-Artifact §VAAPI rewritten: cascade is now the structural mitigation (no longer pending). OBS-STDERR-001 item removed from todo.md.
+
+---
+
 ## bf710b6 — 2026-05-04 — Chunk-duration ramp controller (same-session curation)
 
 **Files:** `docs/SUMMARY.md`, `docs/architecture/Streaming/00-Protocol.md`, `docs/architecture/Streaming/01-Playback-Scenarios.md`, `docs/architecture/Streaming/02-Chunk-Pipeline-Invariants.md`, `docs/client/Config/00-ClientConfig.md`, `docs/client/Feature-Flags/00-Registry.md`, `docs/architecture/Observability/client/00-Spans.md`, `docs/server/Hardware-Acceleration/01-HDR-Pad-Artifact.md`, `docs/todo.md`

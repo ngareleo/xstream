@@ -37,17 +37,20 @@ Key differences for HDR:
 2. **No `pad_vaapi` for HDR** — the driver rejects the padded surface downstream. HDR output may have variable dimensions (e.g. 3840×1604 for 2.39:1), handled transparently by the `<video>` element's `object-fit: contain`.
 3. **Tag the surface via `scale_vaapi out_color_*`** — this flows the BT.709 metadata through the encoder's VUI without any bridging scaler. DO NOT set `-colorspace bt709 -color_primaries bt709 -color_trc bt709` as output flags (tried in commit `cf6b6c1`, confirmed to break every HDR encode — see the "libva `-38`" row in the symptoms table).
 
-## VAAPI silent-success failures — outside the cascade
+## VAAPI silent-success failures — detection and cascade
 
-The three-tier cascade in `server-rust/src/services/chunker.rs` only catches **encoder errors with non-zero exit codes**. There is a second class of VAAPI failure that bypasses it entirely: ffmpeg exits zero, `transcode_complete` fires, but `segment_count: 0`. No error event, no fallback, no retry.
+The three-tier cascade in `server-rust/src/services/chunker.rs` detects two failure shapes and cascades through fallback strategies:
 
-Known instance: `-ss 0 -t 30` on VAAPI HDR 4K (reproduced traces `1bac05bd…`, `b3dbbc34…`, `3d0f0d6f…`). The same file works at `-ss 0 -t 300` and at `-ss N -t 30` for N > 0. Root cause is unknown — likely a flush/pipeline-depth interaction between `tonemap_vaapi` + `scale_vaapi` + H.264 VAAPI encoder on a short window starting at the file head. ffmpeg stderr is not captured in OTel today, so the cause remains opaque.
+1. **Non-zero exit code** — ffmpeg fails with exit code ≠ 0. The original error path.
+2. **Zero-exit silent failure** — ffmpeg exits cleanly (exit code 0) but produces zero segments (`segment_count: 0`).
 
-**Current status (post-ramp-controller):** The ramp-controller model now reaches the bug surface directly — the first chunk uses `chunkRampS[0]` = 10 s by default, which is as short or shorter than the old 30 s workaround. The user explicitly accepted this trade-off during the ramp design (pre-prod phase allows breaking changes; embrace them). **Verification required before merge:** test on a 4K HDR fixture to confirm no regression.
+Silent failures are now detected post-encode and trigger the same cascade as non-zero exits — they're not treated as successful completion. The chunker posts a `transcode_silent_failure` event with `tier`, `ffmpeg_stderr` (4 KB tail from the process stderr buffer), `chunk_start_s`, `chunk_end_s`, and cascades to the next fallback tier.
 
-**If 4K HDR regresses:** The declared tech-debt escalation is **OBS-STDERR-001** (see `docs/todo.md`). Capture ffmpeg stderr in the `transcode.job` span (a `stderr_tail` attribute already exists for cascade-error events but not for `transcode_complete`), then detect `segment_count == 0` after a clean exit and force the cascade to fall through to the next tier (software fallback). This provides structural recovery without special-casing the ramp logic and without weakening the cold-start win.
+Known instance: `-ss 0 -t 10`...`-t 30` on VAAPI HDR 4K (reproduced traces `1bac05bd…`, `b3dbbc34…`, `3d0f0d6f…`). The same file works at `-ss 0 -t 300` and at `-ss N -t 30` for N > 0. Root cause is unknown — likely a flush/pipeline-depth interaction between `tonemap_vaapi` + `scale_vaapi` + H.264 VAAPI encoder on a short window starting at the file head.
 
-**Why not revert to the old workaround:** The old 300 s / 30 s two-tier model disabled eager-prefetch on cold-start (chunk N+1 wouldn't fire until ~210 s into chunk N), costing tens of seconds of seek latency. The ramp model's cold-start parity across all anchor points (session start, seek, MSE recovery, resolution switch) is the load-bearing design. Reverting would sacrifice the seek UX to work around a driver edge-case; instead we fix it structurally via OBS-STDERR-001.
+**Current status (post-ramp-controller):** The ramp-controller model reaches the bug surface directly — the first chunk uses `chunkRampS[0]` = 10 s by default, which is as short or shorter than the old 30 s workaround. **OBS-STDERR-001 is now the standing mitigation.** When a chunk produces zero segments on any tier, the cascade detects it and falls back to the next tier. Silent failures on FastVaapi → `NeedsSwPad` cache write + SwPadVaapi retry. Silent failures on FastVaapi HDR → straight to Software (HDR skips tier 2). Silent failures on SwPadVaapi → `HwUnsafe` cache write + Software retry. Silent failures on Software → cascade exhausted, surfaced as fatal. This provides structural recovery without special-casing the ramp logic and without weakening the cold-start win.
+
+**Why this works:** The old 300 s / 30 s two-tier model disabled eager-prefetch on cold-start (chunk N+1 wouldn't fire until ~210 s into chunk N), costing tens of seconds of seek latency. The ramp model's cold-start parity across all anchor points (session start, seek, MSE recovery, resolution switch) is the load-bearing design. Cascading on silent failure maintains that parity while structurally catching the edge-case that was previously a user-visible error.
 
 
 

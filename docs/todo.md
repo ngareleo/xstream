@@ -12,7 +12,6 @@
 
 - [ ] **STREAM-001** Stream from partial segments: today the chunker waits for fsync before flagging a segment ready. With buffered file reads we could start sending a partially-written `.m4s` as soon as its header is available — reducing per-segment latency. Significant complexity; defer until chunk model is stable.
 
-- [ ] **OBS-STDERR-001** Capture ffmpeg stderr in `transcode_complete` span event: today `stderr_tail` is only attached to cascade-failure events (`transcode_fallback_to_software` etc.), not to the final `transcode_complete` event. Add it to `transcode_complete` too so silent failures (`segment_count: 0`, exit code 0) are diagnosable without a separate stderr stream. Secondary benefit: detect `segment_count == 0` after a clean exit and force the cascade to fall through to the next tier (structural fix for the VAAPI HDR `-ss 0 -t SHORT` silent-zero-output bug). See `docs/server/Hardware-Acceleration/01-HDR-Pad-Artifact.md` § "VAAPI silent-success failures".
 
 ## Cache / Storage
 
