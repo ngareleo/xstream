@@ -8,6 +8,7 @@
 //! diff easy to read when something drifts.
 
 pub mod episode;
+mod film;
 mod library;
 mod misc;
 mod node;
@@ -19,6 +20,7 @@ mod video;
 mod watchlist;
 
 pub use episode::Episode;
+pub use film::{Film, FilmConnection, FilmEdge};
 pub use library::{Library, LibraryStats};
 pub use misc::{DirEntry, LibraryScanProgress, LibraryScanUpdate, SettingEntry};
 pub use node::{Node, PageInfo};

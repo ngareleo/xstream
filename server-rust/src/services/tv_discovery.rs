@@ -149,6 +149,9 @@ async fn discover_one_show(
         // collide with a real file's `<size>:<sha1>` form.
         content_fingerprint: format!("show:{show_id}"),
         native_resolution: None,
+        // TV show parents and episode files are not Films — film_id stays NULL.
+        film_id: None,
+        role: "main".to_string(),
     };
     upsert_video(&ctx.db, &show_row)?;
 
@@ -762,6 +765,8 @@ mod tests {
             scanned_at: "2026-01-01T00:00:00.000Z".to_string(),
             content_fingerprint: format!("show:{show_id}"),
             native_resolution: None,
+            film_id: None,
+            role: "main".to_string(),
         };
         upsert_video(db, &row).expect("upsert show");
     }
@@ -838,6 +843,8 @@ mod tests {
             scanned_at: "2026-01-01T00:00:00.000Z".to_string(),
             content_fingerprint: format!("1000000:{}", file_path.display()),
             native_resolution: Some("1080p".to_string()),
+            film_id: None,
+            role: "main".to_string(),
         };
         upsert_video(db, &row).expect("upsert episode video");
     }

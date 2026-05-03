@@ -14,9 +14,12 @@ Full-viewport film detail view with animated hero poster, metadata, and play/clo
 | Prop | Type | Notes |
 |---|---|---|
 | `film` | `FilmShape` | The selected film object. |
+| `copies` | `FilmCopyNode[] \| undefined` | Video copies for this film (from `film.copies`). Optional; not all films have multiple copies. |
 | `suggestions` | `Film[]` | Films for the "You might also like" carousel. |
 | `onClose` | `() => void` | Back pill / Close button callback. |
 | `onSelectSuggestion` | `(id: string) => void` | Suggestion tile click (optional; defaults to `/player/:id`). |
+| `selectedCopyId` | `string \| undefined` | The user's selected copy ID (if multiple copies are available). Defaults to `film.bestCopy.id`. |
+| `onSelectCopy` | `(videoId: string) => void` | Callback when the user picks a different copy from the variant selector. |
 
 ## Layout & styles
 
@@ -72,7 +75,7 @@ Full-viewport film detail view with animated hero poster, metadata, and play/clo
 #### Title
 
 - Anton 72px, `color: colorText`, **`lineHeight: 0.95`**, `letterSpacing: -0.02em`, uppercase.
-- Renders `film.title || "Unmatched file"`.
+- Prefers `data.metadata?.title` (OMDb-sanitised) over `data.title` (filename fallback). Renders `metadata.title ?? title || "Unmatched file"`.
 
 #### Meta row
 
@@ -99,7 +102,15 @@ Full-viewport film detail view with animated hero poster, metadata, and play/clo
 
 #### Actions row
 
-- Flex row, `columnGap: 20px`, `marginTop: 8px`.
+- Flex row, `columnGap: 12px`, `alignItems: center`, `marginTop: 8px`.
+
+##### Variant selector (FilmVariants component, conditional)
+
+- **Rendered only when `copies && copies.length > 1`.**
+- Mounted as `<FilmVariants copies={copies} selectedCopyId={selectedCopyId} onSelectCopy={onSelectCopy} />`.
+- Displays a dropdown button showing the current copy's resolution (e.g., "4K", "1080p").
+- Lets the user pick which encoding to play if multiple main-role videos exist.
+- See [`FilmVariants.md`](FilmVariants.md) for full spec.
 
 ##### Play CTA (glass pill)
 

@@ -109,6 +109,59 @@ type VideoEdge {
   cursor: String!
 }
 
+# ── Watchlist ─────────────────────────────────────────────────────────────────
+
+type WatchlistItem implements Node {
+  id: ID!
+  film: Film!
+  addedAt: String!
+}
+
+type WatchProgress implements Node {
+  id: ID!
+  film: Film!
+  video: Video!
+  currentTimeSeconds: Float!
+  durationSeconds: Float!
+  updatedAt: String!
+}
+
+# ── Film (Movies Only) ────────────────────────────────────────────────────────
+
+type Film implements Node {
+  id: ID!
+  title: String!
+  year: Int
+  genre: String
+  director: String
+  plot: String
+  """
+  The primary video to display as the poster. Selected via the first role='main'
+  video, or the highest-resolution/bitrate video if multiple role='main' exist.
+  """
+  bestCopy: Video!
+  """
+  All videos belonging to this film, ordered by role ('main' first),
+  then resolution (highest first), then bitrate (highest first).
+  """
+  copies: [Video!]!
+  """
+  Convenience field: copies filtered to role='extra'. Empty if no extras exist.
+  """
+  extras: [Video!]!
+}
+
+type FilmConnection {
+  edges: [FilmEdge!]!
+  pageInfo: PageInfo!
+  totalCount: Int!
+}
+
+type FilmEdge {
+  node: Film!
+  cursor: String!
+}
+
 # ── Transcode Job ─────────────────────────────────────────────────────────────
 
 enum Resolution {
@@ -179,6 +232,14 @@ type Query {
   node(id: ID!): Node
   libraries: [Library!]!
   video(id: ID!): Video
+  """
+  List all films in a library (movies only). Returns cursor-based paginated connection.
+  """
+  films(first: Int, after: String): FilmConnection!
+  """
+  Fetch a single film by global ID.
+  """
+  film(id: ID!): Film
   transcodeJob(id: ID!): TranscodeJob
 }
 
@@ -190,6 +251,22 @@ type Mutation {
     startTimeSeconds: Float
     endTimeSeconds: Float
   ): StartTranscodeResult!
+  """
+  Add a film to the user's watchlist. Idempotent — adding the same film twice is a no-op.
+  """
+  addFilmToWatchlist(filmId: ID!): WatchlistItem!
+  """
+  Remove a film from the watchlist.
+  """
+  removeFilmFromWatchlist(filmId: ID!): Boolean!
+  """
+  Update the user's playback progress on a film. Upserts a watch_progress row.
+  """
+  updateWatchProgress(
+    filmId: ID!
+    videoId: ID!
+    currentTimeSeconds: Float!
+  ): WatchProgress!
 }
 
 type LibraryScanUpdate {

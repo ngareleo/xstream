@@ -19,6 +19,16 @@ pub fn run(conn: &Connection) -> rusqlite::Result<()> {
           env              TEXT NOT NULL,
           video_extensions TEXT NOT NULL DEFAULT '[]'
         );
+        CREATE TABLE IF NOT EXISTS films (
+          id                  TEXT PRIMARY KEY,
+          imdb_id             TEXT UNIQUE,
+          parsed_title_key    TEXT UNIQUE,
+          title               TEXT NOT NULL,
+          year                INTEGER,
+          created_at          TEXT NOT NULL,
+          CHECK (imdb_id IS NOT NULL OR parsed_title_key IS NOT NULL)
+        );
+        CREATE INDEX IF NOT EXISTS films_imdb ON films(imdb_id);
         CREATE TABLE IF NOT EXISTS videos (
           id                   TEXT PRIMARY KEY,
           library_id           TEXT NOT NULL REFERENCES libraries(id) ON DELETE CASCADE,
@@ -30,9 +40,12 @@ pub fn run(conn: &Connection) -> rusqlite::Result<()> {
           bitrate              INTEGER NOT NULL,
           scanned_at           TEXT NOT NULL,
           content_fingerprint  TEXT NOT NULL,
-          native_resolution    TEXT
+          native_resolution    TEXT,
+          film_id              TEXT REFERENCES films(id) ON DELETE SET NULL,
+          role                 TEXT NOT NULL DEFAULT 'main' CHECK (role IN ('main', 'extra'))
         );
         CREATE INDEX IF NOT EXISTS videos_library_id ON videos(library_id);
+        CREATE INDEX IF NOT EXISTS videos_film_id ON videos(film_id);
         CREATE TABLE IF NOT EXISTS video_streams (
           id           INTEGER PRIMARY KEY AUTOINCREMENT,
           video_id     TEXT NOT NULL REFERENCES videos(id) ON DELETE CASCADE,
@@ -84,13 +97,13 @@ pub fn run(conn: &Connection) -> rusqlite::Result<()> {
         );
         CREATE TABLE IF NOT EXISTS watchlist_items (
           id               TEXT PRIMARY KEY,
-          video_id         TEXT NOT NULL REFERENCES videos(id) ON DELETE CASCADE,
+          film_id          TEXT NOT NULL REFERENCES films(id) ON DELETE CASCADE,
           added_at         TEXT NOT NULL,
           progress_seconds REAL NOT NULL DEFAULT 0,
           notes            TEXT,
-          UNIQUE(video_id)
+          UNIQUE(film_id)
         );
-        CREATE INDEX IF NOT EXISTS watchlist_video_id ON watchlist_items(video_id);
+        CREATE INDEX IF NOT EXISTS watchlist_film_id ON watchlist_items(film_id);
         CREATE TABLE IF NOT EXISTS user_settings (
           key   TEXT PRIMARY KEY,
           value TEXT NOT NULL

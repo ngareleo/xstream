@@ -35,6 +35,33 @@ Entry shape (the entry ends with a single line containing exactly three hyphens 
 
 <!-- ENTRIES BELOW — newest first; each ends with a bare three-hyphen divider line. -->
 
+## 2026-05-03 — Film entity architecture: logical dedup layer for movies
+
+The Film entity landed on feat/library-film-entity, addressing the 5-duplicate-movie problem by introducing a logical layer above Videos. One Film owns 1+ video copies (different encodes of the same movie), dedup'd by two keys: `imdb_id` (authoritative, post-OMDb-match) and `parsed_title_key` (pre-OMDb, `<title>|<year>`). The scanner now runs three passes: (1) file walk (unchanged), (2) resolve_films_for_library (new, movies-only, groups files by MovieUnit and links via parsed_title_key), (3) auto_match_library with merge (new, repoints duplicate Films when both match the same OMDb ID). TV is unchanged (shows remain video-as-series). Watchlist and watch_progress are now film-keyed; the variant picker (FilmVariants component) lets users choose which copy to play when multiple main-role videos exist. The database schema adds `films` table, `videos.film_id`, `videos.role`, `watchlist_items.film_id`, and `watch_progress.film_id`. GraphQL adds `Query.films`, `Query.film`, `Film` type with `bestCopy`/`copies`/`extras` fields, and new mutations `addFilmToWatchlist`, `removeFilmFromWatchlist`, `updateWatchProgress`. Nine doc files updated or created to cover architecture, DB schema, GraphQL surface, and the new FilmVariants + updated FilmDetailsOverlay + Library page specs. Forward-only migration; user re-scans to populate the logical layer.
+
+**Files:** `docs/architecture/Library-Scan/02-Film-Entity.md` (new), `docs/architecture/Library-Scan/README.md`, `docs/server/DB-Schema/00-Tables.md` (added films + watchlist_items + watch_progress sections), `docs/server/GraphQL-Schema/00-Surface.md`, `docs/client/Components/FilmVariants.md` (new), `docs/client/Components/FilmDetailsOverlay.md`, `docs/client/Components/Library.md`, `docs/client/Components/README.md`, `docs/INDEX.md`
+**Related Commit.md entry:** `(pending Film entity merge)`
+
+---
+
+## 2026-05-03 — AppHeader spec refinement: scan button holdover mechanism
+
+The scan button was given a 2-second click-triggered holdover in the code to ensure users see visual feedback even when the `scanLibraries` mutation resolves in < 200 ms (as it typically does). The spec entry from `b594485` attempted to document the GraphQL mutation wiring but incompletely stated "No timeout; mutation lifecycle is the authority," which was inaccurate. The current spec now clearly documents the dual-state machine: spin runs while `mutationPending || spinHoldover` is true, with `spinHoldover` being a `useState` flag set on click and cleared by `setTimeout` after 2000 ms. This is a refinement with no code changes in this session — the design-lab reference implementation in `design/Release/src/components/AppHeader/AppHeader.tsx` (lines 28–32) has always used this 2 s mock, and the production code now matches it exactly. The spec was updated to catch up with the code's current state.
+
+**Files:** `docs/client/Components/AppHeader.md`
+**Related Commit.md entry:** `(current HEAD)`
+
+---
+
+## 2026-05-03 — Component specs curation: AppHeader, FilmDetailsOverlay, VideoArea
+
+Four bug-fix commits landed in parallel (AppHeader scan → mutation wiring, FilmDetailsOverlay OMDb title preference, VideoArea poster unmount on play, topbar status removal) and the three paired component specs were stale. AppHeader spec documented the old stub behavior (local spinning state + 2s timeout) instead of the new GraphQL-driven mutation lifecycle. FilmDetailsOverlay spec said the title was `data.title` but it now prefers `metadata?.title ?? data.title` (OMDb-sanitised). VideoArea spec documented opacity-fade + orphaned topbar status badge; code now unmounts the poster entirely when playing and the topbar contains only the back button. Updated all three specs to match current code and removed obsolete sections (resolution label helper, status badge note, fade-out subsection). The "Derived" data list now omits unused items (`resolution label`, `videoStream.width/height`). No index or architecture-level changes.
+
+**Files:** `docs/client/Components/AppHeader.md`, `docs/client/Components/FilmDetailsOverlay.md`, `docs/client/Components/VideoArea.md`
+**Related Commit.md entry:** `b594485`
+
+---
+
 ## 2026-05-03 — Pool permit lifecycle: release at kill, not at reap
 
 When a user seeks during active playback, the old foreground + prefetch transcode jobs receive `client_disconnected` and `kill_job` is called. Before this fix, the semaphore permit (which counts against the concurrency cap) was held until the OS reaped the child process, typically 100–500 ms after SIGTERM/SIGKILL. This caused post-seek transcode requests to fail with `CAPACITY_EXHAUSTED` even though the old jobs were already dead to the user's playback. The fix moves the permit into the `LivePid` struct at spawn time and extracts + drops it immediately in `kill_job`, the moment we decide to kill. If the job exits naturally (no kill), the permit is dropped at reap as before. This decouples "job is conceptually free" from "kernel has finished bookkeeping," making the cap responsive to user interactions. Updated pool architecture doc with permit-lifecycle section and added row 03 to FFmpeg-Caveats overview (marked as pool design, not an ffmpeg caveat, but surfaced for downstream awareness).

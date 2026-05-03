@@ -3,6 +3,7 @@
 
 use async_graphql::{Interface, SimpleObject, ID};
 
+use super::film::Film;
 use super::library::Library;
 use super::transcode_job::TranscodeJob;
 use super::video::Video;
@@ -13,6 +14,7 @@ use super::watchlist::WatchlistItem;
 pub enum Node {
     Library(Library),
     Video(Video),
+    Film(Film),
     WatchlistItem(WatchlistItem),
     TranscodeJob(TranscodeJob),
 }

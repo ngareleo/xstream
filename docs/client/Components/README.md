@@ -43,6 +43,7 @@ Outstanding work that hasn't yet shipped is tracked separately in
 | [EmptyLibrariesHero](EmptyLibrariesHero.md) | `client/src/components/empty-libraries-hero/` |
 | [FilmDetailsOverlay](FilmDetailsOverlay.md) | `client/src/components/film-details-overlay/` |
 | [FilmRow](FilmRow.md) | `client/src/components/film-row/` |
+| [FilmVariants](FilmVariants.md) | `client/src/components/film-variants/` |
 | [FilmTile](FilmTile.md) | `client/src/components/film-tile/` |
 | [FilterSlide](FilterSlide.md) | `client/src/components/filter-slide/` |
 | [LinkSearch](LinkSearch.md) | `client/src/components/link-search/` |

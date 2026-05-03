@@ -71,6 +71,7 @@ Sticky header floating above viewport content. Renders brand identity, navigatio
 - `aria-label`: `"Scanning library"` while scanning, `"Scan library"` otherwise.
 - `aria-busy={scanning}`.
 - While scanning, `.scanIcon` gets `animationName: { to: { transform: "rotate(360deg)" } }`, `1.1s linear infinite`.
+- **Behaviour**: Click handler calls the `scanLibraries` GraphQL mutation via `useMutation<AppHeaderScanMutation>`. The `scanning` state is driven by `mutationPending || spinHoldover`, where `spinHoldover` is a 2-second `useState` flag set on click. When the user clicks, `spinHoldover` becomes true and a `setTimeout` resets it to false after 2000 ms. The `mutationPending` flag reflects the Relay mutation's in-flight state. Together, this ensures the spinner runs for at least 2 seconds (so users see feedback on fast scans, typically < 200 ms) and continues to spin if the mutation is slow. When both are false, the spinner stops and the button re-enters idle state.
 
 #### Avatar & Account Menu
 
@@ -90,7 +91,7 @@ React Router's `<NavLink>` manages active state. The `::after` underline scales 
 
 ### Scan button
 
-Calls `handleScan()`. If already scanning, no-op. Sets `scanning = true`, then `setTimeout(() => setScanning(false), 2000)`. Icon gets the spinning class.
+Calls `handleScan()`. If already scanning or holdover is active, no-op. Fires the `scanLibraries` GraphQL mutation and sets `spinHoldover = true` for 2000 ms. The spin animation is driven by `mutationPending || spinHoldover` — so the animation runs until both are false. The button re-enables once the holdover expires; if the mutation is still in-flight, the animation continues uninterrupted.
 
 ## Notes
 

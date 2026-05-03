@@ -20,42 +20,76 @@ import {
   type FilterRow,
   pickSuggestions,
   timeOfDayGreeting,
-  toFilterRow,
+  toFilterRowFromFilm,
+  toFilterRowFromVideo,
 } from "./HomePageContent.utils";
 import { useHeroMode } from "./useHeroMode";
+
+// Two co-located fragments — one on Video (TV row + each Film copy) and
+// one on Film (movie row). Spread unmasked so the page reads fields off
+// the response directly without per-tile useFragment indirection.
+const _VIDEO_NODE_FRAGMENT = graphql`
+  fragment HomePageContent_videoNode on Video {
+    id
+    title
+    filename
+    mediaType
+    nativeResolution
+    metadata {
+      year
+      genre
+      director
+      posterUrl
+    }
+    videoStream {
+      codec
+    }
+    ...FilmTile_video
+    ...FilmDetailsOverlay_video
+  }
+`;
+
+const _FILM_NODE_FRAGMENT = graphql`
+  fragment HomePageContent_filmNode on Film {
+    id
+    title
+    year
+    metadata {
+      year
+      genre
+      director
+      posterUrl
+    }
+    bestCopy {
+      ...HomePageContent_videoNode @relay(mask: false)
+      fileSizeBytes
+      bitrate
+    }
+    copies {
+      ...HomePageContent_videoNode @relay(mask: false)
+      fileSizeBytes
+      bitrate
+    }
+  }
+`;
 
 const HOMEPAGE_QUERY = graphql`
   query HomePageContentQuery {
     libraries {
       id
     }
-    videos(first: 200) {
+    movies: films(first: 200) {
       edges {
         node {
-          id
-          title
-          filename
-          mediaType
-          nativeResolution
-          metadata {
-            year
-            genre
-            director
-            posterUrl
-          }
-          videoStream {
-            codec
-          }
-          ...FilmTile_video
-          ...FilmDetailsOverlay_video
+          ...HomePageContent_filmNode @relay(mask: false)
         }
       }
     }
-    watchlist {
-      id
-      progressSeconds
-      video {
-        id
+    tvShows: videos(first: 200, mediaType: TV_SHOWS) {
+      edges {
+        node {
+          ...HomePageContent_videoNode @relay(mask: false)
+        }
       }
     }
   }
@@ -71,22 +105,15 @@ export const HomePageContent: FC = () => {
   const [params, setParams] = useSearchParams();
   const hasLibraries = (data.libraries ?? []).length > 0;
 
-  const rows = useMemo<FilterRow[]>(
-    () => (data.videos?.edges ?? []).map((edge) => toFilterRow(edge.node)),
+  const movies = useMemo<FilterRow[]>(
+    () => (data.movies?.edges ?? []).map((edge) => toFilterRowFromFilm(edge.node)),
     [data]
   );
-
-  const watchlistEntries = useMemo(() => {
-    const items = data.watchlist ?? [];
-    const rowsById = new Map(rows.map((r) => [r.id, r]));
-    return items
-      .map((item) => {
-        const row = rowsById.get(item.video.id);
-        if (!row) return null;
-        return { id: item.id, row, progressSeconds: item.progressSeconds };
-      })
-      .filter((x): x is { id: string; row: FilterRow; progressSeconds: number } => x !== null);
-  }, [data, rows]);
+  const tvShows = useMemo<FilterRow[]>(
+    () => (data.tvShows?.edges ?? []).map((edge) => toFilterRowFromVideo(edge.node)),
+    [data]
+  );
+  const rows = useMemo<FilterRow[]>(() => [...movies, ...tvShows], [movies, tvShows]);
 
   const filmId = params.get("film");
   const selectedRow = filmId ? rows.find((r) => r.id === filmId) : undefined;
@@ -137,16 +164,6 @@ export const HomePageContent: FC = () => {
     [heroIndex]
   );
 
-  const continueWatching = useMemo(
-    () => watchlistEntries.filter((w) => w.progressSeconds > 0),
-    [watchlistEntries]
-  );
-  const watchlistRest = useMemo(
-    () => watchlistEntries.filter((w) => w.progressSeconds === 0),
-    [watchlistEntries]
-  );
-  const newReleases = useMemo(() => rows.slice(0, 12), [rows]);
-
   const {
     search,
     setSearch,
@@ -196,6 +213,7 @@ export const HomePageContent: FC = () => {
     return (
       <FilmDetailsOverlay
         video={selectedRow.node}
+        copies={selectedRow.copies}
         suggestions={suggestions}
         onSelectSuggestion={openFilm}
         onClose={closeFilm}
@@ -375,26 +393,18 @@ export const HomePageContent: FC = () => {
           )
         ) : (
           <>
-            {continueWatching.length > 0 && (
-              <PosterRow title={strings.rowContinueWatching}>
-                {continueWatching.map(({ id, row }) => (
-                  <FilmTile key={id} video={row.node} onClick={openFilm} />
-                ))}
-              </PosterRow>
-            )}
-
-            {newReleases.length > 0 && (
-              <PosterRow title={strings.rowNewReleases}>
-                {newReleases.map((r) => (
+            {movies.length > 0 && (
+              <PosterRow title={strings.rowMovies}>
+                {movies.map((r) => (
                   <FilmTile key={r.id} video={r.node} onClick={openFilm} />
                 ))}
               </PosterRow>
             )}
 
-            {watchlistRest.length > 0 && (
-              <PosterRow title={strings.rowWatchlist}>
-                {watchlistRest.map(({ id, row }) => (
-                  <FilmTile key={id} video={row.node} onClick={openFilm} />
+            {tvShows.length > 0 && (
+              <PosterRow title={strings.rowTvShows}>
+                {tvShows.map((r) => (
+                  <FilmTile key={r.id} video={r.node} onClick={openFilm} />
                 ))}
               </PosterRow>
             )}

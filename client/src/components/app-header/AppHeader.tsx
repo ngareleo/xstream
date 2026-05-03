@@ -1,12 +1,22 @@
 import { mergeClasses } from "@griffel/react";
 import { type FC, useEffect, useRef, useState } from "react";
+import { graphql, useMutation } from "react-relay";
 import { Link, NavLink, useNavigate } from "react-router-dom";
 
 import { AccountMenu } from "~/components/account-menu/AccountMenu.js";
 import { IconRefresh } from "~/lib/icons.js";
+import type { AppHeaderScanMutation } from "~/relay/__generated__/AppHeaderScanMutation.graphql.js";
 
 import { strings } from "./AppHeader.strings.js";
 import { useAppHeaderStyles } from "./AppHeader.styles.js";
+
+const SCAN_MUTATION = graphql`
+  mutation AppHeaderScanMutation {
+    scanLibraries {
+      id
+    }
+  }
+`;
 
 interface NavEntry {
   to: string;
@@ -29,14 +39,19 @@ const USER = {
 export const AppHeader: FC = () => {
   const styles = useAppHeaderStyles();
   const navigate = useNavigate();
-  const [scanning, setScanning] = useState(false);
+  const [scan, mutationPending] = useMutation<AppHeaderScanMutation>(SCAN_MUTATION);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [spinHoldover, setSpinHoldover] = useState(false);
   const accountRef = useRef<HTMLDivElement>(null);
+  // Guarantee at least one full rotation of feedback even if the mutation
+  // resolves in <100 ms; the design lab's reference behaviour is a 2 s spin.
+  const spinning = mutationPending || spinHoldover;
 
   const handleScan = (): void => {
-    if (scanning) return;
-    setScanning(true);
-    window.setTimeout(() => setScanning(false), 2000);
+    if (spinning) return;
+    setSpinHoldover(true);
+    window.setTimeout(() => setSpinHoldover(false), 2000);
+    scan({ variables: {} });
   };
 
   useEffect(() => {
@@ -96,11 +111,11 @@ export const AppHeader: FC = () => {
         <button
           type="button"
           onClick={handleScan}
-          aria-busy={scanning}
-          aria-label={scanning ? strings.scanBusyLabel : strings.scanLabel}
+          aria-busy={spinning}
+          aria-label={spinning ? strings.scanBusyLabel : strings.scanLabel}
           className={styles.scanBtn}
         >
-          <span className={mergeClasses(styles.scanIcon, scanning && styles.scanIconSpinning)}>
+          <span className={mergeClasses(styles.scanIcon, spinning && styles.scanIconSpinning)}>
             <IconRefresh width={22} height={22} />
           </span>
         </button>

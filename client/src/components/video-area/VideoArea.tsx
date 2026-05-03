@@ -30,10 +30,6 @@ const VIDEO_FRAGMENT = graphql`
       genre
       posterUrl
     }
-    videoStream {
-      width
-      height
-    }
     ...VideoPlayer_video
   }
 `;
@@ -49,32 +45,18 @@ function formatEpisodeCode(seasonNumber: number, episodeNumber: number): string 
   return `S${String(seasonNumber).padStart(2, "0")}E${String(episodeNumber).padStart(2, "0")}`;
 }
 
-function resolutionLabel(height: number | null | undefined): string | null {
-  if (height == null) return null;
-  if (height >= 2000) return "4K";
-  if (height >= 1000) return "1080p";
-  if (height >= 700) return "720p";
-  if (height >= 400) return "480p";
-  return null;
-}
-
 export const VideoArea: FC<Props> = ({ video, seriesPick, controlsHidden, onBack }) => {
   const styles = useVideoAreaStyles();
   const data = useFragment(VIDEO_FRAGMENT, video);
   const [playStatus, setPlayStatus] = useState<PlayStatus>("idle");
 
   const fadeClass = mergeClasses(styles.fade, controlsHidden && styles.fadeHidden);
-  const backdropClass = mergeClasses(
-    styles.backdrop,
-    playStatus === "playing" && styles.backdropHidden
-  );
   const meta = data.metadata;
   const displayTitle = meta?.title ?? data.title ?? strings.untitled;
   const posterUrl = meta?.posterUrl ?? null;
   const episodeCode = seriesPick
     ? formatEpisodeCode(seriesPick.seasonNumber, seriesPick.episodeNumber)
     : null;
-  const resLabel = resolutionLabel(data.videoStream?.height);
 
   const metaLine = seriesPick
     ? [
@@ -90,12 +72,11 @@ export const VideoArea: FC<Props> = ({ video, seriesPick, controlsHidden, onBack
         .filter(Boolean)
         .join(" · ");
 
-  const statusLabel = strings.statusPlaying;
-  const statusBits = [statusLabel, episodeCode, resLabel].filter(Boolean).join(" · ");
-
   return (
     <div className={styles.root}>
-      <Poster url={posterUrl} alt={displayTitle} className={backdropClass} width={1600} />
+      {playStatus !== "playing" && (
+        <Poster url={posterUrl} alt={displayTitle} className={styles.backdrop} width={1600} />
+      )}
 
       <div className={styles.videoWrapper}>
         <Suspense fallback={null}>
@@ -117,8 +98,6 @@ export const VideoArea: FC<Props> = ({ video, seriesPick, controlsHidden, onBack
         >
           <IconBack size={14} />
         </button>
-        <div className={styles.flexFill} />
-        <div className={styles.topbarStatus}>{statusBits}</div>
       </div>
 
       <div className={mergeClasses(styles.titleOverlay, fadeClass)}>

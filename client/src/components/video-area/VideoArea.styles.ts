@@ -29,13 +29,6 @@ export const useVideoAreaStyles = makeStyles({
     filter: "brightness(0.85) contrast(1.05)",
     viewTransitionName: "film-backdrop",
     zIndex: 0,
-    opacity: 1,
-    transitionProperty: "opacity",
-    transitionDuration: "0.4s",
-    transitionTimingFunction: "ease",
-  },
-  backdropHidden: {
-    opacity: 0,
   },
 
   grain: {
@@ -106,7 +99,6 @@ export const useVideoAreaStyles = makeStyles({
     zIndex: 10,
     color: "#fff",
   },
-  flexFill: { flexGrow: 1 },
   topbarBtn: {
     backgroundColor: "transparent",
     borderTopWidth: 0,
@@ -135,14 +127,6 @@ export const useVideoAreaStyles = makeStyles({
       transform: "scale(0.94)",
     },
   },
-  topbarStatus: {
-    color: "rgba(255,255,255,0.6)",
-    fontFamily: tokens.fontMono,
-    fontSize: "11px",
-    letterSpacing: "0.18em",
-    textTransform: "uppercase",
-  },
-
   titleOverlay: {
     position: "absolute",
     bottom: "130px",

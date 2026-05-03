@@ -86,9 +86,9 @@ When not searching or filtering:
   `display: flex`, `flexDirection: column`, `rowGap: 28px`. No `paddingLeft/Right`
   (page provides 40px inset).
 - Renders three rows in order (each skipped if empty):
-  1. "Continue Watching" — watchlist items with `progress !== undefined`.
-  2. "New Releases" — curated `newReleaseIds` array.
-  3. "Watchlist" — watchlist items with `progress === undefined`.
+  1. "Continue Watching" — `watch_progress` entries with active sessions, resolved to Films.
+  2. "New Releases" — curated `newReleaseIds` array (Films).
+  3. "Watchlist" — `watchlist_items` entries (Films without active progress).
 - **Row anatomy**: `rowHeader` (Mono 11px uppercase), `rowFrame` (relative
   wrapper), `rowTrack` (horizontal-scroll flex, hidden scrollbar, `scrollSnapType:
   x proximity`). Pagination arrows (44×44 circles) at `left: -12px` and `right:
@@ -348,21 +348,19 @@ When `heroMode !== "idle"`, ESC key triggers:
 
 ### Backend queries
 
-- **Continue Watching**: watchlist items where `progress !== undefined`,
-  resolved to Film via library join.
+- **Continue Watching**: `watch_progress` table joined to Films, ordered by `updated_at` (most recent first). Shows films the user has started but not finished.
 - **New Releases**: curated `newReleaseIds` array (e.g., `["f1", "superman",
-  "furiosa", "justiceleague", "madmax"]`).
-- **Watchlist**: watchlist items where `progress === undefined`.
-- **Search**: backend query / Relay refetch (currently client-side filters
-  against `films` array; production should wire `?q=` URL param for
-  shareability).
+  "furiosa", "justiceleague", "madmax"]`), resolved to Films via `Query.films`.
+- **Watchlist**: `watchlist_items` table joined to Films, filtered to films not in `watch_progress` (queued but not started).
+- **Search**: `Query.films` pagination (backend cursor-based) with client-side text filters
+  against title/director/genre; production may add server-side `?q=` param for
+  shareability.
 
 ### Relay fragments
 
-- Root query: `LibraryPageContentQuery` fetching `videos` + `watchlist` +
-  user identity.
-- Overlay: Film fragments including poster URL, OMDb rating, director, plot,
-  year, genre, resolution, HDR, codec.
+- Root query: `LibraryPageContentQuery` fetching `Query.films` (paginated, first N films) + `watchlist_items` + `watch_progress` + user identity.
+- Per-row query: Continue Watching uses `watch_progress` connection; Watchlist uses `watchlist_items` connection; New Releases uses a hardcoded array of film IDs resolved via `Query.film(id)` in parallel.
+- Overlay: Film fragment including `id`, poster URL, OMDb rating, director, plot, year, genre, and `copies` (array of videos for the variant selector).
 
 ### Suggestions algorithm (`pickSuggestions`)
 

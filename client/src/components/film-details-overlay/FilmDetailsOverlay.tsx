@@ -1,9 +1,10 @@
 import { mergeClasses } from "@griffel/react";
-import { type FC, useRef } from "react";
+import { type FC, useMemo, useRef, useState } from "react";
 import { graphql, useFragment } from "react-relay";
 import { useNavigate } from "react-router-dom";
 
 import { FilmTile } from "~/components/film-tile/FilmTile";
+import { type FilmVariantOption, FilmVariants } from "~/components/film-variants/FilmVariants";
 import { Poster } from "~/components/poster/Poster";
 import { PosterRow } from "~/components/poster-row/PosterRow";
 import { SeasonsPanel } from "~/components/seasons-panel/SeasonsPanel";
@@ -16,6 +17,20 @@ import { withViewTransition } from "~/utils/viewTransition";
 import { strings } from "./FilmDetailsOverlay.strings";
 import { useFilmDetailsOverlayStyles } from "./FilmDetailsOverlay.styles";
 
+/**
+ * Shape passed via the `copies` prop. Mirrors the relevant Video fields
+ * the FilmVariants picker needs. The homepage sources it from
+ * `Film.copies` (server-resolver order: highest resolution first).
+ */
+export interface OverlayCopy {
+  readonly id: string;
+  readonly filename: string;
+  readonly nativeResolution: string | null | undefined;
+  readonly fileSizeBytes: number;
+  readonly bitrate: number;
+  readonly videoStream: { readonly codec: string } | null | undefined;
+}
+
 const OVERLAY_FRAGMENT = graphql`
   fragment FilmDetailsOverlay_video on Video {
     id
@@ -25,6 +40,7 @@ const OVERLAY_FRAGMENT = graphql`
     durationSeconds
     nativeResolution
     metadata {
+      title
       year
       genre
       director
@@ -46,10 +62,24 @@ const OVERLAY_FRAGMENT = graphql`
 
 interface FilmDetailsOverlayProps {
   video: FilmDetailsOverlay_video$key;
+  /**
+   * When set (movies only), all main copies of the Film. Drives the
+   * FilmVariants picker. Hidden when length <= 1.
+   */
+  copies?: ReadonlyArray<OverlayCopy>;
   suggestions?: ReadonlyArray<FilmTile_video$key>;
   onClose: () => void;
   onSelectSuggestion?: (id: string) => void;
 }
+
+const RESOLUTION_DISPLAY: Record<string, string> = {
+  "4k": "4K",
+  "1080p": "1080p",
+  "720p": "720p",
+  "480p": "480p",
+  "360p": "360p",
+  "240p": "240p",
+};
 
 const RESOLUTION_LABEL: Record<string, string> = {
   RESOLUTION_4K: "4K",
@@ -62,6 +92,7 @@ const RESOLUTION_LABEL: Record<string, string> = {
 
 export const FilmDetailsOverlay: FC<FilmDetailsOverlayProps> = ({
   video,
+  copies,
   suggestions = [],
   onClose,
   onSelectSuggestion,
@@ -71,8 +102,26 @@ export const FilmDetailsOverlay: FC<FilmDetailsOverlayProps> = ({
   const navigate = useNavigate();
   const overlayRef = useRef<HTMLDivElement>(null);
   const isSeries = data.mediaType === "TV_SHOWS";
-  const altText = data.title || data.filename;
-  const titleText = data.title || strings.unmatched;
+  const sanitisedTitle = data.metadata?.title ?? data.title;
+  const altText = sanitisedTitle || data.filename;
+  const titleText = sanitisedTitle || strings.unmatched;
+  // Variant selection: defaults to the video the overlay was opened with
+  // (caller passes Film.bestCopy). Switching retargets the play CTA only;
+  // poster/title/metadata are Film-level and don't change.
+  const [selectedCopyId, setSelectedCopyId] = useState<string>(data.id);
+  const variantOptions = useMemo<FilmVariantOption[]>(
+    () =>
+      (copies ?? []).map((c) => ({
+        id: c.id,
+        resolution: c.nativeResolution
+          ? (RESOLUTION_DISPLAY[c.nativeResolution] ?? c.nativeResolution)
+          : null,
+        codec: c.videoStream?.codec ?? null,
+        fileSizeBytes: c.fileSizeBytes,
+        libraryName: null,
+      })),
+    [copies]
+  );
 
   const totalEpisodes = (data.seasons ?? []).reduce((sum, s) => sum + s.episodes.length, 0);
   const availableEpisodes = (data.seasons ?? []).reduce(
@@ -87,7 +136,10 @@ export const FilmDetailsOverlay: FC<FilmDetailsOverlayProps> = ({
   const duration = data.durationSeconds > 0 ? formatDurationHuman(data.durationSeconds) : null;
 
   const playWithTransition = (): void => {
-    withViewTransition(() => navigate(`/player/${data.id}`));
+    // Use the picker's selected copy when set; falls back to the
+    // overlay's source video (bestCopy for movies, the show video for TV).
+    const target = selectedCopyId || data.id;
+    withViewTransition(() => navigate(`/player/${target}`));
   };
 
   const playEpisode = (seasonNumber: number, episodeNumber: number): void => {
@@ -151,6 +203,13 @@ export const FilmDetailsOverlay: FC<FilmDetailsOverlayProps> = ({
             </button>
             <span className={styles.filename}>{data.filename}</span>
           </div>
+          {variantOptions.length > 1 && (
+            <FilmVariants
+              copies={variantOptions}
+              selectedId={selectedCopyId}
+              onSelect={setSelectedCopyId}
+            />
+          )}
           {suggestions.length > 0 && (
             <div className={styles.scrollHint} aria-hidden="true">
               {strings.scrollHint}

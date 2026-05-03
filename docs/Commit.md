@@ -15,6 +15,27 @@ Entry shape (each entry ends with the divider line described above):
 
 <!-- ENTRIES BELOW — newest first; each ends with a bare `---` line. The architect's next invocation will treat the no-entries state as the first-run case and prepend a bootstrap entry at HEAD. -->
 
+## (pending Film entity merge) — 2026-05-03 — Film entity architecture + DB + GraphQL + component specs
+
+**Files:** `docs/architecture/Library-Scan/02-Film-Entity.md` (NEW), `docs/architecture/Library-Scan/README.md`, `docs/server/DB-Schema/00-Tables.md`, `docs/server/GraphQL-Schema/00-Surface.md`, `docs/client/Components/FilmVariants.md` (NEW), `docs/client/Components/FilmDetailsOverlay.md`, `docs/client/Components/Library.md`, `docs/client/Components/README.md`, `docs/INDEX.md`
+**Why:** Curator sync for feat/library-film-entity branch (code landed uncommitted): Added Film logical-dedup entity for movies with 1+ video copies. Documented dedup keys (imdb_id, parsed_title_key), scanner three-pass flow, role semantics, watchlist/progress linking, GraphQL Film type + mutations, and new FilmVariants component spec.
+
+---
+
+## (current HEAD) — 2026-05-03 — AppHeader spec refinement: spinHoldover + mutationPending
+
+**Files:** `docs/client/Components/AppHeader.md`
+**Why:** Spec clarification after code change landed. The scan button spin is now driven by `mutationPending || spinHoldover` (2s click-triggered holdover); prior spec entry incorrectly said mutation-only with no holdover. Updated both the detailed behaviour section and the Scan Button subsection to document the combined state machine.
+
+---
+
+## b594485 — 2026-05-03
+
+**Files:** `docs/client/Components/AppHeader.md`, `docs/client/Components/FilmDetailsOverlay.md`, `docs/client/Components/VideoArea.md`
+**Why:** Spec curation after four bug-fix PRs: AppHeader scan button now wires GraphQL mutation (not 2s timeout); FilmDetailsOverlay prefers OMDb title; VideoArea poster unmounts on play (not opacity-fade) and topbar has no status badge.
+
+---
+
 ## 29b5c41 — 2026-05-03
 
 **Files:** `docs/architecture/Streaming/06-FfmpegPool.md`, `docs/server/FFmpeg-Caveats/00-Overview.md`

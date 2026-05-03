@@ -29,7 +29,7 @@ Orchestrates the visual presentation of playback. Renders a dimmed/contrasted ba
 - `position: absolute`, `inset: 0`, `width: 100%`, `height: 100%`, `objectFit: cover`.
 - `filter: brightness(0.85) contrast(1.05)` — dimmed and punchy.
 - **`viewTransitionName: "film-backdrop"`** — must match Library's `.overlayPoster` for View Transitions API morph.
-- Fades out when `playStatus === "playing"`: `opacity: 1 → 0` over 0.4s ease.
+- **Unmounts entirely when `playStatus === "playing"`** — not opacity-faded, but conditionally rendered `{playStatus !== "playing" && <Poster ... />}`. Once video frames are rendering, the component tree no longer includes the backdrop.
 - `zIndex: 0`.
 
 ### Grain overlay (`.grain`)
@@ -49,8 +49,7 @@ Both fade with chrome (`controlsHidden`):
 - `display: flex`, `alignItems: center`, `columnGap: 16px`, `color: #fff`, `zIndex: 10`.
 - Fades with `controlsHidden` (0.3s opacity transition).
 - **Back button** (`.topbarBtn`): Icon-only, `backgroundColor: transparent`, no border, `borderRadius: 999px`. At rest: `color: rgba(255,255,255,0.85)`, `filter: drop-shadow(0 2px 6px rgba(0,0,0,0.6))`. Hover: `color: #fff`, extra glow `drop-shadow(0 0 12px rgba(255,255,255,0.65))`. Active: `scale(0.94)`.
-- **Spacer**: `flexGrow: 1`.
-- **Status badge** (`.topbarStatus`): Right-aligned, `fontMono 11px uppercase`, `color: rgba(255,255,255,0.6)`. Displays `"● PLAYING · S01E03 · 4K"` (play state · episode code [series only] · resolution).
+- **No status badge or spacer** — topbar contains only the back button. The right-side `"● PLAYING · S01E03 · 4K"` display has been removed.
 
 ### Bottom controls (`.titleOverlay`, `.fadeClass`)
 
@@ -68,20 +67,16 @@ Both fade with chrome (`controlsHidden`):
 
 ## Behaviour
 
-### Backdrop fade-out
+### Backdrop unmount on play
 
 - VideoPlayer calls `onStatusChange("playing")` when video element receives first frames.
 - VideoArea sets `playStatus = "playing"`.
-- Backdrop applies `backdropHidden` class: `opacity: 0` over 0.4s ease.
-- Once video frames are rendering, backdrop no longer obscures playback.
+- Backdrop `<Poster>` component is conditionally unmounted: `{playStatus !== "playing" && <Poster ... />}`.
+- Once video frames are rendering, the backdrop is removed from the DOM entirely.
 
 ### Episode code formatting
 
 Helper `formatEpisodeCode(seasonNumber, episodeNumber)` pads both to 2 digits: `S01E03`, `S02E10`, etc.
-
-### Resolution label
-
-Helper `resolutionLabel(height)`: returns `"4K"` (≥2000px), `"1080p"` (≥1000px), `"720p"` (≥700px), `"480p"` (≥400px), or null.
 
 ### Chrome fade with `controlsHidden`
 
@@ -89,12 +84,11 @@ When PlayerContent sets `controlsHidden = true` (3000ms inactivity), VideoArea's
 
 ## Data
 
-- **Fragment**: Spreads `...VideoPlayer_video`. Carries `title`, `durationSeconds`, `metadata { title, year, genre, posterUrl }`, `videoStream { width, height }`.
-- **Derived**: Episode code, resolution label, formatted duration, metadata line text.
+- **Fragment**: Spreads `...VideoPlayer_video`. Carries `title`, `durationSeconds`, `metadata { title, year, genre, posterUrl }`.
+- **Derived**: Episode code, formatted duration, metadata line text.
 
 ## Notes
 
 - **View Transitions contract**: The `viewTransitionName: "film-backdrop"` on backdrop poster must exactly match Library page's `.overlayPoster` for the browser's View Transitions API to morph the poster between routes. If names diverge, morph silently degrades to plain cross-fade.
 - **No click handlers on chrome**: Topbar/bottom controls are `pointerEvents: none` when faded out (chrome hidden), so clicks pass through to VideoPlayer beneath.
 - **Series vs movie variants**: Episode badge and metadata line automatically switch based on presence of `seriesPick` prop.
-- **Placeholder resolution "●"**: Status badge includes a literal play-state bullet (`"● PLAYING"` or `"○ PAUSED"`), episode code (series only), and resolution — all joined with ` · `.

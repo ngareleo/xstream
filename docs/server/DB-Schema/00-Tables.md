@@ -22,14 +22,33 @@ Populated via the `createLibrary` GraphQL mutation. Upserted by `path` so rename
 
 ---
 
+### `films`
+
+One row per distinct movie entity (movies only; TV uses video-as-series). Populated by the scanner's `resolve_films_for_library` pass (step 2) and updated by the auto-match pass (step 3). Owns 1+ rows in `videos` via the `film_id` foreign key.
+
+| Column | Type | Constraints | Description |
+|---|---|---|---|
+| `id` | TEXT | PRIMARY KEY | SHA-1 of `parsed_title_key + media_type` (until OMDb match sets imdb_id) |
+| `parsed_title_key` | TEXT | NOT NULL UNIQUE | `"<lowercased_title>\|<year>"` computed by `parse_title_from_filename`. Used for pre-OMDb dedup and as the natural key when no IMDb match exists. |
+| `imdb_id` | TEXT | nullable UNIQUE | IMDb ID (e.g., `tt15397572`), set by `link_video_film_to_imdb` after OMDb lookup succeeds. If a different film already owns this `imdb_id`, the two films are merged (duplicate deleted, videos repointed). |
+| `media_type` | TEXT | NOT NULL | `'movies'` (TV is excluded; shows remain video-as-series). |
+
+**Indices:** `films(parsed_title_key, media_type)` (used to deduplicate during scan pass 2), `films(imdb_id)` (used to detect collisions during scan pass 3 OMDb merge).
+
+**Why two dedup keys?** Pre-OMDb (parsed_title_key) ensures files that *look* the same are grouped immediately, even if OMDb lookup fails or is pending. Post-OMDb (imdb_id) is authoritative — when two initially separate Films both match the same IMDb entry, the merge consolidates them into one. See [`docs/architecture/Library-Scan/02-Film-Entity.md`](../../architecture/Library-Scan/02-Film-Entity.md) for the full dedup flow.
+
+---
+
 ### `videos`
 
-One row per video file. Populated by the library scanner via ffprobe. Upserted on `path` — re-scans refresh metadata without creating duplicates.
+One row per video file. Populated by the library scanner via ffprobe. Upserted on `path` — re-scans refresh metadata without creating duplicates. For movies, each row is linked to a `films` row via `film_id`; for TV, all videos in a show series share the same logical show (TV support uses the video-as-series pattern and does not use the films table).
 
 | Column | Type | Constraints | Description |
 |---|---|---|---|
 | `id` | TEXT | PRIMARY KEY | SHA-1 of `path` |
 | `library_id` | TEXT | NOT NULL, FK → libraries(id) | Owning library |
+| `film_id` | TEXT | nullable, FK → films(id) ON DELETE CASCADE | **Movies only.** The logical Film this video belongs to. NULL for TV videos. Set by `resolve_films_for_library` (scanner pass 2). |
+| `role` | TEXT | nullable | **Movies only.** `'main'` (primary encoding, or single copy) or `'extra'` (trailers, deleted scenes, etc.). NULL for TV. When multiple `role='main'` videos exist for one Film, the FilmVariants UI lets the user choose which to play. |
 | `path` | TEXT | NOT NULL UNIQUE | Absolute path to video file |
 | `filename` | TEXT | NOT NULL | `basename(path)` |
 | `title` | TEXT | nullable | From `tags.title` in file metadata; falls back to cleaned filename |
@@ -40,6 +59,7 @@ One row per video file. Populated by the library scanner via ffprobe. Upserted o
 | `content_fingerprint` | TEXT | NOT NULL | `"<sizeBytes>:<sha1hex>"` — SHA-1 of the first 64 KB of the file, prefixed with file size. Stable across renames; changes only when content changes. Used as the basis for transcode job cache keys. |
 
 **Index:** `videos_library_id` on `library_id` — used by the `videos(first, after)` connection resolver.
+**Index:** `videos_film_id` on `film_id` — used by the `Film.copies` resolver to fetch all videos for a film, ordered by `role` (main first), then `resolution` (highest first), then `bitrate` (highest first).
 
 > **Breaking migration note:** `content_fingerprint TEXT NOT NULL` is part of the original `CREATE TABLE` definition. If you have an existing `tmp/xstream.db` from before this column was added, delete it — the server will recreate the schema and re-scan all libraries on next startup.
 
@@ -106,6 +126,37 @@ One row per completed `.m4s` file. Inserted by `watchSegments()` as ffmpeg write
 **Unique constraint:** `(job_id, segment_index)` — prevents duplicate inserts from watcher races.
 
 **Index:** `segments_job_id` on `job_id`.
+
+---
+
+### `watchlist_items`
+
+One row per film queued on the user's watchlist. Keyed by `film_id` (movies only); points to the primary `bestCopy` video at query time via the `Film.bestCopy` resolver.
+
+| Column | Type | Constraints | Description |
+|---|---|---|---|
+| `id` | TEXT | PRIMARY KEY | `watchlist_item:<uuid>` (unique stable ID for the watchlist row itself) |
+| `film_id` | TEXT | NOT NULL UNIQUE, FK → films(id) ON DELETE CASCADE | The film queued for watching. **Movies only.** A film may appear on the watchlist only once. |
+| `added_at` | TEXT | NOT NULL | ISO 8601 timestamp when the film was added. |
+
+**Why `film_id` instead of `video_id`?** Films can have multiple video copies (different encodes). The watchlist is semantically a queue of *films*, not specific files. When the user taps Play, the client fetches the film and resolves `bestCopy` to pick the primary video. If the user manually selects a specific copy (e.g., "play the BluRay encode"), that selection is stored in the Player route params, not in the watchlist.
+
+---
+
+### `watch_progress`
+
+One row per film the user has started watching. Tracks playback progress (current time, total duration, last updated timestamp).
+
+| Column | Type | Constraints | Description |
+|---|---|---|---|
+| `id` | TEXT | PRIMARY KEY | `watch_progress:<uuid>` |
+| `film_id` | TEXT | NOT NULL UNIQUE, FK → films(id) ON DELETE CASCADE | The film being watched. **Movies only.** One progress row per film. |
+| `video_id` | TEXT | NOT NULL, FK → videos(id) | The specific video file the user is watching (the selected copy). Used to resume on the correct copy if the film has multiple. |
+| `current_time_seconds` | REAL | NOT NULL | Current playback position. |
+| `duration_seconds` | REAL | NOT NULL | Total video duration (cached for UI display). |
+| `updated_at` | TEXT | NOT NULL | ISO 8601 timestamp of last update. |
+
+**Why both film_id and video_id?** A film may have multiple copies. `film_id` links to the logical entity; `video_id` ensures we resume on the *same copy* the user was watching, even if they manually switched copies before pausing. If the user clears watchlist progress, both rows are deleted together (FK cascade).
 
 ---
 

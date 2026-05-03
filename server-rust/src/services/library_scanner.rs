@@ -35,8 +35,10 @@ use walkdir::WalkDir;
 use crate::config::AppContext;
 use crate::db::queries::videos::replace_video_streams;
 use crate::db::{
-    get_all_libraries, get_unmatched_video_ids, get_video_by_id, upsert_library, upsert_video,
-    upsert_video_metadata, LibraryRow, NewVideoStream, VideoMetadataRow, VideoRow,
+    assign_video_to_film, build_parsed_title_key, film_id_for, find_film_by_imdb_id,
+    find_film_by_parsed_title_key, get_all_libraries, get_unmatched_video_ids, get_video_by_id,
+    merge_films, upsert_film, upsert_library, upsert_video, upsert_video_metadata, FilmRow,
+    LibraryRow, NewVideoStream, VideoMetadataRow, VideoRow,
 };
 use crate::graphql::scalars::Resolution;
 use crate::services::ffmpeg_file::FfmpegFile;
@@ -103,6 +105,13 @@ pub async fn scan_libraries(ctx: &AppContext) {
             // matcher iterates the unmatched-video list.
             if library.media_type == "tvShows" {
                 tv_discovery::discover_tv_shows(ctx, library).await;
+            }
+            // Movie libraries: resolve MovieUnits → Films, set videos.film_id
+            // and role. Runs before OMDb auto-match so the matcher can merge
+            // films by imdb_id when two parsed-key Films later resolve to
+            // the same canonical movie.
+            if library.media_type == "movies" {
+                resolve_films_for_library(ctx, library);
             }
             auto_match_library(ctx, library).await;
         }
@@ -257,6 +266,11 @@ async fn process_file(path: &Path, library_id: &str, ctx: &AppContext) -> Result
         scanned_at: Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
         content_fingerprint: fingerprint,
         native_resolution,
+        // Film resolution happens in a separate post-step (assign_video_to_film)
+        // after MovieUnit detection + OMDb match. The DB default for `role` is
+        // 'main'; passing it explicitly keeps the upsert clear.
+        film_id: None,
+        role: "main".to_string(),
     };
 
     let mut streams: Vec<NewVideoStream> =
@@ -462,12 +476,275 @@ async fn match_one_video(ctx: &AppContext, omdb: &OmdbClient, video_id: &str) {
         return;
     }
 
+    // Promote the Film: now that we have an imdb_id, either annotate the
+    // existing parsed-key-keyed Film with it, or merge into an
+    // already-existing imdb_id-keyed Film if one exists. This is what
+    // collapses two-encodes-of-the-same-movie into a single Film once
+    // both rows match OMDb.
+    if let Err(err) = link_video_film_to_imdb(ctx, video_id, &result.imdb_id, &result.title, result.year.and_then(|y| i32::try_from(y).ok())) {
+        tracing::warn!(
+            video_id = %video_id,
+            error = %err,
+            "auto_match: failed to link Film to imdb_id",
+        );
+    }
+
     info!(
         filename = %video.filename,
         matched_title = %result.title,
         imdb_id = %result.imdb_id,
         "Video matched",
     );
+}
+
+/// After OMDb match, ensure the video's Film carries the canonical imdb_id.
+/// Three cases:
+/// 1. Video has no Film yet (movie scanner skipped) — create one keyed on imdb_id.
+/// 2. Video's Film has no imdb_id yet — try to set it. On UNIQUE conflict,
+///    another Film already owns that imdb_id; merge.
+/// 3. Video's Film already has the imdb_id — no-op.
+fn link_video_film_to_imdb(
+    ctx: &AppContext,
+    video_id: &str,
+    imdb_id: &str,
+    canonical_title: &str,
+    year: Option<i32>,
+) -> Result<(), crate::error::DbError> {
+    let video = match get_video_by_id(&ctx.db, video_id)? {
+        Some(v) => v,
+        None => return Ok(()),
+    };
+    let now = Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
+
+    // Case 1: no Film. Create one keyed on imdb_id and assign as 'main'.
+    let Some(current_film_id) = video.film_id.clone() else {
+        let new_id = film_id_for(Some(imdb_id), None);
+        upsert_film(
+            &ctx.db,
+            &FilmRow {
+                id: new_id.clone(),
+                imdb_id: Some(imdb_id.to_string()),
+                parsed_title_key: None,
+                title: canonical_title.to_string(),
+                year,
+                created_at: now,
+            },
+        )?;
+        assign_video_to_film(&ctx.db, video_id, &new_id, "main")?;
+        return Ok(());
+    };
+
+    // Cases 2/3: Film exists. Look for any other Film already owning imdb_id.
+    if let Some(existing) = find_film_by_imdb_id(&ctx.db, imdb_id)? {
+        if existing.id != current_film_id {
+            // Merge current → existing. Repoints videos and drops current.
+            merge_films(&ctx.db, &current_film_id, &existing.id)?;
+        }
+        // Already linked — nothing more to do.
+        return Ok(());
+    }
+
+    // Set imdb_id on the current Film (refresh title/year from OMDb canonical).
+    upsert_film(
+        &ctx.db,
+        &FilmRow {
+            id: current_film_id,
+            imdb_id: Some(imdb_id.to_string()),
+            parsed_title_key: None, // COALESCE in upsert preserves existing
+            title: canonical_title.to_string(),
+            year,
+            created_at: now,
+        },
+    )?;
+    Ok(())
+}
+
+/// One physical movie + its extras living in a folder, OR a single movie
+/// file directly under the library root.
+struct MovieUnit {
+    main_file: PathBuf,
+    extras: Vec<PathBuf>,
+}
+
+fn has_video_ext(path: &Path, extensions: &HashSet<String>) -> bool {
+    path.extension()
+        .and_then(|e| e.to_str())
+        .map(|s| extensions.contains(&format!(".{}", s.to_lowercase())))
+        .unwrap_or(false)
+}
+
+fn stem_lower(path: &Path) -> String {
+    path.file_stem()
+        .and_then(|n| n.to_str())
+        .unwrap_or("")
+        .to_lowercase()
+}
+
+/// Enumerate MovieUnits at the library root.
+///
+/// - Direct video files at the root → each is its own unit (no extras).
+/// - First-level subfolder → one unit per folder; main = largest video file
+///   (tie-broken by stem matching the folder name); the rest are extras.
+/// - Deeper nesting is not recursed; the convention doc says one level only.
+fn enumerate_movie_units(library_root: &Path, extensions: &HashSet<String>) -> Vec<MovieUnit> {
+    let mut units: Vec<MovieUnit> = Vec::new();
+    let read = match std::fs::read_dir(library_root) {
+        Ok(r) => r,
+        Err(_) => return units,
+    };
+    for entry in read.flatten() {
+        let path = entry.path();
+        let ft = match entry.file_type() {
+            Ok(t) => t,
+            Err(_) => continue,
+        };
+        if ft.is_file() {
+            if has_video_ext(&path, extensions) {
+                units.push(MovieUnit {
+                    main_file: path,
+                    extras: Vec::new(),
+                });
+            }
+            continue;
+        }
+        if !ft.is_dir() {
+            continue;
+        }
+        // Folder-scoped layout — collect immediate video children.
+        let folder_name_lower = path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .map(|s| s.to_lowercase())
+            .unwrap_or_default();
+        let sub = match std::fs::read_dir(&path) {
+            Ok(r) => r,
+            Err(_) => continue,
+        };
+        let mut videos: Vec<(PathBuf, u64)> = Vec::new();
+        for sub_entry in sub.flatten() {
+            let sub_path = sub_entry.path();
+            if !sub_path.is_file() {
+                continue;
+            }
+            if !has_video_ext(&sub_path, extensions) {
+                continue;
+            }
+            let size = std::fs::metadata(&sub_path).map(|m| m.len()).unwrap_or(0);
+            videos.push((sub_path, size));
+        }
+        if videos.is_empty() {
+            continue;
+        }
+        // Tie-break: stem matches folder name → main; otherwise largest size.
+        videos.sort_by(|a, b| {
+            let a_match = stem_lower(&a.0) == folder_name_lower;
+            let b_match = stem_lower(&b.0) == folder_name_lower;
+            match (a_match, b_match) {
+                (true, false) => std::cmp::Ordering::Less,
+                (false, true) => std::cmp::Ordering::Greater,
+                _ => b.1.cmp(&a.1), // size desc
+            }
+        });
+        let main = videos.remove(0).0;
+        let extras: Vec<PathBuf> = videos.into_iter().map(|(p, _)| p).collect();
+        units.push(MovieUnit {
+            main_file: main,
+            extras,
+        });
+    }
+    units
+}
+
+/// For each MovieUnit, find or create its Film and set `videos.film_id`
+/// + `role` for the main file and any extras. Runs after the per-file
+/// `scan_one_library` upsert pass; before OMDb match. Pre-OMDb the Film
+/// is keyed on `parsed_title_key`; the post-OMDb step in `match_one_video`
+/// upgrades it to imdb-keyed and merges duplicates.
+fn resolve_films_for_library(ctx: &AppContext, library: &LibraryRow) {
+    let extensions = parse_extensions(library);
+    let library_path = PathBuf::from(&library.path);
+    let units = enumerate_movie_units(&library_path, &extensions);
+
+    let now = Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
+    for unit in units {
+        let main_video_id = sha1_path(&unit.main_file);
+        let main_video = match get_video_by_id(&ctx.db, &main_video_id) {
+            Ok(Some(v)) => v,
+            // Probe failed earlier; skip — no video row to anchor a Film on.
+            Ok(None) => continue,
+            Err(err) => {
+                tracing::warn!(
+                    library_id = %library.id,
+                    video_id = %main_video_id,
+                    error = %err,
+                    "resolve_films: failed to load main video",
+                );
+                continue;
+            }
+        };
+
+        let (parsed_title, year) = parse_title_from_filename(&main_video.filename);
+        let parsed_key = build_parsed_title_key(&parsed_title, year);
+
+        let film_id = match find_film_by_parsed_title_key(&ctx.db, &parsed_key) {
+            Ok(Some(existing)) => existing.id,
+            Ok(None) => {
+                let id = film_id_for(None, Some(&parsed_key));
+                let display_title = if parsed_title.is_empty() {
+                    main_video.filename.clone()
+                } else {
+                    parsed_title
+                };
+                let film = FilmRow {
+                    id: id.clone(),
+                    imdb_id: None,
+                    parsed_title_key: Some(parsed_key),
+                    title: display_title,
+                    year,
+                    created_at: now.clone(),
+                };
+                if let Err(err) = upsert_film(&ctx.db, &film) {
+                    tracing::warn!(
+                        library_id = %library.id,
+                        video_id = %main_video_id,
+                        error = %err,
+                        "resolve_films: failed to upsert Film",
+                    );
+                    continue;
+                }
+                id
+            }
+            Err(err) => {
+                tracing::warn!(
+                    library_id = %library.id,
+                    error = %err,
+                    "resolve_films: lookup failed",
+                );
+                continue;
+            }
+        };
+
+        if let Err(err) = assign_video_to_film(&ctx.db, &main_video_id, &film_id, "main") {
+            tracing::warn!(
+                library_id = %library.id,
+                video_id = %main_video_id,
+                error = %err,
+                "resolve_films: failed to assign main video",
+            );
+            continue;
+        }
+        for extra in &unit.extras {
+            let extra_id = sha1_path(extra);
+            if let Err(err) = assign_video_to_film(&ctx.db, &extra_id, &film_id, "extra") {
+                tracing::warn!(
+                    library_id = %library.id,
+                    extra_path = %extra.display(),
+                    error = %err,
+                    "resolve_films: failed to assign extra video",
+                );
+            }
+        }
+    }
 }
 
 /// Spawn the periodic background re-scan loop. Every `interval_ms`
@@ -482,6 +759,59 @@ pub fn spawn_periodic_scan(ctx: AppContext) {
             scan_libraries(&ctx).await;
         }
     });
+}
+
+/// Scene-release tokens stripped before sending a title to OMDb.
+/// All comparisons are case-insensitive. Each entry is a full token that must
+/// appear as a complete separator-bounded word, not as a substring.
+const SCENE_TOKENS: &[&str] = &[
+    // Resolution
+    "1080p", "720p", "2160p", "4k", "480p", "360p", "240p",
+    // Source
+    "bluray", "bdrip", "brrip", "web-dl", "webdl", "webrip", "hdrip", "dvdrip", "hdtv",
+    // Video codec
+    "x264", "x265", "hevc", "h264", "h265", "avc",
+    // Audio codec
+    "aac", "ac3", "eac3", "dts", "atmos", "truehd", "dts-hd",
+    // Channels
+    "5.1", "7.1", "2.0",
+    // HDR
+    "hdr", "hdr10", "dv", "dolbyvision", "10bit", "12bit",
+];
+
+/// Strip Scene-release tokens from a normalised (dots/underscores already
+/// replaced with spaces) title string. Tokens are matched whole-word
+/// (case-insensitive). Hyphenated tokens whose *base* part is a scene token
+/// are also dropped (covers `x264-GROUP`, `x265-NAHOM`, etc.).
+fn strip_scene_tokens(normalized: &str) -> String {
+    let tokens: Vec<&str> = normalized.split_whitespace().collect();
+    let mut out: Vec<&str> = Vec::with_capacity(tokens.len());
+
+    for tok in &tokens {
+        let lower = tok.to_lowercase();
+
+        // 1. Exact match against the strip list.
+        if SCENE_TOKENS.contains(&lower.as_str()) {
+            continue;
+        }
+
+        // 2. Token contains a hyphen: check both the whole token and the
+        //    base (everything before the first `-`). This handles cases like
+        //    `x264-NAHOM` where the base `x264` is a scene token and `-NAHOM`
+        //    is the release-group suffix.
+        if let Some(dash_pos) = lower.find('-') {
+            let base = &lower[..dash_pos];
+            // Drop if the whole hyphenated token is in the list (e.g. WEB-DL)
+            // or if the base is a scene token (e.g. x264-GROUP).
+            if SCENE_TOKENS.contains(&lower.as_str()) || SCENE_TOKENS.contains(&base) {
+                continue;
+            }
+        }
+
+        out.push(tok);
+    }
+
+    out.join(" ")
 }
 
 /// Parse a torrent-style filename into `(title, year)`.
@@ -561,10 +891,14 @@ pub fn parse_title_from_filename(filename: &str) -> (String, Option<i32>) {
         }
     };
 
-    let title: String = title_raw
+    // Replace word-separating dots and underscores with spaces, then strip
+    // known Scene-release tokens before re-joining.
+    let normalized: String = title_raw
         .chars()
         .map(|c| if c == '.' || c == '_' { ' ' } else { c })
-        .collect::<String>()
+        .collect();
+
+    let title = strip_scene_tokens(&normalized)
         .split_whitespace()
         .collect::<Vec<_>>()
         .join(" ");
@@ -642,6 +976,90 @@ mod tests {
         let (title, year) = parse_title_from_filename("Movie2024.mkv");
         assert_eq!(title, "Movie2024");
         assert_eq!(year, None);
+    }
+
+    // ── Scene-token stripping (real user data) ────────────────────────────
+
+    #[test]
+    fn parse_title_strips_scene_tokens_after_parenthesised_year() {
+        // Tokens inside the second pair of parens are after the year anchor
+        // and are already discarded by the year-split; this confirms the
+        // year-anchor path still works and the strip pass is a no-op here.
+        let (title, year) =
+            parse_title_from_filename("3 Idiots (2009) (1080p BDRip x265 10bit EAC3 5.1).mkv");
+        assert_eq!(title, "3 Idiots");
+        assert_eq!(year, Some(2009));
+    }
+
+    #[test]
+    fn parse_title_strips_scene_tokens_dot_separated_after_year() {
+        // Year splits at 2025; everything after is discarded; title is clean.
+        let (title, year) = parse_title_from_filename(
+            "Bugonia.2025.4K.HDR.DV.2160p.WEBDL Ita Eng x265-NAHOM.mkv",
+        );
+        assert_eq!(title, "Bugonia");
+        assert_eq!(year, Some(2025));
+    }
+
+    #[test]
+    fn parse_title_preserves_dash_in_subtitle_with_year_in_parens() {
+        let (title, year) =
+            parse_title_from_filename("Furiosa- A Mad Max Saga (2024) 4K.mkv");
+        assert_eq!(title, "Furiosa- A Mad Max Saga");
+        assert_eq!(year, Some(2024));
+    }
+
+    #[test]
+    fn parse_title_preserves_dash_subtitle_plain_parens() {
+        let (title, year) = parse_title_from_filename("Mad Max- Fury Road (2015).mkv");
+        assert_eq!(title, "Mad Max- Fury Road");
+        assert_eq!(year, Some(2015));
+    }
+
+    #[test]
+    fn parse_title_year_at_end_no_scene_tokens() {
+        let (title, year) = parse_title_from_filename("One Battle After Another 2025.mkv");
+        assert_eq!(title, "One Battle After Another");
+        assert_eq!(year, Some(2025));
+    }
+
+    #[test]
+    fn parse_title_dot_separated_with_group_suffix_after_year() {
+        // year-split discards everything after 1999; strip pass is no-op.
+        let (title, year) =
+            parse_title_from_filename("The.Matrix.1999.1080p.BluRay.x264-GROUP.mkv");
+        assert_eq!(title, "The Matrix");
+        assert_eq!(year, Some(1999));
+    }
+
+    #[test]
+    fn parse_title_dot_separated_complex_scene_tokens_after_year() {
+        let (title, year) = parse_title_from_filename(
+            "Inception.2010.2160p.WEB-DL.HEVC.HDR10.Atmos.5.1-NAHOM.mkv",
+        );
+        assert_eq!(title, "Inception");
+        assert_eq!(year, Some(2010));
+    }
+
+    #[test]
+    fn parse_title_strip_pass_no_year_removes_source_and_codec() {
+        // No year — resolution strip cuts at 1080p, then strip pass removes
+        // remaining scene tokens (BluRay, x264-GROUP).
+        let (title, year) =
+            parse_title_from_filename("The.Matrix.1080p.BluRay.x264-GROUP.mkv");
+        assert_eq!(title, "The Matrix");
+        assert_eq!(year, None);
+    }
+
+    #[test]
+    fn parse_title_strip_pass_does_not_eat_real_title_words() {
+        // "DV" is a scene token but it appears as part of the title "DVD"
+        // only as a substring — not a whole token. Here we test that a
+        // title word that merely starts with a scene-token prefix is kept.
+        // "AVC" is also a scene token; "AVCO" is not.
+        let (title, year) = parse_title_from_filename("AVCO.Productions.2010.mkv");
+        assert_eq!(title, "AVCO Productions");
+        assert_eq!(year, Some(2010));
     }
 
     // ── compute_content_fingerprint ──────────────────────────────────────
@@ -898,6 +1316,8 @@ mod tests {
             scanned_at: "2026-01-01T00:00:00.000Z".to_string(),
             content_fingerprint: "1000:abc".to_string(),
             native_resolution: None,
+            film_id: None,
+            role: "main".to_string(),
         }
     }
 

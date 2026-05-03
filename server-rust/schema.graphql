@@ -19,6 +19,46 @@ type Episode {
 	videoId: ID
 }
 
+type Film implements Node {
+	id: ID!
+	title: String!
+	year: Int
+	"""
+	Lifted from the bestCopy's `video_metadata` row (all copies of the
+	same Film share the same OMDb match). Null for unmatched films.
+	"""
+	metadata: VideoMetadata
+	"""
+	`role='main'` rows — the canonical movie file in each containing
+	folder. Sorted highest-resolution first, then by bitrate desc, so
+	the variant picker renders best-first by default.
+	"""
+	copies: [Video!]!
+	"""
+	`role='extra'` rows — trailers, deleted scenes, behind-the-scenes
+	living alongside the main file in the movie's folder.
+	"""
+	extras: [Video!]!
+	"""
+	First entry in `copies` after the resolution+bitrate sort. Errors if
+	the Film has no main copies (a Film row with zero `role='main'`
+	videos is an invariant violation; the scanner shouldn't produce
+	one).
+	"""
+	bestCopy: Video!
+}
+
+type FilmConnection {
+	edges: [FilmEdge!]!
+	pageInfo: PageInfo!
+	totalCount: Int!
+}
+
+type FilmEdge {
+	node: Film!
+	cursor: String!
+}
+
 enum JobStatus {
 	PENDING
 	RUNNING
@@ -104,9 +144,9 @@ type Mutation {
 	"""
 	matchVideo(videoId: ID!, imdbId: String!): Video!
 	unmatchVideo(videoId: ID!): Video!
-	addToWatchlist(videoId: ID!): WatchlistItem!
+	addFilmToWatchlist(filmId: ID!): WatchlistItem!
 	removeFromWatchlist(id: ID!): Boolean!
-	updateWatchProgress(videoId: ID!, progressSeconds: Float!): WatchlistItem!
+	updateWatchProgress(filmId: ID!, progressSeconds: Float!): WatchlistItem!
 	setSetting(key: String!, value: String!): Boolean!
 	recordPlaybackSession(traceId: String!, videoId: ID!, resolution: Resolution!): PlaybackSession!
 }
@@ -184,6 +224,14 @@ type Query {
 	libraries: [Library!]!
 	videos(first: Int, libraryId: ID, search: String, mediaType: MediaType): VideoConnection!
 	video(id: ID!): Video
+	"""
+	Films are the homepage Movies row's source of truth — paginated,
+	server-filterable. One Film per logical movie; multiple `videos`
+	(file copies) hang off `Film.copies`. See
+	`docs/architecture/Library-Scan/01-Filename-Conventions.md`.
+	"""
+	films(first: Int, libraryId: ID, search: String): FilmConnection!
+	film(id: ID!): Film
 	transcodeJob(id: ID!): TranscodeJob
 	watchlist: [WatchlistItem!]!
 	"""
@@ -308,7 +356,7 @@ type WatchlistItem implements Node {
 	addedAt: String!
 	progressSeconds: Float!
 	notes: String
-	video: Video!
+	film: Film!
 }
 
 """

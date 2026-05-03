@@ -26,12 +26,15 @@ Keep rows short (≤ ~120 chars). When adding a new topic file to `docs/`, add i
 | Trace-first verification workflow (decide signal, add logs, query Seq; span.addEvent gotcha) | `docs/architecture/Observability/04-Verification-Workflow.md` |
 | OTel env vars, switching backends, Seq API-key setup | `docs/architecture/Observability/03-Config-And-Backends.md` |
 | Server boot sequence + graceful shutdown | `docs/architecture/Startup/00-Boot-And-Shutdown.md` |
-| Library scanner pipeline | `docs/architecture/Library-Scan/00-Flow.md` |
+| Library scanner pipeline (flow, passes) | `docs/architecture/Library-Scan/00-Flow.md` |
+| Filename + folder conventions (movies, TV) | `docs/architecture/Library-Scan/01-Filename-Conventions.md` |
+| Film entity (logical dedup layer, role semantics, scanner passes, watchlist linking) | `docs/architecture/Library-Scan/02-Film-Entity.md` |
 | Peer-to-peer streaming model (passthrough, Ed25519 invite tokens, content-addressed cache reuse, cross-peer traceparent, invariants) | `docs/architecture/Sharing/00-Peer-Streaming.md` |
 | Tauri desktop shell — `tauri.conf.json`, in-process server, bundled ffmpeg, VAAPI Linux fallback, code-signing, CI matrix | `docs/architecture/Deployment/00-Tauri-Desktop-Shell.md` |
 | Tauri packaging internals — build pipeline, installed-app layout per OS, `tauri-plugin-updater` mechanics | `docs/architecture/Deployment/01-Packaging-Internals.md` |
 | Shipping ffmpeg — manifest pinning, portable strategy for every OS, runtime resolution under Tauri, GPL compliance | `docs/architecture/Deployment/02-Shipping-FFmpeg.md` |
 | Per-component design specs (style, layout, behaviour, data) — agent-facing reference for every UI component | `docs/client/Components/README.md` |
+| FilmVariants component spec (multi-copy variant picker) | `docs/client/Components/FilmVariants.md` |
 | Outstanding redesign work (working document of items not yet shipped) | `docs/release/Outstanding-Work.md` |
 | AppHeader spec (glass, custom caret, scan button, suggestions dropdown, ARIA) — exemplar component spec | `docs/client/Components/AppHeader.md` |
 | Resolution ladder + enum mirror chain | `docs/server/Config/01-Resolution-Ladder.md` |

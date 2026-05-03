@@ -22,6 +22,14 @@ pub struct VideoRow {
     /// The scanner derives this from the first video-stream height via
     /// `Resolution::from_height`; the GraphQL boundary maps it via `Resolution::from_internal`.
     pub native_resolution: Option<String>,
+    /// Logical Film this video belongs to. Set for movie file rows by the
+    /// scanner (after MovieUnit resolution + OMDb match). NULL for TV show
+    /// parent rows, episode file rows, and unmatched movie rows.
+    pub film_id: Option<String>,
+    /// `'main'` (the canonical movie file in its folder) or `'extra'`
+    /// (trailers, deleted scenes, behind-the-scenes living alongside).
+    /// Defaults to `'main'`. Only meaningful when `film_id` is set.
+    pub role: String,
 }
 
 impl VideoRow {
@@ -38,6 +46,8 @@ impl VideoRow {
             scanned_at: r.get("scanned_at")?,
             content_fingerprint: r.get("content_fingerprint")?,
             native_resolution: r.get("native_resolution")?,
+            film_id: r.get("film_id")?,
+            role: r.get("role")?,
         })
     }
 }
@@ -287,6 +297,34 @@ pub fn sum_file_size_by_library(db: &Db, library_id: &str) -> DbResult<i64> {
     })
 }
 
+/// Fetch every `videos` row tied to a Film, regardless of role. The Film
+/// type's `copies` resolver filters to `role='main'`; `extras` filters to
+/// `role='extra'`. Order is: main first, then by resolution desc, then by
+/// bitrate desc — same as the `bestCopy` heuristic.
+pub fn get_videos_by_film_id(db: &Db, film_id: &str) -> DbResult<Vec<VideoRow>> {
+    db.with(|c| {
+        let mut stmt = c.prepare(
+            r#"SELECT v.* FROM videos v
+                 WHERE v.film_id = ?1
+                 ORDER BY
+                   CASE v.role WHEN 'main' THEN 0 ELSE 1 END,
+                   CASE v.native_resolution
+                     WHEN '4k'   THEN 0
+                     WHEN '1080p' THEN 1
+                     WHEN '720p' THEN 2
+                     WHEN '480p' THEN 3
+                     WHEN '360p' THEN 4
+                     WHEN '240p' THEN 5
+                     ELSE 6
+                   END,
+                   v.bitrate DESC"#,
+        )?;
+        let rows = stmt.query_map(params![film_id], VideoRow::from_row)?;
+        let collected: rusqlite::Result<Vec<_>> = rows.collect();
+        Ok(collected?)
+    })
+}
+
 pub fn get_streams_by_video_id(db: &Db, video_id: &str) -> DbResult<Vec<VideoStreamRow>> {
     db.with(|c| {
         let mut stmt = c.prepare("SELECT * FROM video_streams WHERE video_id = ?1")?;
@@ -526,6 +564,8 @@ mod tests {
             scanned_at: "2026-01-01T00:00:00.000Z".to_string(),
             content_fingerprint: "1000:abc".to_string(),
             native_resolution: None,
+            film_id: None,
+            role: "main".to_string(),
         }
     }
 

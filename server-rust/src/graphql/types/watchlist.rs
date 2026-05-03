@@ -1,9 +1,10 @@
-//! `WatchlistItem` — one row per saved video.
+//! `WatchlistItem` — one row per saved film. Watchlist is keyed on
+//! `film_id`; the player picks which file copy to play.
 
 use async_graphql::{Context, Object, ID};
 
-use super::video::Video;
-use crate::db::{get_video_by_id, Db, WatchlistItemRow};
+use super::film::Film;
+use crate::db::{get_film_by_id, Db, WatchlistItemRow};
 use crate::relay::to_global_id;
 
 #[derive(Clone)]
@@ -41,14 +42,14 @@ impl WatchlistItem {
     async fn notes(&self) -> Option<&String> {
         self.notes.as_ref()
     }
-    async fn video(&self, ctx: &Context<'_>) -> async_graphql::Result<Video> {
+    async fn film(&self, ctx: &Context<'_>) -> async_graphql::Result<Film> {
         let db = ctx.data_unchecked::<Db>();
-        let row = get_video_by_id(db, &self.raw.video_id)?.ok_or_else(|| {
+        let row = get_film_by_id(db, &self.raw.film_id)?.ok_or_else(|| {
             async_graphql::Error::new(format!(
-                "WatchlistItem {:?} references missing video {}",
-                self.id, self.raw.video_id
+                "WatchlistItem {:?} references missing film {}",
+                self.id, self.raw.film_id
             ))
         })?;
-        Ok(Video::from_row(&row))
+        Ok(Film::from_row(&row))
     }
 }

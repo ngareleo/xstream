@@ -17,16 +17,19 @@ const WATCHLIST_QUERY = graphql`
       id
       addedAt
       progressSeconds
-      video {
+      film {
         id
         title
-        filename
-        durationSeconds
-        nativeResolution
+        year
         metadata {
-          year
           rating
           posterUrl
+        }
+        bestCopy {
+          id
+          filename
+          durationSeconds
+          nativeResolution
         }
       }
     }
@@ -45,19 +48,24 @@ export const WatchlistPageContent: FC = () => {
   const tiles = useMemo(
     () =>
       items.map((item) => {
-        const altText = item.video.title || item.video.filename;
+        const film = item.film;
+        const best = film.bestCopy;
+        const altText = film.title || best.filename;
         const subtitleParts = [
-          item.video.metadata?.year ?? null,
-          item.video.durationSeconds > 0 ? formatDurationHuman(item.video.durationSeconds) : null,
-          resolutionLabel(item.video.nativeResolution),
+          film.year ?? null,
+          best.durationSeconds > 0 ? formatDurationHuman(best.durationSeconds) : null,
+          resolutionLabel(best.nativeResolution),
         ].filter((v): v is string | number => v !== null && v !== "");
-        const progress = progressPercent(item.progressSeconds, item.video.durationSeconds);
+        const progress = progressPercent(item.progressSeconds, best.durationSeconds);
         return {
           id: item.id,
-          videoId: item.video.id,
+          // Open the FilmDetailsOverlay keyed on the film id (matches the
+          // homepage URL contract); the overlay's variant picker handles
+          // copy selection.
+          filmId: film.id,
           altText,
-          posterUrl: item.video.metadata?.posterUrl ?? null,
-          rating: item.video.metadata?.rating ?? null,
+          posterUrl: film.metadata?.posterUrl ?? null,
+          rating: film.metadata?.rating ?? null,
           subtitle: subtitleParts.join(" · "),
           addedAt: item.addedAt,
           progress,
@@ -79,7 +87,7 @@ export const WatchlistPageContent: FC = () => {
       ) : (
         <div className={styles.grid}>
           {tiles.map((tile) => (
-            <Link key={tile.id} to={`/?film=${tile.videoId}`} className={styles.tile}>
+            <Link key={tile.id} to={`/?film=${tile.filmId}`} className={styles.tile}>
               <div className={styles.tileFrame}>
                 <Poster url={tile.posterUrl} alt={tile.altText} className={styles.tileImage} />
                 {tile.progress !== null && (
