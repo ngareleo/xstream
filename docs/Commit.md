@@ -15,6 +15,20 @@ Entry shape (each entry ends with the divider line described above):
 
 <!-- ENTRIES BELOW — newest first; each ends with a bare `---` line. The architect's next invocation will treat the no-entries state as the first-run case and prepend a bootstrap entry at HEAD. -->
 
+## (pending) — 2026-05-03
+
+**Files:** `docs/SUMMARY.md`, `docs/INDEX.md`, `docs/README.md`, `docs/release/README.md`, `docs/client/Components/README.md`, `docs/design/README.md`, `docs/design/UI-Design-Spec/README.md`, `.claude/agents/migrations-lead.md`, `CLAUDE.md`, `README.md`, `docs/Commit.md`, `docs/History.md`
+**Why:** Curator pass after release-design migration retirement: promoted per-component specs from `docs/migrations/release-design/Components/` to `docs/client/Components/`; created `docs/release/Outstanding-Work.md` for post-redesign work; purged Moran/Prerelease framing from active docs; updated migrations-lead agent scope to own `design/Release/` + `docs/client/Components/`; added Commit.md and History.md entries
+
+---
+
+## 6a875fd — 2026-05-03 (corrected)
+
+**Files:** `docs/architecture/Relay/00-Fragment-Contract.md`, `docs/code-style/Client-Conventions/00-Patterns.md`
+**Why:** User preference is declarative-first React-Relay (no imperative store manipulation). Rewrote "Mutations and cache invalidation" to recommend `fetchPolicy: "store-and-network"` on destination query instead of `updater: store.invalidateStore()`. Mutation just commits + navigates. Moved old pattern to historical note. Code now shows CreateProfilePage.tsx (slim mutation) + HomePageContent.tsx pattern.
+
+---
+
 ## 2026-05-03 — M8 Settings section-tab Relay exception
 
 **Files:** `docs/code-style/Client-Conventions/00-Patterns.md`, `docs/SUMMARY.md`
@@ -66,21 +80,21 @@ Entry shape (each entry ends with the divider line described above):
 
 ## ac4c7fd — 2026-05-02 (icon library standardisation)
 
-**Files:** `docs/code-style/Client-Conventions/00-Patterns.md`, `docs/migrations/release-design/Changes.md`
-**Why:** curator update — both workspaces (design/Release lab + production client) standardised on @heroicons/react@1.0.6 replacing hand-rolled SVG icons; added icon sourcing convention + Figma kit link to client docs; noted change + design-system reference in release-design Changes.md
+**Files:** `docs/code-style/Client-Conventions/00-Patterns.md`
+**Why:** curator update — both workspaces (design/Release lab + production client) standardised on @heroicons/react@1.0.6 replacing hand-rolled SVG icons; added icon sourcing convention + Figma kit link to client docs
 
 ---
 
 ## f75e3ca — 2026-05-01
 
 **Files:** `docs/INDEX.md`
-**Why:** added INDEX row for `docs/migrations/release-design/Changes.md` (Prerelease → Release cross-cutting diff) per migrations-lead notification after PR #46 landed
+**Why:** added INDEX row for the release-design redesign cross-cutting diff per migrations-lead notification after PR #46 landed
 
 ---
 
 ## 92da4bc — 2026-05-01 (PR #46 release-design Griffel sweep + poster offline cache)
 
-**Files:** `docs/migrations/release-design/Components/DetailPane.md`, `docs/migrations/release-design/Components/Poster.md`, `docs/migrations/release-design/Components/Library.md`, `docs/migrations/release-design/Components/Player.md`, `docs/migrations/release-design/Components/Settings.md`, `docs/migrations/release-design/Components/Goodbye.md`, `docs/migrations/release-design/Components/NotFound.md`, `docs/migrations/release-design/Components/Profiles.md`
+**Files:** release-design component specs (DetailPane, Poster, Library, Player, Settings, Goodbye, NotFound, Profiles)
 **Why:** PR #46 Griffel sweep — added `.styles.ts` to 7 lab files and removed stale "inline styles only" TODO entries; updated Poster API note (geometry now caller-supplied via className, style prop dropped); Profiles row-internals inline TODO removed (covered by sweep)
 
 ---
@@ -88,7 +102,7 @@ Entry shape (each entry ends with the divider line described above):
 ## 92da4bc — 2026-05-01
 
 **Files:** no doc updates needed
-**Why:** sync scan — `874c246` ports library scanner to Rust (docs/migrations/rust-rewrite/06-File-Handling-Layer.md in-flight under migrations-lead ownership, no architect action); `92da4bc` scaffolds design/Release/ lab + release-design migration (INDEX rows already landed in prior session)
+**Why:** sync scan — `874c246` ports library scanner to Rust (rust-rewrite migration in-flight under migrations-lead ownership, no architect action); `92da4bc` scaffolds design/Release/ lab + release-design redesign (INDEX rows already landed in prior session)
 **Source commits scanned:** `ae702ab..92da4bc`
 
 ---
@@ -102,15 +116,15 @@ Entry shape (each entry ends with the divider line described above):
 
 ## ae702ab — 2026-05-01 (design-lab mprocs + port assignment)
 
-**Files:** `design/mprocs.yaml` (new), `design/Prerelease/vite.config.ts`, `design/Release/vite.config.ts`, `design/Prerelease/README.md`, `design/Release/README.md`, `docs/design/UI-Design-Spec/01-Release-Tokens-And-Layout.md`, `docs/design/UI-Design-Spec/README.md`
-**Why:** mprocs added to `design/` so both labs boot together; ports assigned from 5000 up (Prerelease 5000, Release 5001); doc port references updated to match — no structural doc additions needed
+**Files:** `design/mprocs.yaml` (new), `design/Release/vite.config.ts`, `design/Release/README.md`, `docs/design/UI-Design-Spec/00-Tokens-And-Layout.md`, `docs/design/UI-Design-Spec/README.md`
+**Why:** mprocs added to `design/` so the lab boots from the repo root; port `5001` assigned to the design lab; doc port references updated to match — no structural doc additions needed
 
 ---
 
 ## ae702ab — 2026-05-01
 
-**Files:** `docs/design/UI-Design-Spec/00-Prerelease-Tokens-And-Layout.md`, `docs/design/UI-Design-Spec/01-Release-Tokens-And-Layout.md`, `docs/design/UI-Design-Spec/README.md`, `docs/SUMMARY.md`, `docs/INDEX.md`, `.claude/skills/implement-design/SKILL.md`
-**Why:** design-lab split — `design/` restructured into `design/Prerelease/` (frozen Moran) and `design/Release/` (active Xstream); doc era index + retrieval rows updated accordingly
+**Files:** `docs/design/UI-Design-Spec/00-Tokens-And-Layout.md`, `docs/design/UI-Design-Spec/README.md`, `docs/SUMMARY.md`, `docs/INDEX.md`, `.claude/skills/implement-design/SKILL.md`
+**Why:** design-lab spec landed at `design/Release/`; doc index + retrieval rows updated accordingly
 **Source commits scanned:** `8534bc2..ae702ab`
 
 ---

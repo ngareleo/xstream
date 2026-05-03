@@ -1,8 +1,7 @@
 /**
  * useSplitResize — drag-to-resize hook for the split-body layout.
  *
- * Verbatim port from `design/Prerelease/src/hooks/useSplitResize.ts`.
- * Same contract: 3-column grid (1fr | handle | pane). When closed:
+ * Contract: 3-column grid (1fr | handle | pane). When closed:
  * `1fr 0px 0px`. When open: `1fr 4px ${paneWidth}px`.
  */
 

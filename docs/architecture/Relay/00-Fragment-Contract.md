@@ -126,6 +126,50 @@ The artifacts in `src/relay/__generated__/` are **gitignored** — they are gene
 
 ---
 
+## Mutations and cache invalidation
+
+### When a mutation affects shared data
+
+Some mutations add, delete, or edit entities that appear in multiple queries. Examples:
+
+- `createLibrary` — affects `HOMEPAGE_QUERY.libraries` and `PROFILES_QUERY.profiles`
+- `deleteLibrary` — affects both queries above
+- `addToWatchlist` — affects queries on Video pages and Watchlist pages
+
+**Canonical pattern: use declarative Relay only.** Mutations that affect shared collections should not use `updater` callbacks or imperative cache manipulation. Instead, mark the destination page's `useLazyLoadQuery` with `fetchPolicy: "store-and-network"` so it re-validates its data on mount. The mutation itself just commits and navigates.
+
+```tsx
+// CreateProfilePage.tsx — the mutation just commits + navigates
+const [commit] = useMutation<CreateLibraryMutation>(CREATE_LIBRARY);
+
+const handleSubmit = (name: string, path: string) => {
+  commit({
+    variables: { name, path },
+    onCompleted: (_data, errors) => {
+      if (errors && errors.length > 0) return;
+      navigate(returnTo); // destination page will refetch its own data
+    },
+  });
+};
+```
+
+```tsx
+// HomePageContent.tsx — the destination page opts into fresh data
+const data = useLazyLoadQuery<HomePageQuery>(
+  HOMEPAGE_QUERY,
+  {},
+  { fetchPolicy: "store-and-network" } // re-validate on mount
+);
+```
+
+This approach is simpler and more testable: data freshness is expressed as a property of the query that reads it, not as a side effect triggered from elsewhere. It works for any `?return_to=` destination without mutation-side code changes. See [`docs/code-style/Client-Conventions/00-Patterns.md`](../../code-style/Client-Conventions/00-Patterns.md) for the broader "prefer declarative React-Relay" directive.
+
+### Historical note: `store.invalidateStore()`
+
+Earlier implementations used Relay's `updater` option to call `store.invalidateStore()` — a method on the `RecordSourceSelectorProxy` type passed to the mutation callback. This approach worked but required imperative cache manipulation at the mutation site. The current pattern (declarative `fetchPolicy` on the destination query) is now preferred — it's simpler, requires no cache knowledge in the mutation, and makes intent clearer to future readers.
+
+---
+
 ## Adding a new component with its own data
 
 1. Define the fragment in the component file with `graphql`

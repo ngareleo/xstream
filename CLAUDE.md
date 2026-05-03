@@ -36,9 +36,10 @@ xstream/
 ├── docs/                           # knowledge base owned by the architect subagent (see docs/README.md)
 │   ├── README.md                   # super-domain index
 │   ├── architecture/               # cross-cutting concepts (Streaming, Relay, Observability, Startup, Library-Scan, Deployment, Sharing, Testing)
-│   ├── client/                     # client-only topics (Feature-Flags, Debugging-Playbooks)
+│   ├── client/                     # client-only topics (Components, Feature-Flags, Debugging-Playbooks)
 │   ├── server/                     # server-only topics (Config, GraphQL-Schema, DB-Schema, Hardware-Acceleration)
-│   ├── design/                     # UI design spec (Prerelease frozen, Release active)
+│   ├── design/                     # UI design spec — tokens, type, spacing, behavioural contracts
+│   ├── release/                    # outstanding redesign work (working document)
 │   ├── product/                    # product spec, customers, roadmap
 │   ├── code-style/                 # conventions, invariants, anti-patterns, naming, testing policy
 │   ├── diagrams/                   # .mmd + .png (stable filenames; owned by `update-docs` skill)
@@ -67,7 +68,7 @@ xstream/
 └── client/src/
     ├── main.tsx router.tsx         # RelayEnvironmentProvider + RouterProvider + NovaEventingProvider
     ├── relay/                      # environment.ts + __generated__/ (gitignored, regenerated)
-    ├── styles/tokens.ts            # Moran design tokens
+    ├── styles/tokens.ts            # Xstream design tokens
     ├── lib/icons.tsx               # icon exports
     ├── pages/                      # XxxPage.tsx (Suspense shell) + XxxPageContent.tsx (data + layout)
     ├── components/                 # one kebab-case directory per component — colocated .styles.ts, .strings.ts, .events.ts, .stories.tsx
@@ -88,7 +89,8 @@ Most domain knowledge lives in skills, subagents, or `docs/`. The main agent sho
 | Topic | Go to |
 |---|---|
 | Architecture, streaming pipeline, backpressure, HW-accel, tech-choice trade-offs | `architect` subagent |
-| Prerelease → Release client redesign (per-component spec) | `migrations-lead` subagent |
+| Per-component design specs (style, layout, behaviour, data) | `docs/client/Components/` |
+| Outstanding redesign work | `docs/release/Outstanding-Work.md` |
 | Local dev setup, ffmpeg pinning, env vars, CI/CD, zombie ffmpeg, VAAPI driver gaps, OMDb auto-match | `devops` subagent |
 | Any browser interaction (UI verification, Seq inspection, playback checks) | `browser` skill |
 | Writing a React component | `write-component` skill |
@@ -129,8 +131,8 @@ Before marking **any task that modified code or docs** as complete, spawn the re
 
 Routing:
 
-- Edits inside `docs/migrations/**` OR `design/Release/**` → notify `migrations-lead`. It curates the Prerelease → Release client redesign tree (`release-design/Components/<Name>.md` per-component specs) and loops `architect` in if a cross-cutting INDEX row needs adding.
-- Everything else (server / client code, other `docs/` subtrees, `design/Prerelease/**` (frozen), `.claude/`, `CLAUDE.md`, `README.md`) → notify `architect`.
+- Edits inside `design/Release/**` → notify `migrations-lead`. It owns the design lab and forwards cross-cutting changes (component-spec updates under `docs/client/Components/`, INDEX rows) to `architect`.
+- Everything else (server / client code, `docs/` subtrees, `.claude/`, `CLAUDE.md`, `README.md`) → notify `architect`.
 
 The curator decides whether `docs/`, `SUMMARY.md`, or the cross-cutting index needs updating, and does so directly (architect-only for `INDEX.md` and `SUMMARY.md`). This keeps the RAG coherent without requiring the caller to know what to update.
 
@@ -164,7 +166,7 @@ If the current work feels architecturally separable from the open PR and a secon
 
 The full registry is surfaced by the Skill tool at session start. Brief map:
 
-- **Subagents** (`.claude/agents/`): `architect` (knowledge-base curator + design / tech choices), `migrations-lead` (Prerelease → Release client-redesign per-component specs in `docs/migrations/release-design/`), `devops` (dev flow / release / backend ops)
+- **Subagents** (`.claude/agents/`): `architect` (knowledge-base curator + design / tech choices), `migrations-lead` (`design/Release/` lab + per-component specs in `docs/client/Components/`), `devops` (dev flow / release / backend ops)
 - **Skills** (`.claude/skills/`): `browser`, `write-component`, `implement-design`, `feature-flags`, `test`, `debug-backend`, `debug-ui`, `e2e-test`, `update-docs`, `otel-logs`, `setup-local`, `create-pr`, `resolve-comments`, `reflect`, `todo`, `groom-knowledge-base`
 
 **Subagent model policy:** invoke all subagents on `haiku` by default. Custom agents in `.claude/agents/` are pinned via frontmatter; built-in agents (`Explore`, `Plan`, `general-purpose`, …) need `model: "haiku"` passed per `Agent` call. Escalate to `sonnet` only when Haiku is known to be insufficient for the specific task; never default a subagent to `opus`.

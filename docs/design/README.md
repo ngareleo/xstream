@@ -4,4 +4,4 @@ The UI design system — tokens, layout rules, visual language. Contrast with [`
 
 | Folder | Hook |
 |---|---|
-| [`UI-Design-Spec/`](UI-Design-Spec/README.md) | Moran tokens, grid, spacing, typography. |
+| [`UI-Design-Spec/`](UI-Design-Spec/README.md) | Tokens, grid, spacing, typography. |
