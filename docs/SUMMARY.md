@@ -55,7 +55,7 @@ Full rationale: [`code-style/Principles/`](code-style/Principles/README.md). The
 - [`code-style/README.md`](code-style/README.md) — full per-language conventions tree (Rust, TS/React, SQL).
 - [`code-style/Naming/00-Conventions.md`](code-style/Naming/00-Conventions.md) — PascalCase for React components + satellites; camelCase for TS; snake_case for Rust.
 - [`code-style/Server-Conventions/00-Patterns.md`](code-style/Server-Conventions/00-Patterns.md) — explicit resolver return types, presenter layer, ffmpeg path resolution is process-global.
-- [`code-style/Client-Conventions/00-Patterns.md`](code-style/Client-Conventions/00-Patterns.md) — `useLazyLoadQuery` in pages only (see exception for section-tabs), fragment-per-component, Griffel only for styles, Nova eventing for user actions (no callback props).
+- [`code-style/Client-Conventions/00-Patterns.md`](code-style/Client-Conventions/00-Patterns.md) — `useLazyLoadQuery` in pages only (see exception for section-tabs), fragment-per-component, Griffel only for styles, Nova eventing for user actions (no callback props); mutations express cache freshness declaratively via destination-page `fetchPolicy`, never via imperative `updater` callbacks.
 - [`code-style/Anti-Patterns/00-What-Not-To-Do.md`](code-style/Anti-Patterns/00-What-Not-To-Do.md) — no ORM, no ad-hoc SQL, no non-null assertions, no literal `className` strings, no duplicate resolvers.
 - [`code-style/Tooling/00-Linting-And-Formatting.md`](code-style/Tooling/00-Linting-And-Formatting.md) — `cargo clippy`/`cargo fmt` (Rust); ESLint v10 + Prettier v3 (TS/React); raw + reviewed-by-hand SQL; Husky + lint-staged on TS/TSX only.
 - Observability rules live with the spans they govern: [`architecture/Observability/01-Logging-Policy.md`](architecture/Observability/01-Logging-Policy.md).
@@ -73,9 +73,10 @@ Full rationale: [`code-style/Principles/`](code-style/Principles/README.md). The
 | Server config, ladder, schema, DB, HW-accel | [`server/`](server/README.md) |
 | Client feature flags, debugging playbooks | [`client/`](client/README.md) |
 | Invariants, naming, conventions, anti-patterns, testing policy | [`code-style/`](code-style/README.md) |
-| UI design spec | [`design/`](design/README.md) — split: Prerelease (Moran, frozen) and Release (Xstream, active) |
+| UI design spec (tokens, grid, typography) | [`design/`](design/README.md) |
+| Per-component design specs (style, layout, behaviour) | [`client/Components/`](client/Components/README.md) |
+| Outstanding redesign work (working document) | [`release/`](release/README.md) |
 | Product spec, customers, roadmap | [`product/`](product/README.md) |
-| Migrations (retired Prerelease → Release redesign; ready-to-archive) | [`migrations/`](migrations/README.md) |
 
 **For anything deeper than this page, ask the `architect` subagent — it owns the knowledge base and maintains this file.** When you modify code or docs, notify architect with a short change summary before closing the task so the tree stays coherent.
 

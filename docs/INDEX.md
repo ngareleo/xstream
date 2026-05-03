@@ -31,10 +31,9 @@ Keep rows short (≤ ~120 chars). When adding a new topic file to `docs/`, add i
 | Tauri desktop shell — `tauri.conf.json`, in-process server, bundled ffmpeg, VAAPI Linux fallback, code-signing, CI matrix | `docs/architecture/Deployment/00-Tauri-Desktop-Shell.md` |
 | Tauri packaging internals — build pipeline, installed-app layout per OS, `tauri-plugin-updater` mechanics | `docs/architecture/Deployment/01-Packaging-Internals.md` |
 | Shipping ffmpeg — manifest pinning, portable strategy for every OS, runtime resolution under Tauri, GPL compliance | `docs/architecture/Deployment/02-Shipping-FFmpeg.md` |
-| Release-design migration — Prerelease (Moran) → Release (Xstream) per-component spec + porting checklist | `docs/migrations/release-design/README.md` |
-| Release-design M0–M10 milestones + agent roster + decision log + sync notes | `docs/migrations/release-design/Plan.md` |
-| Prerelease → Release cross-cutting diff (routing, shell, sidebar, fonts, mock data, visual language) | `docs/migrations/release-design/Changes.md` |
-| AppHeader spec (glass, custom caret, scan button, suggestions dropdown, ARIA) — model for all Release component specs | `docs/migrations/release-design/Components/AppHeader.md` |
+| Per-component design specs (style, layout, behaviour, data) — agent-facing reference for every UI component | `docs/client/Components/README.md` |
+| Outstanding redesign work (working document of items not yet shipped) | `docs/release/Outstanding-Work.md` |
+| AppHeader spec (glass, custom caret, scan button, suggestions dropdown, ARIA) — exemplar component spec | `docs/client/Components/AppHeader.md` |
 | Resolution ladder + enum mirror chain | `docs/server/Config/01-Resolution-Ladder.md` |
 | AppConfig, library configuration | `docs/server/Config/00-AppConfig.md` |
 | GraphQL schema surface | `docs/server/GraphQL-Schema/00-Surface.md` |
@@ -58,7 +57,6 @@ Keep rows short (≤ ~120 chars). When adding a new topic file to `docs/`, add i
 | Tests travel with the port — assertions are the contract across migrations | `docs/code-style/Testing/00-Tests-Travel-With-The-Port.md` |
 | Linting + formatting per language (Rust clippy/fmt, TS ESLint+Prettier, SQL by-hand, Husky pre-commit) | `docs/code-style/Tooling/00-Linting-And-Formatting.md` |
 | Architect narrative history — paired with `docs/Commit.md`, read recent ~5 entries to build familiarity | `docs/History.md` |
-| Design spec (Release / Xstream — active) | `docs/design/UI-Design-Spec/01-Release-Tokens-And-Layout.md` |
-| Design spec (Prerelease / Moran — frozen) | `docs/design/UI-Design-Spec/00-Prerelease-Tokens-And-Layout.md` |
+| Design spec — tokens, type scale, spacing, behavioural contracts | `docs/design/UI-Design-Spec/00-Tokens-And-Layout.md` |
 | Product spec | `docs/product/Product-Spec/00-Scope.md` |
 | Tech-choice question ("should we use X?") | No read required — use the template in `.claude/agents/architect.md` |

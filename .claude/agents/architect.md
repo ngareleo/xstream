@@ -135,6 +135,7 @@ Every agent that modifies code or docs must notify me before closing its task, w
 
 1. Scan the **files changed** list. For each, map to a doc via the index:
    - Server/client source file → the concept folder that documents its subsystem (e.g. `chunker.ts` → `architecture/Streaming/` and/or `architecture/Observability/server/`).
+   - **Component or page source file** (`client/src/components/<name>/*` or `client/src/pages/<name>-page/*`) → the paired per-component spec at `docs/client/Components/<Name>.md`. Open both, diff what the spec claims against what the code now does (layout values, props, behaviour, data sources, subcomponent references), and bring the spec into sync. If the change introduces a brand-new component dir, write a new spec using `docs/client/Components/AccountMenu.md` as the template and add a row to `docs/client/Components/README.md`. If a component is deleted, delete its spec and drop the catalog row.
    - Doc edits → verify the folder's `README.md` still lists the touched files correctly.
 2. **Decide if the knowledge base needs to update.** Many changes (bug fixes with no behavior-contract implications, internal refactors, comment tweaks) don't. When in doubt: if the change contradicts anything the docs currently claim, it needs an update.
 3. If an update is needed, apply the **Curation procedure** above — edit the matching doc(s), update READMEs, refresh `SUMMARY.md` if architecture-level.

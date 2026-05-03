@@ -6,8 +6,8 @@
  * `scripts/fetch-posters.ts` and served from `/posters/<id>.jpg` so the lab
  * stays offline-safe.
  *
- * Mirrors the Profile / Film / WatchlistItem shapes used by the Prerelease
- * lab so future refactors that share types stay trivial.
+ * Mirrors the Profile / Film / WatchlistItem shapes used by the production
+ * client so future refactors that share types stay trivial.
  *
  * TV shows are modelled as `Film` records with `kind: "series"` and a
  * populated `seasons` array. Per-episode availability lives on

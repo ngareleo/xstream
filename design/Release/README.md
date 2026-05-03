@@ -1,29 +1,26 @@
 # Xstream — UI Design Lab (Release)
 
-The active design lab — a sandbox React+Vite prototype of the **Xstream**
+The design lab — a sandbox React+Vite prototype of the **Xstream**
 streaming client. Used to validate user flows and visual treatments before
 implementing against the real GraphQL/MSE data layer in `client/`.
-
-This is the post-redesign era. The previous "Moran" lab is frozen at
-`design/Prerelease/`.
 
 Run with:
 ```bash
 cd design/Release && bun install && bun dev   # http://localhost:5001
 ```
 
-Or boot both labs together from the repo root:
+Or from the repo root:
 ```bash
-bun run design                                # Prerelease :5000 · Release :5001
+bun run design                                # Release :5001
 ```
 
 ---
 
 ## Visual identity
 
-The Xstream identity replaces Moran's red + Bebas Neue with a green +
-Anton system. Tokens are extracted from the Figma handoff at
-`/home/dag/Downloads/XStream Figma Board.html` and live in two places:
+The Xstream identity is a green + Anton system. Tokens are extracted from
+the Figma handoff at `/home/dag/Downloads/XStream Figma Board.html` and
+live in two places:
 
 - `src/styles/tokens.ts` — typed values consumed by Griffel `makeStyles()`.
 - `src/styles/shared.css` — same values exposed as CSS custom properties on
@@ -61,9 +58,11 @@ Anton system. Tokens are extracted from the Figma handoff at
 | `/goodbye` — Sign-out farewell | port-in-progress |
 | `*` — 404 NotFound | port-in-progress |
 
-The behavior contract for each page (URL-based pane state, Player state
-machine, drag-resize, inactivity hide) ports verbatim from
-`design/Prerelease/`. Only the visual treatment changes.
+The structural UX contracts (URL-based pane state, Player state machine,
+drag-resize, inactivity hide) live in
+[`docs/design/UI-Design-Spec/00-Tokens-And-Layout.md`](../../docs/design/UI-Design-Spec/00-Tokens-And-Layout.md).
+Per-component specs (layout, behaviour, data) live in
+[`docs/client/Components/`](../../docs/client/Components/README.md).
 
 ## Source assets
 
@@ -71,7 +70,6 @@ machine, drag-resize, inactivity hide) ports verbatim from
 - `/home/dag/Downloads/app-mockups.jsx` — Profiles / Library / Player JSX
 - `/home/dag/Downloads/logos.jsx` — 7 logo candidates
 - `/home/dag/Downloads/xstream proto 2.zip` → `public/images/atmos-{1..4}.jpg`
-- `design/Prerelease/` — behavior reference for everything not in the Figma
 
 The `app-mockups.jsx` file uses real OMDb poster URLs (Oppenheimer, Barbie,
 Nosferatu, Civil War). Those URLs power `getPosterUrl()` in `src/data/mock.ts`.
