@@ -13,11 +13,26 @@ Presentational accordion component for series browsing. Displays seasons with co
 
 | Prop | Type | Notes |
 |---|---|---|
-| `seasons` | `Season[]` | Array of season objects with episode arrays. |
+| `video` | `SeasonsPanel_video$key` | Relay fragment key. The fragment traverses to `Video.show.seasons` — the video must be an episode file (or a movie video, in which case the panel renders empty). |
 | `defaultOpenFirst` | `boolean` | If true, first season opens expanded on mount (default: false). |
 | `accordion` | `boolean` | If true, opening a season closes others; single-open mode (default: false). |
 | `activeEpisode` | `{ seasonNumber; episodeNumber }` | When provided, marks active episode + auto-expands its season (Player use only). |
 | `onSelectEpisode` | `(seasonNumber, episodeNumber) => void` | Available episode click handler (Player use only). |
+
+## Fragment
+
+```graphql
+fragment SeasonsPanel_video on Video {
+  show {
+    seasons {
+      seasonNumber
+      ...Season_season
+    }
+  }
+}
+```
+
+The component reads `data.show?.seasons ?? []` — movies (`show === null`) render an empty panel.
 
 ## Layout & styles
 

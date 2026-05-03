@@ -1,9 +1,11 @@
 # FilmDetailsOverlay
 
-Full-bleed overlay covering the entire viewport when a user selects a film from the Library carousel (`?film=<id>` set). Renders the film's poster as a hero with Ken Burns animation, gradient overlays, metadata content stack, and CTAs (Play glass pill, Back pill, Close button).
+Full-bleed overlay shown when a movie tile is clicked on the homepage (`?film=<id>`). Renders the film's poster as a hero with Ken Burns animation, gradient overlays, metadata content stack, and CTAs (Play glass pill, Back pill, Close button).
+
+**Movies only.** TV shows have a sibling [`ShowDetailsOverlay`](ShowDetailsOverlay.md) keyed on `?show=<id>`; the homepage routes to one or the other based on which URL param is set.
 
 **Source:** `client/src/components/film-details-overlay/`
-**Used by:** Library page (when `selectedFilm` is set).
+**Used by:** `HomePageContent` (when `selectedFilm` is set).
 
 ## Role
 
@@ -91,14 +93,9 @@ Full-viewport film detail view with animated hero poster, metadata, and play/clo
 - 15px, `lineHeight: 1.55`, `color: colorTextDim`, `maxWidth: 640px`.
 - Rendered only when `film.plot` is truthy.
 
-#### Seasons rail (series only)
+#### Seasons rail (legacy — TV branch deprecated)
 
-- **Only rendered when `film.kind === "series"` and `film.seasons` is truthy.**
-- `position: absolute`, `top: 84px`, `right: 60px`, `bottom: 72px`, `width: 380px`, `zIndex: 2`.
-- Glass treatment: `backgroundColor: rgba(20,28,24,0.55)`, `backdropFilter: blur(20px) saturate(1.6)`, `borderRadius: 3px`, `border: 1px solid rgba(37,48,42,0.45)`.
-- Header row: `"SEASONS"` label (left, Mono 10px muted) + episode count (right, green Mono 10px) `"{onDisk}/{total} ON DISK"`.
-- Body: `flex: 1`, `overflow-y: auto`, renders `<SeasonsPanel seasons={film.seasons} defaultOpenFirst={true} onSelectEpisode={playEpisode} />`.
-- When rail is present, content stack max-width reduces from 720px → 560px to prevent title collision.
+The seasons-rail branch in this overlay is **deprecated**. TV-show overlays now live in [`ShowDetailsOverlay`](ShowDetailsOverlay.md). This component still reads a `Video.show.seasons` chain to support the rare case where a movie's video has a show coordinate (it renders empty on null), but the routing-level decision between film vs show happens in `HomePageContent`.
 
 #### Actions row
 

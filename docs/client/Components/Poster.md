@@ -13,9 +13,10 @@ Presentational image container for OMDb (or other CDN) poster URLs. When a URL i
 
 | Prop | Type | Notes |
 |---|---|---|
-| `url` | `string \| undefined` | OMDb poster URL or similar. |
+| `url` | `string \| null` | Poster URL. Two shapes: an absolute OMDb URL (e.g. `https://m.media-amazon.com/…`) or a server-relative `/poster/<basename>` URL pointing at the local cache. |
 | `alt` | `string` | Fallback label text (also image `alt` attr). |
 | `className` | `string` | Griffel merged classes. Callers supply geometry via `className`. |
+| `width` | `number` | Optional CDN width (default 800). Only meaningful for OMDb URLs — passed to `upgradePosterUrl` which rewrites `_V1_` modifiers. |
 
 ## Layout & styles
 
@@ -43,8 +44,19 @@ Presentational image container for OMDb (or other CDN) poster URLs. When a URL i
 
 ## Data
 
-No fragment dependencies — `url` and `alt` are passed as props from the parent (sourced from OMDb metadata or a film's poster field).
+No fragment dependencies — `url` and `alt` are passed as props from the parent (sourced from `metadata.posterUrl` on Film, Show, or Video).
+
+## URL resolution
+
+The component runs the URL through two helpers in order before rendering:
+
+1. **`resolvePosterUrl(url)` from `~/config/rustOrigin`** — server-relative paths starting with `/poster/` are prefixed with `HTTP_ORIGIN` (the GraphQL server's port — 3002 in dev, the Tauri-injected port in prod) so the dev client (different port from the server) can fetch them. Absolute URLs pass through unchanged.
+2. **`upgradePosterUrl(resolved, width)` from `~/utils/formatters`** — Amazon CDN URLs containing `._V1_` get their size modifier rewritten to `_SX{width}`. Local `/poster/` URLs pass through unchanged (no `._V1_` substring).
+
+The combination means callers always pass the raw `metadata.posterUrl` string the GraphQL resolver returned and the Poster handles the dual-format mechanics.
 
 ## Notes
 
 The `mergeClasses` pattern keeps styling flexible — callers compose their own geometry classes and pass them to the component, avoiding a prop-explosion for every dimension variant.
+
+See [`docs/architecture/Library-Scan/05-Poster-Caching.md`](../../architecture/Library-Scan/05-Poster-Caching.md) for the local-cache pipeline.

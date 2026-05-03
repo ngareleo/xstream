@@ -56,6 +56,8 @@ Outstanding work that hasn't yet shipped is tracked separately in
 | [SearchSlide](SearchSlide.md) | `client/src/components/search-slide/` |
 | [SearchSuggestionCard](SearchSuggestionCard.md) | `client/src/components/search-suggestion-card/` |
 | [SeasonsPanel](SeasonsPanel.md) | `client/src/components/seasons-panel/` |
+| [ShowDetailsOverlay](ShowDetailsOverlay.md) | `client/src/components/show-details-overlay/` |
+| [ShowTile](ShowTile.md) | `client/src/components/show-tile/` |
 
 ### Player subcomponents
 

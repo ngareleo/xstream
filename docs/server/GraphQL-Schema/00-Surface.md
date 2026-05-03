@@ -60,11 +60,39 @@ enum MediaType {
   TV_SHOWS
 }
 
+enum ProfileStatus {
+  ONLINE
+  OFFLINE
+  UNKNOWN
+}
+
 type Library implements Node {
   id: ID!
   name: String!
+  path: String!
   mediaType: MediaType!
-  videos(first: Int, after: String): VideoConnection!
+  videoExtensions: [String!]!
+  """
+  Reachability of this library's storage path. Driven by
+  `services::profile_availability`. ONLINE = path stats as a directory;
+  OFFLINE = path missing/denied; UNKNOWN = not yet probed (default for
+  fresh rows; the probe upgrades within one cycle, ~30s).
+  """
+  status: ProfileStatus!
+  """
+  ISO-8601 timestamp of the most recent probe (online or offline).
+  Null until the first probe runs.
+  """
+  lastSeenAt: String
+  stats: LibraryStats!
+  videos(first: Int, after: String, search: String, mediaType: MediaType): VideoConnection!
+}
+
+type LibraryStats {
+  totalCount: Int!
+  matchedCount: Int!
+  unmatchedCount: Int!
+  totalSizeBytes: Float!
 }
 
 # ── Video ────────────────────────────────────────────────────────────────────
@@ -74,16 +102,50 @@ type Video implements Node {
   title: String!
   filename: String!
   durationSeconds: Float!
-  fileSizeBytes: Int!
+  fileSizeBytes: Float!
   bitrate: Int!
+  matched: Boolean!
+  mediaType: MediaType!
   library: Library!
+  metadata: VideoMetadata
   videoStream: VideoStreamInfo
   audioStream: AudioStreamInfo
+  """
+  Native resolution rung determined at scan time. Null for rows scanned
+  before the column existed.
+  """
+  nativeResolution: Resolution
+  """
+  The Show this video is an episode of, when set. Movie videos and
+  unmatched episode files return null.
+  """
+  show: Show
+  """
+  Episode coordinate `(season, episode)` for episode files; null for
+  movies.
+  """
+  seasonNumber: Int
+  episodeNumber: Int
 }
 
-### Forward note — nativeResolution
-
-The `Video` type will gain a `nativeResolution: Resolution!` field sourced from a new `videos.native_resolution` DB column populated at scan time via ffprobe height → closest-ladder-rung mapping (rounds DOWN). The field is non-null at the boundary; the column is nullable in DB for backward compatibility with rows scanned before the column existed.
+type VideoMetadata {
+  imdbId: String!
+  title: String!
+  year: Int
+  genre: String
+  director: String
+  cast: [String!]!
+  rating: Float
+  plot: String
+  """
+  Resolved URL the client should fetch. When the worker has cached the
+  poster locally this returns `/poster/<basename>` (same-origin); else
+  the OMDb canonical URL. The basename column itself is internal —
+  `services::poster_cache` is the only writer. See
+  `docs/architecture/Library-Scan/05-Poster-Caching.md`.
+  """
+  posterUrl: String
+}
 
 type VideoStreamInfo {
   codec: String!
@@ -162,6 +224,88 @@ type FilmEdge {
   cursor: String!
 }
 
+# ── Show (TV Series) ─────────────────────────────────────────────────────────
+
+type Show implements Node {
+  id: ID!
+  title: String!
+  year: Int
+  metadata: ShowMetadata
+  """
+  Distinct libraries that contain at least one episode file for this
+  show. Surfaces the "Available in: <profiles>" line in the detail
+  overlay.
+  """
+  profiles: [Library!]!
+  seasons: [Season!]!
+}
+
+type ShowMetadata {
+  imdbId: String!
+  title: String!
+  year: Int
+  genre: String
+  director: String
+  cast: [String!]!
+  rating: Float
+  plot: String
+  """
+  Same `/poster/<basename>` ↔ OMDb-URL contract as `VideoMetadata.posterUrl`.
+  """
+  posterUrl: String
+}
+
+type ShowConnection {
+  edges: [ShowEdge!]!
+  pageInfo: PageInfo!
+  totalCount: Int!
+}
+
+type ShowEdge {
+  node: Show!
+  cursor: String!
+}
+
+type Season {
+  seasonNumber: Int!
+  episodes: [Episode!]!
+}
+
+type Episode {
+  seasonNumber: Int!
+  episodeNumber: Int!
+  title: String
+  durationSeconds: Float
+  nativeResolution: Resolution
+  """
+  True when at least one `videos` row exists for this episode coordinate.
+  """
+  onDisk: Boolean!
+  """
+  All file rows for this episode coordinate (`videos` joined on
+  show_id/show_season/show_episode). Multiple rows = the same episode
+  file indexed in two libraries (axis-2 dedup). Ordered by resolution
+  desc, bitrate desc — picker renders best-first.
+  """
+  copies: [Video!]!
+  """
+  First entry of `copies` (best-quality), or null when off-disk.
+  """
+  bestCopy: Video
+  """
+  The bestCopy's owning library, when present. Lets the client mark an
+  episode "offline" when its host library's status is OFFLINE without
+  an extra round-trip.
+  """
+  library: Library
+  """
+  Carry-over for clients still keying on a single video id. Mirrors
+  `bestCopy.id` when present. Tech debt: clients should migrate to
+  `bestCopy.id`.
+  """
+  videoId: ID
+}
+
 # ── Transcode Job ─────────────────────────────────────────────────────────────
 
 enum Resolution {
@@ -233,13 +377,16 @@ type Query {
   libraries: [Library!]!
   video(id: ID!): Video
   """
-  List all films in a library (movies only). Returns cursor-based paginated connection.
+  List films (movies). Cursor-paginated. `libraryId` and `search` are optional filters.
   """
-  films(first: Int, after: String): FilmConnection!
-  """
-  Fetch a single film by global ID.
-  """
+  films(first: Int, libraryId: ID, search: String): FilmConnection!
   film(id: ID!): Film
+  """
+  List shows (TV series). Same shape as `films`. The TV row on the
+  homepage queries this connection.
+  """
+  shows(first: Int, libraryId: ID, search: String): ShowConnection!
+  show(id: ID!): Show
   transcodeJob(id: ID!): TranscodeJob
 }
 
@@ -304,6 +451,9 @@ GraphQL enums use ALL_CAPS. Internally the server uses lowercase / snake_case Ru
 | `ERROR` | `error` |
 | `MOVIES` | `movies` |
 | `TV_SHOWS` | `tvShows` |
+| `ONLINE` | `online` |
+| `OFFLINE` | `offline` |
+| `UNKNOWN` | `unknown` |
 | `CAPACITY_EXHAUSTED` | `capacity_exhausted` (StartJobResult kind) |
 | `VIDEO_NOT_FOUND` | `video_not_found` (StartJobResult kind) |
 | `PROBE_FAILED` | `probe_failed` (ActiveJob errorCode) |

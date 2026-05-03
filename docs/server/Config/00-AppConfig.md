@@ -27,10 +27,13 @@ Entries whose `env` does not match the current `RUST_ENV` are silently ignored. 
 | Field | Env var | Dev default | Prod default | Notes |
 |---|---|---|---|---|
 | `port` | `PORT` | `3002` | `8080` | |
-| `segment_dir` | `SEGMENT_DIR` | `./tmp/segments` | `./tmp/segments` | Override in tests to route to a per-PID temp dir |
-| `db_path` | `DB_PATH` | `./tmp/xstream.db` | `./tmp/xstream.db` | Override in tests; persistent storage recommended in prod |
-| `scan_interval_ms` | `SCAN_INTERVAL_MS` | `30000` | `30000` | |
+| `segment_dir` | `SEGMENT_DIR` | `./tmp/segments-rust/` | (Tauri) `app_cache_dir/segments/` | Override in tests to route to a per-PID temp dir |
+| `db_path` | `DB_PATH` | `./tmp/xstream-rust.db` | (Tauri) `app_local_data_dir/xstream.db` | Override in tests; persistent storage recommended in prod |
+| `poster_dir` | — | `./tmp/poster-cache/` | (Tauri) `app_cache_dir/posters/` | OMDb poster cache root. Files are content-addressed by `sha1(url)+ext`. See [`../../architecture/Library-Scan/05-Poster-Caching.md`](../../architecture/Library-Scan/05-Poster-Caching.md). |
+| `scan_interval_ms` | `SCAN_INTERVAL_MS` | `30000` | `30000` | Period of the background re-scan loop. |
+| `availability_interval_ms` | — | `0` (= `scan_interval_ms`) | same | Period of the profile-availability probe. `0` falls back to `scan_interval_ms`. See [`../../architecture/Library-Scan/04-Profile-Availability.md`](../../architecture/Library-Scan/04-Profile-Availability.md). |
 | `hardware_acceleration` | `HW_ACCEL` | `"auto"` | `"auto"` | `"off"` forces software encode |
+| `omdb_api_key` | `OMDB_API_KEY` | `None` (auto-match disabled) | env override or persisted `omdbApiKey` user setting | Free-tier 1000/day cap — exhaustion logs warn + skips remaining calls. |
 
 `SEGMENT_DIR` and `DB_PATH` are honored in dev (not just prod) so the test harness can route writes to a per-PID temp dir — see [`../../architecture/Testing/00-Side-Effects-Policy.md`](../../architecture/Testing/00-Side-Effects-Policy.md). Don't set them by hand in your dev shell unless you know what you're doing.
 
@@ -75,16 +78,17 @@ In production, `segment_dir` and `db_path` should be set to persistent storage l
 
 ```
 tmp/
-├── xstream.db                    # SQLite database (WAL mode)
-├── xstream.db-shm                # WAL shared memory file
-├── xstream.db-wal                # WAL write-ahead log
-└── segments/
-    └── <jobId>/               # SHA-1 of (content_fingerprint + resolution + startS + endS)
-        ├── init.mp4           # fMP4 init segment (moov box)
-        ├── segment_0000.m4s
-        ├── segment_0001.m4s
-        ├── ...
-        └── segments.txt       # ffmpeg segment list (internal use)
+├── xstream-rust.db                # SQLite database (WAL mode)
+├── xstream-rust.db-shm            # WAL shared memory file
+├── xstream-rust.db-wal            # WAL write-ahead log
+├── segments-rust/
+│   └── <jobId>/                   # SHA-1 of (content_fingerprint + resolution + startS + endS)
+│       ├── init.mp4               # fMP4 init segment (moov box)
+│       ├── segment_0000.m4s
+│       ├── segment_0001.m4s
+│       └── …
+└── poster-cache/
+    └── <sha1(url)>.<ext>          # one file per cached OMDb poster URL (.jpg/.png/.webp/.gif)
 ```
 
 Job IDs are deterministic — the same video, resolution, start time, and end time always produce the same ID. If a client requests a chunk that was previously encoded, the server finds the existing directory on disk and streams from cache without launching a new ffmpeg process.

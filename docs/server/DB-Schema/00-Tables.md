@@ -19,36 +19,69 @@ Populated via the `createLibrary` GraphQL mutation. Upserted by `path` so rename
 | `path` | TEXT | NOT NULL UNIQUE | Absolute path to library root directory |
 | `media_type` | TEXT | NOT NULL | `'movies'` or `'tvShows'` |
 | `env` | TEXT | NOT NULL | `'dev'` or `'prod'` — filtered against `RUST_ENV` at scan time |
+| `video_extensions` | TEXT | NOT NULL DEFAULT `'[]'` | JSON array of file extensions to scan (e.g. `[".mp4",".mkv"]`). Empty array = use built-in defaults. |
+| `status` | TEXT | NOT NULL DEFAULT `'unknown'`, CHECK in `('online','offline','unknown')` | Reachability of the library's storage path. Driven by `services::profile_availability`. `'unknown'` until the first probe lands. |
+| `last_seen_at` | TEXT | nullable | ISO-8601 timestamp of the most recent probe (online or offline). Null until the first probe runs. |
+
+See [`docs/architecture/Library-Scan/04-Profile-Availability.md`](../../architecture/Library-Scan/04-Profile-Availability.md) for the probe + flip semantics.
 
 ---
 
 ### `films`
 
-One row per distinct movie entity (movies only; TV uses video-as-series). Populated by the scanner's `resolve_films_for_library` pass (step 2) and updated by the auto-match pass (step 3). Owns 1+ rows in `videos` via the `film_id` foreign key.
+One row per distinct movie entity. Populated by the scanner's `resolve_films_for_library` pass and updated by the auto-match pass. Owns 1+ rows in `videos` via the `film_id` foreign key.
 
 | Column | Type | Constraints | Description |
 |---|---|---|---|
-| `id` | TEXT | PRIMARY KEY | SHA-1 of `parsed_title_key + media_type` (until OMDb match sets imdb_id) |
-| `parsed_title_key` | TEXT | NOT NULL UNIQUE | `"<lowercased_title>\|<year>"` computed by `parse_title_from_filename`. Used for pre-OMDb dedup and as the natural key when no IMDb match exists. |
-| `imdb_id` | TEXT | nullable UNIQUE | IMDb ID (e.g., `tt15397572`), set by `link_video_film_to_imdb` after OMDb lookup succeeds. If a different film already owns this `imdb_id`, the two films are merged (duplicate deleted, videos repointed). |
-| `media_type` | TEXT | NOT NULL | `'movies'` (TV is excluded; shows remain video-as-series). |
+| `id` | TEXT | PRIMARY KEY | SHA-1 of `"film:" + (imdb_id ‖ parsed_title_key)` |
+| `imdb_id` | TEXT | nullable UNIQUE | IMDb ID (e.g., `tt15397572`), set by `link_video_film_to_imdb` after OMDb lookup. If a different film already owns this `imdb_id`, the two films are merged (duplicate deleted, videos repointed). |
+| `parsed_title_key` | TEXT | nullable UNIQUE | `"<lowercased_title>\|<year>"` from `parse_title_from_filename`. Used for pre-OMDb dedup. |
+| `title` | TEXT | NOT NULL | Display title (filename-derived, replaced when OMDb matches). |
+| `year` | TEXT | nullable | Release year. |
+| `created_at` | TEXT | NOT NULL | ISO-8601 timestamp. |
 
-**Indices:** `films(parsed_title_key, media_type)` (used to deduplicate during scan pass 2), `films(imdb_id)` (used to detect collisions during scan pass 3 OMDb merge).
+CHECK: `imdb_id IS NOT NULL OR parsed_title_key IS NOT NULL` — every Film must be addressable by at least one dedup key.
+
+**Indices:** `films_imdb` on `imdb_id`.
 
 **Why two dedup keys?** Pre-OMDb (parsed_title_key) ensures files that *look* the same are grouped immediately, even if OMDb lookup fails or is pending. Post-OMDb (imdb_id) is authoritative — when two initially separate Films both match the same IMDb entry, the merge consolidates them into one. See [`docs/architecture/Library-Scan/02-Film-Entity.md`](../../architecture/Library-Scan/02-Film-Entity.md) for the full dedup flow.
 
 ---
 
+### `shows`
+
+TV mirror of `films`. One row per distinct TV series — multiple libraries indexing the same series fold into one Show. Owns episodes (via `videos.show_id` + `seasons` + `episodes`).
+
+| Column | Type | Constraints | Description |
+|---|---|---|---|
+| `id` | TEXT | PRIMARY KEY | SHA-1 of `"show:" + (imdb_id ‖ parsed_title_key)` |
+| `imdb_id` | TEXT | nullable UNIQUE | IMDb ID, set after OMDb match. |
+| `parsed_title_key` | TEXT | nullable UNIQUE | `"<lowercased_title>\|"` (year is generally absent for shows). |
+| `title` | TEXT | NOT NULL | Display title. |
+| `year` | INTEGER | nullable | First-air year. |
+| `created_at` | TEXT | NOT NULL | ISO-8601 timestamp. |
+
+CHECK: `imdb_id IS NOT NULL OR parsed_title_key IS NOT NULL`.
+
+**Indices:** `shows_imdb` on `imdb_id`.
+
+The synthetic show-Video pattern from the prerelease design is **gone** — series identity lives in `shows`, episode files in `videos`, joined via `videos.show_id`. See [`docs/architecture/Library-Scan/03-Show-Entity.md`](../../architecture/Library-Scan/03-Show-Entity.md).
+
+---
+
 ### `videos`
 
-One row per video file. Populated by the library scanner via ffprobe. Upserted on `path` — re-scans refresh metadata without creating duplicates. For movies, each row is linked to a `films` row via `film_id`; for TV, all videos in a show series share the same logical show (TV support uses the video-as-series pattern and does not use the films table).
+One row per video file. Populated by the library scanner via ffprobe. Upserted on `path` — re-scans refresh metadata without creating duplicates. Movie files link to a Film via `film_id`; episode files link to a Show via `show_id` + `(show_season, show_episode)`. A given `videos` row has at most one of `film_id` / `show_id` set; episode files indexed in two libraries produce two rows pointing at the same `(show_id, show_season, show_episode)` coordinate (axis-2 dedup, exposed via `Episode.copies`).
 
 | Column | Type | Constraints | Description |
 |---|---|---|---|
 | `id` | TEXT | PRIMARY KEY | SHA-1 of `path` |
-| `library_id` | TEXT | NOT NULL, FK → libraries(id) | Owning library |
-| `film_id` | TEXT | nullable, FK → films(id) ON DELETE CASCADE | **Movies only.** The logical Film this video belongs to. NULL for TV videos. Set by `resolve_films_for_library` (scanner pass 2). |
-| `role` | TEXT | nullable | **Movies only.** `'main'` (primary encoding, or single copy) or `'extra'` (trailers, deleted scenes, etc.). NULL for TV. When multiple `role='main'` videos exist for one Film, the FilmVariants UI lets the user choose which to play. |
+| `library_id` | TEXT | NOT NULL, FK → libraries(id) ON DELETE CASCADE | Owning library |
+| `film_id` | TEXT | nullable, FK → films(id) ON DELETE SET NULL | **Movies only.** The logical Film this video belongs to. Set by `resolve_films_for_library`. |
+| `show_id` | TEXT | nullable, FK → shows(id) ON DELETE SET NULL | **Episode files only.** The logical Show. Set by `tv_discovery::discover_one_show`. |
+| `show_season` | INTEGER | nullable | Episode coordinate — season number. Non-null iff `show_id` is non-null. |
+| `show_episode` | INTEGER | nullable | Episode coordinate — episode number within the season. |
+| `role` | TEXT | NOT NULL DEFAULT `'main'`, CHECK in `('main','extra')` | `'main'` (primary encoding, or single copy) or `'extra'` (trailers, deleted scenes). For movies, drives `Film.copies` vs `Film.extras` split. Episode files are always `'main'` for now. |
 | `path` | TEXT | NOT NULL UNIQUE | Absolute path to video file |
 | `filename` | TEXT | NOT NULL | `basename(path)` |
 | `title` | TEXT | nullable | From `tags.title` in file metadata; falls back to cleaned filename |
@@ -57,11 +90,14 @@ One row per video file. Populated by the library scanner via ffprobe. Upserted o
 | `bitrate` | INTEGER | NOT NULL | Overall bitrate in bps from ffprobe `format.bit_rate` |
 | `scanned_at` | TEXT | NOT NULL | ISO 8601 timestamp of last ffprobe scan |
 | `content_fingerprint` | TEXT | NOT NULL | `"<sizeBytes>:<sha1hex>"` — SHA-1 of the first 64 KB of the file, prefixed with file size. Stable across renames; changes only when content changes. Used as the basis for transcode job cache keys. |
+| `native_resolution` | TEXT | nullable | Internal lowercase rung (`'240p'`, `'1080p'`, `'4k'`, …) derived from the first probed video stream's height. Mapped to `Resolution` enum at the GraphQL boundary. |
 
-**Index:** `videos_library_id` on `library_id` — used by the `videos(first, after)` connection resolver.
-**Index:** `videos_film_id` on `film_id` — used by the `Film.copies` resolver to fetch all videos for a film, ordered by `role` (main first), then `resolution` (highest first), then `bitrate` (highest first).
+**Indices:**
+- `videos_library_id` on `library_id` — used by the `videos(first, after)` connection resolver.
+- `videos_film_id` on `film_id` — used by the `Film.copies` resolver to fetch copies ordered by `role` (main first), `native_resolution` (highest first), `bitrate` (highest first).
+- `videos_show` on `(show_id, show_season, show_episode)` — used by `Episode.copies` and `Show.seasons`.
 
-> **Breaking migration note:** `content_fingerprint TEXT NOT NULL` is part of the original `CREATE TABLE` definition. If you have an existing `tmp/xstream.db` from before this column was added, delete it — the server will recreate the schema and re-scan all libraries on next startup.
+> **Breaking migration note:** the schema is reset on change during pre-prod. Delete `tmp/xstream-rust.db*` and re-scan when the column set changes.
 
 ---
 
@@ -126,6 +162,80 @@ One row per completed `.m4s` file. Inserted by `watchSegments()` as ffmpeg write
 **Unique constraint:** `(job_id, segment_index)` — prevents duplicate inserts from watcher races.
 
 **Index:** `segments_job_id` on `job_id`.
+
+---
+
+### `video_metadata`
+
+OMDb match data for movie videos. One row per video. Set by the auto-match pass (`services::library_scanner::match_one_video`).
+
+| Column | Type | Constraints | Description |
+|---|---|---|---|
+| `video_id` | TEXT | PRIMARY KEY, FK → videos(id) ON DELETE CASCADE | One metadata row per video. |
+| `imdb_id` | TEXT | NOT NULL | IMDb ID resolved by OMDb. |
+| `title` | TEXT | NOT NULL | OMDb canonical title. |
+| `year` | INTEGER | nullable | Release year. |
+| `genre` | TEXT | nullable | Comma-separated genres from OMDb. |
+| `director` | TEXT | nullable |  |
+| `cast_list` | TEXT | nullable | JSON-encoded array of cast names. |
+| `rating` | REAL | nullable | IMDb rating. |
+| `plot` | TEXT | nullable | OMDb plot summary. |
+| `poster_url` | TEXT | nullable | OMDb canonical poster URL. |
+| `poster_local_path` | TEXT | nullable | Basename of the locally cached copy of `poster_url` in `AppConfig::poster_dir`. Set by `services::poster_cache` after download; preserved across re-matches via COALESCE. See [`docs/architecture/Library-Scan/05-Poster-Caching.md`](../../architecture/Library-Scan/05-Poster-Caching.md). |
+| `matched_at` | TEXT | NOT NULL | ISO 8601 timestamp of the OMDb match. |
+
+---
+
+### `show_metadata`
+
+Mirror of `video_metadata` for shows. One row per Show.
+
+| Column | Type | Constraints | Description |
+|---|---|---|---|
+| `show_id` | TEXT | PRIMARY KEY, FK → shows(id) ON DELETE CASCADE | One metadata row per show. |
+| `imdb_id` | TEXT | NOT NULL | IMDb ID. |
+| `title` | TEXT | NOT NULL | OMDb canonical title. |
+| `year` | INTEGER | nullable | First-air year. |
+| `genre` | TEXT | nullable |  |
+| `director` | TEXT | nullable |  |
+| `cast_list` | TEXT | nullable | JSON-encoded array. |
+| `rating` | REAL | nullable | IMDb rating. |
+| `plot` | TEXT | nullable |  |
+| `poster_url` | TEXT | nullable | OMDb canonical poster URL. |
+| `poster_local_path` | TEXT | nullable | Locally cached basename — same contract as `video_metadata.poster_local_path`. |
+| `matched_at` | TEXT | NOT NULL | ISO 8601 timestamp. |
+
+---
+
+### `seasons`
+
+One row per season of a show. Composite primary key on `(show_id, season_number)`. Re-keyed on `show_id` post-Prerelease (the synthetic show-Video pattern is gone).
+
+| Column | Type | Constraints | Description |
+|---|---|---|---|
+| `show_id` | TEXT | NOT NULL, FK → shows(id) ON DELETE CASCADE | Owning show. |
+| `season_number` | INTEGER | NOT NULL, CHECK `season_number > 0` | 1-based season. |
+
+**Primary key:** `(show_id, season_number)`.
+
+---
+
+### `episodes`
+
+One row per episode of a show. The episode-file `videos` rows are derived via `videos WHERE show_id = ? AND show_season = ? AND show_episode = ?` — multiple rows for the same coordinate is the axis-2 dedup case (one episode in two libraries).
+
+| Column | Type | Constraints | Description |
+|---|---|---|---|
+| `show_id` | TEXT | NOT NULL, FK → shows(id) ON DELETE CASCADE | Owning show. |
+| `season_number` | INTEGER | NOT NULL | Season the episode belongs to. |
+| `episode_number` | INTEGER | NOT NULL, CHECK `> 0` | 1-based episode number. |
+| `title` | TEXT | nullable | OMDb episode title. Null when local-only and no OMDb match. |
+
+**Primary key:** `(show_id, season_number, episode_number)`.
+**Foreign key:** `(show_id, season_number)` REFERENCES `seasons(show_id, season_number)` ON DELETE CASCADE.
+**Index:** `idx_episodes_show` on `show_id`.
+
+`episodes.episode_video_id` is **gone** — see [`docs/architecture/Library-Scan/03-Show-Entity.md`](../../architecture/Library-Scan/03-Show-Entity.md) for the rewrite.
 
 ---
 

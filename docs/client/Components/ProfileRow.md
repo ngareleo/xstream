@@ -32,10 +32,17 @@ Leaf row component for the Profiles tree. Uses a 5-column grid layout shared wit
 - Rotated 90° when expanded via `transform: rotate(90deg)`.
 - Transition: `transitionProperty: transform`, `transitionDuration: 0.15s`.
 
-### Column 2: Profile name + path
+### Column 2: Profile name + path + status pill
 
-- Two-line stack: name (13px, `color: colorText`) + path (Mono 10px, `color: colorTextMuted`, `letterSpacing: 0.04em`).
-- Flex column, `rowGap: 2px`.
+- Two-line stack:
+  - **Line 1:** name (13px, `color: colorText`).
+  - **Line 2:** path (Mono 10px, `color: colorTextMuted`, `letterSpacing: 0.04em`) followed by a status pill.
+- **Status pill (`.statusPill`):** Mono 9px, `letterSpacing: 0.18em`, uppercase. Three states driven by `Library.status` from the GraphQL fragment:
+  - `ONLINE` → `● online` in `colorGreen`.
+  - `OFFLINE` → `○ offline` in `colorRed`.
+  - `UNKNOWN` → `○ unknown` in `colorTextFaint`.
+- Pill `title` attribute carries `last seen <timestamp>` from `Library.lastSeenAt` (or `not yet probed` when null).
+- Driven by `services::profile_availability` — see [`docs/architecture/Library-Scan/04-Profile-Availability.md`](../../architecture/Library-Scan/04-Profile-Availability.md).
 
 ### Column 3: Match progress bar
 
@@ -77,7 +84,18 @@ Leaf row component for the Profiles tree. Uses a 5-column grid layout shared wit
 
 ## Data
 
-No Relay fragments — `profile` is passed as a prop from the parent, sourced from the profiles query. FilmRow children are passed via the `children` prop as ReactNode.
+```graphql
+fragment ProfileRow_library on Library {
+  id
+  name
+  path
+  status
+  lastSeenAt
+  stats { totalCount matchedCount unmatchedCount totalSizeBytes }
+}
+```
+
+`status` and `lastSeenAt` populate the status pill. The rest of the row (`stats`) drives the match-progress and size columns.
 
 ## Notes
 

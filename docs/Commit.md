@@ -15,6 +15,14 @@ Entry shape (each entry ends with the divider line described above):
 
 <!-- ENTRIES BELOW — newest first; each ends with a bare `---` line. The architect's next invocation will treat the no-entries state as the first-run case and prepend a bootstrap entry at HEAD. -->
 
+## a7479d5 — 2026-05-03 — Show entity + profile availability + local poster cache (sync)
+
+**Files:** `docs/architecture/Library-Scan/03-Show-Entity.md` (NEW), `docs/architecture/Library-Scan/04-Profile-Availability.md` (NEW), `docs/architecture/Library-Scan/05-Poster-Caching.md` (NEW), `docs/architecture/Library-Scan/README.md`, `docs/architecture/Observability/server/00-Spans.md`, `docs/server/DB-Schema/00-Tables.md`, `docs/server/GraphQL-Schema/00-Surface.md`, `docs/server/Config/00-AppConfig.md`, `docs/client/Components/ShowTile.md` (NEW), `docs/client/Components/ShowDetailsOverlay.md` (NEW), `docs/client/Components/README.md`, `docs/client/Components/Poster.md`, `docs/client/Components/ProfileRow.md`, `docs/client/Components/SeasonsPanel.md`, `docs/client/Components/FilmDetailsOverlay.md`, `docs/client/Components/PlayerContent.md`, `docs/INDEX.md`, `docs/SUMMARY.md`, `docs/todo.md`
+**Why:** Curator sync for feat/library-film-entity branch at HEAD a7479d5. PR #59 landed three layers on top of the Film entity: (1) Show entity (TV mirror, two dedup axes, drop of synthetic show-Video pattern); (2) profile availability probe (`libraries.status`/`last_seen_at`, scanner skip on offline); (3) local OMDb poster cache (`services::poster_cache` + `GET /poster/:basename` + `posterUrl` rewrite). Three new architecture docs, DB-Schema + GraphQL-Schema reconciled, two new component specs (ShowTile, ShowDetailsOverlay), Poster/ProfileRow/SeasonsPanel/FilmDetailsOverlay/PlayerContent updated for new fragment shapes, INDEX + SUMMARY refreshed, observability spans extended with `library.tv_discovery`, `library.availability_probe`, `poster_cache.poll`. 12 declared tech-debt items in `docs/todo.md` (5 for poster cache, 7 for Show entity / availability picker UI).
+**Source commits scanned:** d3c25af..a7479d5
+
+---
+
 ## (pending Film entity merge) — 2026-05-03 — Film entity architecture + DB + GraphQL + component specs
 
 **Files:** `docs/architecture/Library-Scan/02-Film-Entity.md` (NEW), `docs/architecture/Library-Scan/README.md`, `docs/server/DB-Schema/00-Tables.md`, `docs/server/GraphQL-Schema/00-Surface.md`, `docs/client/Components/FilmVariants.md` (NEW), `docs/client/Components/FilmDetailsOverlay.md`, `docs/client/Components/Library.md`, `docs/client/Components/README.md`, `docs/INDEX.md`

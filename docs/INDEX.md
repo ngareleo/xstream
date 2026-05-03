@@ -29,12 +29,17 @@ Keep rows short (≤ ~120 chars). When adding a new topic file to `docs/`, add i
 | Library scanner pipeline (flow, passes) | `docs/architecture/Library-Scan/00-Flow.md` |
 | Filename + folder conventions (movies, TV) | `docs/architecture/Library-Scan/01-Filename-Conventions.md` |
 | Film entity (logical dedup layer, role semantics, scanner passes, watchlist linking) | `docs/architecture/Library-Scan/02-Film-Entity.md` |
+| Show entity (TV mirror of Film, two dedup axes, drop of synthetic show-Video, scanner flow, GraphQL surface) | `docs/architecture/Library-Scan/03-Show-Entity.md` |
+| Profile availability probe (`libraries.status` / `last_seen_at`, scanner skip on offline, re-kick on online flip) | `docs/architecture/Library-Scan/04-Profile-Availability.md` |
+| Local poster cache (worker, `/poster/<basename>` route, hash-addressed dir, `posterUrl` rewrite contract) | `docs/architecture/Library-Scan/05-Poster-Caching.md` |
 | Peer-to-peer streaming model (passthrough, Ed25519 invite tokens, content-addressed cache reuse, cross-peer traceparent, invariants) | `docs/architecture/Sharing/00-Peer-Streaming.md` |
 | Tauri desktop shell — `tauri.conf.json`, in-process server, bundled ffmpeg, VAAPI Linux fallback, code-signing, CI matrix | `docs/architecture/Deployment/00-Tauri-Desktop-Shell.md` |
 | Tauri packaging internals — build pipeline, installed-app layout per OS, `tauri-plugin-updater` mechanics | `docs/architecture/Deployment/01-Packaging-Internals.md` |
 | Shipping ffmpeg — manifest pinning, portable strategy for every OS, runtime resolution under Tauri, GPL compliance | `docs/architecture/Deployment/02-Shipping-FFmpeg.md` |
 | Per-component design specs (style, layout, behaviour, data) — agent-facing reference for every UI component | `docs/client/Components/README.md` |
 | FilmVariants component spec (multi-copy variant picker) | `docs/client/Components/FilmVariants.md` |
+| ShowTile component spec (homepage TV row tile, Show fragment, sibling to FilmTile) | `docs/client/Components/ShowTile.md` |
+| ShowDetailsOverlay component spec (`?show=<id>` overlay, season tree, sibling to FilmDetailsOverlay) | `docs/client/Components/ShowDetailsOverlay.md` |
 | Outstanding redesign work (working document of items not yet shipped) | `docs/release/Outstanding-Work.md` |
 | AppHeader spec (glass, custom caret, scan button, suggestions dropdown, ARIA) — exemplar component spec | `docs/client/Components/AppHeader.md` |
 | Resolution ladder + enum mirror chain | `docs/server/Config/01-Resolution-Ladder.md` |

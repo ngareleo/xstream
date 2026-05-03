@@ -13,7 +13,7 @@ Glue layer between the Player page shell and playback components. Owns chrome vi
 
 | Prop | Type | Notes |
 |---|---|---|
-| `video` | `PlayerContent_video$key` | Relay fragment ref. Carries `id`, `title`, `mediaType`, `seasons` (for series), and spreads `...VideoArea_video` and `...PlayerSidebar_video`. |
+| `video` | `PlayerContent_video$key` | Relay fragment ref. Carries `id`, `title`, `mediaType`, `show.seasons.episodes` (for series — the season tree is reached via the new `Video.show` resolver, not `Video.seasons` which was removed in the Show-entity migration), and spreads `...VideoArea_video` and `...PlayerSidebar_video`. |
 
 ## Layout & styles
 
@@ -87,7 +87,7 @@ For `mediaType === "TV_SHOWS"`:
 
 ## Data
 
-- **Fragment**: Carries `id`, `title`, `mediaType`, `seasons { seasonNumber, episodes { episodeNumber, title, durationSeconds, onDisk } }`. Spreads `...VideoArea_video` and `...PlayerSidebar_video`.
+- **Fragment**: Carries `id`, `title`, `mediaType`, `show { seasons { seasonNumber, episodes { episodeNumber, title, durationSeconds, onDisk } } }`. Spreads `...VideoArea_video` and `...PlayerSidebar_video`.
 - **Derived**: `seriesPick` computed via `resolveSeriesPick` helper (memoized on season/episode params and seasons data).
 
 ## Notes
