@@ -5,17 +5,14 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 
 import { DetailPane } from "~/components/detail-pane/DetailPane.js";
 import { EmptyLibrariesHero } from "~/components/empty-libraries-hero/EmptyLibrariesHero.js";
-import { FilmRow } from "~/components/film-row/FilmRow.js";
-import { ProfileRow } from "~/components/profile-row/ProfileRow.js";
+import { ProfilesExplorer } from "~/components/profiles-explorer/ProfilesExplorer.js";
 import {
   type LibraryScanSnapshot,
   useLibraryScanSubscription,
 } from "~/hooks/useLibraryScanSubscription.js";
 import { useSplitResize } from "~/hooks/useSplitResize.js";
-import { IconClose, IconSearch } from "~/lib/icons.js";
 import type { ProfilesPageContentQuery } from "~/relay/__generated__/ProfilesPageContentQuery.graphql.js";
 
-import { filmMatches } from "./filmMatches.js";
 import { strings } from "./ProfilesPage.strings.js";
 import { useProfilesPageStyles } from "./ProfilesPage.styles.js";
 
@@ -87,8 +84,9 @@ export const ProfilesPageContent: FC = () => {
 
   // Flatten { library, video } edges so we can resolve the selected film
   // in O(1) and pre-expand its parent profile on mount / deep-link.
+  type Edge = (typeof data.libraries)[number]["videos"]["edges"][number]["node"];
   const flatVideos = useMemo(() => {
-    const out: { libraryId: string; node: NonNullable<typeof selectedNode> }[] = [];
+    const out: { libraryId: string; node: Edge }[] = [];
     for (const lib of data.libraries) {
       for (const edge of lib.videos.edges) {
         out.push({ libraryId: lib.id, node: edge.node });
@@ -96,7 +94,6 @@ export const ProfilesPageContent: FC = () => {
     }
     return out;
   }, [data]);
-  type Edge = (typeof data.libraries)[number]["videos"]["edges"][number]["node"];
   const selectedNode: Edge | undefined = filmId
     ? flatVideos.find((v) => v.node.id === filmId)?.node
     : undefined;
@@ -125,23 +122,6 @@ export const ProfilesPageContent: FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const initialExpanded = useMemo(() => {
-    const set = new Set<string>();
-    if (data.libraries.length > 0) set.add(data.libraries[0].id);
-    if (selectedLibraryId) set.add(selectedLibraryId);
-    return set;
-  }, [data.libraries, selectedLibraryId]);
-  const [expandedIds, setExpandedIds] = useState<Set<string>>(initialExpanded);
-
-  const toggleProfile = (id: string): void => {
-    setExpandedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
-
   const openFilm = (id: string): void => {
     if (filmId === id) setParams({});
     else setParams({ film: id });
@@ -153,41 +133,10 @@ export const ProfilesPageContent: FC = () => {
     else setParams({ film: filmId });
   };
   const closePane = (): void => setParams({});
-
-  const [search, setSearch] = useState("");
-  const trimmedSearch = search.trim().toLowerCase();
-  const isSearching = trimmedSearch.length > 0;
-
-  const visibleProfiles = useMemo(() => {
-    return data.libraries
-      .map((lib) => ({
-        library: lib,
-        videos: isSearching
-          ? lib.videos.edges.map((e) => e.node).filter((node) => filmMatches(node, trimmedSearch))
-          : lib.videos.edges.map((e) => e.node),
-      }))
-      .filter((entry) => !isSearching || entry.videos.length > 0);
-  }, [data.libraries, trimmedSearch, isSearching]);
-
-  const matchCount = useMemo(
-    () => visibleProfiles.reduce((sum, p) => sum + p.videos.length, 0),
-    [visibleProfiles]
-  );
-
-  // Aggregate footer counts.
-  let totalFilms = 0;
-  let totalShows = 0;
-  let totalUnmatched = 0;
-  for (const lib of data.libraries) {
-    for (const e of lib.videos.edges) {
-      if (e.node.mediaType === "MOVIES") totalFilms += 1;
-      if (e.node.mediaType === "TV_SHOWS") totalShows += 1;
-      if (!e.node.title) totalUnmatched += 1;
-    }
-  }
-  // TODO(release-design): wire episode counts from the seasons subselection.
-  const totalEpisodes = 0;
-  const scanningCount = scanByLibrary.size;
+  const navigateToCreateProfile = (): void => {
+    const returnTo = encodeURIComponent(window.location.pathname + window.location.search);
+    navigate(`/profiles/new?return_to=${returnTo}`);
+  };
 
   // Empty state preview: `/profiles?empty=1` for the design lab. Production
   // also falls back here when there are no libraries at all.
@@ -201,129 +150,15 @@ export const ProfilesPageContent: FC = () => {
       className={mergeClasses(styles.splitBody, paneOpen && styles.splitBodyOpen)}
       style={paneOpen ? { gridTemplateColumns: `1fr 4px ${paneWidth}px` } : undefined}
     >
-      <div className={styles.leftCol}>
-        <div className={styles.breadcrumb}>
-          <span className={styles.crumbDim}>{strings.crumbHome}</span>
-          <span>/</span>
-          <span>{strings.crumbMedia}</span>
-          <span>/</span>
-          <span className={styles.crumbBright}>{strings.crumbFilms}</span>
-          {scanningCount > 0 && (
-            <span className={styles.breadcrumbScanning}>
-              {strings.formatString(strings.breadcrumbScanningFormat, {
-                n: scanningCount,
-                total: data.libraries.length,
-              })}
-            </span>
-          )}
-        </div>
-
-        <div className={styles.searchBar}>
-          <span className={styles.searchPrompt} aria-hidden="true">
-            <IconSearch />
-          </span>
-          <input
-            className={styles.searchInput}
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder={strings.searchPlaceholder}
-            aria-label={strings.searchAriaLabel}
-            spellCheck={false}
-            autoComplete="off"
-          />
-          {isSearching && (
-            <>
-              <span className={styles.searchCount}>
-                {strings.formatString(strings.searchCountFormat, {
-                  matchCount,
-                  matchLabel: matchCount === 1 ? strings.matchSingular : strings.matchPlural,
-                  profileCount: visibleProfiles.length,
-                  profileLabel:
-                    visibleProfiles.length === 1 ? strings.profileSingular : strings.profilePlural,
-                })}
-              </span>
-              <button
-                type="button"
-                className={styles.searchClear}
-                onClick={() => setSearch("")}
-                aria-label={strings.searchClearAriaLabel}
-              >
-                <IconClose width={12} height={12} />
-              </button>
-            </>
-          )}
-        </div>
-
-        <div className={styles.colHeader}>
-          <div />
-          <div>{strings.colHeaderProfile}</div>
-          <div>{strings.colHeaderMatch}</div>
-          <div>{strings.colHeaderSize}</div>
-          <div />
-        </div>
-
-        <div className={styles.rowsScroll}>
-          {visibleProfiles.length === 0 ? (
-            <div className={styles.noMatches}>
-              {strings.formatString(strings.noMatchesFormat, { q: search.trim() })}
-            </div>
-          ) : (
-            visibleProfiles.map(({ library, videos }) => {
-              const scan = scanByLibrary.get(library.id);
-              const scanProgress =
-                scan && scan.done !== null && scan.total !== null
-                  ? { done: scan.done, total: scan.total }
-                  : null;
-              return (
-                <ProfileRow
-                  key={library.id}
-                  library={library}
-                  expanded={isSearching || expandedIds.has(library.id)}
-                  onToggle={() => {
-                    if (!isSearching) toggleProfile(library.id);
-                  }}
-                  scanning={Boolean(scan)}
-                  scanProgress={scanProgress}
-                >
-                  {videos.map((node) => (
-                    <FilmRow
-                      key={node.id}
-                      video={node}
-                      selected={filmId === node.id}
-                      onOpen={() => openFilm(node.id)}
-                      onEdit={() => editFilm(node.id)}
-                    />
-                  ))}
-                </ProfileRow>
-              );
-            })
-          )}
-        </div>
-
-        <div className={styles.footer}>
-          <span>
-            {strings.formatString(strings.footerCountsFormat, {
-              profiles: data.libraries.length,
-              films: totalFilms,
-              shows: totalShows,
-              episodes: totalEpisodes,
-              unmatched: totalUnmatched,
-            })}
-          </span>
-          <button
-            type="button"
-            className={styles.footerCta}
-            onClick={() => {
-              const returnTo = encodeURIComponent(
-                window.location.pathname + window.location.search
-              );
-              navigate(`/profiles/new?return_to=${returnTo}`);
-            }}
-          >
-            {strings.footerCta}
-          </button>
-        </div>
-      </div>
+      <ProfilesExplorer
+        libraries={data.libraries}
+        selectedFilmId={filmId}
+        selectedLibraryId={selectedLibraryId}
+        scanByLibrary={scanByLibrary}
+        onOpenFilm={openFilm}
+        onEditFilm={editFilm}
+        onCreateProfile={navigateToCreateProfile}
+      />
 
       {paneOpen && selectedNode && (
         <>

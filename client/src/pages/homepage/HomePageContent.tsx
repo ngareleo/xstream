@@ -11,7 +11,7 @@ import { PosterRow } from "~/components/poster-row/PosterRow";
 import { SearchSlide } from "~/components/search-slide/SearchSlide";
 import { IconClose, IconSearch } from "~/lib/icons";
 import type { HomePageContentQuery } from "~/relay/__generated__/HomePageContentQuery.graphql";
-import { applyFilters, EMPTY_FILTERS, type Filters, filtersActive } from "~/utils/filters";
+import { EMPTY_FILTERS } from "~/utils/filters";
 import { upgradePosterUrl } from "~/utils/formatters";
 
 import { strings } from "./HomePage.strings";
@@ -22,6 +22,7 @@ import {
   timeOfDayGreeting,
   toFilterRow,
 } from "./HomePageContent.utils";
+import { useHeroMode } from "./useHeroMode";
 
 const HOMEPAGE_QUERY = graphql`
   query HomePageContentQuery {
@@ -142,8 +143,23 @@ export const HomePageContent: FC = () => {
   );
   const newReleases = useMemo(() => rows.slice(0, 12), [rows]);
 
-  const [search, setSearch] = useState("");
-  const [searchFocused, setSearchFocused] = useState(false);
+  const {
+    search,
+    setSearch,
+    searchFocused,
+    setSearchFocused,
+    setFilterOpen,
+    filters,
+    setFilters,
+    heroMode,
+    hasQuery,
+    showFlatResults,
+    activeFilterCount,
+    queryMatched,
+    searchResults,
+    clearAll,
+  } = useHeroMode(rows, Boolean(selectedRow));
+
   const [searchCaretX, setSearchCaretX] = useState(0);
   const searchMirrorRef = useRef<HTMLSpanElement>(null);
   useEffect(() => {
@@ -151,51 +167,6 @@ export const HomePageContent: FC = () => {
       setSearchCaretX(searchMirrorRef.current.offsetWidth);
     }
   }, [search, searchFocused]);
-  const [filterOpen, setFilterOpen] = useState(false);
-  const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS);
-  const trimmedQuery = search.trim().toLowerCase();
-  const hasQuery = trimmedQuery.length > 0;
-  const activeFilterCount = filtersActive(filters);
-  const showFlatResults = hasQuery || activeFilterCount > 0;
-  const heroMode: "idle" | "searching" | "filtering" = filterOpen
-    ? "filtering"
-    : searchFocused || showFlatResults
-      ? "searching"
-      : "idle";
-
-  const queryMatched = useMemo<FilterRow[]>(() => {
-    if (!trimmedQuery) return rows;
-    return rows.filter(
-      (r) =>
-        r.title.includes(trimmedQuery) ||
-        r.filename.includes(trimmedQuery) ||
-        r.director.includes(trimmedQuery) ||
-        r.genre.includes(trimmedQuery)
-    );
-  }, [rows, trimmedQuery]);
-
-  const searchResults = useMemo<FilterRow[]>(
-    () => applyFilters(queryMatched, filters),
-    [queryMatched, filters]
-  );
-
-  const clearAll = useCallback((): void => {
-    setSearch("");
-    setFilters(EMPTY_FILTERS);
-    setFilterOpen(false);
-    setSearchFocused(false);
-  }, []);
-
-  useEffect(() => {
-    if (heroMode === "idle") return;
-    const onKey = (e: KeyboardEvent): void => {
-      if (e.key !== "Escape") return;
-      if (filterOpen) setFilterOpen(false);
-      else clearAll();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [heroMode, filterOpen, clearAll]);
 
   const openFilm = useCallback(
     (id: string): void => {
