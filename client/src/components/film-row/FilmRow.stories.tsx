@@ -1,5 +1,4 @@
 import { graphql } from "react-relay";
-import { MemoryRouter } from "react-router-dom";
 import type { Meta, StoryObj } from "storybook-react-rsbuild";
 
 import type { FilmRow_video$key } from "~/relay/__generated__/FilmRow_video.graphql";
@@ -22,16 +21,9 @@ interface WrapperProps {
 }
 
 const FilmRowWrapper = ({ video, selected }: WrapperProps): JSX.Element => (
-  <MemoryRouter>
-    <div style={{ width: 720, background: "#050706" }}>
-      <FilmRow
-        video={video}
-        selected={selected}
-        onOpen={() => undefined}
-        onEdit={() => undefined}
-      />
-    </div>
-  </MemoryRouter>
+  <div style={{ width: 720, background: "#050706" }}>
+    <FilmRow video={video} selected={selected} onOpen={() => undefined} onEdit={() => undefined} />
+  </div>
 );
 
 const meta: Meta<WrapperProps> = {

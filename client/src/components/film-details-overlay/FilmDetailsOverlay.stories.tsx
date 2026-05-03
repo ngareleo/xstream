@@ -1,5 +1,4 @@
 import { graphql } from "react-relay";
-import { MemoryRouter } from "react-router-dom";
 import type { Meta, StoryObj } from "storybook-react-rsbuild";
 
 import type { FilmDetailsOverlay_video$key } from "~/relay/__generated__/FilmDetailsOverlay_video.graphql";
@@ -21,11 +20,9 @@ interface WrapperProps {
 }
 
 const FilmDetailsOverlayWrapper = ({ video }: WrapperProps): JSX.Element => (
-  <MemoryRouter>
-    <div style={{ position: "relative", width: "100vw", height: "100vh" }}>
-      <FilmDetailsOverlay video={video} onClose={() => {}} />
-    </div>
-  </MemoryRouter>
+  <div style={{ position: "relative", width: "100vw", height: "100vh" }}>
+    <FilmDetailsOverlay video={video} onClose={() => {}} />
+  </div>
 );
 
 const movie = {

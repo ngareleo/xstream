@@ -11,7 +11,7 @@ import type { ControlBarStoryQuery } from "~/relay/__generated__/ControlBarStory
 import { ControlBar } from "./ControlBar.js";
 
 /**
- * ControlBar is the playback UI: seek bar, play/pause, time display, title,
+ * ControlBar is the playback UI: seek bar, play/pause, time display,
  * and resolution badges. It reads video metadata via a Relay fragment and live
  * state via useVideoSync.
  *
@@ -106,8 +106,7 @@ export const Playing: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await expect(canvas.getByRole("button", { name: /play|pause/i })).toBeInTheDocument();
-    await expect(canvas.getByText(/0:00/)).toBeInTheDocument();
-    await expect(canvas.getByText("Mad Max: Fury Road (2015)")).toBeInTheDocument();
+    await expect(canvas.getByText(/^0:00$/)).toBeInTheDocument();
   },
 };
 
@@ -115,7 +114,6 @@ export const Idle: Story = {
   args: { status: "idle" },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await expect(canvas.getByText("Mad Max: Fury Road (2015)")).toBeInTheDocument();
     await expect(canvas.getByRole("button", { name: /play|pause/i })).toBeInTheDocument();
   },
 };
@@ -124,7 +122,7 @@ export const Loading: Story = {
   args: { status: "loading" },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await expect(canvas.getByText("Mad Max: Fury Road (2015)")).toBeInTheDocument();
+    await expect(canvas.getByRole("button", { name: /play|pause/i })).toBeInTheDocument();
   },
 };
 
@@ -146,7 +144,6 @@ export const CappedAt1080p: Story = {
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await expect(canvas.getByText("Mad Max: Fury Road (2015)")).toBeInTheDocument();
     await expect(canvas.getByText("1080p")).toBeInTheDocument();
   },
 };
@@ -169,7 +166,6 @@ export const CappedAt720p: Story = {
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await expect(canvas.getByText("Mad Max: Fury Road (2015)")).toBeInTheDocument();
     await expect(canvas.getByText("720p")).toBeInTheDocument();
   },
 };
@@ -191,9 +187,7 @@ export const LongTitle: Story = {
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await expect(
-      canvas.getByText(/One Battle After Another: The Director's Cut Extended Edition/)
-    ).toBeInTheDocument();
+    await expect(canvas.getByRole("button", { name: /play|pause/i })).toBeInTheDocument();
   },
 };
 
@@ -214,7 +208,6 @@ export const ShortVideo: Story = {
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await expect(canvas.getByText("Mad Max: Fury Road (2015)")).toBeInTheDocument();
     // 90s = 1:30 — confirms the durationSeconds=90 mock made it through.
     await expect(canvas.getByText(/1:30/)).toBeInTheDocument();
   },

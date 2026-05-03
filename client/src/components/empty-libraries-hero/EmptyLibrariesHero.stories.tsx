@@ -1,4 +1,3 @@
-import { MemoryRouter } from "react-router-dom";
 import type { Meta, StoryObj } from "storybook-react-rsbuild";
 
 import { EmptyLibrariesHero } from "./EmptyLibrariesHero.js";
@@ -8,11 +7,9 @@ interface WrapperProps {
 }
 
 const Wrapper = ({ watermark }: WrapperProps): JSX.Element => (
-  <MemoryRouter>
-    <div style={{ width: "100vw", height: "100vh", background: "#050706" }}>
-      <EmptyLibrariesHero watermark={watermark} />
-    </div>
-  </MemoryRouter>
+  <div style={{ width: "100vw", height: "100vh", background: "#050706" }}>
+    <EmptyLibrariesHero watermark={watermark} />
+  </div>
 );
 
 const meta: Meta<WrapperProps> = {

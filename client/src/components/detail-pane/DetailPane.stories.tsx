@@ -1,5 +1,4 @@
 import { graphql } from "react-relay";
-import { MemoryRouter } from "react-router-dom";
 import type { Meta, StoryObj } from "storybook-react-rsbuild";
 
 import type { DetailPane_video$key } from "~/relay/__generated__/DetailPane_video.graphql";
@@ -22,11 +21,9 @@ interface WrapperProps {
 }
 
 const DetailPaneWrapper = ({ video, initialEdit }: WrapperProps): JSX.Element => (
-  <MemoryRouter>
-    <div style={{ width: 480, height: "100vh", background: "#050706" }}>
-      <DetailPane video={video} initialEdit={initialEdit} onClose={() => undefined} />
-    </div>
-  </MemoryRouter>
+  <div style={{ width: 480, height: "100vh", background: "#050706" }}>
+    <DetailPane video={video} initialEdit={initialEdit} onClose={() => undefined} />
+  </div>
 );
 
 const movieMockResolvers = {

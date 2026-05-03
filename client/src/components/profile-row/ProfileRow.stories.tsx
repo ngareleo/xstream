@@ -1,5 +1,4 @@
 import { graphql } from "react-relay";
-import { MemoryRouter } from "react-router-dom";
 import type { Meta, StoryObj } from "storybook-react-rsbuild";
 
 import type { ProfileRow_library$key } from "~/relay/__generated__/ProfileRow_library.graphql";
@@ -31,17 +30,15 @@ const ProfileRowWrapper = ({
   scanning,
   scanProgress,
 }: WrapperProps): JSX.Element => (
-  <MemoryRouter>
-    <div style={{ width: 720, background: "#050706" }}>
-      <ProfileRow
-        library={library}
-        expanded={expanded}
-        onToggle={() => undefined}
-        scanning={scanning}
-        scanProgress={scanProgress}
-      />
-    </div>
-  </MemoryRouter>
+  <div style={{ width: 720, background: "#050706" }}>
+    <ProfileRow
+      library={library}
+      expanded={expanded}
+      onToggle={() => undefined}
+      scanning={scanning}
+      scanProgress={scanProgress}
+    />
+  </div>
 );
 
 const meta: Meta<WrapperProps> = {
