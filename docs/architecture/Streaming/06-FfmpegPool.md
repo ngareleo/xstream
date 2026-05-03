@@ -44,15 +44,27 @@ ExitOutcome { Killed | Complete | Error }        # exactly one variant returned
 
 `run_to_completion` returns exactly one `ExitOutcome` variant. The chunker's VAAPI cascade lives in the `ExitOutcome::Error` branch, so a deliberate kill cannot trigger a cascade re-encode for a disconnected user.
 
+### Permit lifecycle
+
+The semaphore `OwnedSemaphorePermit` is held from the moment `try_reserve_slot` succeeds until the slot is freed. The key invariant: **a slot is considered free as soon as we decide to kill the job, not when the kernel finishes reaping the process.** Before this rule, post-seek transcode requests would fail with `CAPACITY_EXHAUSTED` while SIGTERM'd jobs were still in the OS zombie state (~100–500 ms after kill, see trace `ca1a1bf525b5f123836979e9d631f6a3`). Now:
+
+- **During `try_reserve_slot`:** permit acquired, slot claimed.
+- **During `run_to_completion`:** permit moves into `LivePid` immediately after spawn. The reservation itself drops its claim.
+- **On `kill_job`:** permit is extracted from `LivePid` and dropped synchronously. The ffmpeg child keeps running (SIGTERM in flight, SIGKILL escalation pending), but the cap formula no longer counts this slot. `run_to_completion`'s wait on `child.wait()` continues in the background — it's just no longer holding up new requests.
+- **On natural exit (no kill):** permit is still in `LivePid`; `run_to_completion` drops it when it removes the entry from `live`.
+
+This decoupling of "job is killed" from "kernel has reaped the child" is load-bearing — it keeps the cap responsive when users rapidly seek during playback.
+
 ## Kill path
 
 `kill_job(id, reason: KillReason)`:
 
-1. Moves `id` from `live` into `dying` — slot freed immediately for the cap formula.
+1. Moves `id` from `live` into `dying` — marks the job for killing.
 2. Records the reason in `kill_reasons` so `run_to_completion` knows this was intentional.
-3. Sends `SIGTERM` via `tokio::process::Child::start_kill`.
-4. Spawns an escalation task that awaits an `Arc<Notify>` stored in `escalation_cancel`; if the process hasn't exited within `transcode.force_kill_timeout_ms` (default 2 000 ms) the task issues `SIGKILL`. Process exit notifies the same `Notify` to cancel the escalation.
-5. When the process exits (either signal), the run-loop emits `ExitOutcome::Killed { reason }`.
+3. **Extracts the semaphore permit from `LivePid` and drops it.** The slot is now free for the cap formula — `run_to_completion`'s wait on the kernel is no longer holding resources.
+4. Sends `SIGTERM` via `nix::sys::signal::kill` (Unix) or `tokio::process::Child::start_kill` (Windows).
+5. Spawns an escalation task that awaits an `Arc<Notify>` stored in `escalation_cancel`; if the process hasn't exited within `transcode.force_kill_timeout_ms` (default 2 000 ms) the task issues `SIGKILL`. Process exit notifies the same `Notify` to cancel the escalation.
+6. When the process exits (either signal), the run-loop emits `ExitOutcome::Killed { reason }`.
 
 Idempotent: calling `kill_job` twice on the same id is a no-op after the first call (the entry is already in `dying`). Calling it on an unknown id is a no-op. Reservations that haven't yet been consumed by `run_to_completion` are released by dropping the `Reservation` rather than via `kill_job`.
 

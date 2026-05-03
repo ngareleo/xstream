@@ -15,6 +15,13 @@ Entry shape (each entry ends with the divider line described above):
 
 <!-- ENTRIES BELOW — newest first; each ends with a bare `---` line. The architect's next invocation will treat the no-entries state as the first-run case and prepend a bootstrap entry at HEAD. -->
 
+## 29b5c41 — 2026-05-03
+
+**Files:** `docs/architecture/Streaming/06-FfmpegPool.md`, `docs/server/FFmpeg-Caveats/00-Overview.md`
+**Why:** Pool permit moved into `LivePid` and released on kill, not at reap. Decouples "slot claimed" from "kernel reaped child" so post-seek transcode requests don't hit `CAPACITY_EXHAUSTED` during zombie grace window.
+
+---
+
 ## fc6fda9 — 2026-05-03 (final)
 
 **Files:** `docs/server/FFmpeg-Caveats/00-Overview.md`, `docs/server/FFmpeg-Caveats/01-Negative-DTS.md`, `docs/server/FFmpeg-Caveats/02-Tfdt-Sample-Mismatch.md`, `docs/server/FFmpeg-Caveats/README.md`, `docs/INDEX.md`, `server-rust/src/services/fmp4_tail_reader.rs`, `server-rust/src/services/mod.rs`, `server-rust/src/services/ffmpeg_file.rs`, `server-rust/src/services/chunker.rs`

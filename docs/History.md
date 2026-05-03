@@ -35,6 +35,15 @@ Entry shape (the entry ends with a single line containing exactly three hyphens 
 
 <!-- ENTRIES BELOW — newest first; each ends with a bare three-hyphen divider line. -->
 
+## 2026-05-03 — Pool permit lifecycle: release at kill, not at reap
+
+When a user seeks during active playback, the old foreground + prefetch transcode jobs receive `client_disconnected` and `kill_job` is called. Before this fix, the semaphore permit (which counts against the concurrency cap) was held until the OS reaped the child process, typically 100–500 ms after SIGTERM/SIGKILL. This caused post-seek transcode requests to fail with `CAPACITY_EXHAUSTED` even though the old jobs were already dead to the user's playback. The fix moves the permit into the `LivePid` struct at spawn time and extracts + drops it immediately in `kill_job`, the moment we decide to kill. If the job exits naturally (no kill), the permit is dropped at reap as before. This decouples "job is conceptually free" from "kernel has finished bookkeeping," making the cap responsive to user interactions. Updated pool architecture doc with permit-lifecycle section and added row 03 to FFmpeg-Caveats overview (marked as pool design, not an ffmpeg caveat, but surfaced for downstream awareness).
+
+**Files:** `docs/architecture/Streaming/06-FfmpegPool.md`, `docs/server/FFmpeg-Caveats/00-Overview.md`
+**Related Commit.md entry:** `29b5c41`
+
+---
+
 ## 2026-05-03 — FFmpeg-Caveats: Option B shipped (negative-DTS + tfdt mismatch both fixed)
 
 The negative-DTS bug evolved through three layers: (1) B-frame reorder produces DTS<0; ffmpeg writes `elst` to compensate, but MSE ignores it (Chromium by design). (2) The HLS-fmp4 muxer wrapper silently eats all timestamp-correction flags, making `-avoid_negative_ts` and `-movflags +negative_cts_offsets` no-ops. (3) Deeper still, even when fixed at the flag level, a mismatched `tfdt` (track fragment decode time) box remains: the mov muxer writes `tfdt` in the post-edit timeline (0) while samples use the pre-edit timeline (+504 ticks), and the offset accumulates across fragments until MSE fails at 2–5 s — indistinguishable from the DTS error until you inspect the `tfdt` box. Initial approach ("-bf 0" to disable B-frames) traded bitrate for simplicity but left the tfdt bug intact. Final fix (Option B): drop the HLS wrapper entirely, use direct `-f mp4 -movflags +frag_keyframe+empty_moov+separate_moof+default_base_moof+negative_cts_offsets -avoid_negative_ts make_zero`, and spawn a Rust tail-reader (`fmp4_tail_reader.rs`) as a tokio task to atomically split the single growing `chunk.fmp4` into `init.mp4 + segment_NNNN.m4s`. This preserves the on-disk shape the rest of the pipeline expects and re-enables B-frames (5–10% bitrate saved). New caveat entry `02-Tfdt-Sample-Mismatch.md` documents the tfdt bug with a diagnostic walkthrough (python `tfdt` decoder + ffprobe script). E2E verified on Furiosa 4K: clean playback to 41.97 s, `buffered_end=74 s`, no errors.
