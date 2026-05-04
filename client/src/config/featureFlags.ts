@@ -42,8 +42,6 @@ function notify(): void {
   subscribers.forEach((cb) => cb());
 }
 
-// ── localStorage I/O ────────────────────────────────────────────────────────
-
 function lsGet(key: string): string | null {
   try {
     return globalThis.localStorage?.getItem(key) ?? null;
@@ -69,7 +67,6 @@ function lsRemove(key: string): void {
   }
 }
 
-// ── Module-init: hydrate cache from localStorage synchronously ──────────────
 //
 // Runs once on first import. Resolvers in `relay/environment.ts` and other
 // non-React call sites can therefore call `getFlag(...)` synchronously and
@@ -81,8 +78,6 @@ for (const desc of FLAG_REGISTRY) {
   const parsed = parseValue(raw, desc.valueType);
   if (parsed !== null) cache.set(desc.key, parsed);
 }
-
-// ── Public API ──────────────────────────────────────────────────────────────
 
 /**
  * Called once by `FeatureFlagsProvider` with the server's response. Server

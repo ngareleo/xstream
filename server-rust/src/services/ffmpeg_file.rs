@@ -15,8 +15,6 @@ use tokio::process::Command;
 
 use crate::config::{bitrate_kbps, ResolutionProfile};
 
-// ── HwAccel config ──────────────────────────────────────────────────────────
-
 /// Tagged-union HW-accel config. Only `Software` and `Vaapi` carry real
 /// argv branches today; the other variants are placeholders for the
 /// per-platform ports listed in `Plan/Open-Questions.md §1`.
@@ -42,8 +40,6 @@ impl HwAccelConfig {
         }
     }
 }
-
-// ── Probe types ─────────────────────────────────────────────────────────────
 
 #[derive(Clone, Debug)]
 pub struct VideoStreamInfo {
@@ -86,8 +82,6 @@ const HDR_TRANSFERS: &[&str] = &[
     "smpte428",     // DCI-P3
 ];
 
-// ── Probe errors ────────────────────────────────────────────────────────────
-
 #[derive(Debug, Error)]
 pub enum ProbeError {
     #[error("spawning '{ffprobe}' for {input}: {source}")]
@@ -112,8 +106,6 @@ pub enum ProbeError {
         source: serde_json::Error,
     },
 }
-
-// ── Internal serde shapes — verbatim ffprobe -of json output ────────────────
 
 #[derive(Deserialize)]
 struct ProbeOutput {
@@ -154,8 +146,6 @@ struct ProbeFormat {
     #[serde(default)]
     bit_rate: Option<String>,
 }
-
-// ── Public file wrapper ─────────────────────────────────────────────────────
 
 #[derive(Clone, Debug)]
 pub struct FfmpegFile {
@@ -352,8 +342,6 @@ fn bit_depth_from_pix_fmt(pix_fmt: &str) -> u32 {
         8
     }
 }
-
-// ── Argv builders ───────────────────────────────────────────────────────────
 
 /// Resolved encode argv split at the input boundary. The chunker calls
 /// `tokio::process::Command::new(ffmpeg).args(pre_input).arg("-i").arg(input).args(post_input).arg(output_pattern)`.
@@ -633,8 +621,6 @@ pub(crate) fn vaapi_video_options(
     (input, output)
 }
 
-// ── Tests ────────────────────────────────────────────────────────────────────
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -793,8 +779,6 @@ mod tests {
         let err = parse_probe_json(b"not json", Path::new("/x.mkv")).expect_err("must fail");
         assert!(matches!(err, ProbeError::ParseJson { .. }));
     }
-
-    // ── Argv-builder snapshots ──────────────────────────────────────────────
 
     fn sdr_metadata() -> FileMetadata {
         parse_probe_json(fixture_h264_sdr().as_bytes(), Path::new("/x.mkv")).expect("parse")

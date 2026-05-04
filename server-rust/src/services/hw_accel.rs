@@ -178,7 +178,6 @@ async fn probe_vaapi(ffmpeg: &Path, device: &str) -> HwAccelResult<()> {
     })
 }
 
-// ── Tests ────────────────────────────────────────────────────────────────────
 //
 // The full VAAPI probe needs a real ffmpeg binary AND a real `/dev/dri`
 // device, so it can't run in CI. We cover the deterministic surface:

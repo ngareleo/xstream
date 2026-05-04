@@ -104,8 +104,6 @@ pub fn upsert_episode(db: &Db, row: &EpisodeRow) -> DbResult<()> {
     })
 }
 
-// ── Tests ────────────────────────────────────────────────────────────────────
-
 #[cfg(test)]
 mod tests {
     use super::*;

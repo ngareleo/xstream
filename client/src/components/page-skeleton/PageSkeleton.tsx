@@ -3,7 +3,6 @@ import React, { type FC } from "react";
 
 import { usePageSkeletonStyles } from "./PageSkeleton.styles.js";
 
-// ── DashboardSkeleton ─────────────────────────────────────────────────────
 export const DashboardSkeleton: FC = () => {
   const s = usePageSkeletonStyles();
   return (
@@ -42,7 +41,6 @@ export const DashboardSkeleton: FC = () => {
   );
 };
 
-// ── LibrarySkeleton ───────────────────────────────────────────────────────
 export const LibrarySkeleton: FC = () => {
   const s = usePageSkeletonStyles();
   return (
@@ -81,7 +79,6 @@ export const LibrarySkeleton: FC = () => {
   );
 };
 
-// ── WatchlistSkeleton ─────────────────────────────────────────────────────
 export const WatchlistSkeleton: FC = () => {
   const s = usePageSkeletonStyles();
   return (
@@ -114,7 +111,6 @@ export const WatchlistSkeleton: FC = () => {
   );
 };
 
-// ── SettingsSkeleton ──────────────────────────────────────────────────────
 export const SettingsSkeleton: FC = () => {
   const s = usePageSkeletonStyles();
   return (

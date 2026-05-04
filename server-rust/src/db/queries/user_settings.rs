@@ -30,7 +30,6 @@ pub fn set_setting(db: &Db, key: &str, value: &str) -> DbResult<()> {
     })
 }
 
-// ── Tests ────────────────────────────────────────────────────────────────────
 //
 // This table backs the client's localStorage-mirrored flag registry, so
 // silent ON-CONFLICT breakage would corrupt every flag write — the tests

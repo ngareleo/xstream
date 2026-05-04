@@ -214,8 +214,6 @@ pub fn merge_films(db: &Db, from_film_id: &str, to_film_id: &str) -> DbResult<()
     })
 }
 
-// ── Tests ────────────────────────────────────────────────────────────────────
-
 #[cfg(test)]
 mod tests {
     use super::*;

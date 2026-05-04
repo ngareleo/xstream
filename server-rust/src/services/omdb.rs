@@ -540,8 +540,6 @@ fn nullable(raw: Option<String>) -> Option<String> {
     }
 }
 
-// ── Tests ────────────────────────────────────────────────────────────────────
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -566,8 +564,6 @@ mod tests {
     fn make_client(base_url: String) -> OmdbClient {
         OmdbClient::with_base_url(reqwest::Client::new(), "test-key".to_string(), base_url)
     }
-
-    // ── pure helpers ─────────────────────────────────────────────────────
 
     #[test]
     fn parse_year_takes_first_four_digits() {
@@ -624,8 +620,6 @@ mod tests {
         assert!(nullable(None).is_none());
     }
 
-    // ── map_response ─────────────────────────────────────────────────────
-
     #[test]
     fn map_response_returns_full_result_on_true_with_all_fields() {
         let api: OmdbApiResponse =
@@ -674,8 +668,6 @@ mod tests {
         assert!(r.imdb_rating.is_none());
         assert!(r.poster_url.is_none());
     }
-
-    // ── search (HTTP, via wiremock) ──────────────────────────────────────
 
     #[tokio::test]
     async fn search_returns_some_for_true_response() {
@@ -770,8 +762,6 @@ mod tests {
         let client = make_client("http://127.0.0.1:1".to_string());
         assert!(client.search("Anything", None).await.is_none());
     }
-
-    // ── search_series / series_details / season_episodes ─────────────────
 
     #[tokio::test]
     async fn search_series_returns_top_match() {
@@ -913,8 +903,6 @@ mod tests {
         assert_eq!(eps.len(), 1);
         assert_eq!(eps[0].episode_number, 1);
     }
-
-    // ── budget guard ─────────────────────────────────────────────────────
 
     fn make_client_with_budget(base_url: String, daily_budget: u32) -> OmdbClient {
         OmdbClient::new(

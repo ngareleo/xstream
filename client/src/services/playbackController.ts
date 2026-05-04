@@ -160,7 +160,6 @@ export class PlaybackController {
   private cancelStartupHandler: (() => void) | null = null;
   private cancelBgReadyHandler: (() => void) | null = null;
 
-  // ── User-pause state ───────────────────────────────────────────────────────
   // While the video element is paused by the user, `timeupdate` is silent so
   // the BufferManager's backpressure check never runs — the network fetch
   // would keep appending until MSE detaches the SourceBuffer. The poller
@@ -223,8 +222,6 @@ export class PlaybackController {
     });
     this.attachVideoListeners();
   }
-
-  // ── Public API ─────────────────────────────────────────────────────────────
 
   startPlayback(res: Resolution): void {
     const videoEl = this.deps.videoEl;
@@ -359,8 +356,6 @@ export class PlaybackController {
     for (const detach of this.detachListeners) detach();
     this.detachListeners = [];
   }
-
-  // ── State helpers ──────────────────────────────────────────────────────────
 
   private setStatus(s: PlaybackStatus): void {
     const from = this.status;
@@ -601,8 +596,6 @@ export class PlaybackController {
     });
   }
 
-  // ── Chunk scheduler ────────────────────────────────────────────────────────
-
   /** Fires a startTranscode mutation for the given time window and returns the raw job ID.
    * `isPrefetch` distinguishes RAF-driven prefetch requests from on-demand chain calls
    * on the `transcode.request` span so Seq queries like
@@ -798,8 +791,6 @@ export class PlaybackController {
       });
   }
 
-  // ── MSE recovery (SourceBuffer detached by Chrome) ─────────────────────────
-
   /**
    * Fired by BufferManager when `appendBuffer` rejects with InvalidStateError
    * AND the SB is no longer in `mediaSource.sourceBuffers` — Chrome's
@@ -914,8 +905,6 @@ export class PlaybackController {
       });
   }
 
-  // ── Prefetch RAF loop ──────────────────────────────────────────────────────
-
   private startPrefetchLoop(res: Resolution): void {
     const videoEl = this.deps.videoEl;
     // Cancel any pre-existing prefetch handler — happens during resolution
@@ -995,8 +984,6 @@ export class PlaybackController {
       return true; // keep ticking
     });
   }
-
-  // ── Resolution switch (background buffer) ──────────────────────────────────
 
   private switchResolution(newRes: Resolution): void {
     const videoEl = this.deps.videoEl;
@@ -1133,8 +1120,6 @@ export class PlaybackController {
         this.sessionSpan?.addEvent("background_mse_init_failed", { message: err.message });
       });
   }
-
-  // ── Video event handlers ───────────────────────────────────────────────────
 
   private handleSeeking = (): void => {
     if (this.isHandlingSeek) return;

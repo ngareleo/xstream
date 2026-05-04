@@ -103,8 +103,6 @@ pub fn update_watchlist_progress(
     get_watchlist_item_by_film_id(db, film_id)
 }
 
-// ── Tests ────────────────────────────────────────────────────────────────────
-
 #[cfg(test)]
 mod tests {
     use super::*;

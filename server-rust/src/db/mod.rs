@@ -103,7 +103,6 @@ pub fn sha1_hex(input: &str) -> String {
     h.finalize().iter().map(|b| format!("{b:02x}")).collect()
 }
 
-// ── Re-exports — keep call-site imports stable ───────────────────────────────
 //
 // Resolvers and other modules `use crate::db::{Db, LibraryRow, get_library_by_id, …}`.
 // Re-exporting from the per-table modules means splitting db.rs into a tree
@@ -151,7 +150,6 @@ pub use queries::watchlist::{
     remove_watchlist_item, update_watchlist_progress, WatchlistItemRow,
 };
 
-// ── Tests ────────────────────────────────────────────────────────────────────
 //
 // The two connection-time PRAGMAs are part of the data-correctness contract:
 //

@@ -3,7 +3,6 @@ import { makeStyles } from "@griffel/react";
 import { tokens } from "~/styles/tokens";
 
 export const useControlBarStyles = makeStyles({
-  // ── Wrapper ────────────────────────────────────────────────────────────────
   // Transparent: VideoArea provides the letterbox-bottom darkening gradient.
   root: {
     position: "absolute",
@@ -24,7 +23,6 @@ export const useControlBarStyles = makeStyles({
     pointerEvents: "none",
   },
 
-  // ── Progress row (track + time labels) ─────────────────────────────────────
   progressRow: {
     display: "flex",
     alignItems: "center",
@@ -111,7 +109,6 @@ export const useControlBarStyles = makeStyles({
     zIndex: 10,
   },
 
-  // ── Controls row ───────────────────────────────────────────────────────────
   controlsRow: {
     display: "flex",
     alignItems: "center",
@@ -122,7 +119,6 @@ export const useControlBarStyles = makeStyles({
     flexGrow: 1,
   },
 
-  // ── Buttons ────────────────────────────────────────────────────────────────
   ctrlBtn: {
     backgroundColor: "transparent",
     borderTopWidth: 0,
@@ -187,7 +183,6 @@ export const useControlBarStyles = makeStyles({
     animationTimingFunction: "ease-in-out",
   },
 
-  // ── Volume ─────────────────────────────────────────────────────────────────
   volumeGroup: {
     display: "flex",
     alignItems: "center",
@@ -201,7 +196,6 @@ export const useControlBarStyles = makeStyles({
     accentColor: tokens.colorGreen,
   },
 
-  // ── Resolution chip ────────────────────────────────────────────────────────
   resWrapper: {
     position: "relative",
   },
@@ -282,7 +276,6 @@ export const useControlBarStyles = makeStyles({
     backgroundColor: tokens.colorGreenSoft,
   },
 
-  // ── Loading spinner (replaces playIcon in loading state) ───────────────────
   loadingSpinner: {
     width: "20px",
     height: "20px",

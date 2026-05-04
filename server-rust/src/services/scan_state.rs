@@ -184,7 +184,6 @@ impl Default for ScanState {
     }
 }
 
-// ── Wire-shape converters ───────────────────────────────────────────────────
 //
 // The two subscription payloads project different views of the same
 // snapshot. Keep the conversions here so the GraphQL layer stays free
@@ -210,8 +209,6 @@ impl From<&ScanSnapshot> for LibraryScanUpdate {
         }
     }
 }
-
-// ── Tests ────────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
 mod tests {

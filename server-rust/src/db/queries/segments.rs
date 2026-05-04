@@ -94,7 +94,6 @@ pub fn delete_segments_by_job(db: &Db, job_id: &str) -> DbResult<usize> {
     })
 }
 
-// ── Tests ────────────────────────────────────────────────────────────────────
 //
 // Each test seeds the FK-parent chain (libraries → videos → transcode_jobs)
 // inline so a fresh `:memory:` db starts from a known state. Coverage spans

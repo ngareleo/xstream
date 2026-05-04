@@ -284,8 +284,6 @@ pub fn resolve_show_for_directory(
     Ok(row)
 }
 
-// ── Tests ────────────────────────────────────────────────────────────────────
-
 #[cfg(test)]
 mod tests {
     use super::*;

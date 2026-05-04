@@ -313,8 +313,6 @@ async fn open_when_ready(path: &Path) -> Result<File, TailError> {
     )))
 }
 
-// ── Tests ────────────────────────────────────────────────────────────────────
-
 #[cfg(test)]
 mod tests {
     use super::*;

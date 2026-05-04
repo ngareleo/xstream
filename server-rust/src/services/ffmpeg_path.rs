@@ -321,8 +321,6 @@ fn parse_version_line(line: &str) -> Option<String> {
     None
 }
 
-// ── Tests ────────────────────────────────────────────────────────────────────
-
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -131,38 +131,19 @@ export class BufferManager {
         () => {
           try {
             this.sourceBuffer = ms.addSourceBuffer(mimeType);
-            // segments mode places each segment at `timestampOffset + tfdt`,
-            // giving us explicit control of the per-chunk offset. The chunker
-            // emits each chunk's segments with relative tfdt (0, 2, 4, …
-            // within the chunk window) — the `-output_ts_offset` flag on the
-            // server records the chunk-start as an empty `elst` edit but
-            // Chromium MSE ignores edit lists, so the client must shift the
-            // segments itself. ChunkPipeline calls
-            // `BufferManager.setTimestampOffset(slot.opts.chunkStartS)` on
-            // every chunk's init append, so a segment with tfdt=160 in chunk
-            // [4200, 4500) lands at playback time 4360. Sequence mode would
-            // auto-advance the offset per append and fight that explicit
-            // assignment — segments interleave from foreground+lookahead
-            // would also balloon the buffer (observed historically).
+            // `mode = "segments"` is required by the chunk PTS contract — see
+            // docs/architecture/Streaming/02-Chunk-Pipeline-Invariants.md §1.
             this.sourceBuffer.mode = "segments";
-            // Pre-set duration to the full video length so the browser allows
-            // seeking anywhere in the video immediately, even before that range
-            // is buffered. Without this, videoEl.currentTime is clamped to
-            // ms.duration (which starts near 0) and seek targets beyond the
-            // currently-buffered end are silently truncated.
+            // Pre-seed duration so seeks beyond the buffered end aren't clamped
+            // by the browser. Without this, currentTime is silently truncated to
+            // ms.duration (which starts ~0).
             if (this.videoDurationS > 0) {
               ms.duration = this.videoDurationS;
             }
-            // Drive back-pressure checks as the video plays forward, so a paused
-            // stream gets resumed even when no new segments are being appended.
             this.videoEl.addEventListener("timeupdate", this.handleTimeUpdate);
-            // Log the actual SourceBuffer mode the UA accepted, not the value we
-            // tried to set — Chromium silently keeps "sequence" if it didn't
-            // honour the assignment (rare but possible on some codec configs).
-            // A trace where this says "sequence" while source has "segments"
-            // means a stale client bundle (HMR miss / cached SW / unrefreshed
-            // tab) — see trace 963696a2… for the symptom (chunk 2 stacked on
-            // chunk 1, playhead skipped to chunk 3).
+            // Log the UA-accepted mode (not the value we set). A `sequence`
+            // value here means a stale client bundle is loaded — see
+            // docs/architecture/Streaming/02-Chunk-Pipeline-Invariants.md §1.
             log.info(`MSE ready — sourceBuffer added (${mimeType})`, {
               mime_type: mimeType,
               source_buffer_mode: this.sourceBuffer.mode,
@@ -176,14 +157,10 @@ export class BufferManager {
         { once: true }
       );
 
-      // Diagnostic: Chromium can flip MS to "ended" without our endStream()
-      // being called (observed mid-playback in trace 8c10bcac…). The leading
-      // hypothesis (per architect, 2026-04-27) is an internal end-of-presentation
-      // probe that fires when the SourceBuffer is empty at currentTime and the
-      // decoder can't make progress within a timeout window — common during
-      // SW-fallback encoding's slow first-segment path. The `stream_done`
-      // attribute distinguishes our own endStream() call (true) from a Chromium-
-      // internal transition (false). Listen once — the MS lifecycle ends here.
+      // Chromium can flip MS to `ended` without our endStream() being called.
+      // `stream_done = false` distinguishes that internal transition from our
+      // own seal. Recovery + background:
+      // docs/architecture/Streaming/02-Chunk-Pipeline-Invariants.md §1a.
       ms.addEventListener(
         "sourceended",
         () => {
@@ -216,12 +193,6 @@ export class BufferManager {
             append_queue_depth: this.appendQueue.length,
             timestamp_offset_s: this.timestampOffsetS,
           });
-          // Defense-in-depth: when the seal wasn't ours (streamDone=false),
-          // Chromium has internally called endOfStream(decode_error) — likely
-          // from a chunk-demuxer sample-prepare failure. Trigger the existing
-          // MSE-recreate recovery so the player rebuilds the MediaSource and
-          // resumes from currentTime instead of leaving the user with a
-          // permanently sealed buffer.
           if (!this.streamDone && this.onMseDetached) {
             this.onMseDetached();
           }
@@ -229,9 +200,8 @@ export class BufferManager {
         { once: true }
       );
 
-      // Distinguishes Chromium's `open → closed` (videoEl.src reassigned, MS
-      // GC'd) from `open → ended` (the bug we're chasing). Both end the MS
-      // lifecycle but only one is the symptom we care about.
+      // Distinguishes `open → closed` (src reassigned, MS GC'd) from
+      // `open → ended` (the recovery path above). Diagnostic only.
       ms.addEventListener(
         "sourceclose",
         () => {

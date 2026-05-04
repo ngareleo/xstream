@@ -32,8 +32,6 @@ import { BatchSpanProcessor, WebTracerProvider } from "@opentelemetry/sdk-trace-
 
 import { getSessionContext } from "~/services/playbackSession.js";
 
-// ── Configuration ──────────────────────────────────────────────────────────────
-
 /** Parse "Key1=Val1,Key2=Val2" into a plain object, ignoring malformed pairs. */
 function parseHeadersEnv(raw: string | undefined): Record<string, string> {
   if (!raw) return {};
@@ -50,8 +48,6 @@ function parseHeadersEnv(raw: string | undefined): Record<string, string> {
 // Default to the Rsbuild dev proxy path so no extra config is needed in dev.
 const endpoint = (import.meta.env.PUBLIC_OTEL_ENDPOINT as string | undefined) ?? "/ingest/otlp";
 const headers = parseHeadersEnv(import.meta.env.PUBLIC_OTEL_HEADERS as string | undefined);
-
-// ── Providers ──────────────────────────────────────────────────────────────────
 
 let loggerProvider: LoggerProvider | null = null;
 let initialized = false;
@@ -108,8 +104,6 @@ export function initTelemetry(): void {
   // Useful for correlating playback stalls with JS jank.
   new LongTaskInstrumentation({}).enable();
 }
-
-// ── Public API ─────────────────────────────────────────────────────────────────
 
 /**
  * Returns an OTel Tracer for the given component.

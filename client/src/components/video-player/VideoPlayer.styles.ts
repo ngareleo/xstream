@@ -3,7 +3,6 @@ import { makeStyles } from "@griffel/react";
 import { tokens } from "~/styles/tokens";
 
 export const useVideoPlayerStyles = makeStyles({
-  // ── Container ──────────────────────────────────────────────────────────────
   // Transparent so VideoArea's backdrop poster shows through before playback.
   // Once the <video> element receives frames it paints its own pixels.
   root: {
@@ -13,7 +12,6 @@ export const useVideoPlayerStyles = makeStyles({
     backgroundColor: "transparent",
   },
 
-  // ── Video element ──────────────────────────────────────────────────────────
   video: {
     width: "100%",
     height: "100%",
@@ -22,7 +20,6 @@ export const useVideoPlayerStyles = makeStyles({
     backgroundColor: "transparent",
   },
 
-  // ── Idle overlay (pre-play) ────────────────────────────────────────────────
   // Full-area click-to-play scrim — no visible button. The primary play
   // affordance is the green disc in the ControlBar.
   idleOverlay: {
@@ -40,7 +37,6 @@ export const useVideoPlayerStyles = makeStyles({
     cursor: "pointer",
   },
 
-  // ── Transcode progress label ───────────────────────────────────────────────
   progressLabel: {
     position: "absolute",
     top: "16px",
@@ -58,7 +54,6 @@ export const useVideoPlayerStyles = makeStyles({
     zIndex: 6,
   },
 
-  // ── Error overlay ──────────────────────────────────────────────────────────
   errorOverlay: {
     position: "absolute",
     top: "16px",
@@ -75,7 +70,6 @@ export const useVideoPlayerStyles = makeStyles({
     zIndex: 6,
   },
 
-  // ── Control bar spinner (loading state inside ControlBar) ──────────────────
   ctrlSpinner: {
     width: "18px",
     height: "18px",

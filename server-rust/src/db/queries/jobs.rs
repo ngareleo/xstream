@@ -191,7 +191,6 @@ pub fn mark_job_evicted(db: &Db, id: &str) -> DbResult<()> {
     })
 }
 
-// ── Tests ────────────────────────────────────────────────────────────────────
 //
 // Each test seeds the FK-parent rows (libraries → videos) inline so a
 // fresh `:memory:` db starts from a known state. Tests cover writes

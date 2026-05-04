@@ -73,7 +73,6 @@ fn from_job_row(r: &Row<'_>) -> rusqlite::Result<TranscodeJobRow> {
     })
 }
 
-// ── Tests ────────────────────────────────────────────────────────────────────
 //
 // Cover the structural lookup contract: the same content range produces
 // the same hit, a different range or resolution misses, and `status` is

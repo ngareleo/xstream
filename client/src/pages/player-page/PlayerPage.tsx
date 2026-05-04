@@ -29,7 +29,6 @@ function resolveVideoId(param: string): string {
   return btoa(`Video:${decoded}`);
 }
 
-// ─── PlayerPageInner ──────────────────────────────────────────────────────────
 // Data-fetching bridge: issues useLazyLoadQuery (must be inside Suspense) and
 // hands the fragment key off to PlayerContent. Contains no UI of its own.
 
@@ -39,8 +38,6 @@ const PlayerPageInner: FC<{ videoId: string }> = ({ videoId }) => {
   if (!data.video) return <div className={styles.notFound}>{strings.videoNotFound}</div>;
   return <PlayerContent video={data.video} />;
 };
-
-// ─── PlayerPage ───────────────────────────────────────────────────────────────
 
 export const PlayerPage: FC = () => {
   const { videoId } = useParams<{ videoId: string }>();

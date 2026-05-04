@@ -454,8 +454,6 @@ fn persist_merged_tree(
     Ok(())
 }
 
-// ── Filesystem helpers ───────────────────────────────────────────────────────
-
 fn list_subdirectories(path: &Path) -> std::io::Result<Vec<PathBuf>> {
     let mut out = Vec::new();
     for entry in std::fs::read_dir(path)? {
@@ -491,8 +489,6 @@ fn sha1_path(path: &Path) -> String {
     hasher.update(path.to_string_lossy().as_bytes());
     hex::encode(hasher.finalize())
 }
-
-// ── Parse helpers ────────────────────────────────────────────────────────────
 
 pub fn parse_season_number(dirname: &str) -> Option<i64> {
     let digits: String = dirname
@@ -587,13 +583,9 @@ fn parse_nxnn(s: &str) -> Option<(i64, i64)> {
     None
 }
 
-// ── Tests ────────────────────────────────────────────────────────────────────
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    // ── parse_season_number ──────────────────────────────────────────────
 
     #[test]
     fn parse_season_number_handles_common_formats() {
@@ -611,8 +603,6 @@ mod tests {
         assert_eq!(parse_season_number(""), None);
         assert_eq!(parse_season_number("Season 0"), None);
     }
-
-    // ── parse_episode_id ─────────────────────────────────────────────────
 
     #[test]
     fn parse_episode_id_handles_sxxexx_with_dots() {
@@ -647,8 +637,6 @@ mod tests {
         let r = parse_episode_id("Show 1x02 S03E04.mkv");
         assert_eq!(r, Some((3, 4)));
     }
-
-    // ── merge_trees ──────────────────────────────────────────────────────
 
     fn local_with_episodes(spec: &[(i64, i64, &str)]) -> LocalShowTree {
         let mut tree = LocalShowTree::default();
@@ -725,8 +713,6 @@ mod tests {
         assert_eq!(nums, vec![1, 3, 5]);
     }
 
-    // ── persist_merged_tree (against in-memory DB) ───────────────────────
-
     use crate::db::{
         create_library, get_episodes_by_show, get_seasons_by_show, upsert_show, Db, ShowRow,
     };
@@ -781,8 +767,6 @@ mod tests {
         assert_eq!(eps.len(), 2);
         assert_eq!(eps[0].title.as_deref(), Some("Pilot"));
     }
-
-    // ── End-to-end: tempdir + wiremock OMDb → seasons + episodes ─────────
 
     use crate::config::AppContext;
     use crate::db::{find_show_by_imdb_id, get_show_metadata, VideoRow};

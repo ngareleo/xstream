@@ -15,4 +15,4 @@
 - **No plain-string `*.strings.ts` exports.** Use `LocalizedStrings`.
 - **Icons use the `base()` helper** (`client/src/lib/icons.tsx`). Known exceptions: `IconEdit` (20×20 artboard), `IconSpinner` (inline animation). New exceptions need a comment explaining why.
 - **No magic numbers.** Extract named constants with a comment. Group related constants and describe the behaviour they control.
-- **No comments that restate code or reference the current task** (see the top-level "Don't write comments" rule in the harness default prompt).
+- **Comments are governed by [`01-Commenting.md`](01-Commenting.md).** Default to no comment; TSDoc / rustdoc on public surface and "why"-only inline comments are acceptable; banners, what-comments, commented-out code, and multi-paragraph prose are not.

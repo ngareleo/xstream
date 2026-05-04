@@ -975,7 +975,6 @@ pub fn parse_title_from_filename(filename: &str) -> (String, Option<i32>) {
     (title, year_value)
 }
 
-// ── Tests ────────────────────────────────────────────────────────────────────
 //
 // `parse_title_from_filename` covers torrent-style filename parsing.
 // Walk + fingerprint coverage uses tempdirs.
@@ -986,8 +985,6 @@ mod tests {
     use std::fs;
     use std::io::Write;
     use tempfile::TempDir;
-
-    // ── parse_title_from_filename ─────────────────────────────────────────
 
     #[test]
     fn parse_title_extracts_year_from_dot_separated() {
@@ -1046,8 +1043,6 @@ mod tests {
         assert_eq!(title, "Movie2024");
         assert_eq!(year, None);
     }
-
-    // ── Scene-token stripping (real user data) ────────────────────────────
 
     #[test]
     fn parse_title_strips_scene_tokens_after_parenthesised_year() {
@@ -1127,8 +1122,6 @@ mod tests {
         assert_eq!(year, Some(2010));
     }
 
-    // ── compute_content_fingerprint ──────────────────────────────────────
-
     #[tokio::test]
     async fn fingerprint_is_deterministic_for_same_bytes() {
         let dir = TempDir::new().expect("tempdir");
@@ -1176,8 +1169,6 @@ mod tests {
         let suffix = |s: &str| s.split(':').nth(1).map(str::to_string).unwrap_or_default();
         assert_eq!(suffix(&fp), suffix(&fp_small));
     }
-
-    // ── walk_directory ────────────────────────────────────────────────────
 
     fn make_exts(es: &[&str]) -> HashSet<String> {
         es.iter().map(|s| s.to_string()).collect()
@@ -1229,15 +1220,11 @@ mod tests {
         assert!(paths.is_empty());
     }
 
-    // ── derive_title ──────────────────────────────────────────────────────
-
     #[test]
     fn derive_title_strips_extension_and_normalises_separators() {
         assert_eq!(derive_title("My_Cool.Movie.mkv"), "My Cool Movie");
         assert_eq!(derive_title("plain.mp4"), "plain");
     }
-
-    // ── parse_extensions ──────────────────────────────────────────────────
 
     fn library_with_exts(ext_json: &str) -> LibraryRow {
         LibraryRow {
@@ -1284,8 +1271,6 @@ mod tests {
         assert!(exts.contains(".mkv"));
         assert!(exts.contains(".mp4"));
     }
-
-    // ── scan_libraries (end-to-end with stub ffprobe) ────────────────────
 
     fn fresh_test_ctx(segment_dir: PathBuf) -> AppContext {
         let db = crate::db::Db::open(std::path::Path::new(":memory:")).expect("db");
@@ -1362,8 +1347,6 @@ mod tests {
             .expect("count");
         assert_eq!(videos, 0, "stub ffprobe should fail every probe");
     }
-
-    // ── auto_match_library (with wiremock OMDb) ──────────────────────────
 
     use crate::db::{upsert_video, VideoRow};
     use crate::services::omdb::OmdbClient;

@@ -68,7 +68,6 @@ pub enum CursorError {
     BadOffset(String),
 }
 
-// ── Tests ────────────────────────────────────────────────────────────────────
 //
 // Encode/decode is part of the wire contract — the client's Relay store
 // keys every record by this exact byte sequence. Tests pin the format

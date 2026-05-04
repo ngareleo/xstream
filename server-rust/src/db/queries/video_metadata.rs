@@ -182,7 +182,6 @@ pub fn delete_video_metadata(db: &Db, video_id: &str) -> DbResult<()> {
     })
 }
 
-// ── Tests ────────────────────────────────────────────────────────────────────
 //
 // The ON-CONFLICT upsert and the matched/unmatched aggregation are subtle
 // enough to deserve explicit assertions — a wrong-direction merge or a

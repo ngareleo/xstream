@@ -45,8 +45,6 @@ pub fn sweep_interrupted(db: &Db) -> DbResult<usize> {
     Ok(count)
 }
 
-// ── Tests ────────────────────────────────────────────────────────────────────
-
 #[cfg(test)]
 mod tests {
     use super::*;

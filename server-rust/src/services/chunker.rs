@@ -969,7 +969,6 @@ mod tests {
         assert_eq!(format_seconds(30.5), "30.5");
     }
 
-    // ── decide_cascade_next_tier ──────────────────────────────────────────
     //
     // The helper drives both the non-zero-exit cascade (`ExitOutcome::Error`)
     // and the silent-failure cascade (`ExitOutcome::Complete` with zero
@@ -1053,7 +1052,6 @@ mod tests {
         assert_eq!(cache.get("v4").map(|r| *r), Some(VaapiVideoState::HwUnsafe));
     }
 
-    // ── probe_cache ───────────────────────────────────────────────────────
     //
     // The full cache-aware path inside `run_cascade` requires a real ffprobe
     // binary + a real source file, so it lives in `cascade_integration.rs`

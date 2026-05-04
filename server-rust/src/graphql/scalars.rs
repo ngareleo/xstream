@@ -172,7 +172,6 @@ pub enum PlaybackErrorCode {
     Internal,
 }
 
-// ── Tests ────────────────────────────────────────────────────────────────────
 //
 // Round-trip every variant, then assert unknown values resolve to `None`.
 // The unhappy path must be visible to the caller — never a silent
