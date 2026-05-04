@@ -50,7 +50,8 @@ pub fn run() {
             })?;
 
             // 3. Pick a free port, spawn the embedded server.
-            let handle = spawn_server(db_path, segment_dir, poster_dir, resource_dir, ffmpeg_paths)?;
+            let handle =
+                spawn_server(db_path, segment_dir, poster_dir, resource_dir, ffmpeg_paths)?;
             let port = handle.port;
             app.manage(handle);
 
