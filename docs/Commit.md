@@ -15,6 +15,13 @@ Entry shape (each entry ends with the divider line described above):
 
 <!-- ENTRIES BELOW — newest first; each ends with a bare `---` line. The architect's next invocation will treat the no-entries state as the first-run case and prepend a bootstrap entry at HEAD. -->
 
+## 8941fcb — 2026-05-04 — Loading UX consolidation: remove overlay, keep play-button spinner (same-session curation)
+
+**Files:** `docs/client/Components/VideoPlayer.md`, `docs/client/Components/ControlBar.md`
+**Why:** Curator sync for feat/library-film-entity PR #59: UX feedback consolidated loading affordances. Removed full-area `loadingOverlay` (56×56 spinner on dimmed scrim), which duplicated and obscured the play-button icon morph. ControlBar's 20×20 spinner morph (green top arc, 0.75s spin) is now the sole loading signal, staying on-screen without mouse movement. Controls forced `visible: true` during loading so the morphed play button remains visible during stalls. Two doc files updated: VideoPlayer spec clarified that loading state has no separate overlay and documented control-visibility force; ControlBar spec expanded play-button behavior note to explain icon morphing as the in-place, modern affordance.
+
+---
+
 ## [pending-commit] — 2026-05-04 — Probe-cache: ffprobe result caching per video_id (same-session curation)
 
 **Files:** `docs/server/Config/00-AppConfig.md`, `docs/architecture/Streaming/06-FfmpegPool.md`, `docs/architecture/Observability/server/00-Spans.md`

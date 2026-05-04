@@ -63,7 +63,7 @@ The primary playback UI surface. Owns timeline scrubbing (with hover-preview too
 
 - **Status idle**: Clicking play button fires `PlayRequestedEvent()`, triggers VideoPlayer's `handlePlay()` → `startPlayback(resolution)`.
 - **Status loading/playing**: Clicking toggles native `videoRef.play()/pause()` directly.
-- Icon: Loading state shows spinner; playing state shows pause icon; idle state shows play icon.
+- **Icon morphing**: When `status === "loading"`, the play icon morphs to a 20×20 spinner (green top arc, 2px border, 0.75s linear spin). This in-place spinner is the sole loading affordance, replacing the old full-area overlay. It stays in the center of the 48×48 play button disc and remains on-screen without requiring mouse movement — a modern, non-disruptive signal of transcoding/buffering activity.
 
 ### Resolution picker
 

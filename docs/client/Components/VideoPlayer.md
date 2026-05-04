@@ -21,7 +21,6 @@ The core playback orchestrator. Owns the MSE-backed video element, manages resol
 - **Root container** (`.root`): `position: relative`, `width: 100%`, `height: 100%`, `backgroundColor: transparent`. Transparent so VideoArea's backdrop poster shows through before playback starts.
 - **Video element** (`.video`): `width: 100%`, `height: 100%`, `display: block`, `objectFit: contain`, `backgroundColor: transparent`. Captures click-to-play/pause events.
 - **Idle overlay** (`.idleOverlay`): Full-area scrim, `backgroundColor: rgba(0,0,0,0.35)`, `cursor: pointer`, `zIndex: 5`. No visible button; primary affordance is the green play disc in ControlBar.
-- **Loading overlay** (`.loadingOverlay`): Flex-centered, full-area, `backgroundColor: rgba(0,0,0,0.35)`, `pointerEvents: none`. Contains 56×56 spinner with green top arc, 0.9s linear rotation.
 - **Progress label** (`.progressLabel`): Top-left `position: absolute`, dark background, `fontFamily: fontMono`, `fontSize: 12px`, displays transcode progress (e.g., `"Transcoding 45/120"`) only during loading.
 - **Error overlay** (`.errorOverlay`): Top-left, dark red background `rgba(206,17,38,0.85)`, white text, `fontSize: 13px`.
 
@@ -36,7 +35,7 @@ When `VideoPlayer` mounts, `useChunkedPlayback.prewarm(nativeMax)` fires a `star
 ### Playback state machine
 
 - **idle** (initial): User has not started playback. Overlay shown. Spacebar or ControlBar play button transitions to **loading**.
-- **loading**: Transcode job spinning up or seeking MSE buffer. Spinner visible. `setTimeout(600ms)` simulates decoder warm-up (production: bound to MSE `canplay` event). Transitions to **playing** or **error**.
+- **loading**: Transcode job spinning up or seeking MSE buffer. ControlBar play button icon morphs to a 20×20 spinner (green top arc, 2px border, 0.75s linear spin) — this is the sole loading affordance. Controls remain visible during loading (controlled `controlsVisible: true`). `setTimeout(600ms)` simulates decoder warm-up (production: bound to MSE `canplay` event). Transitions to **playing** or **error**.
 - **playing**: Video frames rendering. Overlay hidden. Controls visible unless idle. `isEnded` flag set by video's `ended` event. When user clicks ControlBar play button while playing, toggles native video element pause/play.
 - **ended**: Video reached duration. `isEnded` flag set. Overlay hidden; ControlBar hidden; PlayerEndScreen rendered (lazy-loaded).
 

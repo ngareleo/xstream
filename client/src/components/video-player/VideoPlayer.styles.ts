@@ -40,43 +40,6 @@ export const useVideoPlayerStyles = makeStyles({
     cursor: "pointer",
   },
 
-  // ── Loading overlay ────────────────────────────────────────────────────────
-  loadingOverlay: {
-    position: "absolute",
-    top: 0,
-    right: 0,
-    bottom: 0,
-    left: 0,
-    zIndex: 5,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    pointerEvents: "none",
-    backgroundColor: "rgba(0,0,0,0.35)",
-  },
-  // 56×56 green-arc spinner per lab spec.
-  loadingSpinner: {
-    width: "56px",
-    height: "56px",
-    borderRadius: "50%",
-    borderTopWidth: "3px",
-    borderRightWidth: "3px",
-    borderBottomWidth: "3px",
-    borderLeftWidth: "3px",
-    borderTopStyle: "solid",
-    borderRightStyle: "solid",
-    borderBottomStyle: "solid",
-    borderLeftStyle: "solid",
-    borderTopColor: tokens.colorGreen,
-    borderRightColor: "rgba(255,255,255,0.30)",
-    borderBottomColor: "rgba(255,255,255,0.30)",
-    borderLeftColor: "rgba(255,255,255,0.30)",
-    animationName: { to: { transform: "rotate(360deg)" } },
-    animationDuration: "0.9s",
-    animationTimingFunction: "linear",
-    animationIterationCount: "infinite",
-  },
-
   // ── Transcode progress label ───────────────────────────────────────────────
   progressLabel: {
     position: "absolute",

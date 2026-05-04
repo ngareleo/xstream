@@ -151,7 +151,7 @@ function makeController(opts?: {
       getVideoId: () => "v-1",
       getVideoDurationS: () => opts?.durationS ?? 1800,
       startTranscodeChunk: vi.fn(),
-      cancelTranscodeChunks,
+      cancelTranscodeChunks: cancelTranscodeChunks as (jobIds: readonly string[]) => void,
       recordSession: vi.fn(),
     },
     {

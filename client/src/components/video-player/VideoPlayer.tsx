@@ -274,12 +274,11 @@ export const VideoPlayer: FC<Props> = ({ video, onStatusChange }) => {
         />
       )}
 
-      {/* Loading spinner overlay */}
-      {status === "loading" && (
-        <div className={styles.loadingOverlay}>
-          <div className={styles.loadingSpinner} />
-        </div>
-      )}
+      {/* No full-area loading overlay — the loading affordance is the
+          ControlBar's play disc, which morphs its inner icon to a spinner
+          when status === "loading" (see ControlBar.tsx playIcon). The
+          controls are forced visible during loading below so the morphed
+          disc is always on-screen during a stall. */}
 
       {/* Transcode progress label */}
       {progressLabel && <div className={styles.progressLabel}>{progressLabel}</div>}
@@ -300,7 +299,11 @@ export const VideoPlayer: FC<Props> = ({ video, onStatusChange }) => {
           videoRef={videoRef}
           resolution={resolution}
           status={status}
-          isVisible={controlsVisible && !isEnded}
+          // Force controls visible during loading so the play-disc spinner
+          // morph (the only loading affordance after the overlay was
+          // removed) stays on-screen even if the user hasn't moved the
+          // mouse for a few seconds.
+          isVisible={(controlsVisible || status === "loading") && !isEnded}
           isFullscreen={isFullscreen}
         />
       </NovaEventingInterceptor>
