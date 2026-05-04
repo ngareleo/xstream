@@ -17,3 +17,4 @@ pub mod poster_cache;
 pub mod profile_availability;
 pub mod scan_state;
 pub mod tv_discovery;
+pub mod wipe;

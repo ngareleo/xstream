@@ -15,6 +15,20 @@ Entry shape (each entry ends with the divider line described above):
 
 <!-- ENTRIES BELOW — newest first; each ends with a bare `---` line. The architect's next invocation will treat the no-entries state as the first-run case and prepend a bootstrap entry at HEAD. -->
 
+## Current HEAD — 2026-05-04 — Homepage Relay refactor: fragment ownership to component level (same-session curation)
+
+**Files:** `docs/client/Components/Library.md`, `docs/client/Components/README.md`
+**Why:** Curator sync for user feedback on page-level query shape. Lifted two page-level Relay fragments (`HomePageContent_videoNode`, `HomePageContent_filmNode`) into a new `HomeFilmsSection` component; the page query now contains only fragment spreads at the boundary. Data masking enforced at component level, no `@relay(mask: false)` at page boundary. No schema/contract changes; UI behavior identical.
+
+---
+
+## Current HEAD — 2026-05-04 — Sized poster cache + wipe utilities (same-session curation)
+
+**Files:** `docs/SUMMARY.md`, `docs/INDEX.md`, `docs/architecture/Library-Scan/05-Poster-Caching.md`, `docs/server/GraphQL-Schema/00-Surface.md`, `docs/client/Components/Poster.md`, `docs/client/Components/DangerTab.md`
+**Why:** Curator sync for Batch A (wipe utilities) + Batch B (sized poster cache, breaking schema change). Poster cache now produces four WebP variants (240, 400, 800, 1600px) per source URL, stored as `<sha1>.w{N}.webp`. GraphQL `posterUrl(size: PosterSize!)` field now requires a size argument; fragments use unique aliases (thumbPoster, tilePoster, panelPoster, overlayPoster, heroPoster) to select sizes without Relay conflicts. Four new wipe mutations (wipeDb, wipePosterCache, wipeSegmentCache, wipeAll) added for test-friendly fresh-state tooling. Six doc files updated: SUMMARY §Library rewritten to explain sized variants + alias convention; INDEX row for Poster-Caching updated; 05-Poster-Caching expanded with cache-migration procedure, batch-atomic resize/encode, legacy-cleanup startup hook, and per-fragment alias table; GraphQL-Schema added PosterSize enum, updated posterUrl field docs on Video/ShowMetadata with size arg + alias convention cross-ref, added four wipe mutations, updated Enum Mapping table; Poster.md simplified (width prop removed, URL resolution no longer rewrites CDN modifiers); DangerTab.md replaced stub spec with complete spec covering two-click armed-window UX, four mutations, loading state, result feedback, and status-row lifecycle.
+
+---
+
 ## 427da30 — 2026-05-04 — Loading UX consolidation: remove overlay, keep play-button spinner (same-session curation)
 
 **Files:** `docs/client/Components/VideoPlayer.md`, `docs/client/Components/ControlBar.md`

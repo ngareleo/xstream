@@ -129,6 +129,7 @@ pub use queries::watchlist::{
     add_watchlist_item, get_watchlist, get_watchlist_item_by_film_id, get_watchlist_item_by_id,
     remove_watchlist_item, update_watchlist_progress, WatchlistItemRow,
 };
+pub use queries::wipe::wipe_content;
 
 //
 // The two connection-time PRAGMAs are part of the data-correctness contract:

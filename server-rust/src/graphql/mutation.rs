@@ -247,6 +247,49 @@ impl Mutation {
         Ok(true)
     }
 
+    /// Dev-only: drop every content row (videos, films, shows, metadata,
+    /// jobs, segments, watch state, watchlist, playback history). Preserves
+    /// `user_settings`. Refuses to run while a job is active or a scan is
+    /// in progress — call `wipe_all` for the aggressive variant.
+    async fn wipe_db(&self, ctx: &Context<'_>) -> async_graphql::Result<bool> {
+        let app_ctx = ctx.data_unchecked::<crate::config::AppContext>();
+        crate::services::wipe::wipe_db(app_ctx)
+            .await
+            .map_err(|e| async_graphql::Error::new(e.to_string()))?;
+        Ok(true)
+    }
+
+    /// Dev-only: delete every cached poster file from disk and null out
+    /// `poster_local_path` so the worker re-downloads on its next cycle.
+    async fn wipe_poster_cache(&self, ctx: &Context<'_>) -> async_graphql::Result<bool> {
+        let app_ctx = ctx.data_unchecked::<crate::config::AppContext>();
+        crate::services::wipe::wipe_poster_cache(app_ctx)
+            .await
+            .map_err(|e| async_graphql::Error::new(e.to_string()))?;
+        Ok(true)
+    }
+
+    /// Dev-only: delete every cached fMP4 segment from disk and clear
+    /// the in-memory job store. Gated on no active jobs.
+    async fn wipe_segment_cache(&self, ctx: &Context<'_>) -> async_graphql::Result<bool> {
+        let app_ctx = ctx.data_unchecked::<crate::config::AppContext>();
+        crate::services::wipe::wipe_segment_cache(app_ctx)
+            .await
+            .map_err(|e| async_graphql::Error::new(e.to_string()))?;
+        Ok(true)
+    }
+
+    /// Dev-only: kill any active transcode jobs, then run all three
+    /// wipes back-to-back. Still refuses if a library scan is in
+    /// progress (kill_all_jobs handles the transcode side).
+    async fn wipe_all(&self, ctx: &Context<'_>) -> async_graphql::Result<bool> {
+        let app_ctx = ctx.data_unchecked::<crate::config::AppContext>();
+        crate::services::wipe::wipe_all(app_ctx)
+            .await
+            .map_err(|e| async_graphql::Error::new(e.to_string()))?;
+        Ok(true)
+    }
+
     async fn record_playback_session(
         &self,
         ctx: &Context<'_>,

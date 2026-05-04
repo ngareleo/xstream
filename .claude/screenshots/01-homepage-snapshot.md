@@ -1,0 +1,478 @@
+- generic [ref=e3]:
+  - banner:
+    - link "Xstream — home" [ref=e5] [cursor=pointer]:
+      - /url: /
+      - generic [ref=e6]: X
+      - generic [ref=e7]: stream
+    - navigation "Primary" [ref=e8]:
+      - link "home" [ref=e9] [cursor=pointer]:
+        - /url: /
+      - link "profiles" [ref=e10] [cursor=pointer]:
+        - /url: /profiles
+      - link "watchlist" [ref=e11] [cursor=pointer]:
+        - /url: /watchlist
+    - generic [ref=e12]:
+      - button "Scan library" [ref=e13] [cursor=pointer]:
+        - img [ref=e15]
+      - button "Account · Dag" [ref=e18] [cursor=pointer]: DG
+  - main [ref=e19]:
+    - generic [ref=e20]:
+      - generic [ref=e21]:
+        - generic [ref=e23]:
+          - img [ref=e25]
+          - textbox "Search the library" [ref=e28]:
+            - /placeholder: Search films, directors, genres…
+        - generic [ref=e29]:
+          - generic [ref=e30]:
+            - generic [ref=e31]: · Good evening
+            - generic [ref=e32]: Tonight's library.
+          - generic [ref=e33]:
+            - button "Show 3 Idiots (2009) (1080p BDRip x265 10bit EAC3 5 1)" [ref=e34] [cursor=pointer]
+            - button "Show Bugonia 2025 4K HDR DV 2160p WEBDL Ita Eng x265-NAHOM" [ref=e36] [cursor=pointer]
+            - button "Show Furiosa- A Mad Max Saga (2024) 4K" [ref=e37] [cursor=pointer]
+            - button "Show Mad Max- Fury Road (2015)" [ref=e38] [cursor=pointer]
+      - generic [ref=e39]:
+        - generic [ref=e40]:
+          - generic [ref=e41]: Movies
+          - generic [ref=e42]:
+            - generic [ref=e43]:
+              - button "3 Idiots (2009) (1080p BDRip x265 10bit EAC3 5 1) Movie 3 Idiots (2009) (1080p BDRip x265 10bit EAC3 5 1) 2009 · 171 min" [ref=e44] [cursor=pointer]:
+                - generic [ref=e45]:
+                  - img "3 Idiots (2009) (1080p BDRip x265 10bit EAC3 5 1)" [ref=e46]
+                  - generic "Movie":
+                    - img
+                - generic [ref=e47]:
+                  - generic [ref=e48]: 3 Idiots (2009) (1080p BDRip x265 10bit EAC3 5 1)
+                  - generic [ref=e49]: 2009 · 171 min
+              - button "Bugonia 2025 4K HDR DV 2160p WEBDL Ita Eng x265-NAHOM Movie Bugonia 2025 4K HDR DV 2160p WEBDL Ita Eng x265-NAHOM 2025 · 119 min" [ref=e50] [cursor=pointer]:
+                - generic [ref=e51]:
+                  - img "Bugonia 2025 4K HDR DV 2160p WEBDL Ita Eng x265-NAHOM" [ref=e52]
+                  - generic "Movie":
+                    - img
+                - generic [ref=e53]:
+                  - generic [ref=e54]: Bugonia 2025 4K HDR DV 2160p WEBDL Ita Eng x265-NAHOM
+                  - generic [ref=e55]: 2025 · 119 min
+              - button "Furiosa- A Mad Max Saga (2024) 4K Movie Furiosa- A Mad Max Saga (2024) 4K 2024 · 148 min" [ref=e56] [cursor=pointer]:
+                - generic [ref=e57]:
+                  - img "Furiosa- A Mad Max Saga (2024) 4K" [ref=e58]
+                  - generic "Movie":
+                    - img
+                - generic [ref=e59]:
+                  - generic [ref=e60]: Furiosa- A Mad Max Saga (2024) 4K
+                  - generic [ref=e61]: 2024 · 148 min
+              - button "Mad Max- Fury Road (2015) Movie Mad Max- Fury Road (2015) 2015 · 120 min" [ref=e62] [cursor=pointer]:
+                - generic [ref=e63]:
+                  - img "Mad Max- Fury Road (2015)" [ref=e64]
+                  - generic "Movie":
+                    - img
+                - generic [ref=e65]:
+                  - generic [ref=e66]: Mad Max- Fury Road (2015)
+                  - generic [ref=e67]: 2015 · 120 min
+              - button "One Battle After Another 2025 Movie One Battle After Another 2025 2025 · 162 min" [ref=e68] [cursor=pointer]:
+                - generic [ref=e69]:
+                  - img "One Battle After Another 2025" [ref=e70]
+                  - generic "Movie":
+                    - img
+                - generic [ref=e71]:
+                  - generic [ref=e72]: One Battle After Another 2025
+                  - generic [ref=e73]: 2025 · 162 min
+            - button "Next" [ref=e74] [cursor=pointer]:
+              - img [ref=e75]
+        - generic [ref=e77]:
+          - generic [ref=e78]: TV shows
+          - generic [ref=e79]:
+            - generic [ref=e80]:
+              - button "Jujutsu Kaisen TV series Jujutsu Kaisen 2020" [ref=e81] [cursor=pointer]:
+                - generic [ref=e82]:
+                  - img "Jujutsu Kaisen" [ref=e83]
+                  - generic "TV series":
+                    - img
+                - generic [ref=e84]:
+                  - generic [ref=e85]: Jujutsu Kaisen
+                  - generic [ref=e86]: "2020"
+              - button "Jujutsu Kaisen - S00E02 - Jujutsu Kaisen 0 - [Bluray-1080p Remux][h265] TV series Jujutsu Kaisen - S00E02 - Jujutsu Kaisen 0 - [Bluray-1080p Remux][h265] 105 min" [ref=e87] [cursor=pointer]:
+                - generic [ref=e88]:
+                  - generic [ref=e89]: Jujutsu Kaisen - S00E02 - Jujutsu Kaisen 0 - [Bluray-1080p Remux][h265]
+                  - generic "TV series":
+                    - img
+                - generic [ref=e90]:
+                  - generic [ref=e91]: Jujutsu Kaisen - S00E02 - Jujutsu Kaisen 0 - [Bluray-1080p Remux][h265]
+                  - generic [ref=e92]: 105 min
+              - button "Jujutsu Kaisen - S01E01 - Ryoumen Sukuna - [WEBDL-1080p][h265] TV series Jujutsu Kaisen - S01E01 - Ryoumen Sukuna - [WEBDL-1080p][h265] 24 min" [ref=e93] [cursor=pointer]:
+                - generic [ref=e94]:
+                  - generic [ref=e95]: Jujutsu Kaisen - S01E01 - Ryoumen Sukuna - [WEBDL-1080p][h265]
+                  - generic "TV series":
+                    - img
+                - generic [ref=e96]:
+                  - generic [ref=e97]: Jujutsu Kaisen - S01E01 - Ryoumen Sukuna - [WEBDL-1080p][h265]
+                  - generic [ref=e98]: 24 min
+              - button "Jujutsu Kaisen - S01E02 - For Myself - [WEBDL-1080p][h265] TV series Jujutsu Kaisen - S01E02 - For Myself - [WEBDL-1080p][h265] 24 min" [ref=e99] [cursor=pointer]:
+                - generic [ref=e100]:
+                  - generic [ref=e101]: Jujutsu Kaisen - S01E02 - For Myself - [WEBDL-1080p][h265]
+                  - generic "TV series":
+                    - img
+                - generic [ref=e102]:
+                  - generic [ref=e103]: Jujutsu Kaisen - S01E02 - For Myself - [WEBDL-1080p][h265]
+                  - generic [ref=e104]: 24 min
+              - button "Jujutsu Kaisen - S01E03 - Girl of Steel - [WEBDL-1080p][h265] TV series Jujutsu Kaisen - S01E03 - Girl of Steel - [WEBDL-1080p][h265] 24 min" [ref=e105] [cursor=pointer]:
+                - generic [ref=e106]:
+                  - generic [ref=e107]: Jujutsu Kaisen - S01E03 - Girl of Steel - [WEBDL-1080p][h265]
+                  - generic "TV series":
+                    - img
+                - generic [ref=e108]:
+                  - generic [ref=e109]: Jujutsu Kaisen - S01E03 - Girl of Steel - [WEBDL-1080p][h265]
+                  - generic [ref=e110]: 24 min
+              - button "Jujutsu Kaisen - S01E04 - Curse Womb Must Die - [WEBDL-1080p][h265] TV series Jujutsu Kaisen - S01E04 - Curse Womb Must Die - [WEBDL-1080p][h265] 24 min" [ref=e111] [cursor=pointer]:
+                - generic [ref=e112]:
+                  - generic [ref=e113]: Jujutsu Kaisen - S01E04 - Curse Womb Must Die - [WEBDL-1080p][h265]
+                  - generic "TV series":
+                    - img
+                - generic [ref=e114]:
+                  - generic [ref=e115]: Jujutsu Kaisen - S01E04 - Curse Womb Must Die - [WEBDL-1080p][h265]
+                  - generic [ref=e116]: 24 min
+              - button "Jujutsu Kaisen - S01E05 - Curse Womb Must Die -II- - [WEBDL-1080p][h265] TV series Jujutsu Kaisen - S01E05 - Curse Womb Must Die -II- - [WEBDL-1080p][h265] 24 min" [ref=e117] [cursor=pointer]:
+                - generic [ref=e118]:
+                  - generic [ref=e119]: Jujutsu Kaisen - S01E05 - Curse Womb Must Die -II- - [WEBDL-1080p][h265]
+                  - generic "TV series":
+                    - img
+                - generic [ref=e120]:
+                  - generic [ref=e121]: Jujutsu Kaisen - S01E05 - Curse Womb Must Die -II- - [WEBDL-1080p][h265]
+                  - generic [ref=e122]: 24 min
+              - button "Jujutsu Kaisen - S01E06 - After Rain - [WEBDL-1080p][h265] TV series Jujutsu Kaisen - S01E06 - After Rain - [WEBDL-1080p][h265] 24 min" [ref=e123] [cursor=pointer]:
+                - generic [ref=e124]:
+                  - generic [ref=e125]: Jujutsu Kaisen - S01E06 - After Rain - [WEBDL-1080p][h265]
+                  - generic "TV series":
+                    - img
+                - generic [ref=e126]:
+                  - generic [ref=e127]: Jujutsu Kaisen - S01E06 - After Rain - [WEBDL-1080p][h265]
+                  - generic [ref=e128]: 24 min
+              - button "Jujutsu Kaisen - S01E07 - Assault - [WEBDL-1080p][h265] TV series Jujutsu Kaisen - S01E07 - Assault - [WEBDL-1080p][h265] 24 min" [ref=e129] [cursor=pointer]:
+                - generic [ref=e130]:
+                  - generic [ref=e131]: Jujutsu Kaisen - S01E07 - Assault - [WEBDL-1080p][h265]
+                  - generic "TV series":
+                    - img
+                - generic [ref=e132]:
+                  - generic [ref=e133]: Jujutsu Kaisen - S01E07 - Assault - [WEBDL-1080p][h265]
+                  - generic [ref=e134]: 24 min
+              - button "Jujutsu Kaisen - S01E08 - Boredom - [WEBDL-1080p][h265] TV series Jujutsu Kaisen - S01E08 - Boredom - [WEBDL-1080p][h265] 24 min" [ref=e135] [cursor=pointer]:
+                - generic [ref=e136]:
+                  - generic [ref=e137]: Jujutsu Kaisen - S01E08 - Boredom - [WEBDL-1080p][h265]
+                  - generic "TV series":
+                    - img
+                - generic [ref=e138]:
+                  - generic [ref=e139]: Jujutsu Kaisen - S01E08 - Boredom - [WEBDL-1080p][h265]
+                  - generic [ref=e140]: 24 min
+              - button "Jujutsu Kaisen - S01E09 - Small Fry and Reverse Retribution - [WEBDL-1080p][h265] TV series Jujutsu Kaisen - S01E09 - Small Fry and Reverse Retribution - [WEBDL-1080p][h265] 24 min" [ref=e141] [cursor=pointer]:
+                - generic [ref=e142]:
+                  - generic [ref=e143]: Jujutsu Kaisen - S01E09 - Small Fry and Reverse Retribution - [WEBDL-1080p][h265]
+                  - generic "TV series":
+                    - img
+                - generic [ref=e144]:
+                  - generic [ref=e145]: Jujutsu Kaisen - S01E09 - Small Fry and Reverse Retribution - [WEBDL-1080p][h265]
+                  - generic [ref=e146]: 24 min
+              - button "Jujutsu Kaisen - S01E10 - Idle Transfiguration - [WEBDL-1080p][h265] TV series Jujutsu Kaisen - S01E10 - Idle Transfiguration - [WEBDL-1080p][h265] 24 min" [ref=e147] [cursor=pointer]:
+                - generic [ref=e148]:
+                  - generic [ref=e149]: Jujutsu Kaisen - S01E10 - Idle Transfiguration - [WEBDL-1080p][h265]
+                  - generic "TV series":
+                    - img
+                - generic [ref=e150]:
+                  - generic [ref=e151]: Jujutsu Kaisen - S01E10 - Idle Transfiguration - [WEBDL-1080p][h265]
+                  - generic [ref=e152]: 24 min
+              - button "Jujutsu Kaisen - S01E11 - Narrow-minded - [WEBDL-1080p][h265] TV series Jujutsu Kaisen - S01E11 - Narrow-minded - [WEBDL-1080p][h265] 24 min" [ref=e153] [cursor=pointer]:
+                - generic [ref=e154]:
+                  - generic [ref=e155]: Jujutsu Kaisen - S01E11 - Narrow-minded - [WEBDL-1080p][h265]
+                  - generic "TV series":
+                    - img
+                - generic [ref=e156]:
+                  - generic [ref=e157]: Jujutsu Kaisen - S01E11 - Narrow-minded - [WEBDL-1080p][h265]
+                  - generic [ref=e158]: 24 min
+              - button "Jujutsu Kaisen - S01E12 - To You Someday - [WEBDL-1080p][h265] TV series Jujutsu Kaisen - S01E12 - To You Someday - [WEBDL-1080p][h265] 24 min" [ref=e159] [cursor=pointer]:
+                - generic [ref=e160]:
+                  - generic [ref=e161]: Jujutsu Kaisen - S01E12 - To You Someday - [WEBDL-1080p][h265]
+                  - generic "TV series":
+                    - img
+                - generic [ref=e162]:
+                  - generic [ref=e163]: Jujutsu Kaisen - S01E12 - To You Someday - [WEBDL-1080p][h265]
+                  - generic [ref=e164]: 24 min
+              - button "Jujutsu Kaisen - S01E13 - Tomorrow - [WEBDL-1080p][h265] TV series Jujutsu Kaisen - S01E13 - Tomorrow - [WEBDL-1080p][h265] 24 min" [ref=e165] [cursor=pointer]:
+                - generic [ref=e166]:
+                  - generic [ref=e167]: Jujutsu Kaisen - S01E13 - Tomorrow - [WEBDL-1080p][h265]
+                  - generic "TV series":
+                    - img
+                - generic [ref=e168]:
+                  - generic [ref=e169]: Jujutsu Kaisen - S01E13 - Tomorrow - [WEBDL-1080p][h265]
+                  - generic [ref=e170]: 24 min
+              - button "Jujutsu Kaisen - S01E14 - Kyoto Sister School Exchange Event Group Battle 0 - - [WEBDL-1080p][h265] TV series Jujutsu Kaisen - S01E14 - Kyoto Sister School Exchange Event Group Battle 0 - - [WEBDL-1080p][h265] 24 min" [ref=e171] [cursor=pointer]:
+                - generic [ref=e172]:
+                  - generic [ref=e173]: Jujutsu Kaisen - S01E14 - Kyoto Sister School Exchange Event Group Battle 0 - - [WEBDL-1080p][h265]
+                  - generic "TV series":
+                    - img
+                - generic [ref=e174]:
+                  - generic [ref=e175]: Jujutsu Kaisen - S01E14 - Kyoto Sister School Exchange Event Group Battle 0 - - [WEBDL-1080p][h265]
+                  - generic [ref=e176]: 24 min
+              - button "Jujutsu Kaisen - S01E15 - Kyoto Sister School Exchange Event Group Battle 1 - - [WEBDL-1080p][h265] TV series Jujutsu Kaisen - S01E15 - Kyoto Sister School Exchange Event Group Battle 1 - - [WEBDL-1080p][h265] 24 min" [ref=e177] [cursor=pointer]:
+                - generic [ref=e178]:
+                  - generic [ref=e179]: Jujutsu Kaisen - S01E15 - Kyoto Sister School Exchange Event Group Battle 1 - - [WEBDL-1080p][h265]
+                  - generic "TV series":
+                    - img
+                - generic [ref=e180]:
+                  - generic [ref=e181]: Jujutsu Kaisen - S01E15 - Kyoto Sister School Exchange Event Group Battle 1 - - [WEBDL-1080p][h265]
+                  - generic [ref=e182]: 24 min
+              - button "Jujutsu Kaisen - S01E16 - Kyoto Sister School Exchange Event Group Battle 2 - - [WEBDL-1080p][h265] TV series Jujutsu Kaisen - S01E16 - Kyoto Sister School Exchange Event Group Battle 2 - - [WEBDL-1080p][h265] 24 min" [ref=e183] [cursor=pointer]:
+                - generic [ref=e184]:
+                  - generic [ref=e185]: Jujutsu Kaisen - S01E16 - Kyoto Sister School Exchange Event Group Battle 2 - - [WEBDL-1080p][h265]
+                  - generic "TV series":
+                    - img
+                - generic [ref=e186]:
+                  - generic [ref=e187]: Jujutsu Kaisen - S01E16 - Kyoto Sister School Exchange Event Group Battle 2 - - [WEBDL-1080p][h265]
+                  - generic [ref=e188]: 24 min
+              - button "Jujutsu Kaisen - S01E17 - Kyoto Sister School Exchange Event Group Battle 3 - - [WEBDL-1080p][h265] TV series Jujutsu Kaisen - S01E17 - Kyoto Sister School Exchange Event Group Battle 3 - - [WEBDL-1080p][h265] 24 min" [ref=e189] [cursor=pointer]:
+                - generic [ref=e190]:
+                  - generic [ref=e191]: Jujutsu Kaisen - S01E17 - Kyoto Sister School Exchange Event Group Battle 3 - - [WEBDL-1080p][h265]
+                  - generic "TV series":
+                    - img
+                - generic [ref=e192]:
+                  - generic [ref=e193]: Jujutsu Kaisen - S01E17 - Kyoto Sister School Exchange Event Group Battle 3 - - [WEBDL-1080p][h265]
+                  - generic [ref=e194]: 24 min
+              - button "Jujutsu Kaisen - S01E18 - Sage - [WEBDL-1080p][h265] TV series Jujutsu Kaisen - S01E18 - Sage - [WEBDL-1080p][h265] 24 min" [ref=e195] [cursor=pointer]:
+                - generic [ref=e196]:
+                  - generic [ref=e197]: Jujutsu Kaisen - S01E18 - Sage - [WEBDL-1080p][h265]
+                  - generic "TV series":
+                    - img
+                - generic [ref=e198]:
+                  - generic [ref=e199]: Jujutsu Kaisen - S01E18 - Sage - [WEBDL-1080p][h265]
+                  - generic [ref=e200]: 24 min
+              - button "Jujutsu Kaisen - S01E19 - Black Flash - [WEBDL-1080p][h265] TV series Jujutsu Kaisen - S01E19 - Black Flash - [WEBDL-1080p][h265] 25 min" [ref=e201] [cursor=pointer]:
+                - generic [ref=e202]:
+                  - generic [ref=e203]: Jujutsu Kaisen - S01E19 - Black Flash - [WEBDL-1080p][h265]
+                  - generic "TV series":
+                    - img
+                - generic [ref=e204]:
+                  - generic [ref=e205]: Jujutsu Kaisen - S01E19 - Black Flash - [WEBDL-1080p][h265]
+                  - generic [ref=e206]: 25 min
+              - button "Jujutsu Kaisen - S01E20 - Nonstandard - [WEBDL-1080p][h265] TV series Jujutsu Kaisen - S01E20 - Nonstandard - [WEBDL-1080p][h265] 24 min" [ref=e207] [cursor=pointer]:
+                - generic [ref=e208]:
+                  - generic [ref=e209]: Jujutsu Kaisen - S01E20 - Nonstandard - [WEBDL-1080p][h265]
+                  - generic "TV series":
+                    - img
+                - generic [ref=e210]:
+                  - generic [ref=e211]: Jujutsu Kaisen - S01E20 - Nonstandard - [WEBDL-1080p][h265]
+                  - generic [ref=e212]: 24 min
+              - button "Jujutsu Kaisen - S01E21 - Jujutsu Koshien - [WEBDL-1080p][h265] TV series Jujutsu Kaisen - S01E21 - Jujutsu Koshien - [WEBDL-1080p][h265] 24 min" [ref=e213] [cursor=pointer]:
+                - generic [ref=e214]:
+                  - generic [ref=e215]: Jujutsu Kaisen - S01E21 - Jujutsu Koshien - [WEBDL-1080p][h265]
+                  - generic "TV series":
+                    - img
+                - generic [ref=e216]:
+                  - generic [ref=e217]: Jujutsu Kaisen - S01E21 - Jujutsu Koshien - [WEBDL-1080p][h265]
+                  - generic [ref=e218]: 24 min
+              - button "Jujutsu Kaisen - S01E22 - The Origin of Blind Obedience - [WEBDL-1080p][h265] TV series Jujutsu Kaisen - S01E22 - The Origin of Blind Obedience - [WEBDL-1080p][h265] 24 min" [ref=e219] [cursor=pointer]:
+                - generic [ref=e220]:
+                  - generic [ref=e221]: Jujutsu Kaisen - S01E22 - The Origin of Blind Obedience - [WEBDL-1080p][h265]
+                  - generic "TV series":
+                    - img
+                - generic [ref=e222]:
+                  - generic [ref=e223]: Jujutsu Kaisen - S01E22 - The Origin of Blind Obedience - [WEBDL-1080p][h265]
+                  - generic [ref=e224]: 24 min
+              - button "Jujutsu Kaisen - S01E23 - The Origin of Blind Obedience 2 - - [WEBDL-1080p][h265] TV series Jujutsu Kaisen - S01E23 - The Origin of Blind Obedience 2 - - [WEBDL-1080p][h265] 24 min" [ref=e225] [cursor=pointer]:
+                - generic [ref=e226]:
+                  - generic [ref=e227]: Jujutsu Kaisen - S01E23 - The Origin of Blind Obedience 2 - - [WEBDL-1080p][h265]
+                  - generic "TV series":
+                    - img
+                - generic [ref=e228]:
+                  - generic [ref=e229]: Jujutsu Kaisen - S01E23 - The Origin of Blind Obedience 2 - - [WEBDL-1080p][h265]
+                  - generic [ref=e230]: 24 min
+              - button "Jujutsu Kaisen - S01E24 - Accomplices - [WEBDL-1080p][h265] TV series Jujutsu Kaisen - S01E24 - Accomplices - [WEBDL-1080p][h265] 24 min" [ref=e231] [cursor=pointer]:
+                - generic [ref=e232]:
+                  - generic [ref=e233]: Jujutsu Kaisen - S01E24 - Accomplices - [WEBDL-1080p][h265]
+                  - generic "TV series":
+                    - img
+                - generic [ref=e234]:
+                  - generic [ref=e235]: Jujutsu Kaisen - S01E24 - Accomplices - [WEBDL-1080p][h265]
+                  - generic [ref=e236]: 24 min
+              - button "Jujutsu Kaisen - S02E01 - Hidden Inventory - [WEBDL-1080p Proper][h265] TV series Jujutsu Kaisen - S02E01 - Hidden Inventory - [WEBDL-1080p Proper][h265] 24 min" [ref=e237] [cursor=pointer]:
+                - generic [ref=e238]:
+                  - generic [ref=e239]: Jujutsu Kaisen - S02E01 - Hidden Inventory - [WEBDL-1080p Proper][h265]
+                  - generic "TV series":
+                    - img
+                - generic [ref=e240]:
+                  - generic [ref=e241]: Jujutsu Kaisen - S02E01 - Hidden Inventory - [WEBDL-1080p Proper][h265]
+                  - generic [ref=e242]: 24 min
+              - button "Jujutsu Kaisen - S02E02 - Hidden Inventory 2 - [WEBDL-1080p][h265] TV series Jujutsu Kaisen - S02E02 - Hidden Inventory 2 - [WEBDL-1080p][h265] 24 min" [ref=e243] [cursor=pointer]:
+                - generic [ref=e244]:
+                  - generic [ref=e245]: Jujutsu Kaisen - S02E02 - Hidden Inventory 2 - [WEBDL-1080p][h265]
+                  - generic "TV series":
+                    - img
+                - generic [ref=e246]:
+                  - generic [ref=e247]: Jujutsu Kaisen - S02E02 - Hidden Inventory 2 - [WEBDL-1080p][h265]
+                  - generic [ref=e248]: 24 min
+              - button "Jujutsu Kaisen - S02E03 - Hidden Inventory 3 - [WEBDL-1080p][h265] TV series Jujutsu Kaisen - S02E03 - Hidden Inventory 3 - [WEBDL-1080p][h265] 24 min" [ref=e249] [cursor=pointer]:
+                - generic [ref=e250]:
+                  - generic [ref=e251]: Jujutsu Kaisen - S02E03 - Hidden Inventory 3 - [WEBDL-1080p][h265]
+                  - generic "TV series":
+                    - img
+                - generic [ref=e252]:
+                  - generic [ref=e253]: Jujutsu Kaisen - S02E03 - Hidden Inventory 3 - [WEBDL-1080p][h265]
+                  - generic [ref=e254]: 24 min
+              - button "Jujutsu Kaisen - S02E04 - Hidden Inventory 4 - [WEBDL-1080p Proper][h265] TV series Jujutsu Kaisen - S02E04 - Hidden Inventory 4 - [WEBDL-1080p Proper][h265] 24 min" [ref=e255] [cursor=pointer]:
+                - generic [ref=e256]:
+                  - generic [ref=e257]: Jujutsu Kaisen - S02E04 - Hidden Inventory 4 - [WEBDL-1080p Proper][h265]
+                  - generic "TV series":
+                    - img
+                - generic [ref=e258]:
+                  - generic [ref=e259]: Jujutsu Kaisen - S02E04 - Hidden Inventory 4 - [WEBDL-1080p Proper][h265]
+                  - generic [ref=e260]: 24 min
+              - button "Jujutsu Kaisen - S02E05 - Premature Death - [WEBDL-1080p][h265] TV series Jujutsu Kaisen - S02E05 - Premature Death - [WEBDL-1080p][h265] 24 min" [ref=e261] [cursor=pointer]:
+                - generic [ref=e262]:
+                  - generic [ref=e263]: Jujutsu Kaisen - S02E05 - Premature Death - [WEBDL-1080p][h265]
+                  - generic "TV series":
+                    - img
+                - generic [ref=e264]:
+                  - generic [ref=e265]: Jujutsu Kaisen - S02E05 - Premature Death - [WEBDL-1080p][h265]
+                  - generic [ref=e266]: 24 min
+              - button "Jujutsu Kaisen - S02E06 - Thats How It Is - [Bluray-1080p Proper][h265] TV series Jujutsu Kaisen - S02E06 - Thats How It Is - [Bluray-1080p Proper][h265] 24 min" [ref=e267] [cursor=pointer]:
+                - generic [ref=e268]:
+                  - generic [ref=e269]: Jujutsu Kaisen - S02E06 - Thats How It Is - [Bluray-1080p Proper][h265]
+                  - generic "TV series":
+                    - img
+                - generic [ref=e270]:
+                  - generic [ref=e271]: Jujutsu Kaisen - S02E06 - Thats How It Is - [Bluray-1080p Proper][h265]
+                  - generic [ref=e272]: 24 min
+              - button "Jujutsu Kaisen - S02E07 - Evening Festival - [Bluray-1080p Proper][h265] TV series Jujutsu Kaisen - S02E07 - Evening Festival - [Bluray-1080p Proper][h265] 24 min" [ref=e273] [cursor=pointer]:
+                - generic [ref=e274]:
+                  - generic [ref=e275]: Jujutsu Kaisen - S02E07 - Evening Festival - [Bluray-1080p Proper][h265]
+                  - generic "TV series":
+                    - img
+                - generic [ref=e276]:
+                  - generic [ref=e277]: Jujutsu Kaisen - S02E07 - Evening Festival - [Bluray-1080p Proper][h265]
+                  - generic [ref=e278]: 24 min
+              - button "Jujutsu Kaisen - S02E08 - Shibuya Incident - [Bluray-1080p Proper][h265] TV series Jujutsu Kaisen - S02E08 - Shibuya Incident - [Bluray-1080p Proper][h265] 24 min" [ref=e279] [cursor=pointer]:
+                - generic [ref=e280]:
+                  - generic [ref=e281]: Jujutsu Kaisen - S02E08 - Shibuya Incident - [Bluray-1080p Proper][h265]
+                  - generic "TV series":
+                    - img
+                - generic [ref=e282]:
+                  - generic [ref=e283]: Jujutsu Kaisen - S02E08 - Shibuya Incident - [Bluray-1080p Proper][h265]
+                  - generic [ref=e284]: 24 min
+              - button "Jujutsu Kaisen - S02E09 - Shibuya Incident Gate Open - [WEBDL-1080p][h265] TV series Jujutsu Kaisen - S02E09 - Shibuya Incident Gate Open - [WEBDL-1080p][h265] 24 min" [ref=e285] [cursor=pointer]:
+                - generic [ref=e286]:
+                  - generic [ref=e287]: Jujutsu Kaisen - S02E09 - Shibuya Incident Gate Open - [WEBDL-1080p][h265]
+                  - generic "TV series":
+                    - img
+                - generic [ref=e288]:
+                  - generic [ref=e289]: Jujutsu Kaisen - S02E09 - Shibuya Incident Gate Open - [WEBDL-1080p][h265]
+                  - generic [ref=e290]: 24 min
+              - button "Jujutsu Kaisen - S02E10 - Pandemonium - [WEBDL-1080p Proper][h265] TV series Jujutsu Kaisen - S02E10 - Pandemonium - [WEBDL-1080p Proper][h265] 24 min" [ref=e291] [cursor=pointer]:
+                - generic [ref=e292]:
+                  - generic [ref=e293]: Jujutsu Kaisen - S02E10 - Pandemonium - [WEBDL-1080p Proper][h265]
+                  - generic "TV series":
+                    - img
+                - generic [ref=e294]:
+                  - generic [ref=e295]: Jujutsu Kaisen - S02E10 - Pandemonium - [WEBDL-1080p Proper][h265]
+                  - generic [ref=e296]: 24 min
+              - button "Jujutsu Kaisen - S02E11 - Seance - [WEBDL-1080p][h265] TV series Jujutsu Kaisen - S02E11 - Seance - [WEBDL-1080p][h265] 24 min" [ref=e297] [cursor=pointer]:
+                - generic [ref=e298]:
+                  - generic [ref=e299]: Jujutsu Kaisen - S02E11 - Seance - [WEBDL-1080p][h265]
+                  - generic "TV series":
+                    - img
+                - generic [ref=e300]:
+                  - generic [ref=e301]: Jujutsu Kaisen - S02E11 - Seance - [WEBDL-1080p][h265]
+                  - generic [ref=e302]: 24 min
+              - button "Jujutsu Kaisen - S02E12 - Dull Knife - [WEBDL-1080p][h265] TV series Jujutsu Kaisen - S02E12 - Dull Knife - [WEBDL-1080p][h265] 24 min" [ref=e303] [cursor=pointer]:
+                - generic [ref=e304]:
+                  - generic [ref=e305]: Jujutsu Kaisen - S02E12 - Dull Knife - [WEBDL-1080p][h265]
+                  - generic "TV series":
+                    - img
+                - generic [ref=e306]:
+                  - generic [ref=e307]: Jujutsu Kaisen - S02E12 - Dull Knife - [WEBDL-1080p][h265]
+                  - generic [ref=e308]: 24 min
+              - button "Jujutsu Kaisen - S02E13 - Red Scale - [WEBDL-1080p][h265] TV series Jujutsu Kaisen - S02E13 - Red Scale - [WEBDL-1080p][h265] 24 min" [ref=e309] [cursor=pointer]:
+                - generic [ref=e310]:
+                  - generic [ref=e311]: Jujutsu Kaisen - S02E13 - Red Scale - [WEBDL-1080p][h265]
+                  - generic "TV series":
+                    - img
+                - generic [ref=e312]:
+                  - generic [ref=e313]: Jujutsu Kaisen - S02E13 - Red Scale - [WEBDL-1080p][h265]
+                  - generic [ref=e314]: 24 min
+              - button "Jujutsu Kaisen - S02E14 - Fluctuations - [WEBDL-1080p][h265] TV series Jujutsu Kaisen - S02E14 - Fluctuations - [WEBDL-1080p][h265] 24 min" [ref=e315] [cursor=pointer]:
+                - generic [ref=e316]:
+                  - generic [ref=e317]: Jujutsu Kaisen - S02E14 - Fluctuations - [WEBDL-1080p][h265]
+                  - generic "TV series":
+                    - img
+                - generic [ref=e318]:
+                  - generic [ref=e319]: Jujutsu Kaisen - S02E14 - Fluctuations - [WEBDL-1080p][h265]
+                  - generic [ref=e320]: 24 min
+              - button "Jujutsu Kaisen - S02E15 - Fluctuations Part 2 - [WEBDL-1080p][h265] TV series Jujutsu Kaisen - S02E15 - Fluctuations Part 2 - [WEBDL-1080p][h265] 24 min" [ref=e321] [cursor=pointer]:
+                - generic [ref=e322]:
+                  - generic [ref=e323]: Jujutsu Kaisen - S02E15 - Fluctuations Part 2 - [WEBDL-1080p][h265]
+                  - generic "TV series":
+                    - img
+                - generic [ref=e324]:
+                  - generic [ref=e325]: Jujutsu Kaisen - S02E15 - Fluctuations Part 2 - [WEBDL-1080p][h265]
+                  - generic [ref=e326]: 24 min
+              - button "Jujutsu Kaisen - S02E16 - Thunderclap - [WEBDL-1080p][h265] TV series Jujutsu Kaisen - S02E16 - Thunderclap - [WEBDL-1080p][h265] 24 min" [ref=e327] [cursor=pointer]:
+                - generic [ref=e328]:
+                  - generic [ref=e329]: Jujutsu Kaisen - S02E16 - Thunderclap - [WEBDL-1080p][h265]
+                  - generic "TV series":
+                    - img
+                - generic [ref=e330]:
+                  - generic [ref=e331]: Jujutsu Kaisen - S02E16 - Thunderclap - [WEBDL-1080p][h265]
+                  - generic [ref=e332]: 24 min
+              - button "Jujutsu Kaisen - S02E17 - Thunderclap Part 2 - [WEBDL-1080p][h265] TV series Jujutsu Kaisen - S02E17 - Thunderclap Part 2 - [WEBDL-1080p][h265] 24 min" [ref=e333] [cursor=pointer]:
+                - generic [ref=e334]:
+                  - generic [ref=e335]: Jujutsu Kaisen - S02E17 - Thunderclap Part 2 - [WEBDL-1080p][h265]
+                  - generic "TV series":
+                    - img
+                - generic [ref=e336]:
+                  - generic [ref=e337]: Jujutsu Kaisen - S02E17 - Thunderclap Part 2 - [WEBDL-1080p][h265]
+                  - generic [ref=e338]: 24 min
+              - button "Jujutsu Kaisen - S02E18 - Right and Wrong - [WEBDL-1080p][h265] TV series Jujutsu Kaisen - S02E18 - Right and Wrong - [WEBDL-1080p][h265] 24 min" [ref=e339] [cursor=pointer]:
+                - generic [ref=e340]:
+                  - generic [ref=e341]: Jujutsu Kaisen - S02E18 - Right and Wrong - [WEBDL-1080p][h265]
+                  - generic "TV series":
+                    - img
+                - generic [ref=e342]:
+                  - generic [ref=e343]: Jujutsu Kaisen - S02E18 - Right and Wrong - [WEBDL-1080p][h265]
+                  - generic [ref=e344]: 24 min
+              - button "Jujutsu Kaisen - S02E19 - Right and Wrong Part 2 - [HDTV-1080p Proper][h265] TV series Jujutsu Kaisen - S02E19 - Right and Wrong Part 2 - [HDTV-1080p Proper][h265] 24 min" [ref=e345] [cursor=pointer]:
+                - generic [ref=e346]:
+                  - generic [ref=e347]: Jujutsu Kaisen - S02E19 - Right and Wrong Part 2 - [HDTV-1080p Proper][h265]
+                  - generic "TV series":
+                    - img
+                - generic [ref=e348]:
+                  - generic [ref=e349]: Jujutsu Kaisen - S02E19 - Right and Wrong Part 2 - [HDTV-1080p Proper][h265]
+                  - generic [ref=e350]: 24 min
+              - button "Jujutsu Kaisen - S02E20 - Right and Wrong Part 3 - [WEBDL-1080p Proper][h265] TV series Jujutsu Kaisen - S02E20 - Right and Wrong Part 3 - [WEBDL-1080p Proper][h265] 24 min" [ref=e351] [cursor=pointer]:
+                - generic [ref=e352]:
+                  - generic [ref=e353]: Jujutsu Kaisen - S02E20 - Right and Wrong Part 3 - [WEBDL-1080p Proper][h265]
+                  - generic "TV series":
+                    - img
+                - generic [ref=e354]:
+                  - generic [ref=e355]: Jujutsu Kaisen - S02E20 - Right and Wrong Part 3 - [WEBDL-1080p Proper][h265]
+                  - generic [ref=e356]: 24 min
+              - button "Jujutsu Kaisen - S02E21 - Metamorphosis - [WEBDL-1080p Proper][h265] TV series Jujutsu Kaisen - S02E21 - Metamorphosis - [WEBDL-1080p Proper][h265] 24 min" [ref=e357] [cursor=pointer]:
+                - generic [ref=e358]:
+                  - generic [ref=e359]: Jujutsu Kaisen - S02E21 - Metamorphosis - [WEBDL-1080p Proper][h265]
+                  - generic "TV series":
+                    - img
+                - generic [ref=e360]:
+                  - generic [ref=e361]: Jujutsu Kaisen - S02E21 - Metamorphosis - [WEBDL-1080p Proper][h265]
+                  - generic [ref=e362]: 24 min
+              - button "Jujutsu Kaisen - S02E22 - Metamorphosis Part 2 - [WEBDL-1080p][h265] TV series Jujutsu Kaisen - S02E22 - Metamorphosis Part 2 - [WEBDL-1080p][h265] 24 min" [ref=e363] [cursor=pointer]:
+                - generic [ref=e364]:
+                  - generic [ref=e365]: Jujutsu Kaisen - S02E22 - Metamorphosis Part 2 - [WEBDL-1080p][h265]
+                  - generic "TV series":
+                    - img
+                - generic [ref=e366]:
+                  - generic [ref=e367]: Jujutsu Kaisen - S02E22 - Metamorphosis Part 2 - [WEBDL-1080p][h265]
+                  - generic [ref=e368]: 24 min
+              - button "Jujutsu Kaisen - S02E23 - Shibuya Incident Gate Close - [WEBDL-1080p][h265] TV series Jujutsu Kaisen - S02E23 - Shibuya Incident Gate Close - [WEBDL-1080p][h265] 24 min" [ref=e369] [cursor=pointer]:
+                - generic [ref=e370]:
+                  - generic [ref=e371]: Jujutsu Kaisen - S02E23 - Shibuya Incident Gate Close - [WEBDL-1080p][h265]
+                  - generic "TV series":
+                    - img
+                - generic [ref=e372]:
+                  - generic [ref=e373]: Jujutsu Kaisen - S02E23 - Shibuya Incident Gate Close - [WEBDL-1080p][h265]
+                  - generic [ref=e374]: 24 min
+            - button "Next" [ref=e375] [cursor=pointer]:
+              - img [ref=e376]

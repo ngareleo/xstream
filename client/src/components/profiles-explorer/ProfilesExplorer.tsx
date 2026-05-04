@@ -19,7 +19,6 @@ interface ProfilesExplorerProps {
   scanByLibrary: Map<string, LibraryScanSnapshot>;
   onOpenFilm: (id: string) => void;
   onEditFilm: (id: string) => void;
-  onCreateProfile: () => void;
 }
 
 export const ProfilesExplorer: FC<ProfilesExplorerProps> = ({
@@ -29,7 +28,6 @@ export const ProfilesExplorer: FC<ProfilesExplorerProps> = ({
   scanByLibrary,
   onOpenFilm,
   onEditFilm,
-  onCreateProfile,
 }) => {
   const styles = useProfilesExplorerStyles();
 
@@ -70,38 +68,8 @@ export const ProfilesExplorer: FC<ProfilesExplorerProps> = ({
     [visibleProfiles]
   );
 
-  let totalFilms = 0;
-  let totalShows = 0;
-  let totalUnmatched = 0;
-  for (const lib of libraries) {
-    for (const e of lib.videos.edges) {
-      if (e.node.mediaType === "MOVIES") totalFilms += 1;
-      if (e.node.mediaType === "TV_SHOWS") totalShows += 1;
-      if (!e.node.title) totalUnmatched += 1;
-    }
-  }
-  // TODO(release-design): wire episode counts from the seasons subselection.
-  const totalEpisodes = 0;
-  const scanningCount = scanByLibrary.size;
-
   return (
     <div className={styles.root}>
-      <div className={styles.breadcrumb}>
-        <span className={styles.crumbDim}>{strings.crumbHome}</span>
-        <span>/</span>
-        <span>{strings.crumbMedia}</span>
-        <span>/</span>
-        <span className={styles.crumbBright}>{strings.crumbFilms}</span>
-        {scanningCount > 0 && (
-          <span className={styles.breadcrumbScanning}>
-            {strings.formatString(strings.breadcrumbScanningFormat, {
-              n: scanningCount,
-              total: libraries.length,
-            })}
-          </span>
-        )}
-      </div>
-
       <div className={styles.searchBar}>
         <span className={styles.searchPrompt} aria-hidden="true">
           <IconSearch />
@@ -182,21 +150,6 @@ export const ProfilesExplorer: FC<ProfilesExplorerProps> = ({
             );
           })
         )}
-      </div>
-
-      <div className={styles.footer}>
-        <span>
-          {strings.formatString(strings.footerCountsFormat, {
-            profiles: libraries.length,
-            films: totalFilms,
-            shows: totalShows,
-            episodes: totalEpisodes,
-            unmatched: totalUnmatched,
-          })}
-        </span>
-        <button type="button" className={styles.footerCta} onClick={onCreateProfile}>
-          {strings.footerCta}
-        </button>
       </div>
     </div>
   );

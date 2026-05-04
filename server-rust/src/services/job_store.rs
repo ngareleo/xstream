@@ -35,6 +35,10 @@ impl JobStore {
     pub fn is_empty(&self) -> bool {
         self.by_id.is_empty()
     }
+
+    pub fn clear(&self) {
+        self.by_id.clear();
+    }
 }
 
 #[cfg(test)]

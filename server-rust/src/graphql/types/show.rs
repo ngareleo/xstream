@@ -11,6 +11,7 @@ use crate::db::{
     get_episodes_by_show, get_library_by_id, get_seasons_by_show, get_show_metadata,
     get_videos_by_show_id, Db, ShowRow, VideoRow,
 };
+use crate::graphql::scalars::PosterSize;
 use crate::graphql::types::episode::Episode;
 use crate::relay::to_global_id;
 
@@ -106,8 +107,9 @@ impl Show {
     }
 }
 
-/// OMDb-derived show metadata. Mirrors `VideoMetadata`.
-#[derive(SimpleObject, Clone)]
+/// OMDb-derived show metadata. Mirrors `VideoMetadata` — same poster
+/// resolver shape (sized variant from cache, OMDb URL as fallback).
+#[derive(Clone)]
 pub struct ShowMetadata {
     pub imdb_id: String,
     pub title: String,
@@ -117,7 +119,8 @@ pub struct ShowMetadata {
     pub cast: Vec<String>,
     pub rating: Option<f64>,
     pub plot: Option<String>,
-    pub poster_url: Option<String>,
+    pub poster_local_path: Option<String>,
+    pub poster_source_url: Option<String>,
 }
 
 impl ShowMetadata {
@@ -146,11 +149,44 @@ impl ShowMetadata {
             cast,
             rating: row.rating,
             plot: row.plot,
-            poster_url: crate::graphql::types::poster_url_for_metadata(
-                row.poster_local_path.as_deref(),
-                row.poster_url.as_deref(),
-            ),
+            poster_local_path: row.poster_local_path,
+            poster_source_url: row.poster_url,
         }
+    }
+}
+
+#[Object]
+impl ShowMetadata {
+    async fn imdb_id(&self) -> &str {
+        &self.imdb_id
+    }
+    async fn title(&self) -> &str {
+        &self.title
+    }
+    async fn year(&self) -> Option<i32> {
+        self.year
+    }
+    async fn genre(&self) -> Option<&str> {
+        self.genre.as_deref()
+    }
+    async fn director(&self) -> Option<&str> {
+        self.director.as_deref()
+    }
+    async fn cast(&self) -> &[String] {
+        &self.cast
+    }
+    async fn rating(&self) -> Option<f64> {
+        self.rating
+    }
+    async fn plot(&self) -> Option<&str> {
+        self.plot.as_deref()
+    }
+    async fn poster_url(&self, size: PosterSize) -> Option<String> {
+        crate::graphql::types::poster_url_for_metadata(
+            self.poster_local_path.as_deref(),
+            self.poster_source_url.as_deref(),
+            size,
+        )
     }
 }
 

@@ -146,6 +146,56 @@ impl ProfileStatus {
     }
 }
 
+/// Pre-rendered poster widths the server caches as WebP variants. Each
+/// `<sha1>.w{N}.webp` file is generated once at fetch time by
+/// `services::poster_cache` and served by `routes::poster::get_poster`.
+/// The variants cover the actual call sites at 2x DPR — adding a new
+/// width is a schema break (call sites must opt in), removing one is a
+/// migration.
+#[derive(Enum, Copy, Clone, Eq, PartialEq, Debug)]
+#[graphql(name = "PosterSize")]
+pub enum PosterSize {
+    #[graphql(name = "W240")]
+    W240,
+    #[graphql(name = "W400")]
+    W400,
+    #[graphql(name = "W800")]
+    W800,
+    #[graphql(name = "W1600")]
+    W1600,
+}
+
+impl PosterSize {
+    /// Pixel width on the long edge. Aspect ratio is preserved during
+    /// resize, so the encoded file may be narrower than this when the
+    /// source is portrait — which all OMDb posters are.
+    pub fn width_px(self) -> u32 {
+        match self {
+            PosterSize::W240 => 240,
+            PosterSize::W400 => 400,
+            PosterSize::W800 => 800,
+            PosterSize::W1600 => 1600,
+        }
+    }
+
+    /// Filename suffix used on disk: `<sha1>.<suffix>.webp`.
+    pub fn suffix(self) -> &'static str {
+        match self {
+            PosterSize::W240 => "w240",
+            PosterSize::W400 => "w400",
+            PosterSize::W800 => "w800",
+            PosterSize::W1600 => "w1600",
+        }
+    }
+
+    pub const ALL: &'static [PosterSize] = &[
+        PosterSize::W240,
+        PosterSize::W400,
+        PosterSize::W800,
+        PosterSize::W1600,
+    ];
+}
+
 #[derive(Enum, Copy, Clone, Eq, PartialEq, Debug)]
 #[graphql(name = "PlaybackErrorCode")]
 pub enum PlaybackErrorCode {

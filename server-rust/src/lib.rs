@@ -235,6 +235,19 @@ pub async fn run(config: ServerConfig) -> AppResult<()> {
     // offline→online flips it kicks a one-shot scan to catch up.
     services::profile_availability::spawn_periodic_availability(ctx.clone());
 
+    // One-shot startup cleanup: any pre-PosterSize cached files (raw
+    // bytes at `<sha>.<ext>`) get reaped here, AND legacy DB rows get
+    // their `poster_local_path` nulled so the worker treats them as
+    // "needs download" again. Without the DB pass the worker would
+    // think the posters are still cached. Runs concurrently with the
+    // worker so we don't block boot.
+    {
+        let cleanup_ctx = ctx.clone();
+        tokio::spawn(async move {
+            services::poster_cache::purge_legacy_cache(&cleanup_ctx).await;
+        });
+    }
+
     // Poster cache worker — downloads OMDb posters into
     // `app_config.poster_dir` so subsequent requests serve from disk and
     // the client works offline.

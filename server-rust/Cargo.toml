@@ -53,6 +53,12 @@ hex = "0.4"
 # Tauri bundle has no per-platform OpenSSL dependency.
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 
+# Poster resize + WebP encode. `image` decodes JPEG/PNG/WebP/GIF (no
+# AVIF — avoids a native libavif dep); `webp` wraps libwebp for fast
+# q75 lossy encoding. Used by services::poster_cache.
+image = { version = "0.25", default-features = false, features = ["jpeg", "png", "webp", "gif"] }
+webp = { version = "0.3", default-features = false }
+
 # POSIX signals — chunker SIGTERM/SIGKILL escalation on Unix
 [target.'cfg(unix)'.dependencies]
 nix = { version = "0.29", features = ["signal"] }

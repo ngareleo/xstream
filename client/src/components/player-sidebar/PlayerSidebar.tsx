@@ -18,7 +18,8 @@ export interface SidebarSeriesPick {
 }
 
 const VIDEO_FRAGMENT = graphql`
-  fragment PlayerSidebar_video on Video {
+  fragment PlayerSidebar_video on Video
+  @argumentDefinitions(posterSize: { type: "PosterSize!", defaultValue: W400 }) {
     id
     title
     durationSeconds
@@ -27,7 +28,6 @@ const VIDEO_FRAGMENT = graphql`
       year
       genre
       plot
-      posterUrl
     }
     library {
       videos(first: 6) {
@@ -37,7 +37,7 @@ const VIDEO_FRAGMENT = graphql`
             title
             metadata {
               year
-              posterUrl
+              tilePoster: posterUrl(size: $posterSize)
             }
           }
         }
@@ -143,8 +143,8 @@ export const PlayerSidebar: FC<Props> = ({
               <div className={styles.upNextEmpty}>{strings.upNextEmpty}</div>
             ) : (
               upNext.map((v) => {
-                const posterStyle = v.metadata?.posterUrl
-                  ? { backgroundImage: `url(${v.metadata.posterUrl})` }
+                const posterStyle = v.metadata?.tilePoster
+                  ? { backgroundImage: `url(${v.metadata.tilePoster})` }
                   : undefined;
                 return (
                   <Link key={v.id} to={`/player/${v.id}`} replace className={styles.upNextRow}>

@@ -138,13 +138,16 @@ type VideoMetadata {
   rating: Float
   plot: String
   """
-  Resolved URL the client should fetch. When the worker has cached the
-  poster locally this returns `/poster/<basename>` (same-origin); else
-  the OMDb canonical URL. The basename column itself is internal —
-  `services::poster_cache` is the only writer. See
-  `docs/architecture/Library-Scan/05-Poster-Caching.md`.
+  Poster URL sized to the requested dimension. When the worker has cached
+  the poster locally this returns `/poster/<basename>.w{N}.webp` 
+  (same-origin, WebP-encoded); else the OMDb canonical URL (unchanged).
+  The poster_local_path column is internal — `services::poster_cache`
+  resizes and encodes all 4 width variants (240, 400, 800, 1600px).
+  See `docs/architecture/Library-Scan/05-Poster-Caching.md` and
+  `docs/architecture/Library-Scan/05-Poster-Caching.md` § "Client
+  fragment alias convention" for per-fragment size selection.
   """
-  posterUrl: String
+  posterUrl(size: PosterSize!): String
 }
 
 type VideoStreamInfo {
@@ -250,9 +253,11 @@ type ShowMetadata {
   rating: Float
   plot: String
   """
-  Same `/poster/<basename>` ↔ OMDb-URL contract as `VideoMetadata.posterUrl`.
+  Poster URL sized to the requested dimension. Same contract as
+  `VideoMetadata.posterUrl` — server-relative WebP variants when cached,
+  else OMDb CDN URL.
   """
-  posterUrl: String
+  posterUrl(size: PosterSize!): String
 }
 
 type ShowConnection {
@@ -315,6 +320,13 @@ enum Resolution {
   RESOLUTION_720P
   RESOLUTION_1080P
   RESOLUTION_4K
+}
+
+enum PosterSize {
+  W240
+  W400
+  W800
+  W1600
 }
 
 enum JobStatus {
@@ -420,6 +432,32 @@ type Mutation {
     videoId: ID!
     currentTimeSeconds: Float!
   ): WatchProgress!
+  """
+  Wipe the local SQLite database of all content (libraries, films, shows,
+  videos, metadata, watchlist, playback progress). Preserves user_settings
+  and schema. Gates on job_store.is_empty() and scan_state.is_scanning().
+  """
+  wipeDb: Boolean!
+  """
+  Delete all poster image files from the local cache directory. Gates on
+  job_store.is_empty() and scan_state.is_scanning(). Subsequent metadata
+  queries will re-download posters as needed.
+  """
+  wipePosterCache: Boolean!
+  """
+  Delete all transcoded segment files from the local cache directory. Gates
+  on job_store.is_empty() and scan_state.is_scanning(). In-flight
+  transcode jobs will have their output deleted, breaking playback; the
+  user should be advised not to call this during streaming.
+  """
+  wipeSegmentCache: Boolean!
+  """
+  Equivalent to calling wipeDb, wipePosterCache, and wipeSegmentCache in
+  sequence. First kills all in-flight jobs via job_store.kill_all_jobs(),
+  then wipes the three layers. Atomic from the user's perspective — one
+  button, one mutation, fresh state after it returns.
+  """
+  wipeAll: Boolean!
 }
 
 type LibraryScanUpdate {
@@ -451,6 +489,10 @@ GraphQL enums use ALL_CAPS. Internally the server uses lowercase / snake_case Ru
 | `RESOLUTION_720P` | `720p` |
 | `RESOLUTION_1080P` | `1080p` |
 | `RESOLUTION_4K` | `4k` |
+| `W240` | `w240` (PosterSize variant) |
+| `W400` | `w400` (PosterSize variant) |
+| `W800` | `w800` (PosterSize variant) |
+| `W1600` | `w1600` (PosterSize variant) |
 | `PENDING` | `pending` |
 | `RUNNING` | `running` |
 | `COMPLETE` | `complete` |
