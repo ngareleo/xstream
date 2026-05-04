@@ -11,7 +11,8 @@ import { strings } from "./ShowDetailsOverlay.strings";
 import { useShowDetailsOverlayStyles } from "./ShowDetailsOverlay.styles";
 
 const SHOW_FRAGMENT = graphql`
-  fragment ShowDetailsOverlay_show on Show {
+  fragment ShowDetailsOverlay_show on Show
+  @argumentDefinitions(posterSize: { type: "PosterSize!", defaultValue: W1600 }) {
     id
     title
     year
@@ -22,7 +23,7 @@ const SHOW_FRAGMENT = graphql`
       director
       plot
       rating
-      posterUrl
+      overlayPoster: posterUrl(size: $posterSize)
     }
     profiles {
       id
@@ -84,10 +85,9 @@ export const ShowDetailsOverlay: FC<ShowDetailsOverlayProps> = ({ show, onClose 
     <div ref={overlayRef} className={styles.overlay}>
       <div className={styles.hero}>
         <Poster
-          url={data.metadata?.posterUrl ?? null}
+          url={data.metadata?.overlayPoster ?? null}
           alt={altText}
           className={styles.poster}
-          width={1600}
         />
         <div className={styles.gradient} />
         <button

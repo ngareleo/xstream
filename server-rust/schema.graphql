@@ -205,6 +205,29 @@ type Mutation {
 	removeFromWatchlist(id: ID!): Boolean!
 	updateWatchProgress(filmId: ID!, progressSeconds: Float!): WatchlistItem!
 	setSetting(key: String!, value: String!): Boolean!
+	"""
+	Dev-only: drop every content row (videos, films, shows, metadata,
+	jobs, segments, watch state, watchlist, playback history). Preserves
+	`user_settings`. Refuses to run while a job is active or a scan is
+	in progress — call `wipe_all` for the aggressive variant.
+	"""
+	wipeDb: Boolean!
+	"""
+	Dev-only: delete every cached poster file from disk and null out
+	`poster_local_path` so the worker re-downloads on its next cycle.
+	"""
+	wipePosterCache: Boolean!
+	"""
+	Dev-only: delete every cached fMP4 segment from disk and clear
+	the in-memory job store. Gated on no active jobs.
+	"""
+	wipeSegmentCache: Boolean!
+	"""
+	Dev-only: kill any active transcode jobs, then run all three
+	wipes back-to-back. Still refuses if a library scan is in
+	progress (kill_all_jobs handles the transcode side).
+	"""
+	wipeAll: Boolean!
 	recordPlaybackSession(traceId: String!, videoId: ID!, resolution: Resolution!): PlaybackSession!
 }
 
@@ -274,6 +297,21 @@ type PlaybackSession {
 	videoTitle: String!
 	resolution: Resolution!
 	startedAt: String!
+}
+
+"""
+Pre-rendered poster widths the server caches as WebP variants. Each
+`<sha1>.w{N}.webp` file is generated once at fetch time by
+`services::poster_cache` and served by `routes::poster::get_poster`.
+The variants cover the actual call sites at 2x DPR — adding a new
+width is a schema break (call sites must opt in), removing one is a
+migration.
+"""
+enum PosterSize {
+	W240
+	W400
+	W800
+	W1600
 }
 
 enum ProfileStatus {
@@ -388,9 +426,6 @@ type ShowEdge {
 	cursor: String!
 }
 
-"""
-OMDb-derived show metadata. Mirrors `VideoMetadata`.
-"""
 type ShowMetadata {
 	imdbId: String!
 	title: String!
@@ -400,7 +435,7 @@ type ShowMetadata {
 	cast: [String!]!
 	rating: Float
 	plot: String
-	posterUrl: String
+	posterUrl(size: PosterSize!): String
 }
 
 union StartTranscodeResult = TranscodeJob | PlaybackError
@@ -483,7 +518,14 @@ type VideoMetadata {
 	cast: [String!]!
 	rating: Float
 	plot: String
-	posterUrl: String
+	"""
+	Resolved URL for the poster at the requested width. When the
+	local cache has the entry, returns `/poster/<root>.w{N}.webp`
+	at the same origin as the GraphQL endpoint — works offline. In
+	the cache-fill window the OMDb URL is returned as-is; size is
+	best-effort at most for that fallback.
+	"""
+	posterUrl(size: PosterSize!): String
 }
 
 type VideoStreamInfo {

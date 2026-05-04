@@ -1,4 +1,4 @@
-//! Background poster fetcher for metadata rows; stores locally with SHA1 keying. See docs/architecture/Library-Scan/05-Poster-Caching.md.
+//! Background poster fetcher; downloads each OMDb poster once and writes one WebP variant per `PosterSize`. See docs/architecture/Library-Scan/05-Poster-Caching.md.
 
 use std::collections::HashSet;
 use std::path::PathBuf;
@@ -6,6 +6,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use futures_util::stream::{self, StreamExt};
+use image::imageops::FilterType;
 use sha1::{Digest, Sha1};
 use tokio::io::AsyncWriteExt;
 use tokio::sync::Mutex;
@@ -16,6 +17,12 @@ use crate::db::{
     list_shows_needing_poster_download, list_videos_needing_poster_download,
     set_show_poster_local_path, set_video_poster_local_path,
 };
+use crate::graphql::scalars::PosterSize;
+
+/// libwebp lossy quality. 75 is the standard "indistinguishable from
+/// source at typical poster sizes" point and keeps each variant in the
+/// 25-40 KB range for a 2:3 poster.
+const WEBP_QUALITY: f32 = 75.0;
 
 /// How often the worker wakes up to look for new pending downloads.
 const POLL_INTERVAL: Duration = Duration::from_secs(15);
@@ -147,8 +154,18 @@ enum DownloadError {
     Status(u16),
     #[error("io error: {0}")]
     Io(#[from] std::io::Error),
+    #[error("image decode failed: {0}")]
+    Decode(#[from] image::ImageError),
+    #[error("resize task panicked")]
+    JoinError,
 }
 
+/// Fetch a poster and write one WebP variant per `PosterSize`.
+///
+/// Returns the SHA1 hex digest used as the basename root: each variant
+/// lands at `<root>.w{N}.webp`. The root alone is stored in
+/// `poster_local_path`; the size suffix is appended at GraphQL resolve
+/// time so a single DB write covers every variant.
 async fn download_one(
     client: &reqwest::Client,
     url: &str,
@@ -158,45 +175,149 @@ async fn download_one(
     if !response.status().is_success() {
         return Err(DownloadError::Status(response.status().as_u16()));
     }
-    let bytes = response.bytes().await?;
-    let basename = basename_for(url);
+    let bytes = response.bytes().await?.to_vec();
+    let root = sha1_root_for(url);
     tokio::fs::create_dir_all(poster_dir).await?;
-    let target = poster_dir.join(&basename);
-    // Atomic-ish write: stage in a sibling temp file, then rename.
-    let tmp = poster_dir.join(format!("{basename}.part"));
-    let mut f = tokio::fs::File::create(&tmp).await?;
-    f.write_all(&bytes).await?;
-    f.flush().await?;
-    drop(f);
-    tokio::fs::rename(&tmp, &target).await?;
-    Ok(basename)
+
+    // Resize + encode is CPU-bound (Lanczos3 over a 600×900 source is
+    // ~5-10ms per variant; libwebp encode adds another ~10ms). Keep the
+    // tokio runtime free by handing the whole batch to a blocking pool.
+    let variants =
+        tokio::task::spawn_blocking(move || encode_all_variants(&bytes))
+            .await
+            .map_err(|_| DownloadError::JoinError)??;
+
+    for (size, encoded) in variants {
+        let basename = variant_basename(&root, size);
+        let target = poster_dir.join(&basename);
+        // Atomic-ish write: stage in a sibling temp file, then rename.
+        // The serving route only matches `<hex>.w<digits>.webp`, so the
+        // `.part` files are invisible to clients even mid-write.
+        let tmp = poster_dir.join(format!("{basename}.part"));
+        let mut f = tokio::fs::File::create(&tmp).await?;
+        f.write_all(&encoded).await?;
+        f.flush().await?;
+        drop(f);
+        tokio::fs::rename(&tmp, &target).await?;
+    }
+    Ok(root)
 }
 
-/// Content-addressed basename: `sha1(url)` + the URL's original
-/// extension (defaults to `.jpg`). Stable so re-downloading the same
-/// URL overwrites the same file.
-fn basename_for(url: &str) -> String {
+/// Decode once, resize for every `PosterSize`, encode each as WebP q75.
+/// Synchronous — caller wraps in `spawn_blocking`.
+fn encode_all_variants(bytes: &[u8]) -> Result<Vec<(PosterSize, Vec<u8>)>, DownloadError> {
+    let img = image::load_from_memory(bytes)?;
+    let mut out = Vec::with_capacity(PosterSize::ALL.len());
+    for &size in PosterSize::ALL {
+        // resize() preserves aspect ratio: the longer edge becomes the
+        // target width, the other shrinks proportionally. For OMDb's
+        // 2:3 portrait posters that's exactly what we want.
+        let resized = img.resize(size.width_px(), u32::MAX, FilterType::Lanczos3);
+        let rgba = resized.to_rgba8();
+        let encoder = webp::Encoder::from_rgba(rgba.as_raw(), rgba.width(), rgba.height());
+        let memory = encoder.encode(WEBP_QUALITY);
+        out.push((size, memory.to_vec()));
+    }
+    Ok(out)
+}
+
+/// Content-addressed basename root: `sha1(url)` hex. Stable so
+/// re-downloading the same URL overwrites the same files.
+fn sha1_root_for(url: &str) -> String {
     let mut hasher = Sha1::new();
     hasher.update(url.as_bytes());
-    let hash = hex::encode(hasher.finalize());
-    let ext = extension_from_url(url);
-    format!("{hash}.{ext}")
+    hex::encode(hasher.finalize())
 }
 
-fn extension_from_url(url: &str) -> &'static str {
-    let path_part = url.split('?').next().unwrap_or(url);
-    let lower = path_part.to_ascii_lowercase();
-    if lower.ends_with(".png") {
-        "png"
-    } else if lower.ends_with(".webp") {
-        "webp"
-    } else if lower.ends_with(".gif") {
-        "gif"
-    } else {
-        // OMDb posters are nearly always JPEG; default keeps the
-        // common case fast and the response Content-Type will still be
-        // accurate when set on the route.
-        "jpg"
+fn variant_basename(root: &str, size: PosterSize) -> String {
+    format!("{root}.{}.webp", size.suffix())
+}
+
+/// True when `name` matches `<hex>.w<digits>.webp`. Used by the startup
+/// cleanup pass to spare the new sized files while reaping legacy
+/// originals.
+pub fn is_sized_variant_name(name: &str) -> bool {
+    let Some((root, rest)) = name.split_once('.') else {
+        return false;
+    };
+    if !root.chars().all(|c| c.is_ascii_hexdigit()) || root.is_empty() {
+        return false;
+    }
+    let Some((suffix, ext)) = rest.split_once('.') else {
+        return false;
+    };
+    if ext != "webp" {
+        return false;
+    }
+    let Some(digits) = suffix.strip_prefix('w') else {
+        return false;
+    };
+    !digits.is_empty() && digits.chars().all(|c| c.is_ascii_digit())
+}
+
+/// One-shot startup hook: delete every file in `poster_dir` that isn't
+/// a sized variant, AND null out `poster_local_path` rows still in the
+/// legacy `<sha>.<ext>` form so the worker treats them as "needs
+/// download" again. Without the DB pass, the worker would think the
+/// posters are still cached and never re-encode them.
+pub async fn purge_legacy_cache(ctx: &AppContext) {
+    let poster_dir = &ctx.config.poster_dir;
+    let mut purged_files: u64 = 0;
+    match tokio::fs::read_dir(poster_dir).await {
+        Ok(mut iter) => {
+            while let Ok(Some(entry)) = iter.next_entry().await {
+                let name = entry.file_name();
+                let Some(name_str) = name.to_str() else { continue };
+                if is_sized_variant_name(name_str) {
+                    continue;
+                }
+                let path = entry.path();
+                if let Err(err) = tokio::fs::remove_file(&path).await {
+                    warn!(path = %path.display(), error = %err, "purge_legacy_cache: remove failed");
+                } else {
+                    purged_files += 1;
+                }
+            }
+        }
+        Err(err) if err.kind() != std::io::ErrorKind::NotFound => {
+            warn!(dir = %poster_dir.display(), error = %err, "purge_legacy_cache: read_dir failed");
+        }
+        Err(_) => {}
+    }
+
+    // Legacy rows wrote `<sha>.<ext>` to poster_local_path; the new
+    // worker writes just `<sha>`. Null any value containing a `.` so
+    // the worker queues a re-download. Idempotent — once the next
+    // cycle finishes, every row's value is dot-free and the UPDATE is
+    // a no-op.
+    let result = ctx.db.with(|c| {
+        let v = c.execute(
+            "UPDATE video_metadata SET poster_local_path = NULL \
+             WHERE poster_local_path LIKE '%.%'",
+            [],
+        )?;
+        let s = c.execute(
+            "UPDATE show_metadata SET poster_local_path = NULL \
+             WHERE poster_local_path LIKE '%.%'",
+            [],
+        )?;
+        Ok::<_, crate::error::DbError>((v, s))
+    });
+    let (videos_nulled, shows_nulled) = match result {
+        Ok(t) => t,
+        Err(err) => {
+            warn!(error = %err, "purge_legacy_cache: DB null-out failed");
+            (0, 0)
+        }
+    };
+    if purged_files > 0 || videos_nulled > 0 || shows_nulled > 0 {
+        info!(
+            files = purged_files,
+            video_rows = videos_nulled,
+            show_rows = shows_nulled,
+            dir = %poster_dir.display(),
+            "purged legacy poster cache",
+        );
     }
 }
 
@@ -228,26 +349,69 @@ mod tests {
     use super::*;
 
     #[test]
-    fn basename_for_uses_sha1_and_jpg_default() {
-        let name = basename_for("https://example.com/poster.jpg");
-        assert!(name.ends_with(".jpg"));
-        assert!(name.len() > "sha1.jpg".len());
-    }
-
-    #[test]
-    fn extension_picks_png_webp_gif_jpg() {
-        assert_eq!(extension_from_url("https://example.com/a.png"), "png");
-        assert_eq!(extension_from_url("https://example.com/a.webp"), "webp");
-        assert_eq!(extension_from_url("https://example.com/a.gif"), "gif");
-        assert_eq!(extension_from_url("https://example.com/a.jpg"), "jpg");
-        assert_eq!(extension_from_url("https://example.com/foo"), "jpg");
-        assert_eq!(extension_from_url("https://example.com/a.JPG?x=1"), "jpg");
-    }
-
-    #[test]
-    fn basename_is_stable_for_the_same_url() {
-        let a = basename_for("https://m.media-amazon.com/p.jpg");
-        let b = basename_for("https://m.media-amazon.com/p.jpg");
+    fn sha1_root_is_stable_for_the_same_url() {
+        let a = sha1_root_for("https://m.media-amazon.com/p.jpg");
+        let b = sha1_root_for("https://m.media-amazon.com/p.jpg");
         assert_eq!(a, b);
+        assert_eq!(a.len(), 40);
+        assert!(a.chars().all(|c| c.is_ascii_hexdigit()));
+    }
+
+    #[test]
+    fn variant_basename_appends_size_suffix_and_webp_ext() {
+        assert_eq!(
+            variant_basename("abc123", PosterSize::W240),
+            "abc123.w240.webp"
+        );
+        assert_eq!(
+            variant_basename("abc123", PosterSize::W1600),
+            "abc123.w1600.webp"
+        );
+    }
+
+    #[test]
+    fn is_sized_variant_name_matches_hex_dot_w_digits_dot_webp() {
+        assert!(is_sized_variant_name("abc123.w240.webp"));
+        assert!(is_sized_variant_name("abc123.w1600.webp"));
+        assert!(is_sized_variant_name(
+            "0123456789abcdef0123456789abcdef01234567.w800.webp"
+        ));
+    }
+
+    #[test]
+    fn is_sized_variant_name_rejects_legacy_and_garbage() {
+        assert!(!is_sized_variant_name("abc123.jpg"));
+        assert!(!is_sized_variant_name("abc123.png"));
+        assert!(!is_sized_variant_name("abc123.webp")); // missing size segment
+        assert!(!is_sized_variant_name("abc123.w240.webp.part")); // staging file
+        assert!(!is_sized_variant_name("abc123.w.webp")); // empty digits
+        assert!(!is_sized_variant_name("zzz.w240.webp")); // non-hex root
+        assert!(!is_sized_variant_name(""));
+    }
+
+    #[test]
+    fn encode_all_variants_produces_one_webp_per_size() {
+        // Synthesize a tiny 4×6 RGB image, encode it as JPEG, then run
+        // the variant pipeline against those bytes. Real OMDb posters
+        // are ~600×900; the test fixture is just a smoke check that
+        // every variant emits valid WebP-magic bytes.
+        let mut img = image::RgbImage::new(4, 6);
+        for px in img.pixels_mut() {
+            *px = image::Rgb([200, 80, 120]);
+        }
+        let dynamic = image::DynamicImage::ImageRgb8(img);
+        let mut jpeg_bytes = Vec::new();
+        dynamic
+            .write_to(
+                &mut std::io::Cursor::new(&mut jpeg_bytes),
+                image::ImageFormat::Jpeg,
+            )
+            .expect("jpeg encode");
+        let variants = encode_all_variants(&jpeg_bytes).expect("encode");
+        assert_eq!(variants.len(), PosterSize::ALL.len());
+        for (size, bytes) in variants {
+            assert!(bytes.starts_with(b"RIFF"), "WebP magic for {size:?}");
+            assert!(bytes.len() > 16, "non-trivial encoded size for {size:?}");
+        }
     }
 }

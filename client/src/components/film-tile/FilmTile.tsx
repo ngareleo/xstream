@@ -9,7 +9,8 @@ import { formatDurationHuman } from "~/utils/formatters";
 import { useFilmTileStyles } from "./FilmTile.styles";
 
 const FILM_TILE_FRAGMENT = graphql`
-  fragment FilmTile_video on Video {
+  fragment FilmTile_video on Video
+  @argumentDefinitions(posterSize: { type: "PosterSize!", defaultValue: W400 }) {
     id
     title
     filename
@@ -17,7 +18,7 @@ const FILM_TILE_FRAGMENT = graphql`
     durationSeconds
     metadata {
       year
-      posterUrl
+      tilePoster: posterUrl(size: $posterSize)
     }
   }
 `;
@@ -39,7 +40,7 @@ export const FilmTile: FC<FilmTileProps> = ({ video, progress, onClick }) => {
   return (
     <button type="button" onClick={() => onClick(data.id)} className={styles.tile}>
       <div className={styles.frame}>
-        <Poster url={data.metadata?.posterUrl ?? null} alt={altText} className={styles.image} />
+        <Poster url={data.metadata?.tilePoster ?? null} alt={altText} className={styles.image} />
         <MediaKindBadge kind={data.mediaType} variant="tile" />
         {progress !== undefined && (
           <div className={styles.progressTrack}>

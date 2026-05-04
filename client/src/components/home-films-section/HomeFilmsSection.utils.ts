@@ -1,33 +1,23 @@
-import type { HomePageContentQuery } from "~/relay/__generated__/HomePageContentQuery.graphql.js";
+import type { HomeFilmsSection_films$data } from "~/relay/__generated__/HomeFilmsSection_films.graphql.js";
 import { type Codec, type FilterableFilm, type Hdr, type Resolution } from "~/utils/filters.js";
 
-import { strings } from "./HomePage.strings.js";
+import { strings } from "./HomeFilmsSection.strings.js";
 
-type FilmEdge = NonNullable<HomePageContentQuery["response"]["movies"]>["edges"][number];
-export type FilmNode = FilmEdge["node"];
-type FilmCopyNode = FilmNode["copies"][number];
-/// Compatibility alias: `node` on a FilterRow always points at a Film
-/// copy (Video) — kept under the historical name so existing call sites
-/// continue to compile.
-export type VideoNode = FilmCopyNode;
+export type FilmData = HomeFilmsSection_films$data["edges"][number]["node"];
+export type VideoData = FilmData["bestCopy"];
 
 export interface FilterRow extends FilterableFilm {
-  /** Row's stable id (the Film id). Shows live in a separate flow and
-   *  don't appear in FilterRow.
-   */
   id: string;
   title: string;
   filename: string;
   director: string;
   genre: string;
-  /** The Film's `bestCopy` Video — what the FilmTile / FilmDetailsOverlay
-   *  fragments render against.
-   */
-  node: FilmCopyNode;
+  /** The Film's `bestCopy` Video — what FilmTile / FilmDetailsOverlay
+   *  fragments render against. Carries spread fragment refs. */
+  node: VideoData;
   /** All copies of the Film, in res-desc/bitrate-desc order — drives the
-   *  FilmVariants picker. Always populated for movies (≥1 copy).
-   */
-  copies: ReadonlyArray<FilmCopyNode>;
+   *  FilmVariants picker. Always populated for movies (≥1 copy). */
+  copies: ReadonlyArray<VideoData>;
 }
 
 const RESOLUTION_LABEL: Record<string, Resolution> = {
@@ -61,7 +51,7 @@ function deriveFilters(
   };
 }
 
-export function toFilterRowFromFilm(film: FilmNode): FilterRow {
+export function toFilterRowFromFilm(film: FilmData): FilterRow {
   const best = film.bestCopy;
   const filters = deriveFilters(
     best,
@@ -86,7 +76,7 @@ export function timeOfDayGreeting(now: Date): string {
   return strings.greetingEvening;
 }
 
-export function pickSuggestions(film: FilterRow, all: FilterRow[]): FilmCopyNode[] {
+export function pickSuggestions(film: FilterRow, all: FilterRow[]): VideoData[] {
   const tokens = film.genre.split(/[·\s/]+/).filter(Boolean);
   const scored: { row: FilterRow; score: number }[] = [];
   for (const f of all) {

@@ -2,10 +2,6 @@ import LocalizedStrings from "react-localization";
 
 export const strings = new LocalizedStrings({
   en: {
-    crumbHome: "~",
-    crumbMedia: "media",
-    crumbFilms: "films",
-    breadcrumbScanningFormat: "● scanning {n} of {total}",
     searchPlaceholder: "Search films, directors, genres in every profile…",
     searchAriaLabel: "Search profiles",
     searchClearAriaLabel: "Clear search",
@@ -18,8 +14,5 @@ export const strings = new LocalizedStrings({
     colHeaderMatch: "Match",
     colHeaderSize: "Size",
     noMatchesFormat: 'No films match "{q}"',
-    footerCountsFormat:
-      "{profiles} PROFILES · {films} FILMS · {shows} SHOWS ({episodes} EPS) · {unmatched} UNMATCHED",
-    footerCta: "+ NEW PROFILE",
   },
 });

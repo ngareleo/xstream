@@ -9,7 +9,7 @@ import {
 
 import { applyFilters, EMPTY_FILTERS, type Filters, filtersActive } from "~/utils/filters";
 
-import { type FilterRow } from "./HomePageContent.utils";
+import { type FilterRow } from "./HomeFilmsSection.utils";
 
 export type HeroMode = "idle" | "searching" | "filtering";
 

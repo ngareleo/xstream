@@ -159,12 +159,7 @@ export const DetailPaneEdit: FC<DetailPaneEditProps> = ({
               )}
               aria-pressed={selected === r.imdbId}
             >
-              <Poster
-                url={r.posterUrl ?? null}
-                alt={r.title}
-                className={styles.editResultPoster}
-                width={120}
-              />
+              <Poster url={r.posterUrl ?? null} alt={r.title} className={styles.editResultPoster} />
               <div className={styles.editResultText}>
                 <div className={styles.editResultTitle}>
                   {r.title}

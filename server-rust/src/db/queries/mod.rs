@@ -12,3 +12,4 @@ pub mod user_settings;
 pub mod video_metadata;
 pub mod videos;
 pub mod watchlist;
+pub mod wipe;

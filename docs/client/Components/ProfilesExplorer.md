@@ -1,16 +1,17 @@
 # ProfilesExplorer
 
-Library browser UI showing profiles (folders) and their films in a two-tier
-collapsible structure with search, column headers, and footer stats. Mounted
-inside the profiles page as the main content area.
+Left-column library browser showing profiles (folders) and their films in a
+hierarchical collapsible structure with search and column headers. Owned by the
+Profiles page; renders search bar, column header, and row hierarchy only.
 
 **Source:** `client/src/components/profiles-explorer/`
-**Used by:** `ProfilesPageContent` (main library/film browser panel).
+**Used by:** `ProfilesPageContent` (left cell of the split-body grid).
 
 ## Role
 
-Hierarchical library explorer with integrated search, scan progress, and bulk
-statistics. Delegates film/profile mutations to parent callbacks.
+Hierarchical library explorer with integrated search and per-profile scan
+indicators. Does not own page chrome (breadcrumb, footer); those are managed by
+the page. Delegates selection callbacks to parent.
 
 ## Props
 
@@ -22,72 +23,81 @@ statistics. Delegates film/profile mutations to parent callbacks.
 | `scanByLibrary` | `Map<string, LibraryScanSnapshot>` | Real-time scan progress per profile. |
 | `onOpenFilm` | `(id: string) => void` | Film selection callback. |
 | `onEditFilm` | `(id: string) => void` | Film detail edit trigger. |
-| `onCreateProfile` | `() => void` | New profile creation callback (footer CTA). |
 
 ## Layout & styles
 
-### Root container
+### Root container (`.root`)
 
-- `display: flex`, `flexDirection: column`, `overflow: hidden`, `position: relative`, `height: 100%`.
+- `display: flex`, `flexDirection: column`, `overflow: hidden`, `height: 100%`.
 
-### Breadcrumb
-
-- `height: 38px`, `paddingLeft/Right: 24px`, `display: flex`, `alignItems: center`, `columnGap: 8px`.
-- `borderBottom: 1px solid colorBorderSoft`, `fontFamily: fontMono`, `fontSize: 11px`, `color: colorTextMuted`, `letterSpacing: 0.1em`.
-- Format: "~ / media / films", with real-time scanning indicator appended if active.
-- **Scanning badge** — `marginLeft: auto`, `color: colorGreen`, format "● scanning N of TOTAL".
-
-### Search bar
+### Search bar (`.searchBar`)
 
 - `display: flex`, `alignItems: center`, `columnGap: 10px`, `padding: 8px 24px 8px 24px`.
 - `borderBottom: 1px solid colorBorderSoft`, `backgroundColor: colorSurface`.
 - Focus-within: `borderBottomColor: colorGreen`.
-- **Search prompt** — `color: colorGreen`, icon, `flexShrink: 0`.
-- **Search input** — `flexGrow: 1`, `background: none`, `border: none`, `fontFamily: fontMono`, `fontSize: 12px`, `letterSpacing: 0.04em`, `color: colorText`, placeholder color `colorTextMuted` italic.
-- **Match count** — `fontFamily: fontMono`, `fontSize: 10px`, `letterSpacing: 0.16em`, `color: colorGreen`, format "N matches · M profiles".
-- **Clear button** — `20x20px`, `background: none`, `border: none`, `color: colorTextMuted`, hover `color: colorText`.
+- **Search prompt** (`.searchPrompt`) — `<IconSearch>`, `color: colorGreen`, `flexShrink: 0`.
+- **Search input** (`.searchInput`) — `flexGrow: 1`, `background: none`, `border: none`, `fontFamily: fontMono`, `fontSize: 12px`, `letterSpacing: 0.04em`, `color: colorText`. Placeholder: `colorTextMuted` italic.
+- **Match count** (`.searchCount`, shown only when searching) — `fontFamily: fontMono`, `fontSize: 10px`, `letterSpacing: 0.16em`, `color: colorGreen`. Format: `"{N} match(es) · {M} profile(s)"`.
+- **Clear button** (`.searchClear`, shown only when searching) — `20×20px`, `background: none`, `border: none`, `color: colorTextMuted`, hover `colorText`. Icon: `<IconClose 12×12>`.
 
-### Column header
+### Column header (`.colHeader`)
 
-- `display: grid`, `gridTemplateColumns: PROFILE_GRID_COLUMNS`.
+- `display: grid`, `gridTemplateColumns: PROFILE_GRID_COLUMNS` (5 columns: chevron, profile/file, match, size, actions).
 - `padding: 10px 24px`, `columnGap: 16px`, `fontFamily: fontMono`, `fontSize: 9px`, `letterSpacing: 0.18em`, `color: colorTextFaint`, `textTransform: uppercase`.
 - `borderBottom: 1px solid colorBorderSoft`.
-- Columns: `Profile / File`, `Match`, `Size`, with empty columns for expand/action icons.
 
-### Rows scroll area
+### Rows scroll area (`.rowsScroll`)
 
 - `flexGrow: 1`, `overflowY: auto`.
+- Contains `<ProfileRow>` elements (one per library), each possibly containing `<FilmRow>` children.
 
-### No matches state
+### No matches state (`.noMatches`)
 
+- Shown when `isSearching && visibleProfiles.length === 0`.
 - Centered message: `padding: 40px`, `fontFamily: fontMono`, `fontSize: 11px`, `letterSpacing: 0.18em`, `color: colorTextMuted`, `textTransform: uppercase`.
-- Format: 'No films match "QUERY"'.
-
-### Footer
-
-- `display: flex`, `justifyContent: space-between`, `paddingTop/Bottom: 10px`, `paddingLeft/Right: 24px`.
-- `borderTop: 1px solid colorBorder`, `fontFamily: fontMono`, `fontSize: 10px`, `color: colorTextMuted`, `letterSpacing: 0.1em`.
-- **Stats** — format "{N} PROFILES · {M} FILMS · {S} SHOWS ({E} EPS) · {U} UNMATCHED".
-- **CTA button** — "+ NEW PROFILE", `color: colorGreen`, `background: none`, `border: none`, hover `color: colorText`.
+- Format: `'No films match "QUERY"'`.
 
 ## Behaviour
 
-- Profiles expand on click to show child films (unless actively searching; search auto-expands all).
-- Search filters films by title, director, or genre across all profiles.
-- Match count updates live as query changes.
-- Clear button on the search input resets to empty string.
-- Renders `ProfileRow` for each profile, `FilmRow` for each child film.
-- Scan progress (if active) shows real-time counts under the breadcrumb.
+### Search state
+
+- `[search, setSearch]`: raw query string (not trimmed).
+- `trimmedSearch = search.trim().toLowerCase()`.
+- `isSearching = trimmedSearch.length > 0`.
+- **Film matching**: `filmMatches(node, query)` checks title, filename, director, genre (case-insensitive substring).
+- **Auto-expand during search**: when `isSearching`, all profiles are forced expanded (toggle disabled). When search clears, expansion reverts to manual control.
+- **Match count**: total films across visible profiles; only shown when searching.
+- **Clear button**: resets `search` to `""`.
+
+### Profile expansion
+
+- `expandedIds: Set<string>` local state; pre-initializes with `libraries[0]` and the profile containing `selectedFilmId` (for deep-link support).
+- `toggleProfile(id)`: adds/removes from set (disabled while searching).
+- When expanded, `ProfileRow` renders its child `FilmRow` elements inline.
+
+### Scan progress
+
+- Receives `scanByLibrary: Map<string, LibraryScanSnapshot>` from parent.
+- Passes scan state to each `ProfileRow` via `scanning` and `scanProgress` props.
+- Does not render breadcrumb or scanning badge; the page owns those.
+
+### Rendering
+
+- Renders search bar (with match count + clear button, visible only when searching).
+- Renders column header (`Profile / File · Match · Size`).
+- Renders `<ProfileRow>` for each visible profile; `ProfileRow` conditionally renders `<FilmRow>` children.
 
 ## Data
 
-- Derives visible profiles and film counts from `libraries` array.
-- Counts unique media types: MOVIES, TV_SHOWS, episodes (currently 0, TODO wire from seasons).
-- Unmatched count is films where `!title` (no OMDb match yet).
+- Derives `visibleProfiles` from `libraries` by filtering via `filmMatches()` when searching.
+- Computes `matchCount` as total films across all visible profiles.
+- Scan progress is received from parent; not computed here.
+- Aggregate statistics (total profiles, films, shows, episodes, unmatched) are computed by the page, not the explorer.
 
 ## Notes
 
-- Search is client-side filtering of the loaded libraries array.
-- The `PROFILE_GRID_COLUMNS` constant comes from `~/pages/profiles-page/grid`.
-- Scan progress uses `Map<libraryId, {done, total}>` to show per-profile badge.
-- Searching disables profile toggle to keep all matches visible.
+- The explorer is a **left-column content component**, not a full page. Page chrome (breadcrumb, footer) is owned by `ProfilesPageContent`.
+- Search is client-side filtering of the loaded libraries array; not URL-driven.
+- The `PROFILE_GRID_COLUMNS` constant is defined in `~/pages/profiles-page/grid.ts`.
+- `filmMatches()` helper is in `~/pages/profiles-page/filmMatches.ts`.
+- Scan progress received from parent is passed through to `ProfileRow` components for display.

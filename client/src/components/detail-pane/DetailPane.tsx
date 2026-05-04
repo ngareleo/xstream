@@ -16,7 +16,8 @@ import { RESOLUTION_LABEL } from "./DetailPane.utils.js";
 import { DetailPaneEdit } from "./DetailPaneEdit.js";
 
 const DETAIL_PANE_FRAGMENT = graphql`
-  fragment DetailPane_video on Video {
+  fragment DetailPane_video on Video
+  @argumentDefinitions(posterSize: { type: "PosterSize!", defaultValue: W800 }) {
     id
     title
     filename
@@ -31,7 +32,7 @@ const DETAIL_PANE_FRAGMENT = graphql`
       director
       plot
       rating
-      posterUrl
+      panelPoster: posterUrl(size: $posterSize)
     }
     videoStream {
       codec
@@ -93,7 +94,7 @@ export const DetailPane: FC<DetailPaneProps> = ({
   const genre = data.metadata?.genre ?? null;
   const plot = data.metadata?.plot ?? null;
   const rating = data.metadata?.rating ?? null;
-  const posterUrl = data.metadata?.posterUrl ?? null;
+  const posterUrl = data.metadata?.panelPoster ?? null;
   const codec = data.videoStream?.codec ?? null;
   const audioCodec = data.audioStream?.codec ?? null;
   const audioChannels = data.audioStream?.channels ?? null;
@@ -128,7 +129,7 @@ export const DetailPane: FC<DetailPaneProps> = ({
   return (
     <div className={styles.pane}>
       <div className={styles.posterFrame}>
-        <Poster url={posterUrl} alt={altText} className={styles.posterImage} width={1200} />
+        <Poster url={posterUrl} alt={altText} className={styles.posterImage} />
         <div className={styles.posterFade} />
         <button
           type="button"

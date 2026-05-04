@@ -7,7 +7,7 @@ use super::node::PageInfo;
 use crate::db::{
     self, get_library_by_id, get_metadata_by_video_id, get_streams_by_video_id, Db, VideoRow,
 };
-use crate::graphql::scalars::{MediaType, Resolution};
+use crate::graphql::scalars::{MediaType, PosterSize, Resolution};
 use crate::relay::to_global_id;
 
 #[derive(Clone)]
@@ -179,7 +179,14 @@ impl Video {
     }
 }
 
-#[derive(SimpleObject, Clone)]
+/// OMDb-derived movie metadata. Field-for-field with `ShowMetadata`
+/// except for the omitted show-only fields.
+///
+/// Implemented as `#[Object]` (not `SimpleObject`) so `posterUrl` can
+/// take a `size: PosterSize` argument — the resolver appends the size
+/// suffix to the cached basename root and returns the matching WebP
+/// variant URL. All other fields are plain field readers.
+#[derive(Clone)]
 pub struct VideoMetadata {
     pub imdb_id: String,
     pub title: String,
@@ -189,7 +196,11 @@ pub struct VideoMetadata {
     pub cast: Vec<String>,
     pub rating: Option<f64>,
     pub plot: Option<String>,
-    pub poster_url: Option<String>,
+    /// SHA1 root of the cached poster (no extension, no size suffix);
+    /// `None` while the worker hasn't downloaded yet.
+    pub poster_local_path: Option<String>,
+    /// Original OMDb URL — used as a fallback before the cache fills.
+    pub poster_source_url: Option<String>,
 }
 
 impl VideoMetadata {
@@ -218,15 +229,50 @@ impl VideoMetadata {
             cast,
             rating: row.rating,
             plot: row.plot,
-            // Prefer the locally cached copy. The client renders the
-            // returned URL directly; `/poster/<basename>` resolves
-            // against the same origin as the GraphQL endpoint, so the
-            // image lives on the user's disk and works offline.
-            poster_url: crate::graphql::types::poster_url_for_metadata(
-                row.poster_local_path.as_deref(),
-                row.poster_url.as_deref(),
-            ),
+            poster_local_path: row.poster_local_path,
+            poster_source_url: row.poster_url,
         }
+    }
+}
+
+#[Object]
+impl VideoMetadata {
+    async fn imdb_id(&self) -> &str {
+        &self.imdb_id
+    }
+    async fn title(&self) -> &str {
+        &self.title
+    }
+    async fn year(&self) -> Option<i32> {
+        self.year
+    }
+    async fn genre(&self) -> Option<&str> {
+        self.genre.as_deref()
+    }
+    async fn director(&self) -> Option<&str> {
+        self.director.as_deref()
+    }
+    async fn cast(&self) -> &[String] {
+        &self.cast
+    }
+    async fn rating(&self) -> Option<f64> {
+        self.rating
+    }
+    async fn plot(&self) -> Option<&str> {
+        self.plot.as_deref()
+    }
+
+    /// Resolved URL for the poster at the requested width. When the
+    /// local cache has the entry, returns `/poster/<root>.w{N}.webp`
+    /// at the same origin as the GraphQL endpoint — works offline. In
+    /// the cache-fill window the OMDb URL is returned as-is; size is
+    /// best-effort at most for that fallback.
+    async fn poster_url(&self, size: PosterSize) -> Option<String> {
+        crate::graphql::types::poster_url_for_metadata(
+            self.poster_local_path.as_deref(),
+            self.poster_source_url.as_deref(),
+            size,
+        )
     }
 }
 

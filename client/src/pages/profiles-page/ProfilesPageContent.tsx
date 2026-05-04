@@ -137,33 +137,79 @@ export const ProfilesPageContent: FC = () => {
     return <EmptyLibrariesHero watermark={strings.emptyWatermark} />;
   }
 
-  return (
-    <div
-      ref={containerRef}
-      className={mergeClasses(styles.splitBody, paneOpen && styles.splitBodyOpen)}
-      style={paneOpen ? { gridTemplateColumns: `1fr 4px ${paneWidth}px` } : undefined}
-    >
-      <ProfilesExplorer
-        libraries={data.libraries}
-        selectedFilmId={filmId}
-        selectedLibraryId={selectedLibraryId}
-        scanByLibrary={scanByLibrary}
-        onOpenFilm={openFilm}
-        onEditFilm={editFilm}
-        onCreateProfile={navigateToCreateProfile}
-      />
+  let totalFilms = 0;
+  let totalShows = 0;
+  let totalUnmatched = 0;
+  for (const lib of data.libraries) {
+    for (const e of lib.videos.edges) {
+      if (e.node.mediaType === "MOVIES") totalFilms += 1;
+      if (e.node.mediaType === "TV_SHOWS") totalShows += 1;
+      if (!e.node.title) totalUnmatched += 1;
+    }
+  }
+  // TODO(release-design): wire episode counts from the seasons subselection.
+  const totalEpisodes = 0;
+  const scanningCount = scanByLibrary.size;
 
-      {paneOpen && selectedNode && (
-        <>
-          <div className={styles.resizeHandle} onMouseDown={onResizeMouseDown} />
-          <DetailPane
-            video={selectedNode}
-            initialEdit={editingFilm}
-            onEditChange={handleEditChange}
-            onClose={closePane}
-          />
-        </>
-      )}
+  return (
+    <div className={styles.page}>
+      <div className={styles.breadcrumb}>
+        <span className={styles.crumbDim}>{strings.crumbHome}</span>
+        <span>/</span>
+        <span>{strings.crumbMedia}</span>
+        <span>/</span>
+        <span className={styles.crumbBright}>{strings.crumbFilms}</span>
+        {scanningCount > 0 && (
+          <span className={styles.breadcrumbScanning}>
+            {strings.formatString(strings.breadcrumbScanningFormat, {
+              n: scanningCount,
+              total: data.libraries.length,
+            })}
+          </span>
+        )}
+      </div>
+
+      <div
+        ref={containerRef}
+        className={mergeClasses(styles.splitBody, paneOpen && styles.splitBodyOpen)}
+        style={paneOpen ? { gridTemplateColumns: `1fr 4px ${paneWidth}px` } : undefined}
+      >
+        <ProfilesExplorer
+          libraries={data.libraries}
+          selectedFilmId={filmId}
+          selectedLibraryId={selectedLibraryId}
+          scanByLibrary={scanByLibrary}
+          onOpenFilm={openFilm}
+          onEditFilm={editFilm}
+        />
+
+        {paneOpen && selectedNode && (
+          <>
+            <div className={styles.resizeHandle} onMouseDown={onResizeMouseDown} />
+            <DetailPane
+              video={selectedNode}
+              initialEdit={editingFilm}
+              onEditChange={handleEditChange}
+              onClose={closePane}
+            />
+          </>
+        )}
+      </div>
+
+      <div className={styles.footer}>
+        <span>
+          {strings.formatString(strings.footerCountsFormat, {
+            profiles: data.libraries.length,
+            films: totalFilms,
+            shows: totalShows,
+            episodes: totalEpisodes,
+            unmatched: totalUnmatched,
+          })}
+        </span>
+        <button type="button" className={styles.footerCta} onClick={navigateToCreateProfile}>
+          {strings.footerCta}
+        </button>
+      </div>
     </div>
   );
 };

@@ -23,7 +23,7 @@ const WATCHLIST_QUERY = graphql`
         year
         metadata {
           rating
-          posterUrl
+          tilePoster: posterUrl(size: W400)
         }
         bestCopy {
           id
@@ -64,7 +64,7 @@ export const WatchlistPageContent: FC = () => {
           // copy selection.
           filmId: film.id,
           altText,
-          posterUrl: film.metadata?.posterUrl ?? null,
+          posterUrl: film.metadata?.tilePoster ?? null,
           rating: film.metadata?.rating ?? null,
           subtitle: subtitleParts.join(" · "),
           addedAt: item.addedAt,

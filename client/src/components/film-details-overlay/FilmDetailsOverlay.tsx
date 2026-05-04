@@ -28,7 +28,8 @@ export interface OverlayCopy {
 }
 
 const OVERLAY_FRAGMENT = graphql`
-  fragment FilmDetailsOverlay_video on Video {
+  fragment FilmDetailsOverlay_video on Video
+  @argumentDefinitions(posterSize: { type: "PosterSize!", defaultValue: W1600 }) {
     id
     title
     filename
@@ -42,7 +43,7 @@ const OVERLAY_FRAGMENT = graphql`
       director
       plot
       rating
-      posterUrl
+      overlayPoster: posterUrl(size: $posterSize)
     }
     videoStream {
       codec
@@ -149,10 +150,9 @@ export const FilmDetailsOverlay: FC<FilmDetailsOverlayProps> = ({
     <div ref={overlayRef} className={styles.overlay}>
       <div className={styles.hero}>
         <Poster
-          url={data.metadata?.posterUrl ?? null}
+          url={data.metadata?.overlayPoster ?? null}
           alt={altText}
           className={styles.poster}
-          width={1600}
         />
         <div className={styles.gradient} />
         <button

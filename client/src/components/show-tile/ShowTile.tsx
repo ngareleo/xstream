@@ -8,13 +8,14 @@ import type { ShowTile_show$key } from "~/relay/__generated__/ShowTile_show.grap
 import { useShowTileStyles } from "./ShowTile.styles";
 
 const SHOW_TILE_FRAGMENT = graphql`
-  fragment ShowTile_show on Show {
+  fragment ShowTile_show on Show
+  @argumentDefinitions(posterSize: { type: "PosterSize!", defaultValue: W400 }) {
     id
     title
     year
     metadata {
       year
-      posterUrl
+      tilePoster: posterUrl(size: $posterSize)
     }
   }
 `;
@@ -32,7 +33,7 @@ export const ShowTile: FC<ShowTileProps> = ({ show, onClick }) => {
   return (
     <button type="button" onClick={() => onClick(data.id)} className={styles.tile}>
       <div className={styles.frame}>
-        <Poster url={data.metadata?.posterUrl ?? null} alt={altText} className={styles.image} />
+        <Poster url={data.metadata?.tilePoster ?? null} alt={altText} className={styles.image} />
         <MediaKindBadge kind="TV_SHOWS" variant="tile" />
       </div>
       <div className={styles.meta}>

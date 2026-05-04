@@ -21,14 +21,15 @@ export interface SeriesPick {
 }
 
 const VIDEO_FRAGMENT = graphql`
-  fragment VideoArea_video on Video {
+  fragment VideoArea_video on Video
+  @argumentDefinitions(posterSize: { type: "PosterSize!", defaultValue: W1600 }) {
     title
     durationSeconds
     metadata {
       title
       year
       genre
-      posterUrl
+      backdropPoster: posterUrl(size: $posterSize)
     }
     ...VideoPlayer_video
   }
@@ -53,7 +54,7 @@ export const VideoArea: FC<Props> = ({ video, seriesPick, controlsHidden, onBack
   const fadeClass = mergeClasses(styles.fade, controlsHidden && styles.fadeHidden);
   const meta = data.metadata;
   const displayTitle = meta?.title ?? data.title ?? strings.untitled;
-  const posterUrl = meta?.posterUrl ?? null;
+  const posterUrl = meta?.backdropPoster ?? null;
   const episodeCode = seriesPick
     ? formatEpisodeCode(seriesPick.seasonNumber, seriesPick.episodeNumber)
     : null;
@@ -75,7 +76,7 @@ export const VideoArea: FC<Props> = ({ video, seriesPick, controlsHidden, onBack
   return (
     <div className={styles.root}>
       {playStatus !== "playing" && (
-        <Poster url={posterUrl} alt={displayTitle} className={styles.backdrop} width={1600} />
+        <Poster url={posterUrl} alt={displayTitle} className={styles.backdrop} />
       )}
 
       <div className={styles.videoWrapper}>

@@ -10,7 +10,8 @@ import { strings } from "./PlayerEndScreen.strings.js";
 import { usePlayerEndScreenStyles } from "./PlayerEndScreen.styles.js";
 
 const VIDEO_FRAGMENT = graphql`
-  fragment PlayerEndScreen_video on Video {
+  fragment PlayerEndScreen_video on Video
+  @argumentDefinitions(posterSize: { type: "PosterSize!", defaultValue: W400 }) {
     id
     library {
       videos(first: 6) {
@@ -20,7 +21,7 @@ const VIDEO_FRAGMENT = graphql`
             title
             metadata {
               year
-              posterUrl
+              tilePoster: posterUrl(size: $posterSize)
             }
           }
         }
@@ -54,8 +55,8 @@ export const PlayerEndScreen: FC<Props> = ({ video }) => {
           <div className={styles.label}>{strings.upNext}</div>
           <div className={styles.cards}>
             {suggestions.map((v) => {
-              const thumbStyle = v.metadata?.posterUrl
-                ? { backgroundImage: `url(${v.metadata.posterUrl})` }
+              const thumbStyle = v.metadata?.tilePoster
+                ? { backgroundImage: `url(${v.metadata.tilePoster})` }
                 : undefined;
               return (
                 <Link key={v.id} to={`/player/${encodeURIComponent(v.id)}`} className={styles.card}>

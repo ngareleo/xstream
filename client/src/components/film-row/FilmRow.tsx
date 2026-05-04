@@ -14,7 +14,8 @@ import { strings } from "./FilmRow.strings.js";
 import { useFilmRowStyles } from "./FilmRow.styles.js";
 
 const FILM_FRAGMENT = graphql`
-  fragment FilmRow_video on Video {
+  fragment FilmRow_video on Video
+  @argumentDefinitions(posterSize: { type: "PosterSize!", defaultValue: W240 }) {
     id
     title
     filename
@@ -26,7 +27,7 @@ const FILM_FRAGMENT = graphql`
       year
       genre
       rating
-      posterUrl
+      thumbPoster: posterUrl(size: $posterSize)
     }
     show {
       seasons {
@@ -68,7 +69,7 @@ export const FilmRow: FC<FilmRowProps> = ({ video, selected, onOpen, onEdit }) =
   const year = data.metadata?.year ?? null;
   const genre = data.metadata?.genre ?? null;
   const rating = data.metadata?.rating ?? null;
-  const posterUrl = data.metadata?.posterUrl ?? null;
+  const posterUrl = data.metadata?.thumbPoster ?? null;
   const resolutionLabel = data.nativeResolution
     ? (RESOLUTION_LABEL[data.nativeResolution] ?? null)
     : null;
@@ -107,7 +108,7 @@ export const FilmRow: FC<FilmRowProps> = ({ video, selected, onOpen, onEdit }) =
           aria-label={strings.formatString(strings.playAriaFormat, { title: titleText }) as string}
           className={styles.thumbBtn}
         >
-          <Poster url={posterUrl} alt={titleText} className={styles.thumb} width={120} />
+          <Poster url={posterUrl} alt={titleText} className={styles.thumb} />
           <span className={styles.thumbHover} aria-hidden="true">
             <IconPlay width={14} height={14} />
           </span>
