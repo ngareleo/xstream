@@ -9,9 +9,7 @@ use async_graphql::{Context, Object, SimpleObject, ID};
 
 use super::node::PageInfo;
 use super::video::{Video, VideoMetadata};
-use crate::db::{
-    get_metadata_by_video_id, get_videos_by_film_id, Db, FilmRow, VideoRow,
-};
+use crate::db::{get_metadata_by_video_id, get_videos_by_film_id, Db, FilmRow, VideoRow};
 use crate::relay::to_global_id;
 
 #[derive(Clone)]

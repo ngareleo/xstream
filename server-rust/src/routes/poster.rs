@@ -72,10 +72,7 @@ pub async fn get_poster(
     Response::builder()
         .status(StatusCode::OK)
         .header(header::CONTENT_TYPE, content_type_for(&basename))
-        .header(
-            header::CACHE_CONTROL,
-            "public, max-age=31536000, immutable",
-        )
+        .header(header::CACHE_CONTROL, "public, max-age=31536000, immutable")
         .body(body)
         .unwrap_or_else(|_| {
             (

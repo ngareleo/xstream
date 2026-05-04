@@ -197,7 +197,10 @@ pub fn merge_shows(db: &Db, from_show_id: &str, to_show_id: &str) -> DbResult<()
              SELECT ?2, season_number FROM seasons WHERE show_id = ?1",
             params![from_show_id, to_show_id],
         )?;
-        c.execute("DELETE FROM seasons WHERE show_id = ?1", params![from_show_id])?;
+        c.execute(
+            "DELETE FROM seasons WHERE show_id = ?1",
+            params![from_show_id],
+        )?;
         c.execute(
             "INSERT OR IGNORE INTO episodes (show_id, season_number, episode_number, title)
              SELECT ?2, season_number, episode_number, title
@@ -318,7 +321,11 @@ mod tests {
     #[test]
     fn upsert_and_get_round_trip() {
         let db = fresh_db();
-        upsert_show(&db, &fixture_show("s1", Some("tt1"), Some("k|2020"), "Show")).expect("upsert");
+        upsert_show(
+            &db,
+            &fixture_show("s1", Some("tt1"), Some("k|2020"), "Show"),
+        )
+        .expect("upsert");
         let got = get_show_by_id(&db, "s1").expect("get").expect("exists");
         assert_eq!(got.imdb_id.as_deref(), Some("tt1"));
         assert_eq!(got.title, "Show");
@@ -327,7 +334,11 @@ mod tests {
     #[test]
     fn upsert_show_keeps_existing_imdb_when_excluded_is_null() {
         let db = fresh_db();
-        upsert_show(&db, &fixture_show("s1", Some("tt1"), Some("k|2020"), "Show")).expect("first");
+        upsert_show(
+            &db,
+            &fixture_show("s1", Some("tt1"), Some("k|2020"), "Show"),
+        )
+        .expect("first");
         upsert_show(&db, &fixture_show("s1", None, Some("k|2020"), "Show")).expect("second");
         let got = get_show_by_id(&db, "s1").expect("get").expect("exists");
         assert_eq!(got.imdb_id.as_deref(), Some("tt1"));
@@ -336,10 +347,10 @@ mod tests {
     #[test]
     fn resolve_show_for_directory_creates_when_absent_and_returns_existing_when_present() {
         let db = fresh_db();
-        let a = resolve_show_for_directory(&db, "Breaking Bad", "2026-01-01T00:00:00.000Z")
-            .expect("a");
-        let b = resolve_show_for_directory(&db, "Breaking Bad", "2026-01-01T00:00:00.000Z")
-            .expect("b");
+        let a =
+            resolve_show_for_directory(&db, "Breaking Bad", "2026-01-01T00:00:00.000Z").expect("a");
+        let b =
+            resolve_show_for_directory(&db, "Breaking Bad", "2026-01-01T00:00:00.000Z").expect("b");
         assert_eq!(a.id, b.id);
         assert_eq!(a.parsed_title_key.as_deref(), Some("breaking bad|"));
     }

@@ -145,12 +145,7 @@ pub fn delete_library(db: &Db, id: &str) -> DbResult<bool> {
 
 /// Set `libraries.status` and `libraries.last_seen_at` for one library.
 /// Used by `services::profile_availability` after each probe cycle.
-pub fn update_library_status(
-    db: &Db,
-    id: &str,
-    status: &str,
-    last_seen_at: &str,
-) -> DbResult<()> {
+pub fn update_library_status(db: &Db, id: &str, status: &str, last_seen_at: &str) -> DbResult<()> {
     db.with(|c| {
         c.execute(
             "UPDATE libraries SET status = ?2, last_seen_at = ?3 WHERE id = ?1",

@@ -42,7 +42,11 @@ pub fn film_id_for(imdb_id: Option<&str>, parsed_title_key: Option<&str>) -> Str
 /// lowercased, whitespace-collapsed, joined by `|`. Year-less titles still
 /// produce a key (the year part is empty).
 pub fn build_parsed_title_key(title: &str, year: Option<i32>) -> String {
-    let normalised: String = title.split_whitespace().collect::<Vec<_>>().join(" ").to_lowercase();
+    let normalised: String = title
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .to_lowercase();
     match year {
         Some(y) => format!("{normalised}|{y}"),
         None => format!("{normalised}|"),
@@ -345,11 +349,8 @@ mod tests {
         let db = fresh_db();
         seed_library(&db, "lib1");
         seed_video(&db, "lib1", "v1");
-        upsert_film(
-            &db,
-            &fixture_film("f1", None, Some("test|2020"), "Test"),
-        )
-        .expect("upsert film");
+        upsert_film(&db, &fixture_film("f1", None, Some("test|2020"), "Test"))
+            .expect("upsert film");
         assign_video_to_film(&db, "v1", "f1", "main").expect("assign");
         let got: (Option<String>, String) = db
             .with(|c| {
@@ -413,11 +414,7 @@ mod tests {
             &fixture_film("f-canonical", Some("tt1"), Some("a|2020"), "A"),
         )
         .expect("canonical");
-        upsert_film(
-            &db,
-            &fixture_film("f-dup", None, Some("a-dup|2020"), "A"),
-        )
-        .expect("dup");
+        upsert_film(&db, &fixture_film("f-dup", None, Some("a-dup|2020"), "A")).expect("dup");
         assign_video_to_film(&db, "v1", "f-canonical", "main").expect("v1");
         assign_video_to_film(&db, "v2", "f-dup", "main").expect("v2");
         merge_films(&db, "f-dup", "f-canonical").expect("merge");
@@ -426,11 +423,11 @@ mod tests {
         // v2 now points at f-canonical.
         let got: Option<String> = db
             .with(|c| {
-                Ok(c.query_row(
-                    "SELECT film_id FROM videos WHERE id = 'v2'",
-                    [],
-                    |r| r.get::<_, Option<String>>(0),
-                )?)
+                Ok(
+                    c.query_row("SELECT film_id FROM videos WHERE id = 'v2'", [], |r| {
+                        r.get::<_, Option<String>>(0)
+                    })?,
+                )
             })
             .expect("read");
         assert_eq!(got.as_deref(), Some("f-canonical"));
@@ -439,11 +436,7 @@ mod tests {
     #[test]
     fn merge_films_noop_when_source_equals_target() {
         let db = fresh_db();
-        upsert_film(
-            &db,
-            &fixture_film("f1", None, Some("k|2020"), "F"),
-        )
-        .expect("upsert");
+        upsert_film(&db, &fixture_film("f1", None, Some("k|2020"), "F")).expect("upsert");
         merge_films(&db, "f1", "f1").expect("noop merge");
         assert!(get_film_by_id(&db, "f1").expect("get").is_some());
     }

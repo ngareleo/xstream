@@ -126,7 +126,9 @@ pub async fn poll_once(
                         }
                     };
                     let res = match p.owner {
-                        Owner::Video => set_video_poster_local_path(&ctx.db, &p.owner_id, &basename),
+                        Owner::Video => {
+                            set_video_poster_local_path(&ctx.db, &p.owner_id, &basename)
+                        }
                         Owner::Show => set_show_poster_local_path(&ctx.db, &p.owner_id, &basename),
                     };
                     if let Err(err) = res {

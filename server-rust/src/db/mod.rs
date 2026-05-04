@@ -125,7 +125,6 @@ pub use queries::playback_history::{
 pub use queries::seasons::{
     get_episodes_by_show, get_seasons_by_show, upsert_episode, upsert_season, EpisodeRow, SeasonRow,
 };
-pub use queries::user_settings::{get_setting, set_setting};
 pub use queries::show_metadata::{
     get_show_metadata, list_shows_needing_poster_download, set_show_poster_local_path,
     upsert_show_metadata, ShowMetadataRow,
@@ -135,6 +134,7 @@ pub use queries::shows::{
     link_show_to_imdb, list_shows, merge_shows, resolve_show_for_directory, show_id_for,
     upsert_show, ShowRow, ShowsFilter,
 };
+pub use queries::user_settings::{get_setting, set_setting};
 pub use queries::video_metadata::{
     count_matched_by_library, delete_video_metadata, get_metadata_by_video_id,
     get_unmatched_video_ids, has_video_metadata, list_videos_needing_poster_download,

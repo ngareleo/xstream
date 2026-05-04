@@ -916,21 +916,17 @@ mod tests {
         let eps = get_episodes_by_show(&ctx.db, &show_id).expect("episodes");
         assert_eq!(eps.len(), 3);
 
-        let by_num: HashMap<i64, &EpisodeRow> =
-            eps.iter().map(|e| (e.episode_number, e)).collect();
+        let by_num: HashMap<i64, &EpisodeRow> = eps.iter().map(|e| (e.episode_number, e)).collect();
         assert_eq!(by_num.get(&1).unwrap().title.as_deref(), Some("Pilot"));
         assert_eq!(
             by_num.get(&2).unwrap().title.as_deref(),
             Some("Second Step")
         );
-        assert_eq!(
-            by_num.get(&3).unwrap().title.as_deref(),
-            Some("Third Step")
-        );
+        assert_eq!(by_num.get(&3).unwrap().title.as_deref(), Some("Third Step"));
 
         // Episode files now point at the show via show_id/show_season/show_episode.
-        let copies = crate::db::get_videos_by_show_episode(&ctx.db, &show_id, 1, 1)
-            .expect("ep1 copies");
+        let copies =
+            crate::db::get_videos_by_show_episode(&ctx.db, &show_id, 1, 1).expect("ep1 copies");
         assert_eq!(copies.len(), 1);
         assert_eq!(copies[0].path, ep1.to_str().unwrap_or_default());
 
@@ -986,8 +982,8 @@ mod tests {
         assert_eq!(eps.len(), 1);
         assert!(eps[0].title.is_none());
 
-        let copies = crate::db::get_videos_by_show_episode(&ctx.db, &show_id, 1, 1)
-            .expect("copies");
+        let copies =
+            crate::db::get_videos_by_show_episode(&ctx.db, &show_id, 1, 1).expect("copies");
         assert_eq!(copies.len(), 1);
 
         // No show_metadata — OMDb didn't match.

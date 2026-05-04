@@ -7,12 +7,12 @@ use dashmap::DashMap;
 
 use crate::db::Db;
 use crate::graphql::scalars::Resolution;
+use crate::services::ffmpeg_file::FileMetadata;
 use crate::services::ffmpeg_file::HwAccelConfig;
 use crate::services::ffmpeg_path::FfmpegPaths;
 use crate::services::ffmpeg_pool::FfmpegPool;
 use crate::services::job_store::JobStore;
 use crate::services::omdb::OmdbClient;
-use crate::services::ffmpeg_file::FileMetadata;
 use crate::services::scan_state::ScanState;
 
 /// Per-source VAAPI capability state, learned from prior failures. Lives on
@@ -260,7 +260,10 @@ impl AppContext {
     /// Helper for tests + headless boot — supplies a stub `FfmpegPaths`
     /// pointing at `/bin/true` (probe is gated on actual encode args).
     pub fn for_tests(db: Db, segment_dir: PathBuf) -> Self {
-        let poster_dir = segment_dir.parent().map(|p| p.join("poster-cache")).unwrap_or_else(|| PathBuf::from("/tmp/xstream-test-posters"));
+        let poster_dir = segment_dir
+            .parent()
+            .map(|p| p.join("poster-cache"))
+            .unwrap_or_else(|| PathBuf::from("/tmp/xstream-test-posters"));
         let config = AppConfig {
             segment_dir,
             db_path: PathBuf::from(":memory:"),

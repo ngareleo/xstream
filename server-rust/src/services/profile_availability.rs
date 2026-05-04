@@ -71,7 +71,9 @@ pub async fn probe_once(
 
             let prev = {
                 let map = last_status.lock().await;
-                map.get(&lib.id).cloned().unwrap_or_else(|| lib.status.clone())
+                map.get(&lib.id)
+                    .cloned()
+                    .unwrap_or_else(|| lib.status.clone())
             };
             if prev != new_status {
                 handle_transition(ctx, lib, &prev, new_status).await;
@@ -180,7 +182,10 @@ mod tests {
         let lib = create_library(&ctx.db, "L", "/no/such/path", "movies", &[]).expect("lib");
         let last = Mutex::new(HashMap::new());
         let result = probe_once(&ctx, &last).await;
-        assert_eq!(result.get(&lib.id).map(|s| s.as_str()), Some(STATUS_OFFLINE));
+        assert_eq!(
+            result.get(&lib.id).map(|s| s.as_str()),
+            Some(STATUS_OFFLINE)
+        );
     }
 
     #[tokio::test]

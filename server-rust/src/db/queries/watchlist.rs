@@ -51,10 +51,7 @@ pub fn get_watchlist_item_by_id(db: &Db, id: &str) -> DbResult<Option<WatchlistI
     })
 }
 
-pub fn get_watchlist_item_by_film_id(
-    db: &Db,
-    film_id: &str,
-) -> DbResult<Option<WatchlistItemRow>> {
+pub fn get_watchlist_item_by_film_id(db: &Db, film_id: &str) -> DbResult<Option<WatchlistItemRow>> {
     db.with(|c| {
         let row = c
             .query_row(
@@ -122,7 +119,11 @@ mod tests {
             c.execute(
                 "INSERT INTO films (id, parsed_title_key, title, year, created_at)
                  VALUES (?1, ?2, ?3, 2020, '2026-01-01T00:00:00.000Z')",
-                params![film_id, format!("{film_id}|2020"), format!("Film {film_id}")],
+                params![
+                    film_id,
+                    format!("{film_id}|2020"),
+                    format!("Film {film_id}")
+                ],
             )?;
             Ok(())
         })

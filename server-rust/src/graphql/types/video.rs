@@ -159,10 +159,7 @@ impl Video {
     /// The Show this video is an episode of, when set. Movie videos and
     /// unmatched episode files return null. Lets the player resolve the
     /// full season tree from the show context without an extra query.
-    async fn show(
-        &self,
-        ctx: &Context<'_>,
-    ) -> async_graphql::Result<Option<super::show::Show>> {
+    async fn show(&self, ctx: &Context<'_>) -> async_graphql::Result<Option<super::show::Show>> {
         let Some(show_id) = self.raw.show_id.as_deref() else {
             return Ok(None);
         };

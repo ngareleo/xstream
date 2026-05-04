@@ -150,8 +150,7 @@ pub fn list_videos_needing_poster_download(db: &Db) -> DbResult<Vec<(String, Str
                    AND poster_url <> ''
                    AND (poster_local_path IS NULL OR poster_local_path = '')"#,
         )?;
-        let rows =
-            stmt.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))?;
+        let rows = stmt.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))?;
         let collected: rusqlite::Result<Vec<_>> = rows.collect();
         Ok(collected?)
     })

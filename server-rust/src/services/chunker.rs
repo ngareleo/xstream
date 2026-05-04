@@ -626,12 +626,7 @@ async fn run_cascade(
                     chunk_end_s = end_time_seconds.unwrap_or(0.0),
                     "transcode_silent_failure"
                 );
-                match decide_cascade_next_tier(
-                    tier,
-                    metadata.is_hdr,
-                    &video_id,
-                    &ctx.vaapi_state,
-                ) {
+                match decide_cascade_next_tier(tier, metadata.is_hdr, &video_id, &ctx.vaapi_state) {
                     Some(next) => {
                         tier = next;
                         continue;
@@ -658,12 +653,7 @@ async fn run_cascade(
                     ffmpeg_stderr = %tail,
                     "transcode_tier_failed"
                 );
-                match decide_cascade_next_tier(
-                    tier,
-                    metadata.is_hdr,
-                    &video_id,
-                    &ctx.vaapi_state,
-                ) {
+                match decide_cascade_next_tier(tier, metadata.is_hdr, &video_id, &ctx.vaapi_state) {
                     Some(next) => {
                         tier = next;
                         continue;
@@ -999,7 +989,10 @@ mod tests {
         let cache = empty_cache();
         let next = decide_cascade_next_tier(CascadeTier::FastVaapi, false, "v1", &cache);
         assert_eq!(next, Some(CascadeTier::SwPadVaapi));
-        assert_eq!(cache.get("v1").map(|r| *r), Some(VaapiVideoState::NeedsSwPad));
+        assert_eq!(
+            cache.get("v1").map(|r| *r),
+            Some(VaapiVideoState::NeedsSwPad)
+        );
     }
 
     #[test]
@@ -1052,7 +1045,10 @@ mod tests {
         // pessimistic state. Verifies write-not-skip semantics on `insert`.
         let cache = empty_cache();
         decide_cascade_next_tier(CascadeTier::FastVaapi, false, "v4", &cache);
-        assert_eq!(cache.get("v4").map(|r| *r), Some(VaapiVideoState::NeedsSwPad));
+        assert_eq!(
+            cache.get("v4").map(|r| *r),
+            Some(VaapiVideoState::NeedsSwPad)
+        );
         decide_cascade_next_tier(CascadeTier::SwPadVaapi, false, "v4", &cache);
         assert_eq!(cache.get("v4").map(|r| *r), Some(VaapiVideoState::HwUnsafe));
     }
@@ -1088,7 +1084,7 @@ mod tests {
         cache.insert("video-1".into(), meta.clone());
         let hit = cache.get("video-1").expect("present");
         assert_eq!(hit.duration_seconds, 7200.0);
-        assert_eq!(hit.is_hdr, false);
+        assert!(!hit.is_hdr);
     }
 
     #[test]

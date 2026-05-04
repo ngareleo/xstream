@@ -512,7 +512,13 @@ async fn match_one_video(ctx: &AppContext, omdb: &OmdbClient, video_id: &str) {
     // already-existing imdb_id-keyed Film if one exists. This is what
     // collapses two-encodes-of-the-same-movie into a single Film once
     // both rows match OMDb.
-    if let Err(err) = link_video_film_to_imdb(ctx, video_id, &result.imdb_id, &result.title, result.year.and_then(|y| i32::try_from(y).ok())) {
+    if let Err(err) = link_video_film_to_imdb(
+        ctx,
+        video_id,
+        &result.imdb_id,
+        &result.title,
+        result.year.and_then(|y| i32::try_from(y).ok()),
+    ) {
         tracing::warn!(
             video_id = %video_id,
             error = %err,
@@ -797,17 +803,49 @@ pub fn spawn_periodic_scan(ctx: AppContext) {
 /// appear as a complete separator-bounded word, not as a substring.
 const SCENE_TOKENS: &[&str] = &[
     // Resolution
-    "1080p", "720p", "2160p", "4k", "480p", "360p", "240p",
+    "1080p",
+    "720p",
+    "2160p",
+    "4k",
+    "480p",
+    "360p",
+    "240p",
     // Source
-    "bluray", "bdrip", "brrip", "web-dl", "webdl", "webrip", "hdrip", "dvdrip", "hdtv",
+    "bluray",
+    "bdrip",
+    "brrip",
+    "web-dl",
+    "webdl",
+    "webrip",
+    "hdrip",
+    "dvdrip",
+    "hdtv",
     // Video codec
-    "x264", "x265", "hevc", "h264", "h265", "avc",
+    "x264",
+    "x265",
+    "hevc",
+    "h264",
+    "h265",
+    "avc",
     // Audio codec
-    "aac", "ac3", "eac3", "dts", "atmos", "truehd", "dts-hd",
+    "aac",
+    "ac3",
+    "eac3",
+    "dts",
+    "atmos",
+    "truehd",
+    "dts-hd",
     // Channels
-    "5.1", "7.1", "2.0",
+    "5.1",
+    "7.1",
+    "2.0",
     // HDR
-    "hdr", "hdr10", "dv", "dolbyvision", "10bit", "12bit",
+    "hdr",
+    "hdr10",
+    "dv",
+    "dolbyvision",
+    "10bit",
+    "12bit",
 ];
 
 /// Strip Scene-release tokens from a normalised (dots/underscores already
@@ -1025,17 +1063,15 @@ mod tests {
     #[test]
     fn parse_title_strips_scene_tokens_dot_separated_after_year() {
         // Year splits at 2025; everything after is discarded; title is clean.
-        let (title, year) = parse_title_from_filename(
-            "Bugonia.2025.4K.HDR.DV.2160p.WEBDL Ita Eng x265-NAHOM.mkv",
-        );
+        let (title, year) =
+            parse_title_from_filename("Bugonia.2025.4K.HDR.DV.2160p.WEBDL Ita Eng x265-NAHOM.mkv");
         assert_eq!(title, "Bugonia");
         assert_eq!(year, Some(2025));
     }
 
     #[test]
     fn parse_title_preserves_dash_in_subtitle_with_year_in_parens() {
-        let (title, year) =
-            parse_title_from_filename("Furiosa- A Mad Max Saga (2024) 4K.mkv");
+        let (title, year) = parse_title_from_filename("Furiosa- A Mad Max Saga (2024) 4K.mkv");
         assert_eq!(title, "Furiosa- A Mad Max Saga");
         assert_eq!(year, Some(2024));
     }
@@ -1065,9 +1101,8 @@ mod tests {
 
     #[test]
     fn parse_title_dot_separated_complex_scene_tokens_after_year() {
-        let (title, year) = parse_title_from_filename(
-            "Inception.2010.2160p.WEB-DL.HEVC.HDR10.Atmos.5.1-NAHOM.mkv",
-        );
+        let (title, year) =
+            parse_title_from_filename("Inception.2010.2160p.WEB-DL.HEVC.HDR10.Atmos.5.1-NAHOM.mkv");
         assert_eq!(title, "Inception");
         assert_eq!(year, Some(2010));
     }
@@ -1076,8 +1111,7 @@ mod tests {
     fn parse_title_strip_pass_no_year_removes_source_and_codec() {
         // No year — resolution strip cuts at 1080p, then strip pass removes
         // remaining scene tokens (BluRay, x264-GROUP).
-        let (title, year) =
-            parse_title_from_filename("The.Matrix.1080p.BluRay.x264-GROUP.mkv");
+        let (title, year) = parse_title_from_filename("The.Matrix.1080p.BluRay.x264-GROUP.mkv");
         assert_eq!(title, "The Matrix");
         assert_eq!(year, None);
     }
