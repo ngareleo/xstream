@@ -29,7 +29,7 @@ const VIDEO_FRAGMENT = graphql`
       title
       year
       genre
-      backdropPoster: posterUrl(size: $posterSize)
+      heroPoster: posterUrl(size: $posterSize)
     }
     ...VideoPlayer_video
   }
@@ -54,7 +54,7 @@ export const VideoArea: FC<Props> = ({ video, seriesPick, controlsHidden, onBack
   const fadeClass = mergeClasses(styles.fade, controlsHidden && styles.fadeHidden);
   const meta = data.metadata;
   const displayTitle = meta?.title ?? data.title ?? strings.untitled;
-  const posterUrl = meta?.backdropPoster ?? null;
+  const posterUrl = meta?.heroPoster ?? null;
   const episodeCode = seriesPick
     ? formatEpisodeCode(seriesPick.seasonNumber, seriesPick.episodeNumber)
     : null;

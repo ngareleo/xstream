@@ -24,6 +24,11 @@ use crate::graphql::scalars::PosterSize;
 /// 25-40 KB range for a 2:3 poster.
 const WEBP_QUALITY: f32 = 75.0;
 
+/// Pixel width we request from Amazon's `m.media-amazon.com` CDN. Must
+/// be ≥ the largest `PosterSize` so every variant downscales from the
+/// source rather than upscaling from a 300px default.
+const SOURCE_FETCH_WIDTH: u32 = 2000;
+
 /// How often the worker wakes up to look for new pending downloads.
 const POLL_INTERVAL: Duration = Duration::from_secs(15);
 /// Maximum simultaneous in-flight HTTP requests. Modest — we don't want
@@ -171,21 +176,25 @@ async fn download_one(
     url: &str,
     poster_dir: &PathBuf,
 ) -> Result<String, DownloadError> {
-    let response = client.get(url).send().await?;
+    // Hash the original DB URL so the basename stays stable across
+    // future tweaks to the rewriter, then fetch from the high-res
+    // version so every variant downscales rather than upscaling from
+    // the 300-px default.
+    let root = sha1_root_for(url);
+    let fetch_url = upgrade_amazon_cdn_url(url, SOURCE_FETCH_WIDTH);
+    let response = client.get(fetch_url.as_ref()).send().await?;
     if !response.status().is_success() {
         return Err(DownloadError::Status(response.status().as_u16()));
     }
     let bytes = response.bytes().await?.to_vec();
-    let root = sha1_root_for(url);
     tokio::fs::create_dir_all(poster_dir).await?;
 
     // Resize + encode is CPU-bound (Lanczos3 over a 600×900 source is
     // ~5-10ms per variant; libwebp encode adds another ~10ms). Keep the
     // tokio runtime free by handing the whole batch to a blocking pool.
-    let variants =
-        tokio::task::spawn_blocking(move || encode_all_variants(&bytes))
-            .await
-            .map_err(|_| DownloadError::JoinError)??;
+    let variants = tokio::task::spawn_blocking(move || encode_all_variants(&bytes))
+        .await
+        .map_err(|_| DownloadError::JoinError)??;
 
     for (size, encoded) in variants {
         let basename = variant_basename(&root, size);
@@ -233,6 +242,36 @@ fn variant_basename(root: &str, size: PosterSize) -> String {
     format!("{root}.{}.webp", size.suffix())
 }
 
+/// Replace Amazon's `_V1_<modifiers>.<ext>` size hints with a single
+/// `_V1_SX{width}.<ext>` so the CDN serves a high-res original we can
+/// then downscale into the four `PosterSize` variants. URLs without
+/// `._V1_` (non-Amazon) pass through unchanged.
+///
+/// Amazon's CDN packs an arbitrary chain of modifiers between `_V1_`
+/// and the file extension — examples:
+///   * `_V1_SX300.jpg`                           (width-only)
+///   * `_V1_QL75_UY562_CR35,0,380,562_.jpg`      (quality + height + crop)
+///
+/// Both forms collapse to `_V1_SX{width}.<ext>`.
+fn upgrade_amazon_cdn_url(url: &str, width: u32) -> std::borrow::Cow<'_, str> {
+    if !url.contains("._V1_") {
+        return std::borrow::Cow::Borrowed(url);
+    }
+    // Find the `._V1_` anchor, then split the suffix at the last `.`
+    // which is the file extension. Anything between belongs to the
+    // modifier block we want to replace wholesale.
+    let Some(anchor) = url.find("._V1_") else {
+        return std::borrow::Cow::Borrowed(url);
+    };
+    let prefix = &url[..anchor];
+    let after_anchor = &url[anchor + 5..]; // skip `._V1_`
+    let Some(dot) = after_anchor.rfind('.') else {
+        return std::borrow::Cow::Borrowed(url);
+    };
+    let ext = &after_anchor[dot..];
+    std::borrow::Cow::Owned(format!("{prefix}._V1_SX{width}{ext}"))
+}
+
 /// True when `name` matches `<hex>.w<digits>.webp`. Used by the startup
 /// cleanup pass to spare the new sized files while reaping legacy
 /// originals.
@@ -267,7 +306,9 @@ pub async fn purge_legacy_cache(ctx: &AppContext) {
         Ok(mut iter) => {
             while let Ok(Some(entry)) = iter.next_entry().await {
                 let name = entry.file_name();
-                let Some(name_str) = name.to_str() else { continue };
+                let Some(name_str) = name.to_str() else {
+                    continue;
+                };
                 if is_sized_variant_name(name_str) {
                     continue;
                 }
@@ -387,6 +428,36 @@ mod tests {
         assert!(!is_sized_variant_name("abc123.w.webp")); // empty digits
         assert!(!is_sized_variant_name("zzz.w240.webp")); // non-hex root
         assert!(!is_sized_variant_name(""));
+    }
+
+    #[test]
+    fn upgrade_amazon_cdn_url_replaces_sx300_with_target_width() {
+        let got = upgrade_amazon_cdn_url(
+            "https://m.media-amazon.com/images/M/abc._V1_SX300.jpg",
+            2000,
+        );
+        assert_eq!(
+            got.as_ref(),
+            "https://m.media-amazon.com/images/M/abc._V1_SX2000.jpg"
+        );
+    }
+
+    #[test]
+    fn upgrade_amazon_cdn_url_collapses_complex_modifier_chain() {
+        let got = upgrade_amazon_cdn_url(
+            "https://m.media-amazon.com/images/M/abc._V1_QL75_UY562_CR35,0,380,562_.jpg",
+            2000,
+        );
+        assert_eq!(
+            got.as_ref(),
+            "https://m.media-amazon.com/images/M/abc._V1_SX2000.jpg"
+        );
+    }
+
+    #[test]
+    fn upgrade_amazon_cdn_url_is_a_no_op_for_non_amazon_urls() {
+        let got = upgrade_amazon_cdn_url("https://example.com/poster.jpg", 2000);
+        assert_eq!(got.as_ref(), "https://example.com/poster.jpg");
     }
 
     #[test]
