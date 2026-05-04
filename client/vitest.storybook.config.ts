@@ -24,6 +24,30 @@ export default defineConfig({
       "~": path.resolve(dirname, "src"),
     },
   },
+  // Pre-bundle the heavy shared deps so Vite seals the deps cache once at
+  // startup. Without this, vitest-browser navigates to story files one at
+  // a time; each new story can introduce a not-yet-seen dep, triggering a
+  // re-optimisation under a fresh `?v=…` hash. Any browser tab that already
+  // imported via the old hash then 404s on `sb-vitest/deps/react-18-…js`.
+  // Local CPUs absorb the race; CI runners surface it. Keep this list in
+  // sync with the deps actually used by stories.
+  optimizeDeps: {
+    include: [
+      "react",
+      "react-dom",
+      "react-dom/client",
+      "react/jsx-runtime",
+      "react/jsx-dev-runtime",
+      "react-relay",
+      "relay-runtime",
+      "relay-test-utils",
+      "react-router-dom",
+      "@nova/react",
+      "@nova/types",
+      "@griffel/react",
+      "react-localization",
+    ],
+  },
   test: {
     projects: [
       {
