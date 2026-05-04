@@ -1,6 +1,4 @@
-//! In-memory `JobStore` — `DashMap`-backed lookup for live transcode
-//! jobs. The DB is the audit mirror; this map is the source of truth
-//! while ffmpeg runs.
+//! In-memory `DashMap`-backed lookup for live transcode jobs.
 
 use dashmap::DashMap;
 use std::sync::Arc;

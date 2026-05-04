@@ -1,20 +1,4 @@
-//! Library-scan progress state.
-//!
-//! One process-wide [`ScanState`] holds the current scan snapshot behind
-//! an `RwLock` and broadcasts every state change over a
-//! `tokio::sync::broadcast` channel. The two GraphQL subscriptions
-//! (`library_scan_updated`, `library_scan_progress`) seed themselves from
-//! [`ScanState::current`] and then forward live broadcasts to the wire.
-//!
-//! Concurrency contract:
-//! - [`mark_started`] is the atomic "is anyone scanning?" guard. It reads
-//!   and flips `scanning` under the same write-lock so two callers racing
-//!   into [`crate::services::library_scanner::scan_libraries`] cannot both
-//!   advance past the guard.
-//! - Broadcast `send` returns `Err` only when no subscribers exist; the
-//!   scan itself is unaffected, so the no-receiver path is a documented
-//!   no-op (per `docs/code-style/Invariants/00-Never-Violate.md` §14, the
-//!   handler is explicit rather than a silent `let _ =`).
+//! Library-scan progress snapshot with broadcast subscriptions.
 
 use std::sync::{Arc, RwLock};
 
@@ -184,7 +168,6 @@ impl Default for ScanState {
     }
 }
 
-// ── Wire-shape converters ───────────────────────────────────────────────────
 //
 // The two subscription payloads project different views of the same
 // snapshot. Keep the conversions here so the GraphQL layer stays free
@@ -210,8 +193,6 @@ impl From<&ScanSnapshot> for LibraryScanUpdate {
         }
     }
 }
-
-// ── Tests ────────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
 mod tests {

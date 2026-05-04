@@ -1,28 +1,4 @@
-/**
- * useSplitResize — drag-to-resize hook for the split-body layout.
- *
- * The split-body always has 3 CSS columns (1fr | handle | right-pane) so that
- * the column count never changes and the open/close CSS transition works cleanly.
- * When closed: `1fr 0px 0px`. When open: `1fr 4px ${paneWidth}px`.
- *
- * During drag the hook:
- *   1. Disables the CSS transition on the container so the pane tracks the
- *      pointer without a 0.25s lag on every mousemove.
- *   2. Sets col-resize cursor on <html> and disables text selection on <body>.
- *   3. Restores both on mouseup.
- *
- * Usage:
- *   const { paneWidth, containerRef, onResizeMouseDown } = useSplitResize();
- *
- *   <div
- *     ref={containerRef}
- *     style={paneOpen ? { gridTemplateColumns: `1fr 4px ${paneWidth}px` } : undefined}
- *   >
- *     <div>...left...</div>
- *     {paneOpen && <div onMouseDown={onResizeMouseDown} />}
- *     <div>...right...</div>
- *   </div>
- */
+/** Drag-to-resize hook for split-body layout. See docs/client/Components/README.md for usage. */
 
 import type React from "react";
 import { useCallback, useRef, useState } from "react";
@@ -49,8 +25,7 @@ export function useSplitResize(defaultWidth = 360): SplitResizeResult {
     }
     return defaultWidth;
   });
-  // Ref tracks the live value so the stable mousedown handler always reads the
-  // latest width without needing to re-create the handler on every state update.
+  // Ref tracks live value so mousedown handler reads latest width without re-creation.
   const paneWidthRef = useRef(defaultWidth);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -60,18 +35,16 @@ export function useSplitResize(defaultWidth = 360): SplitResizeResult {
     const startX = e.clientX;
     const startWidth = paneWidthRef.current;
 
-    // Suppress transition during drag so the pane tracks the pointer instantly.
+    // Suppress transition to track pointer instantly; lock cursor globally.
     if (containerRef.current) containerRef.current.style.transition = "none";
-    // Lock cursor globally so it stays col-resize even when hovering other elements.
     document.documentElement.style.cursor = "col-resize";
     document.body.style.userSelect = "none";
 
     const onMouseMove = (ev: MouseEvent) => {
-      // Dragging left widens the right pane; dragging right narrows it.
       const delta = startX - ev.clientX;
-      // Also cap so the left column never drops below MIN_LEFT_WIDTH.
+      // Cap so left column never drops below MIN_LEFT_WIDTH.
       const containerWidth = containerRef.current?.offsetWidth ?? Infinity;
-      const maxByContainer = containerWidth - MIN_LEFT_WIDTH - 4; // 4px handle
+      const maxByContainer = containerWidth - MIN_LEFT_WIDTH - 4;
       const newWidth = Math.max(
         MIN_PANE_WIDTH,
         Math.min(MAX_PANE_WIDTH, maxByContainer, startWidth + delta)
@@ -91,7 +64,7 @@ export function useSplitResize(defaultWidth = 360): SplitResizeResult {
 
     document.addEventListener("mousemove", onMouseMove);
     document.addEventListener("mouseup", onMouseUp);
-  }, []); // stable — captures nothing from render scope
+  }, []);
 
   return { paneWidth, containerRef, onResizeMouseDown };
 }

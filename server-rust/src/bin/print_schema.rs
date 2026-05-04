@@ -1,13 +1,4 @@
-//! Emits the GraphQL SDL for the Rust server's schema to stdout.
-//!
-//! Used by `bun run --filter client relay` to feed `relay-compiler` —
-//! the SDL is the authoritative wire contract; the client's relay
-//! artefacts are derived from it. Also used in CI to refresh
-//! `server-rust/schema.graphql` before the relay step runs.
-//!
-//! No `AppContext` is required: async-graphql's `Schema::sdl()` only
-//! depends on the type structure (Query / Mutation / Subscription),
-//! not on the `data` registrations.
+//! Emits the GraphQL SDL for the Rust server's schema — feeds relay-compiler and CI refresh cycle.
 
 use async_graphql::Schema;
 use xstream_server::graphql::{Mutation, Query, Subscription};

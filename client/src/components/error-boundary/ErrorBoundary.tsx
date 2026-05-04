@@ -29,8 +29,6 @@ import { useErrorBoundaryStyles } from "./ErrorBoundary.styles.js";
 
 const log = getClientLogger("errorBoundary");
 
-// ── DevErrorScreen ────────────────────────────────────────────────────────────
-
 const DevErrorScreen: FC<{
   error: Error;
   errorInfo: ErrorInfo;
@@ -134,8 +132,6 @@ const DevErrorScreen: FC<{
     </div>
   );
 };
-
-// ── ErrorBoundary (class) ─────────────────────────────────────────────────────
 
 interface State {
   hasError: boolean;

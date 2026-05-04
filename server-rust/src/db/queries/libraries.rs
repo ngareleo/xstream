@@ -195,7 +195,6 @@ pub fn update_library(
     get_library_by_id(db, id)
 }
 
-// ── Tests ────────────────────────────────────────────────────────────────────
 //
 // Cover the `create_library` write surface plus the round-trip through
 // `get_library_by_id`. The assertions exercise ON-CONFLICT (insert-or-update)

@@ -1,5 +1,4 @@
-//! `Video` + nested types: `VideoMetadata`, `VideoStreamInfo`,
-//! `AudioStreamInfo`, plus the connection wrappers for paginated queries.
+//! `Video` + metadata, stream info, and paginated-query connection wrappers.
 
 use async_graphql::{Context, Object, SimpleObject, ID};
 

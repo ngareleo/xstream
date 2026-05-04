@@ -15,10 +15,7 @@ export const useAppHeaderStyles = makeStyles({
     display: "grid",
     gridTemplateColumns: "1fr auto 1fr",
     alignItems: "center",
-    // The bottom 32px is a decorative gradient fade-out — let clicks fall
-    // through to whatever is below (e.g. the DetailPane close button on
-    // /profiles). The grid cells re-enable pointer events for the
-    // interactive parts of the header.
+    // Bottom 32px gradient fade-out; clicks fall through; grid cells re-enable for interactive parts.
     pointerEvents: "none",
   },
   headerBg: {

@@ -1,32 +1,4 @@
-//! TV-show discovery — walks a `tvShows` library and rebuilds the
-//! `shows` / `seasons` / `episodes` rows from the canonical
-//! `<library>/<Show>/<Season>/<Episode>` layout.
-//!
-//! Series identity lives in the `shows` table (not in `videos`); episode
-//! files are regular `videos` rows linked back to a Show by
-//! `(show_id, show_season, show_episode)`. Two libraries indexing the
-//! same series fold into one Show; two libraries indexing the same
-//! episode file produce two `videos` rows pointing at the same
-//! `(show_id, season, episode)` coordinate (axis-2 dedup — the picker
-//! shows them as variants).
-//!
-//! Per-show flow:
-//! 1. `resolve_show_for_directory` — Show keyed on parsed_title_key.
-//! 2. Walk local files; for each parseable episode, `assign_video_to_show`.
-//! 3. OMDb best-effort: `search_series` → `series_details` →
-//!    `season_episodes` per season.
-//! 4. On match: `link_show_to_imdb` (which may merge into a canonical
-//!    show) + `upsert_show_metadata`.
-//! 5. Merge local + OMDb episode trees; write seasons + episodes rows.
-//!
-//! Failure isolation:
-//! - OMDb miss → fall back to regex-only persistence (local episodes
-//!   still land, no canonical titles).
-//! - Per-season fetch failure → log warn, continue.
-//! - DB write failure → log error, abort that show, continue.
-//!
-//! See `docs/architecture/Library-Scan/03-Show-Entity.md` for the
-//! architectural picture.
+//! TV-show discovery via local filesystem walk + OMDb matching. See docs/architecture/Library-Scan/03-Show-Entity.md.
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -454,8 +426,6 @@ fn persist_merged_tree(
     Ok(())
 }
 
-// ── Filesystem helpers ───────────────────────────────────────────────────────
-
 fn list_subdirectories(path: &Path) -> std::io::Result<Vec<PathBuf>> {
     let mut out = Vec::new();
     for entry in std::fs::read_dir(path)? {
@@ -491,8 +461,6 @@ fn sha1_path(path: &Path) -> String {
     hasher.update(path.to_string_lossy().as_bytes());
     hex::encode(hasher.finalize())
 }
-
-// ── Parse helpers ────────────────────────────────────────────────────────────
 
 pub fn parse_season_number(dirname: &str) -> Option<i64> {
     let digits: String = dirname
@@ -587,13 +555,9 @@ fn parse_nxnn(s: &str) -> Option<(i64, i64)> {
     None
 }
 
-// ── Tests ────────────────────────────────────────────────────────────────────
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    // ── parse_season_number ──────────────────────────────────────────────
 
     #[test]
     fn parse_season_number_handles_common_formats() {
@@ -611,8 +575,6 @@ mod tests {
         assert_eq!(parse_season_number(""), None);
         assert_eq!(parse_season_number("Season 0"), None);
     }
-
-    // ── parse_episode_id ─────────────────────────────────────────────────
 
     #[test]
     fn parse_episode_id_handles_sxxexx_with_dots() {
@@ -647,8 +609,6 @@ mod tests {
         let r = parse_episode_id("Show 1x02 S03E04.mkv");
         assert_eq!(r, Some((3, 4)));
     }
-
-    // ── merge_trees ──────────────────────────────────────────────────────
 
     fn local_with_episodes(spec: &[(i64, i64, &str)]) -> LocalShowTree {
         let mut tree = LocalShowTree::default();
@@ -725,8 +685,6 @@ mod tests {
         assert_eq!(nums, vec![1, 3, 5]);
     }
 
-    // ── persist_merged_tree (against in-memory DB) ───────────────────────
-
     use crate::db::{
         create_library, get_episodes_by_show, get_seasons_by_show, upsert_show, Db, ShowRow,
     };
@@ -781,8 +739,6 @@ mod tests {
         assert_eq!(eps.len(), 2);
         assert_eq!(eps[0].title.as_deref(), Some("Pilot"));
     }
-
-    // ── End-to-end: tempdir + wiremock OMDb → seasons + episodes ─────────
 
     use crate::config::AppContext;
     use crate::db::{find_show_by_imdb_id, get_show_metadata, VideoRow};

@@ -1,8 +1,4 @@
-//! GraphQL API integration tests.
-//!
-//! Drives `XstreamSchema::execute` directly because the axum handler is a
-//! thin wrapper over the schema (the HTTP shape is covered by the e2e
-//! Playwright test the user already runs).
+//! GraphQL API integration tests — drives `XstreamSchema::execute` directly.
 
 use std::path::Path;
 

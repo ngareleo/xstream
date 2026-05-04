@@ -11,5 +11,6 @@ The length-prefixed binary streaming protocol on `/stream/:jobId` plus the clien
 | [`04-Demand-Driven-Streaming.md`](04-Demand-Driven-Streaming.md) | Pull-based `ReadableStream` contract (`pull` not `start`), `drainAndDispatch` pause cooperation, MSE detach recovery path, Rust/Tauri translation notes. |
 | [`05-Single-SourceBuffer-ADR.md`](05-Single-SourceBuffer-ADR.md) | ADR: why xstream uses one SourceBuffer per session — MSE_DETACHED is cumulative, multi-SB breaks all three chunk-pipeline invariants. |
 | [`06-FfmpegPool.md`](06-FfmpegPool.md) | Bounded ffmpeg pool: cap formula (dying excluded), kill/SIGKILL escalation, KillReason union, shutdown sweep, telemetry fields. |
+| [`07-Fmp4-Tail-Reader.md`](07-Fmp4-Tail-Reader.md) | Tails ffmpeg's single growing fragmented-MP4 output and splits it into `init.mp4` + `segment_NNNN.m4s` files for the segment watcher. |
 
 Diagrams are in [`../../diagrams/`](../../diagrams/). The `.mmd` is authoritative; the `.png` is regenerated via the `update-docs` skill.

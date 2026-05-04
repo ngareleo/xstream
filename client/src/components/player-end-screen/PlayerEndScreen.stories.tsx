@@ -10,14 +10,7 @@ import type { PlayerEndScreenStoryQuery } from "~/relay/__generated__/PlayerEndS
 
 import { PlayerEndScreen } from "./PlayerEndScreen.js";
 
-/**
- * PlayerEndScreen is shown when playback reaches the end of a video.
- * It displays up-next suggestion cards (filtered from the same library) and
- * a Replay button that bubbles a PLAY_REQUESTED Nova event.
- *
- * Stories use @imchhh/storybook-addon-relay for mock fragment data and wrap
- * the component in a NovaEventingProvider (required for useNovaEventing).
- */
+/** End-screen shown on playback completion; displays suggestions + Replay button. */
 
 const STORY_QUERY = graphql`
   query PlayerEndScreenStoryQuery($videoId: ID!) @relay_test_operation {
@@ -45,13 +38,7 @@ function PlayerEndScreenWrapper({ video }: WrapperProps): JSX.Element {
   );
 }
 
-// Relay's MockPayloadGenerator applies the `Video` resolver to every Video in
-// the response — including nested suggestion edges. `context.path` is the same
-// for every nested edge, so we use a per-resolver-pass counter to give each
-// edge a distinct id (otherwise React warns about duplicate keys when the
-// component renders multiple cards with the same id). The counter resets
-// whenever a root resolver call comes in, so the addon's repeated mock-resolver
-// invocations across renders stay deterministic.
+// Per-resolver-pass counter gives each suggestion edge a distinct id for React keys.
 const SUGGESTION_TITLES = ["Mad Max: Fury Road", "Dune: Part Two", "Oppenheimer", "The Batman"];
 let suggestionCounter = 0;
 
@@ -93,7 +80,6 @@ const meta: Meta<WrapperProps> = {
 export default meta;
 type Story = StoryObj<WrapperProps>;
 
-/** Suggestion card (Relay deduplicates by id) plus the Replay button. */
 export const WithSuggestions: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
@@ -103,7 +89,6 @@ export const WithSuggestions: Story = {
   },
 };
 
-/** No other videos in the library — only the Replay button is shown. */
 export const NoSuggestions: Story = {
   parameters: {
     relay: {
@@ -121,7 +106,6 @@ export const NoSuggestions: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await expect(canvas.getByRole("button", { name: "Replay" })).toBeInTheDocument();
-    // No suggestion cards → no "Up Next" header.
     await expect(canvas.queryByText("Up Next")).toBeNull();
   },
 };

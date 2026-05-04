@@ -1,10 +1,4 @@
-//! GraphQL enum types — every enum name and variant name is part of the
-//! published SDL wire contract (locked in `scripts/check-sdl-parity.ts`).
-//!
-//! Mapper contract: every `from_internal` returns `Option<Self>`, with
-//! `None` on an unknown input. Callers decide whether to log + degrade or
-//! propagate as a typed error — never a silent fallback. The unhappy path
-//! is always visible to the caller.
+//! GraphQL enum types — all names are part of the published SDL wire contract (locked in `scripts/check-sdl-parity.ts`).
 
 use async_graphql::Enum;
 
@@ -172,7 +166,6 @@ pub enum PlaybackErrorCode {
     Internal,
 }
 
-// ── Tests ────────────────────────────────────────────────────────────────────
 //
 // Round-trip every variant, then assert unknown values resolve to `None`.
 // The unhappy path must be visible to the caller — never a silent

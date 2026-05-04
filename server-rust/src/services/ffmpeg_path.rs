@@ -1,26 +1,4 @@
-//! ffmpeg + ffprobe binary resolution.
-//!
-//! The manifest at `scripts/ffmpeg-manifest.json` pins one exact
-//! jellyfin-ffmpeg version per platform. This resolver finds the binary
-//! installed by `bun run setup-ffmpeg` at the platform-specific location
-//! the manifest commits us to, and verifies its version string matches.
-//! Drift is a fatal error with a clear pointer back to setup.
-//!
-//! Resolution priority:
-//!   1. `FFMPEG_PATH` / `FFPROBE_PATH` env vars (explicit override —
-//!      bypasses the version check; intended for dev experimentation,
-//!      not production).
-//!   2. Platform-prescribed install location:
-//!      - `linux-x64` / `linux-arm64` → `/usr/lib/jellyfin-ffmpeg/{ffmpeg,ffprobe}`
-//!      - `darwin-*` / `win32-x64`    → `vendor/ffmpeg/<platform>/{ffmpeg,ffprobe}[.exe]`
-//!   3. No fallback. Missing binary → fatal, with a message pointing to
-//!      `bun run setup-ffmpeg`. No system $PATH lookup — we are opinionated
-//!      about the exact version we run against.
-//!
-//! No module-globals: the caller resolves once at startup and threads the
-//! resulting `Arc<FfmpegPaths>` through `AppState` to every spawn site.
-//! That keeps the resolver pure (no IO at use sites) and the path
-//! configuration explicit at every boundary.
+//! Manifest-pinned ffmpeg + ffprobe binary resolution, with version verification.
 
 use serde::Deserialize;
 use std::collections::BTreeMap;
@@ -146,19 +124,7 @@ pub struct FfmpegPaths {
     pub version_string: String,
 }
 
-/// Resolve the manifest-pinned ffmpeg + ffprobe binaries.
-///
-/// **Boot-time only.** Called exactly once from `main()`; the result is
-/// wrapped in `Arc<FfmpegPaths>` and stored on `AppContext` so every
-/// downstream caller (chunker, ffmpeg_pool, hw_accel probe) reads the
-/// cached struct instead of re-parsing the manifest. The manifest file
-/// itself never changes during a process lifetime — pinning is at build
-/// time. Re-entering this function would re-do disk IO and the version
-/// check for no benefit.
-///
-/// Returns the validated paths plus the version the resolver actually
-/// saw, or a typed `FfmpegPathError` describing the exact failure
-/// (missing binary, version drift, etc).
+/// Resolve manifest-pinned ffmpeg + ffprobe binaries with version verification.
 pub fn resolve_ffmpeg_paths(
     project_root: &Path,
     manifest_path: &Path,
@@ -320,8 +286,6 @@ fn parse_version_line(line: &str) -> Option<String> {
     }
     None
 }
-
-// ── Tests ────────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
 mod tests {

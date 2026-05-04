@@ -1,6 +1,4 @@
-//! Root Mutation. CRUD for libraries, video metadata, watchlist, settings,
-//! playback-session writes work fully. `scan_libraries` and `create_library`
-//! both spawn the background scanner; transcode-start spawns the chunker.
+//! Root Mutation — CRUD for libraries, metadata, watchlist, settings, playback history.
 
 use async_graphql::{Context, Object, ID};
 

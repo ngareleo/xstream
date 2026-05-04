@@ -6,9 +6,7 @@ import type * as PlaybackSessionModule from "~/services/playbackSession.js";
 
 /* ── Module mocks ────────────────────────────────────────────────────────── */
 
-// Capture every StreamingService instance so tests can drive segment delivery
-// + lifecycle callbacks. vi.hoisted lets the closure reference survive the
-// vi.mock hoisting.
+// vi.hoisted preserves closure references through vi.mock hoisting.
 const { createdServices } = vi.hoisted(() => ({
   createdServices: [] as FakeStreamingService[],
 }));
@@ -29,7 +27,6 @@ interface FakeStreamingService {
   pause(): void;
   resume(): void;
   cancel(): void;
-  /** Test helpers — drive the slot's segment/lifecycle callbacks. */
   deliverInit(data?: Uint8Array): Promise<void>;
   deliverMedia(data?: Uint8Array): Promise<void>;
   finish(): void;
@@ -59,9 +56,7 @@ vi.mock("~/services/streamingService.js", () => {
       this.onSegment = onSegment;
       this.onError = onError;
       this.onDone = onDone;
-      // Real start() returns a Promise that resolves when the stream ends.
-      // Tests drive that ending via finish() / fail() / cancel(); the returned
-      // Promise here just stays unresolved (the Pipeline doesn't await it).
+      // Real start() resolves when stream ends; tests drive via finish/fail/cancel.
       return new Promise(() => {});
     }
 
@@ -121,12 +116,9 @@ function makeMockSpan(): {
 
 interface FakeBuffer {
   appendCalls: Array<{ bytes: number; resolve: () => void; reject: (err: Error) => void }>;
-  /** Records every `setTimestampOffset(N)` call in order — exercised by
-   *  ChunkPipeline.processSegment on every chunk's init. */
   setTimestampOffsetCalls: number[];
   markStreamDoneCalls: number;
   bufferedAheadSeconds: number;
-  /** Set true to make `waitIfPaused` block until `releasePause()` is called. */
   paused: boolean;
   releasePause(): void;
   appendSegment(data: ArrayBuffer): Promise<void>;
@@ -152,9 +144,6 @@ function makeFakeBuffer(): FakeBuffer {
     appendSegment(data: ArrayBuffer): Promise<void> {
       return new Promise<void>((resolve, reject) => {
         buf.appendCalls.push({ bytes: data.byteLength, resolve, reject });
-        // Default: resolve immediately so tests don't have to drain manually
-        // unless they want to inspect ordering. Tests that care about ordering
-        // can pop from appendCalls before the microtask runs.
         queueMicrotask(resolve);
       });
     },
@@ -178,9 +167,7 @@ function makeFakeBuffer(): FakeBuffer {
   return buf;
 }
 
-// Minimal shape of @opentelemetry/api Tracer that ChunkPipeline actually calls.
-// Cast through unknown because the production type wants a Tracer with many
-// methods — only startSpan is exercised at runtime.
+// Minimal Tracer shape; only startSpan is exercised at runtime.
 function makePipeline(buffer: FakeBuffer): ChunkPipeline {
   const tracer = { startSpan: vi.fn(makeMockSpan) };
   const log = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
@@ -234,9 +221,7 @@ describe("ChunkPipeline", () => {
     pipeline.startForeground(baseOpts({ jobId: "fg", chunkStartS: 0, isFirstChunk: true }));
     pipeline.openLookahead(baseOpts({ jobId: "la", chunkStartS: 300 }));
 
-    // This is the bug fix: BOTH services exist simultaneously, so the server
-    // sees connections > 0 for the prefetched job and the orphan timer is
-    // satisfied.
+    // Both services exist simultaneously; server sees connections > 0.
     expect(createdServices).toHaveLength(2);
     expect(createdServices[0].jobId).toBe("fg");
     expect(createdServices[1].jobId).toBe("la");
@@ -338,10 +323,8 @@ describe("ChunkPipeline", () => {
   });
 
   it("init segment is QUEUED for lookahead, then appended on promotion-drain", async () => {
-    // Each chunk's init carries its own elst; the lookahead defers it (and
-    // every segment) until promotion so the foreground's in-flight segments
-    // never get re-parented against the wrong edit list. See the
-    // architect.md "Lookahead buffers segments locally" section.
+    // Lookahead defers all segments until promotion to prevent foreground
+    // segments re-parenting against wrong edit lists.
     const buffer = makeFakeBuffer();
     const pipeline = makePipeline(buffer);
     pipeline.startForeground(baseOpts({ isFirstChunk: true }));
@@ -350,10 +333,8 @@ describe("ChunkPipeline", () => {
     const lookaheadSlot = createdServices[1];
     const fgAppendsBefore = buffer.appendCalls.length;
     await lookaheadSlot.deliverInit();
-    // Pre-promotion: no new appends from the lookahead's init
     expect(buffer.appendCalls.length).toBe(fgAppendsBefore);
 
-    // Promotion drains the queued init into the SourceBuffer.
     const { drain } = pipeline.promoteLookahead();
     await drain;
     expect(buffer.appendCalls.length).toBe(fgAppendsBefore + 1);
@@ -370,18 +351,13 @@ describe("ChunkPipeline", () => {
   });
 
   it("setTimestampOffset fires with chunkStartS on every chunk's init append", async () => {
-    // Anchors the relative-tfdt → playback-time mapping. Without this call
-    // post-seek segments land at playback time `tfdt` (e.g. 160s) instead of
-    // `chunkStart + tfdt` (e.g. 4360s). See `02-Chunk-Pipeline-Invariants.md`
-    // Invariant #1.
+    // Maps relative-tfdt to playback time. See docs/architecture/Streaming/02-Chunk-Pipeline-Invariants.md.
     const buffer = makeFakeBuffer();
     const pipeline = makePipeline(buffer);
     pipeline.startForeground(baseOpts({ jobId: "fg-0", chunkStartS: 0, isFirstChunk: true }));
     await createdServices[0].deliverInit();
     expect(buffer.setTimestampOffsetCalls).toEqual([0]);
 
-    // A continuation chunk at 4200s must offset by 4200 BEFORE the init's
-    // appendSegment is called.
     pipeline.startForeground(baseOpts({ jobId: "fg-1", chunkStartS: 4200 }));
     await createdServices[1].deliverInit();
     expect(buffer.setTimestampOffsetCalls).toEqual([0, 4200]);
@@ -407,19 +383,15 @@ describe("ChunkPipeline", () => {
 
     const slot = createdServices[0];
     await slot.deliverInit();
-    // Wait for the appendSegment microtask to drain
     await new Promise((r) => queueMicrotask(() => r(undefined)));
     expect(onFirstChunkInit).toHaveBeenCalledTimes(1);
   });
 
   it("onFirstMediaSegmentArrived fires on the first media segment of a continuation chunk (after promotion-drain)", async () => {
-    // Lookahead defers ALL appends + side-effects until promotion. The
-    // first-media callback fires when the first media segment is actually
-    // appended to the SourceBuffer, which now means during the drain.
+    // Lookahead defers all appends until promotion-drain.
     const buffer = makeFakeBuffer();
     const pipeline = makePipeline(buffer);
     const onFirstMediaSegmentArrived = vi.fn();
-    // Need a foreground slot so openLookahead doesn't replace it as foreground.
     pipeline.startForeground(baseOpts({ isFirstChunk: true }));
     pipeline.openLookahead(
       baseOpts({
@@ -431,17 +403,15 @@ describe("ChunkPipeline", () => {
     );
 
     const lookaheadSlot = createdServices[1];
-    await lookaheadSlot.deliverInit(); // queued, no append yet
-    await lookaheadSlot.deliverMedia(); // queued
-    await lookaheadSlot.deliverMedia(); // queued
+    await lookaheadSlot.deliverInit();
+    await lookaheadSlot.deliverMedia();
+    await lookaheadSlot.deliverMedia();
 
-    // Still nothing should have fired — we're a lookahead.
     expect(onFirstMediaSegmentArrived).not.toHaveBeenCalled();
 
     const { drain } = pipeline.promoteLookahead();
     await drain;
 
-    // After drain: first media seg fires the callback exactly once.
     expect(onFirstMediaSegmentArrived).toHaveBeenCalledTimes(1);
   });
 
@@ -452,12 +422,11 @@ describe("ChunkPipeline", () => {
     pipeline.startForeground(baseOpts({ isFirstChunk: true, onStreamEnded }));
 
     const slot = createdServices[0];
-    // Deliver enough media bytes to clear MIN_REAL_CHUNK_BYTES
     await slot.deliverMedia(new Uint8Array(8_192));
     slot.finish();
 
     expect(onStreamEnded).toHaveBeenCalledWith("completed");
-    expect(buffer.markStreamDoneCalls).toBe(0); // 'completed' does not call markStreamDone
+    expect(buffer.markStreamDoneCalls).toBe(0);
   });
 
   it("foreground stream completion with no real content calls onStreamEnded with 'no_real_content' AND markStreamDone", () => {
@@ -467,7 +436,6 @@ describe("ChunkPipeline", () => {
     pipeline.startForeground(baseOpts({ isFirstChunk: true, onStreamEnded }));
 
     const slot = createdServices[0];
-    // No media delivered — totalMediaBytes stays at 0 → no_real_content
     slot.finish();
 
     expect(onStreamEnded).toHaveBeenCalledWith("no_real_content");
@@ -475,10 +443,8 @@ describe("ChunkPipeline", () => {
   });
 
   it("LOOKAHEAD stream completion is DEFERRED — onStreamEnded does NOT fire until promotion", async () => {
-    // The critical invariant: a lookahead's stream ending while the foreground
-    // is still appending must NOT call markStreamDone (would call
-    // MediaSource.endOfStream and break MSE) and must NOT call onStreamEnded
-    // (would chain to the next chunk while the current one is still playing).
+    // Lookahead's stream ending before foreground finish must defer markStreamDone
+    // and onStreamEnded to avoid race with PlaybackController.handleChunkEnded.
     const buffer = makeFakeBuffer();
     const pipeline = makePipeline(buffer);
     pipeline.startForeground(baseOpts({ isFirstChunk: true }));
@@ -493,14 +459,10 @@ describe("ChunkPipeline", () => {
     );
     const lookaheadSlot = createdServices[1];
     await lookaheadSlot.deliverMedia(new Uint8Array(8_192));
-    lookaheadSlot.finish(); // stream ends naturally before promotion
+    lookaheadSlot.finish();
 
-    // Deferred — should NOT fire yet
     expect(lookaheadOnStreamEnded).not.toHaveBeenCalled();
 
-    // Now promote — drain runs first, THEN the deferred outcome fires
-    // (chaining to the next chunk before the SourceBuffer reflects the
-    // queued segments would race PlaybackController.handleChunkEnded).
     const { drain } = pipeline.promoteLookahead();
     await drain;
     expect(lookaheadOnStreamEnded).toHaveBeenCalledWith("completed");
@@ -520,14 +482,11 @@ describe("ChunkPipeline", () => {
       })
     );
     const lookaheadSlot = createdServices[1];
-    lookaheadSlot.finish(); // no media → no_real_content
+    lookaheadSlot.finish();
 
-    // Deferred — markStreamDone NOT called yet (foreground still appending)
     expect(buffer.markStreamDoneCalls).toBe(0);
     expect(lookaheadOnStreamEnded).not.toHaveBeenCalled();
 
-    // Promotion drains (no segments to drain here) then fires the deferred
-    // outcome — markStreamDone + onStreamEnded both fire after `drain`.
     const { drain } = pipeline.promoteLookahead();
     await drain;
     expect(buffer.markStreamDoneCalls).toBe(1);
@@ -559,11 +518,8 @@ describe("ChunkPipeline", () => {
   });
 
   it("drainAndDispatch halts between segments when BufferManager reports paused", async () => {
-    // Trace e699c0ae… failure mode: at chunk handover, drainAndDispatch
-    // previously appended ALL queued lookahead segments in a tight loop —
-    // bypassing backpressure and flooding MSE by 200-400 MB. With
-    // waitIfPaused() between iterations, only 1 segment appends before the
-    // pause blocks the drain; resume releases and the rest flow through.
+    // Old code appended all queued lookahead segments in a tight loop,
+    // bypassing backpressure and flooding MSE. See trace e699c0ae.
     const buffer = makeFakeBuffer();
     const pipeline = makePipeline(buffer);
 
@@ -571,34 +527,24 @@ describe("ChunkPipeline", () => {
     pipeline.openLookahead(baseOpts({ jobId: "la", chunkStartS: 300, isFirstChunk: false }));
 
     const la = createdServices[1];
-    // Queue an init + 4 media segments on the lookahead.
     await la.deliverInit(new Uint8Array([1, 2, 3, 4]));
     for (let i = 0; i < 4; i++) {
       await la.deliverMedia(new Uint8Array(32));
     }
     la.finish();
 
-    // Lookahead's appends should be QUEUED (not called yet) — foreground is
-    // still active, queueing path applies. The fakeBuffer captures appendSegment
-    // calls, so this lets us count actual drain-time appends precisely.
     const beforePromote = buffer.appendCalls.length;
 
-    // Flip the buffer to paused BEFORE promotion so the very first
-    // waitIfPaused() call inside drainAndDispatch blocks the loop.
     buffer.paused = true;
     const { drain } = pipeline.promoteLookahead();
 
-    // Let any microtasks settle — waitIfPaused blocks the first iteration
-    // immediately, so at most 0 or 1 segments may process depending on where
-    // the await lands in the scheduler. Either way, NOT all 5 should land.
     await new Promise((r) => setTimeout(r, 10));
     const duringPause = buffer.appendCalls.length - beforePromote;
     expect(duringPause).toBeLessThan(5);
 
-    // Resume — drain resumes and appends the remaining queued segments.
     buffer.releasePause();
     await drain;
     const totalDrained = buffer.appendCalls.length - beforePromote;
-    expect(totalDrained).toBe(5); // init + 4 media segments
+    expect(totalDrained).toBe(5);
   });
 });

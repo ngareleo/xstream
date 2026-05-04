@@ -66,13 +66,9 @@ function makeHarness(opts: { throwsOnAppend: Error; sbInMsList: boolean }): {
   };
   const fakeMs: FakeMediaSource = {
     readyState: "open",
-    // When sbInMsList=false we want the detached signature: the SB we're
-    // about to append to is NOT in `sourceBuffers`.
     sourceBuffers: opts.sbInMsList ? [fakeSb] : [],
   };
 
-  // Inject into private fields. The waitForUpdateEnd helper branches on
-  // sb.updating (false here) so no event machinery is needed.
   const priv = buffer as unknown as PrivateFields;
   priv.mediaSource = fakeMs;
   priv.sourceBuffer = fakeSb;
@@ -82,12 +78,10 @@ function makeHarness(opts: { throwsOnAppend: Error; sbInMsList: boolean }): {
 }
 
 function makeDomException(name: string, message = "fake"): DOMException {
-  // DOMException isn't globally available in node env; construct a plain
-  // Error with a `name` property — BufferManager reads `.name` and `.message`
-  // from the thrown value, not `instanceof DOMException`.
+  // DOMException unavailable in node; create Error with `name` property.
   const err = new Error(message) as unknown as DOMException;
   (err as unknown as { name: string }).name = name;
-  (err as unknown as { code: number }).code = 11; // InvalidStateError
+  (err as unknown as { code: number }).code = 11;
   return err;
 }
 

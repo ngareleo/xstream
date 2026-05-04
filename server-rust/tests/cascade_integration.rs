@@ -1,23 +1,4 @@
-//! Cascade-delete contract.
-//!
-//! The schema (in `db/migrate.rs`) wires:
-//!
-//! - libraries → videos              ON DELETE CASCADE
-//! - videos    → video_streams       ON DELETE CASCADE
-//! - videos    → transcode_jobs      ON DELETE CASCADE
-//! - videos    → video_metadata      ON DELETE CASCADE
-//! - films     → watchlist_items     ON DELETE CASCADE
-//! - shows     → seasons → episodes  ON DELETE CASCADE
-//! - transcode_jobs → segments       ON DELETE CASCADE
-//!
-//! Films and shows are independent of libraries — deleting a library
-//! does NOT cascade to films/shows/watchlist_items, which is the
-//! correct semantic for the logical-entity layer (a Film survives one
-//! of its source libraries being removed as long as another library
-//! still has a copy).
-//!
-//! `playback_history` has NO foreign key — rows survive video deletion
-//! by design.
+//! Cascade-delete contract — verifies ON DELETE CASCADE wiring matches the logical-entity semantics. See docs/server/DB-Schema/.
 
 use std::path::Path;
 

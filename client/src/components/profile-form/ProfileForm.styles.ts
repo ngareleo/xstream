@@ -7,10 +7,7 @@ export const useProfileFormStyles = makeStyles({
     display: "flex",
     flexDirection: "column",
     height: "100%",
-    // AppHeader's visual footprint is `headerHeight + 32px` (the trailing
-    // 32px is the decorative gradient fade-out — see AppHeader.styles.ts).
-    // Clearing only `headerHeight` lets the gradient overlap the breadcrumb
-    // row. Mirror the homepage's clearance (`HomePage.styles.ts` rowsScroll).
+    // Include AppHeader's decorative 32px gradient fade-out to avoid overlap.
     paddingTop: `calc(${tokens.headerHeight} + 32px)`,
     boxSizing: "border-box",
     overflowY: "auto",

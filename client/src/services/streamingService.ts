@@ -28,9 +28,6 @@ export class StreamingService {
     log.info(`Fetching ${url}`, { url, job_id: jobId });
 
     try {
-      // context.with() makes the chunk span the active context for the
-      // synchronous fetch() call so FetchInstrumentation injects the correct
-      // traceparent — linking server's stream.request under the chunk.stream span.
       const controller = this.abortController;
       response = await context.with(parentContext, () =>
         fetch(url, { signal: controller?.signal })
@@ -75,27 +72,14 @@ export class StreamingService {
     let segmentCount = 0;
 
     try {
-      // This loop is NOT a busy-wait. Each iteration suspends on
-      // `reader.read()`, which resolves only when the next network chunk
-      // arrives. The pause path also suspends: it stores the Promise's
-      // `resolve` callback in `resumeResolve` so that calling `resume()`
-      // (from BufferManager's back-pressure callback) unblocks the loop
-      // without any polling.
       while (true) {
-        // Snapshot the reader at the top of every iteration. cancel() (called
-        // by seek/teardown/resolution-switch) sets this.reader = null, and
-        // can fire while this loop is suspended at any await below. Without
-        // this snapshot, the next `this.reader.read()` after cancel hits a
-        // null deref — caught in trace 5d5b5137… as
-        // `Stream error: can't access property "read", this.reader is null`
-        // after two rapid seeks.
+        // Snapshot reader to guard against null deref during pause/cancel; see trace 5d5b5137.
         const reader = this.reader;
         if (!reader) {
           log.info("Reader nulled — exiting stream loop cleanly", { job_id: jobId });
           return;
         }
         if (this.paused) {
-          // Suspend here until resume() calls this.resumeResolve().
           await new Promise<void>((resolve) => {
             this.resumeResolve = resolve;
           });
@@ -106,17 +90,12 @@ export class StreamingService {
         const { done, value } = await reader.read();
         if (done) break;
 
-        // Concat incoming bytes onto buffer
         const merged = new Uint8Array(buffer.length + value.length);
         merged.set(buffer, 0);
         merged.set(value, buffer.length);
         buffer = merged;
 
-        // Extract all complete length-prefixed frames.
-        // Await each onSegment call so back-pressure can fire between segments —
-        // without this, a fast cache-hit response floods the append queue with
-        // hundreds of segments before checkForwardBuffer() has a chance to pause
-        // the stream, overflowing the SourceBuffer quota.
+        // Await onSegment to allow back-pressure between segments.
         while (buffer.length >= 4) {
           const view = new DataView(buffer.buffer, buffer.byteOffset);
           const segLen = view.getUint32(0, false); // big-endian
@@ -125,17 +104,12 @@ export class StreamingService {
 
           const segData = buffer.slice(4, 4 + segLen).buffer;
           await onSegment(segData, isFirstSegment);
-          // cancel() can fire during await onSegment — bail before the next
-          // segment slice or pause-await touches this.reader.
           if (!this.reader) return;
           isFirstSegment = false;
           segmentCount++;
 
           buffer = buffer.slice(4 + segLen);
 
-          // Re-check pause after each segment so back-pressure applies immediately
-          // rather than only at the top of the outer reader.read() loop.
-          // Same suspend-on-promise pattern: resume() resolves this via resumeResolve.
           if (this.paused) {
             await new Promise<void>((resolve) => {
               this.resumeResolve = resolve;

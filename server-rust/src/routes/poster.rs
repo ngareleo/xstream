@@ -1,10 +1,4 @@
-//! `GET /poster/:basename` — stream a cached OMDb poster image from
-//! `AppConfig::poster_dir`. Files are content-addressed by
-//! `sha1(url)+ext` so the basename is enough to locate them; the route
-//! sets `Cache-Control: max-age=31536000, immutable` since the content
-//! at a given hash never changes.
-//!
-//! See `docs/architecture/Library-Scan/05-Poster-Caching.md`.
+//! `GET /poster/:basename` — stream cached OMDb poster images. See docs/architecture/Library-Scan/05-Poster-Caching.md.
 
 use axum::{
     body::Body,

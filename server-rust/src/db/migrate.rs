@@ -1,9 +1,4 @@
-//! Idempotent schema setup.
-//!
-//! No migration versioning + no `ALTER TABLE` retro-fits: the schema is
-//! whatever this file says it is on a fresh DB. While we're pre-prod the
-//! cost of "delete `tmp/xstream-rust.db` and re-create" is tiny, and the
-//! payoff is one place to read the canonical column set per table.
+//! Idempotent schema setup — the schema is whatever this file says on a fresh DB.
 
 use rusqlite::Connection;
 

@@ -1,5 +1,4 @@
-//! `OmdbSearchResult` — one entry per OMDb hit. Currently a Step-1 stub
-//! (the resolver returns an empty list).
+//! `OmdbSearchResult` — one entry per OMDb hit (Step-1 stub).
 
 use async_graphql::SimpleObject;
 

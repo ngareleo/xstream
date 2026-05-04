@@ -1,17 +1,4 @@
-//! Hardware-acceleration probe + selection.
-//!
-//! Policy: the server probes at startup for a platform-appropriate HW path.
-//! If `auto` (the default) and the probe fails, the resolver returns a typed
-//! error — `main()` surfaces it as `AppError::HwAccelProbe` and the process
-//! exits with a clear diagnostic. Silent fallback to software is deliberately
-//! NOT the default: 4K libx264 stalls continuously on consumer CPUs and would
-//! mask real driver / permission regressions in production.
-//!
-//! Today only the VAAPI branch is fully implemented. macOS (VideoToolbox)
-//! and Windows (QSV / NVENC / AMF) variants are tracked as
-//! `Plan/Open-Questions.md §1` follow-ups; this module returns
-//! `HwAccelError::PlatformNotImplemented` for those hosts so the failure
-//! surface is explicit rather than silent.
+//! Hardware-acceleration probe and selection; VAAPI on Linux, stubs for macOS/Windows.
 
 use std::path::Path;
 use std::time::Duration;
@@ -178,7 +165,6 @@ async fn probe_vaapi(ffmpeg: &Path, device: &str) -> HwAccelResult<()> {
     })
 }
 
-// ── Tests ────────────────────────────────────────────────────────────────────
 //
 // The full VAAPI probe needs a real ffmpeg binary AND a real `/dev/dri`
 // device, so it can't run in CI. We cover the deterministic surface:

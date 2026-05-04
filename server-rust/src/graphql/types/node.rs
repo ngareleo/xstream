@@ -1,5 +1,4 @@
-//! Relay `Node` interface + `PageInfo`. Every globally-addressable type
-//! must implement Node (`{ id: ID! }`).
+//! Relay `Node` interface + `PageInfo` — every globally-addressable type implements Node.
 
 use async_graphql::{Interface, SimpleObject, ID};
 

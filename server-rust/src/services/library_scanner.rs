@@ -1,23 +1,4 @@
-//! Library scanner.
-//!
-//! One sweep walks every library row in the DB, fingerprints each video
-//! file, ffprobes it for streams + duration, and upserts the
-//! `videos` + `video_streams` rows. Per-library progress flows through
-//! [`crate::services::scan_state::ScanState`] so the GraphQL
-//! `library_scan_progress` subscription can drive the dashboard.
-//!
-//! Triggers:
-//! - GraphQL `scan_libraries` mutation (resolver spawns this).
-//! - GraphQL `create_library` mutation (chains a fire-and-forget scan so
-//!   adding a profile auto-indexes it — the user-visible "click Scan All
-//!   did nothing" symptom this guards against).
-//! - [`spawn_periodic_scan`] background loop, started at boot from
-//!   `lib.rs::run`. Re-entry-guarded by
-//!   [`crate::services::scan_state::ScanState::mark_started`].
-//!
-//! OMDb auto-match runs after each library finishes its file walk: any
-//! video without a `video_metadata` row gets searched against OMDb (if
-//! `OMDB_API_KEY` is configured) — see [`auto_match_library`].
+//! Library scanner: file fingerprinting, ffprobe, and OMDb auto-match.
 
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
@@ -47,14 +28,7 @@ use crate::services::tv_discovery;
 
 const FINGERPRINT_BYTES: usize = 65_536;
 
-/// One full sweep across every library row in the DB. Idempotent — a
-/// re-scan upserts the same rows. Skips silently if a scan is already
-/// in progress (the `ScanState` guard makes this race-safe).
-///
-/// Errors are NEVER swallowed: per-file probe failures `tracing::warn!`
-/// and continue (one bad file does not abort a library); per-library
-/// path-access failures emit a `library_skipped` warning and continue;
-/// DB write failures abort that library's pass with a `tracing::error!`.
+/// Scan all libraries in the DB, re-indexing with idempotent upserts.
 pub async fn scan_libraries(ctx: &AppContext) {
     if !ctx.scan_state.mark_started() {
         info!("library.scan skipped — already in progress");
@@ -140,9 +114,7 @@ pub async fn scan_libraries(ctx: &AppContext) {
     ctx.scan_state.mark_ended();
 }
 
-/// Walk + probe + upsert one library. Per-file errors are logged and the
-/// scan continues; DB-write failures abort the per-file unit but keep the
-/// rest of the library going.
+/// Scan a single library, walking and probing all video files.
 pub async fn scan_one_library(ctx: &AppContext, library: &LibraryRow) {
     let extensions = parse_extensions(library);
     let library_path = PathBuf::from(&library.path);
@@ -784,10 +756,7 @@ fn resolve_films_for_library(ctx: &AppContext, library: &LibraryRow) {
     }
 }
 
-/// Spawn the periodic background re-scan loop. Every `interval_ms`
-/// ticks, a scan is kicked off if one is not already running. The
-/// re-entry guard lives in `scan_libraries` → `ScanState::mark_started`,
-/// so this loop never has to check itself.
+/// Spawn the periodic background library scan loop.
 pub fn spawn_periodic_scan(ctx: AppContext) {
     let interval = Duration::from_millis(ctx.config.scan.interval_ms);
     tokio::spawn(async move {
@@ -883,8 +852,7 @@ fn strip_scene_tokens(normalized: &str) -> String {
     out.join(" ")
 }
 
-/// Parse a torrent-style filename into `(title, year)`.
-/// Public so the OMDb match path can call it directly.
+/// Parse torrent-style filename to extract title and year.
 pub fn parse_title_from_filename(filename: &str) -> (String, Option<i32>) {
     let stem = match filename.rsplit_once('.') {
         Some((stem, _ext)) => stem,
@@ -975,7 +943,6 @@ pub fn parse_title_from_filename(filename: &str) -> (String, Option<i32>) {
     (title, year_value)
 }
 
-// ── Tests ────────────────────────────────────────────────────────────────────
 //
 // `parse_title_from_filename` covers torrent-style filename parsing.
 // Walk + fingerprint coverage uses tempdirs.
@@ -986,8 +953,6 @@ mod tests {
     use std::fs;
     use std::io::Write;
     use tempfile::TempDir;
-
-    // ── parse_title_from_filename ─────────────────────────────────────────
 
     #[test]
     fn parse_title_extracts_year_from_dot_separated() {
@@ -1046,8 +1011,6 @@ mod tests {
         assert_eq!(title, "Movie2024");
         assert_eq!(year, None);
     }
-
-    // ── Scene-token stripping (real user data) ────────────────────────────
 
     #[test]
     fn parse_title_strips_scene_tokens_after_parenthesised_year() {
@@ -1127,8 +1090,6 @@ mod tests {
         assert_eq!(year, Some(2010));
     }
 
-    // ── compute_content_fingerprint ──────────────────────────────────────
-
     #[tokio::test]
     async fn fingerprint_is_deterministic_for_same_bytes() {
         let dir = TempDir::new().expect("tempdir");
@@ -1176,8 +1137,6 @@ mod tests {
         let suffix = |s: &str| s.split(':').nth(1).map(str::to_string).unwrap_or_default();
         assert_eq!(suffix(&fp), suffix(&fp_small));
     }
-
-    // ── walk_directory ────────────────────────────────────────────────────
 
     fn make_exts(es: &[&str]) -> HashSet<String> {
         es.iter().map(|s| s.to_string()).collect()
@@ -1229,15 +1188,11 @@ mod tests {
         assert!(paths.is_empty());
     }
 
-    // ── derive_title ──────────────────────────────────────────────────────
-
     #[test]
     fn derive_title_strips_extension_and_normalises_separators() {
         assert_eq!(derive_title("My_Cool.Movie.mkv"), "My Cool Movie");
         assert_eq!(derive_title("plain.mp4"), "plain");
     }
-
-    // ── parse_extensions ──────────────────────────────────────────────────
 
     fn library_with_exts(ext_json: &str) -> LibraryRow {
         LibraryRow {
@@ -1284,8 +1239,6 @@ mod tests {
         assert!(exts.contains(".mkv"));
         assert!(exts.contains(".mp4"));
     }
-
-    // ── scan_libraries (end-to-end with stub ffprobe) ────────────────────
 
     fn fresh_test_ctx(segment_dir: PathBuf) -> AppContext {
         let db = crate::db::Db::open(std::path::Path::new(":memory:")).expect("db");
@@ -1362,8 +1315,6 @@ mod tests {
             .expect("count");
         assert_eq!(videos, 0, "stub ffprobe should fail every probe");
     }
-
-    // ── auto_match_library (with wiremock OMDb) ──────────────────────────
 
     use crate::db::{upsert_video, VideoRow};
     use crate::services::omdb::OmdbClient;

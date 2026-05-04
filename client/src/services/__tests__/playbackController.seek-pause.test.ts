@@ -20,9 +20,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite
 import { PlaybackController } from "~/services/playbackController.js";
 
 // vitest's `environment: node` lacks rAF, but PlaybackTicker references it
-// inside `register`. Stub once here — every test in this file uses the
-// controller's ticker only as a side-channel; the rAF body is never the
-// thing under test.
+// inside `register`. Stub once here — the rAF body is never under test.
 beforeAll(() => {
   if (typeof globalThis.requestAnimationFrame === "undefined") {
     (
@@ -39,12 +37,7 @@ interface FakeBuffer {
   setAfterAppend: (cb: (() => void) | null) => void;
   getBufferedAheadSeconds: (t: number) => number | null;
   tickBackpressure: () => void;
-  // The afterAppend callback the controller registers — exposed so tests can
-  // simulate "a segment was just appended" without spinning a real timer.
   triggerAppend: () => void;
-  // Seek call site is what the snap-back test asserts against. The fake
-  // returns a Promise that resolves when `resolveSeek` is called, so tests
-  // can inspect controller state both before and after the .then runs.
   seek: (timeSeconds: number) => Promise<void>;
   seekCalls: number[];
   resolveSeek: () => void;
@@ -165,16 +158,14 @@ function makeController(opts?: {
 
 describe("PlaybackController.waitForStartupBuffer (post-seek stall fix)", () => {
   it("does NOT fire onPlay when bufferedAhead < target, even if absolute bufferedEnd is large", () => {
-    // The bug: previous code compared `bufferedEnd >= target`. After a seek
-    // to currentTime=600, the first segment lands at PTS≈600 making
-    // bufferedEnd≈602 — trivially >= 5. video.play() fires with only ~2s
-    // of data ahead and immediately stalls. The fix uses buffered-ahead.
+    // Previous code compared bufferedEnd >= target; after a seek to 600,
+    // bufferedEnd≈602 (≥5) but buffered-ahead is only ~2s, causing immediate stall.
     const { controller, videoEl } = makeController({ currentTime: 600 });
     (videoEl as unknown as { currentTime: number }).currentTime = 600;
     const onPlay = vi.fn();
     const buf = makeFakeBuffer();
-    buf.bufferedEnd = 602; // absolute — would have passed old check
-    buf.bufferedAhead = 2; // ahead of currentTime — fails new check (target=5)
+    buf.bufferedEnd = 602;
+    buf.bufferedAhead = 2;
 
     (controller as unknown as PrivateController).waitForStartupBuffer(buf, 5, onPlay);
     buf.triggerAppend();
@@ -236,18 +227,15 @@ describe("PlaybackController.handlePlaying (spinner-race fix)", () => {
   });
 
   it("restores playing status on seek-resume auto-resume (hasStartedPlayback=false, firstFrameRecorded=true)", () => {
-    // Seek-resume bug: video element auto-resumes as soon as the new buffer
-    // is available, firing DOM `playing` BEFORE tryPlay's startup-buffer
-    // threshold is met. handleSeeking has reset hasStartedPlayback to false,
-    // so the previous `&& hasStartedPlayback` guard kept status="loading"
-    // for the whole startup-fill window — user saw spinner over playing
-    // video. firstFrameRecorded persists across seeks (only reset on
-    // resetForNewSession), so it correctly admits this case.
+    // Video element auto-resumes firing DOM `playing` before tryPlay's startup-buffer
+    // threshold; handleSeeking resets hasStartedPlayback=false. The old guard would keep
+    // status="loading" for the startup window. firstFrameRecorded persists across seeks
+    // and correctly admits this case.
     const { controller } = makeController();
     const priv = controller as unknown as PrivateController;
     priv.isHandlingSeek = false;
-    priv.hasStartedPlayback = false; // reset by handleSeeking
-    priv.firstFrameRecorded = true; // set by cold-start tryPlay earlier in the session
+    priv.hasStartedPlayback = false;
+    priv.firstFrameRecorded = true;
     priv.status = "loading";
 
     priv.handlePlaying();
@@ -256,10 +244,8 @@ describe("PlaybackController.handlePlaying (spinner-race fix)", () => {
   });
 
   it("does NOT restore playing status during cold-start before any frame has rendered", () => {
-    // Cold-start, before tryPlay's threshold has been met. Video element is
-    // paused (videoEl.play() not called yet), so no spurious DOM `playing`
-    // event would actually fire — but if one did, status must remain
-    // "loading" until the proper cold-start gate (tryPlay → onPlay).
+    // Before tryPlay's threshold; status must remain "loading" until the proper
+    // cold-start gate (tryPlay → onPlay).
     const { controller } = makeController();
     const priv = controller as unknown as PrivateController;
     priv.isHandlingSeek = false;
@@ -299,13 +285,12 @@ describe("PlaybackController user-pause poller (Change D V1)", () => {
     const buf = makeFakeBuffer();
     priv.buffer = buf;
     priv.pipeline = { hasLookahead: () => false, resumeLookahead: vi.fn() };
-    priv.chunkEnd = 0; // no next chunk → prefetch path bails
+    priv.chunkEnd = 0;
 
     priv.handleUserPause();
 
     expect(priv.userPauseInterval).not.toBeNull();
-    // Immediate-tick contract: tickBackpressure called synchronously, so the
-    // first check happens BEFORE the 1s interval fires.
+    // Immediate tick synchronously before the 1s interval fires.
     expect(buf.tickBackpressure).toHaveBeenCalledTimes(1);
   });
 
@@ -342,8 +327,7 @@ describe("PlaybackController user-pause poller (Change D V1)", () => {
 });
 
 describe("PlaybackController.handleSeeking (slider snap-back + stale-prefetch fixes)", () => {
-  // handleSeeking is private; pull it via the same type-cast trick used for
-  // other handlers. Defined here because it depends on the augmented
+  // handleSeeking is private; we extract via type-cast and need the augmented
   // PrivateController shape with pipeline.cancel + timeline.clearLookahead.
   interface SeekableController {
     handleSeeking: () => void;
@@ -356,9 +340,6 @@ describe("PlaybackController.handleSeeking (slider snap-back + stale-prefetch fi
     buffer: FakeBuffer | null;
     pipeline: FakePipeline;
     timeline: FakeTimeline;
-    // We stub startChunkSeries so the test doesn't need a live ChunkPipeline
-    // or `requestChunk` mock — we're only asserting state at the seek-handler
-    // level, not the full chunk flow.
     startChunkSeries: (res: string, startS: number, buffer: FakeBuffer, isFirst: boolean) => void;
   }
 
@@ -379,16 +360,15 @@ describe("PlaybackController.handleSeeking (slider snap-back + stale-prefetch fi
     priv.buffer = buf;
     priv.pipeline = makeFakePipeline();
     priv.timeline = { clearLookahead: vi.fn() };
-    priv.chunkEnd = 900; // stale value from a prior chunk — must be reset on seek
+    // stale value from a prior chunk — must be reset on seek
+    priv.chunkEnd = 900;
     priv.startChunkSeries = vi.fn();
     return { controller, priv, buf, videoEl, cancelTranscodeChunks };
   }
 
   it("passes the user's intended seekTime to buf.seek (NOT a snapped chunk boundary)", () => {
-    // The slider snap-back bug: clicking at 720s used to call buf.seek(600)
-    // (the chunk boundary), which then set videoEl.currentTime = 600 and the
-    // playhead visually jumped backward. Fix: pass seekTime so currentTime
-    // stays at the user's intended position.
+    // Previous code snapped to chunk boundaries (buf.seek(600) when user clicked 720),
+    // causing visual snap-back. Fix: pass seekTime directly.
     const { controller, priv, buf } = setUpSeekable(720);
 
     controller.seekTo(720);
@@ -398,46 +378,35 @@ describe("PlaybackController.handleSeeking (slider snap-back + stale-prefetch fi
   });
 
   it("sets chunkEnd to the ramp[0] seek-chunk window so RAF prefetch fires immediately", () => {
-    // Pre-fix: chunkEnd was reset to 0 to gate out a stale prefetch race
-    // (trace 5d5b5137…). Now chunkEnd is clamped to seekTime + ramp[0] so
-    // the prefetch RAF threshold (`prefetchThresholdS = 90`) trips
-    // immediately and a continuation chunk eager-warms ffmpeg in parallel.
-    // Seek resets the ramp index, so we always start from `chunkRampS[0]`.
+    // chunkEnd was reset to 0 to gate stale prefetch races (see trace 5d5b5137).
+    // Now set to seekTime + ramp[0] so prefetch threshold trips immediately.
     const { controller, priv } = setUpSeekable(1500);
-    expect(priv.chunkEnd).toBe(900); // baseline: stale value from prior chunk
+    expect(priv.chunkEnd).toBe(900);
 
     controller.seekTo(1500);
     priv.handleSeeking();
 
-    // seekChunkEnd = min(1500 + chunkRampS[0]=10, dur) = 1510
     expect(priv.chunkEnd).toBe(1510);
   });
 
   it("anchors the chunk REQUEST at seekTime — no chunk-grid snapping", () => {
-    // The 300s grid was forcing ffmpeg to encode segments 0..K-1 the user
-    // didn't need before reaching their first useful one (16-60s wall-clock
-    // for fresh 4K seeks, trace 9da5539d…). The ramp model has no canonical
-    // grid; the chunk anchors at seekTime so ffmpeg's `-ss seekTime`
-    // produces the user's first segment in ~1-2s.
+    // The old 300s grid forced ffmpeg to encode segments 0..K-1 before reaching
+    // the first useful one (16-60s wall-clock for fresh 4K seeks, see trace 9da5539d).
     const { controller, priv, buf } = setUpSeekable(720);
 
     controller.seekTo(720);
     priv.handleSeeking();
-    // Resolve the in-flight buf.seek so the .then() body fires.
     buf.resolveSeek();
 
     return Promise.resolve().then(() => {
       expect(priv.startChunkSeries).toHaveBeenCalledTimes(1);
       const call = (priv.startChunkSeries as ReturnType<typeof vi.fn>).mock.calls[0];
-      // call args: (res, chunkStartS, buf, isFirstChunk, override)
-      expect(call[1]).toBe(720); // chunkStartS = seekTime
+      expect(call[1]).toBe(720);
     });
   });
 
   it("anchors at seekTime even when it lands exactly on a chunk-multiple", () => {
-    // Edge case: a seek to a round number still produces a non-degenerate
-    // chunk under the ramp model (no `seekTime === chunkBoundary` pitfall
-    // because there is no boundary).
+    // Round-number seeks still produce non-degenerate chunks; no chunk boundary pitfall.
     const { controller, priv, buf } = setUpSeekable(600);
 
     controller.seekTo(600);
@@ -446,45 +415,39 @@ describe("PlaybackController.handleSeeking (slider snap-back + stale-prefetch fi
 
     return Promise.resolve().then(() => {
       const call = (priv.startChunkSeries as ReturnType<typeof vi.fn>).mock.calls[0];
-      expect(call[1]).toBe(600); // chunkStartS = seekTime
-      // seekChunkEnd = min(600 + chunkRampS[0]=10, dur) = 610
+      expect(call[1]).toBe(600);
       expect(priv.chunkEnd).toBe(610);
     });
   });
 
   it("re-entrancy guard uses seekTime — distinct in-chunk seeks are NOT collapsed", () => {
-    // Pre-fix the dedup compared against snapTime, which would silently let
-    // two rapid in-chunk seeks both slip through (architect catch). Now the
-    // guard uses seekTime — only the spurious second `seeking` event from
-    // BufferManager.seek()'s own currentTime reassign is filtered out.
+    // Old dedup against snapTime let two rapid in-chunk seeks both slip through.
+    // Guard now uses seekTime, filtering only the spurious second `seeking` event.
     const { controller, priv } = setUpSeekable(564.9);
 
     controller.seekTo(564.9);
     priv.handleSeeking();
 
-    expect(priv.seekTarget).toBe(564.9); // not 300 (the old snapTime)
+    expect(priv.seekTarget).toBe(564.9);
   });
 
   it("does NOT call videoEl.play() after seek when user was paused", async () => {
-    // Pre-fix: handleSeeking's onPlay callback unconditionally called
-    // videoEl.play(), auto-resuming a user who had intentionally paused
-    // before seeking. Fix: respect videoEl.paused at onPlay time.
+    // Old code unconditionally called videoEl.play(), auto-resuming paused users.
+    // Fix: respect videoEl.paused at onPlay time.
     const { controller, priv, buf, videoEl } = setUpSeekable(720);
-    (videoEl as unknown as { paused: boolean }).paused = true; // user is paused
+    (videoEl as unknown as { paused: boolean }).paused = true;
 
     controller.seekTo(720);
     priv.handleSeeking();
     buf.resolveSeek();
-    // Yield so buf.seek().then() runs and waitForStartupBuffer wires up.
     await Promise.resolve();
     await Promise.resolve();
 
-    // Drive tryPlay's threshold: STARTUP_BUFFER_S["240p"] = 2 (default).
     buf.bufferedAhead = 5;
     buf.triggerAppend();
 
     expect(videoEl.play).not.toHaveBeenCalled();
-    expect(priv.status).toBe("playing"); // spinner still hides
+    expect(priv.status).toBe("playing");
   });
 
   it("DOES call videoEl.play() after seek when user was playing", async () => {
@@ -505,12 +468,8 @@ describe("PlaybackController.handleSeeking (slider snap-back + stale-prefetch fi
   });
 
   it("fires cancelTranscodeChunks for the active foreground+lookahead before flushing", () => {
-    // Pool-contention bug: pre-fix, the seek's foreground mutation queued
-    // ~1.2 s waiting for a slot because the OLD foreground+lookahead jobs
-    // kept ffmpeg running on chunks at the previous playhead. The cancel
-    // call here triggers `pool.kill_job` which drops the semaphore permit
-    // synchronously — the seek's mutation typically sees a free slot in
-    // <50 ms. See trace `6f0ef574…`.
+    // Old code queued seeks ~1.2s waiting for ffmpeg slots; old jobs kept running.
+    // Cancel drops semaphore synchronously, freeing slots in <50ms (see trace 6f0ef574).
     const { controller, priv, cancelTranscodeChunks } = setUpSeekable(720);
     (priv.pipeline as FakePipeline).setJobIds(["job-fg", "job-la"]);
 
@@ -522,9 +481,7 @@ describe("PlaybackController.handleSeeking (slider snap-back + stale-prefetch fi
   });
 
   it("does NOT call cancelTranscodeChunks when no jobs are active", () => {
-    // Edge case — user seeks before the first chunk's mutation resolved
-    // (rare but possible during cold-start). currentJobIds() returns []
-    // and we shouldn't fire an empty mutation.
+    // User seeks before first chunk mutation resolves (rare during cold-start).
     const { controller, priv, cancelTranscodeChunks } = setUpSeekable(720);
     (priv.pipeline as FakePipeline).setJobIds([]);
 

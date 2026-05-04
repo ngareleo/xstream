@@ -4,11 +4,7 @@ import { tokens } from "~/styles/tokens";
 
 export const TILE_WIDTH = 200;
 
-// ShowTile shares the FilmTile visual contract — same aspect ratio,
-// same hover treatment, same two-line title clamp. The structural
-// difference is what it points at (Show, not Video) and the absence of
-// a per-tile progress bar (progress is per-episode for shows; the
-// detail overlay surfaces it).
+// Shares FilmTile visual contract; no per-tile progress bar (per-episode; see detail overlay).
 export const useShowTileStyles = makeStyles({
   tile: {
     flexShrink: 0,

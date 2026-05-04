@@ -1,10 +1,4 @@
-//! Relay-style global IDs and pagination cursors.
-//!
-//! Both encodings are base64 of a structured payload (`Type:localId` for
-//! global IDs, `offset:N` for cursors). The encoding is part of the wire
-//! contract — every node identity in the client's Relay store is keyed by
-//! this exact byte sequence; any drift makes the client treat the same
-//! record as a new one and resets in-memory state.
+//! Relay-style global IDs and pagination cursors. See docs/architecture/Relay/.
 
 use base64::{engine::general_purpose::STANDARD, Engine};
 
@@ -68,18 +62,9 @@ pub enum CursorError {
     BadOffset(String),
 }
 
-// ── Tests ────────────────────────────────────────────────────────────────────
-//
-// Encode/decode is part of the wire contract — the client's Relay store
-// keys every record by this exact byte sequence. Tests pin the format
-// against the documented shape (`Type:localId` for global IDs, `offset:N`
-// for cursors) so a regression here surfaces before it reaches the client.
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    // toGlobalId — encodes type and id as base64
 
     #[test]
     fn encodes_type_and_id_as_base64() {
@@ -95,8 +80,6 @@ mod tests {
         let id = to_global_id("Library", "42");
         assert_eq!(id, STANDARD.encode("Library:42"));
     }
-
-    // fromGlobalId — decodes type and id
 
     #[test]
     fn decodes_type_and_id() {

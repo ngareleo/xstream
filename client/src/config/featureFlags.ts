@@ -1,20 +1,4 @@
-/**
- * Feature-flag runtime: module-level cache + pub/sub.
- *
- * Flag *declarations* live in `flagRegistry.ts`. This file owns the cache,
- * the parse/serialize helpers, and the subscription plumbing so the same
- * values are readable from React (`useFeatureFlag`) and non-React code
- * (`getFlag`, `getEffectiveBufferConfig`, `relay/environment.ts`).
- *
- * **Trust model — `localStorage` is higher trust than the server.** At
- * module load (synchronously, before any GraphQL query has run) we read
- * every registered flag from `localStorage` into the cache. Once the
- * `FeatureFlagsProvider` later hydrates from the server, server values
- * are written to the cache **only for keys that have no localStorage
- * override** — a local toggle wins. Operators wanting the server to
- * become authoritative again call `clearLocalFlagOverrides()` (the
- * "Clear local overrides" button in Settings → Flags).
- */
+/** Feature-flag runtime: module cache + pub/sub. localStorage has higher trust than server. See docs/client/Feature-Flags/. */
 
 import { type BufferConfig, clientConfig } from "./appConfig.js";
 import { FLAG_KEYS, FLAG_REGISTRY, type FlagValue, type FlagValueType } from "./flagRegistry.js";
@@ -42,8 +26,6 @@ function notify(): void {
   subscribers.forEach((cb) => cb());
 }
 
-// ── localStorage I/O ────────────────────────────────────────────────────────
-
 function lsGet(key: string): string | null {
   try {
     return globalThis.localStorage?.getItem(key) ?? null;
@@ -56,8 +38,7 @@ function lsSet(key: string, value: string): void {
   try {
     globalThis.localStorage?.setItem(key, value);
   } catch {
-    // Quota errors / private browsing — non-fatal here, the in-memory
-    // cache is still authoritative for this session.
+    // Quota / private browsing; in-memory cache still authoritative.
   }
 }
 
@@ -69,12 +50,7 @@ function lsRemove(key: string): void {
   }
 }
 
-// ── Module-init: hydrate cache from localStorage synchronously ──────────────
-//
-// Runs once on first import. Resolvers in `relay/environment.ts` and other
-// non-React call sites can therefore call `getFlag(...)` synchronously and
-// get the locally-overridden value without waiting for the server hydration.
-
+// Module-init: populate cache from localStorage so getFlag() works synchronously.
 for (const desc of FLAG_REGISTRY) {
   const raw = lsGet(desc.key);
   if (raw === null) continue;
@@ -82,13 +58,7 @@ for (const desc of FLAG_REGISTRY) {
   if (parsed !== null) cache.set(desc.key, parsed);
 }
 
-// ── Public API ──────────────────────────────────────────────────────────────
-
-/**
- * Called once by `FeatureFlagsProvider` with the server's response. Server
- * values are written to the cache **only for keys that don't already have
- * a localStorage override** — local always wins.
- */
+/** Hydrate cache from server; local overrides always win. */
 export function hydrateFlags(
   entries: readonly { key: string; value: string | null | undefined }[]
 ): void {
@@ -107,24 +77,14 @@ export function getFlag<T extends FlagValue>(key: string, fallback: T): T {
   return (cached ?? fallback) as T;
 }
 
-/**
- * Optimistic local update: writes to BOTH the in-memory cache and to
- * `localStorage` (so the next page load sees it before the server hydration
- * even starts). The caller is responsible for persisting to the server via
- * the `setSetting` mutation. Subscribers are notified so React re-renders.
- */
+/** Optimistic update: cache + localStorage. Caller persists to server via setSetting mutation. */
 export function setFlagLocal(key: string, value: FlagValue): void {
   cache.set(key, value);
   lsSet(key, serializeValue(value));
   notify();
 }
 
-/**
- * Drop every flag's localStorage override and in-memory cache entry. The
- * next read returns the registry default until the next server hydration
- * fills the cache from the server. Used by Settings → Flags' "Clear local
- * overrides" button.
- */
+/** Clear all localStorage overrides; revert to registry defaults until next server hydration. */
 export function clearLocalFlagOverrides(): void {
   for (const desc of FLAG_REGISTRY) {
     lsRemove(desc.key);
@@ -133,11 +93,7 @@ export function clearLocalFlagOverrides(): void {
   notify();
 }
 
-/**
- * Set every flag back to its registry `defaultValue` (writes to cache +
- * localStorage). Returns the list of `{ key, serializedValue }` so the
- * caller can persist them to the server in one batch via `setSetting`.
- */
+/** Reset all flags to registry defaults; return serialized values for batch server persistence. */
 export function resetAllFlagsToDefaults(): Array<{ key: string; value: string }> {
   const writes: Array<{ key: string; value: string }> = [];
   for (const desc of FLAG_REGISTRY) {
@@ -154,18 +110,12 @@ export function subscribeFlags(cb: () => void): () => void {
   };
 }
 
-/** Snapshot identity used by `useSyncExternalStore`. Bumped whenever a flag
- *  is hydrated or written so React components re-render. */
+/** Snapshot for useSyncExternalStore; bumped on flag change. */
 export function getFlagsSnapshot(): number {
   return snapshotVersion;
 }
 
-/**
- * Resolves the effective BufferConfig for a new playback session. Called
- * synchronously by `PlaybackController` at the moment it constructs a
- * `BufferManager`, so toggling the flag takes effect on the *next* playback
- * (current session keeps whatever config it booted with).
- */
+/** Resolve effective BufferConfig for new playback session; takes effect on next playback. */
 export function getEffectiveBufferConfig(): BufferConfig {
   const experimental = getFlag<boolean>(FLAG_KEYS.experimentalBuffer, false);
   if (!experimental) return clientConfig.buffer;

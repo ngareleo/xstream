@@ -1,23 +1,4 @@
-//! Transcode chunker — job registration, inflight dedup, three-tier VAAPI
-//! cascade as a loop, segment watcher, silent-failure event.
-//!
-//! The chunker is the only module that owns the lifecycle of a transcode
-//! job. The stream route reads the resulting `ActiveJob` (and its segments
-//! on disk) but never spawns ffmpeg directly; the GraphQL `start_transcode`
-//! resolver calls into this module.
-//!
-//! Design notes:
-//! - The cascade is a plain loop (per `01-Streaming-Layer.md §3.4`). Tier
-//!   transitions happen inside one function; the surrounding scope owns
-//!   the per-source `VaapiVideoState` cache so a re-encode can skip a
-//!   known-failing tier without going through ffmpeg again.
-//! - Per-progress span events (`transcode_progress` periodic ticks) are
-//!   not emitted today — they require an ffmpeg-stderr line parser that
-//!   isn't yet wired. The terminal events (`transcode_started`,
-//!   `transcode_complete`, `transcode_killed`, `transcode_silent_failure`)
-//!   all fire.
-//! - Segment watcher uses `notify::RecommendedWatcher` with per-job
-//!   isolation (one watcher per `segment_dir`).
+//! Transcode job lifecycle: registration, VAAPI cascade, segment watcher, final events.
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -56,16 +37,7 @@ pub enum StartJobResult {
     },
 }
 
-/// Compute the deterministic job ID. The `v3|` prefix is part of the hash
-/// input — it invalidates segments encoded before `-bsf:v dump_extra=keyframe`
-/// became required (Chromium's chunk demuxer needs in-band SPS/PPS to
-/// reset across fragment seams). Bumping the prefix is the documented
-/// way to force a re-encode after an incompatible pipeline change.
-///
-/// Two callers asking for byte-identical
-/// `(content_fingerprint, resolution, start, end)` get the same id; the
-/// `format_seconds` helper guarantees integer-valued floats serialize
-/// without a trailing `.0` so the hash stays stable.
+/// Compute deterministic job ID from content fingerprint, resolution, and range.
 pub fn job_id(
     content_fingerprint: &str,
     resolution: Resolution,
@@ -107,9 +79,7 @@ fn format_seconds(s: f64) -> String {
     }
 }
 
-/// Public entry — invoked by the GraphQL `start_transcode` resolver. The
-/// resolver is responsible for surfacing the `StartJobResult` as either a
-/// `TranscodeJob` or a `PlaybackError` per the union spec.
+/// Start a transcode job or return a cached result; maps to the GraphQL resolver.
 pub async fn start_transcode_job(
     ctx: &AppContext,
     video_id: &str,
@@ -969,7 +939,6 @@ mod tests {
         assert_eq!(format_seconds(30.5), "30.5");
     }
 
-    // ── decide_cascade_next_tier ──────────────────────────────────────────
     //
     // The helper drives both the non-zero-exit cascade (`ExitOutcome::Error`)
     // and the silent-failure cascade (`ExitOutcome::Complete` with zero
@@ -1053,7 +1022,6 @@ mod tests {
         assert_eq!(cache.get("v4").map(|r| *r), Some(VaapiVideoState::HwUnsafe));
     }
 
-    // ── probe_cache ───────────────────────────────────────────────────────
     //
     // The full cache-aware path inside `run_cascade` requires a real ffprobe
     // binary + a real source file, so it lives in `cascade_integration.rs`

@@ -1,7 +1,4 @@
-//! `Episode` — one episode of a TV show. Built by `Show.seasons` from
-//! `(EpisodeRow, &[VideoRow])` where the slice carries every file row
-//! at the `(show_id, season, episode)` coordinate (one or many — many
-//! when the same episode is indexed in multiple libraries).
+//! `Episode` — one episode of a TV show. Supports multiple file rows per (show_id, season, episode) coordinate.
 
 use async_graphql::{Object, ID};
 

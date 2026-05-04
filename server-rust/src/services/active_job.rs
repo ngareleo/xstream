@@ -1,11 +1,4 @@
-//! In-memory `ActiveJob` state — the chunker's source of truth for live
-//! transcodes.
-//!
-//! The DB row (`transcode_jobs` table) is the audit / restart-recovery
-//! mirror; this struct is what the stream route actually reads while
-//! ffmpeg is running. Updates are pushed to subscribers via a
-//! `tokio::sync::Notify` per job (per-connection isolation — each
-//! `/stream/:jobId` connection holds its own subscription).
+//! In-memory `ActiveJob` state for live transcodes with per-connection subscriber notification.
 
 use std::sync::{Arc, Mutex};
 

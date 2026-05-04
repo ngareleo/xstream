@@ -26,8 +26,6 @@ interface RetryHarness {
 
 function makeHarness(): RetryHarness {
   const startTranscodeChunk = vi.fn();
-  // Minimal video element + deps stub. The retry loop only touches
-  // `deps.startTranscodeChunk`; everything else is unused for these tests.
   const fakeVideo = {
     addEventListener: vi.fn(),
     removeEventListener: vi.fn(),
@@ -78,9 +76,7 @@ function fakeSpan(): FakeSpan {
   };
 }
 
-// Use real timers with a tiny retryAfterMs so each test wraps in <50ms total.
-// Fake timers + the retry loop's interleaved promise rejections produce noisy
-// unhandled-rejection warnings during teardown — not worth the speed savings.
+// Real timers + tiny backoff to avoid fake-timer unhandled-rejection noise.
 const TINY_BACKOFF_MS = 5;
 
 describe("PlaybackController retry policy", () => {
@@ -103,8 +99,6 @@ describe("PlaybackController retry policy", () => {
 
     expect(result).toEqual({ rawJobId: "abc", globalJobId: "VHJh" });
     expect(startTranscodeChunk).toHaveBeenCalledTimes(3);
-    // Two retries emit playback.recovery_attempt; final success doesn't add
-    // a recovery.outcome event (only failure paths do).
     expect(span.events.filter((e) => e === "playback.recovery_attempt")).toHaveLength(2);
     expect(span.events).not.toContain("recovery.outcome");
   });
@@ -149,7 +143,6 @@ describe("PlaybackController retry policy", () => {
     ).rejects.toMatchObject({ code: "CAPACITY_EXHAUSTED" });
     expect(startTranscodeChunk).toHaveBeenCalledTimes(3);
     expect(span.events.filter((e) => e === "playback.recovery_attempt")).toHaveLength(2);
-    // gave_up event captures the final state — not retry, not non-retryable.
     expect(span.events).toContain("recovery.outcome");
   });
 });
@@ -161,11 +154,7 @@ interface PrivateRecovery {
 
 describe("PlaybackController MSE recovery", () => {
   it("surfaces fatal MSE_DETACHED error when recreate budget is exhausted", () => {
-    // The successful-recreate path can't run in `environment: node` because it
-    // constructs a real MediaSource inside BufferManager.init(). Instead we
-    // exercise the budget-exhausted branch — this is the one that matters for
-    // user-facing behaviour (the 4th detach in a session must fail fast, not
-    // loop-recreate).
+    // Budget-exhausted branch only; 4th detach in session must fail fast.
     const onError = vi.fn();
     const onStatusChange = vi.fn();
     const controller = new PlaybackController(
@@ -173,7 +162,7 @@ describe("PlaybackController MSE recovery", () => {
         videoEl: {
           addEventListener: vi.fn(),
           removeEventListener: vi.fn(),
-          currentTime: 425, // mid-chunk — expected resume at chunk-boundary floor(425 / 300) * 300 = 300
+          currentTime: 425,
         } as unknown as HTMLVideoElement,
         getVideoId: () => "v-1",
         getVideoDurationS: () => 1800,

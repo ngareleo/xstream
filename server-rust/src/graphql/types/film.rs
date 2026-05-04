@@ -1,9 +1,4 @@
-//! `Film` — a logical movie entity owning one or more `Video` file rows
-//! (the file copies on disk). A user typically interacts with films, not
-//! individual video files; the player picks which copy to play.
-//!
-//! See `docs/architecture/Library-Scan/01-Filename-Conventions.md` for the
-//! Film entity contract and dedup rules.
+//! `Film` — a logical movie entity owning `Video` file rows. See docs/architecture/Library-Scan/01-Filename-Conventions.md.
 
 use async_graphql::{Context, Object, SimpleObject, ID};
 

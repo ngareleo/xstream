@@ -1,6 +1,4 @@
-//! OMDb match metadata for a logical Show. Mirrors `video_metadata.rs`
-//! row-for-row (only the foreign key changes from `video_id` →
-//! `show_id`).
+//! OMDb match metadata for a logical Show. Mirrors `video_metadata.rs` (keyed on `show_id`).
 
 use rusqlite::{params, OptionalExtension, Row};
 

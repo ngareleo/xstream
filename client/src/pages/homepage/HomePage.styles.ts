@@ -29,10 +29,7 @@ export const useHomePageStyles = makeStyles({
     left: 0,
     overflow: "hidden",
     zIndex: 0,
-    // Soft elliptical alpha mask so every edge of the poster blends into
-    // the page background instead of showing a hard rectangular cut. The
-    // existing heroEdgeFade / heroBottomFade overlays still tint the
-    // fringe toward bg-0, but the mask is what actually erases the edge.
+    // Elliptical alpha mask to blend edges instead of hard rectangle.
     maskImage:
       "radial-gradient(ellipse 95% 95% at 50% 50%, #000 55%, rgba(0,0,0,0.4) 80%, transparent 100%)",
     WebkitMaskImage:
@@ -171,12 +168,7 @@ export const useHomePageStyles = makeStyles({
     rowGap: "20px",
     zIndex: 2,
   },
-  // In search/filter mode the hero is auto-height (heroActive). Pull
-  // heroBody into normal flow so its content height drives the hero
-  // height instead of stretching to fill an absolute box. Stay
-  // `relative` (not `static`) so heroBody's `z-index: 2` keeps
-  // applying — otherwise heroPanelBg (the absolute backdrop) paints
-  // over the SearchSlide / FilterSlide content.
+  // In search/filter mode, pull heroBody into normal flow; position: relative preserves z-index.
   heroBodyFlow: {
     position: "relative",
     top: "auto",
@@ -349,11 +341,7 @@ export const useHomePageStyles = makeStyles({
     flexDirection: "column",
     rowGap: "28px",
   },
-  // The negative marginTop bleeds the rows up under the hero in idle
-  // mode for the magazine seam. In search/filter mode the hero hosts
-  // the SearchSlide / FilterSlide whose action buttons sit at the
-  // bottom — the lift-and-stack would cover them with the results
-  // grid. Reset both so the hero owns its full 75vh in non-idle mode.
+  // In search/filter mode, reset negative marginTop to avoid covering SearchSlide action buttons.
   rowsScrollFlat: {
     marginTop: 0,
     zIndex: "auto",

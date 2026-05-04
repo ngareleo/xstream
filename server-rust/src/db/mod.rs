@@ -1,24 +1,4 @@
-//! SQLite layer — connection, migrations, and per-table query modules.
-//!
-//! **Per-process DB isolation during the cutover.** This server opens
-//! `tmp/xstream-rust.db`. The legacy server (deleted at Step 3) opens its
-//! own DB. The two backends are fully independent — no shared in-memory
-//! state, no shared segment cache, no shared DB rows. Sharing the DB
-//! produced cross-contamination: deterministic content-addressed job_ids
-//! collide across backends, but each writes its own `segment_dir` value
-//! into the row, so whichever backend reads it back tries to serve from
-//! the wrong filesystem. The seam dies when this server becomes THE
-//! server at Step 3; `DB_PATH` env var overrides the default for testing.
-//!
-//! Notes / invariants:
-//! - WAL + foreign_keys=ON pragmas applied BEFORE any query.
-//! - Migrations are idempotent (`CREATE TABLE IF NOT EXISTS`).
-//! - Single connection wrapped in `Mutex` — sufficient for the current
-//!   read-heavy profile. A pool (r2d2-sqlite) is the natural next step if
-//!   contention shows up under load.
-//! - **Every query returns [`DbResult`].** Mutex poisoning is encoded as a
-//!   typed error, never a panic. Callers `?`-propagate; resolvers surface
-//!   it as a GraphQL error via `From<DbError>`.
+//! SQLite layer — connection, migrations, and per-table query modules. Single connection wrapped in `Mutex`; WAL mode, foreign keys ON.
 
 mod migrate;
 pub mod queries;
@@ -103,7 +83,6 @@ pub fn sha1_hex(input: &str) -> String {
     h.finalize().iter().map(|b| format!("{b:02x}")).collect()
 }
 
-// ── Re-exports — keep call-site imports stable ───────────────────────────────
 //
 // Resolvers and other modules `use crate::db::{Db, LibraryRow, get_library_by_id, …}`.
 // Re-exporting from the per-table modules means splitting db.rs into a tree
@@ -151,7 +130,6 @@ pub use queries::watchlist::{
     remove_watchlist_item, update_watchlist_progress, WatchlistItemRow,
 };
 
-// ── Tests ────────────────────────────────────────────────────────────────────
 //
 // The two connection-time PRAGMAs are part of the data-correctness contract:
 //

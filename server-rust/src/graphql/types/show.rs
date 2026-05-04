@@ -1,11 +1,4 @@
-//! `Show` — a logical TV series owning the `seasons` + `episodes` tree.
-//! Episode files live as `videos` rows linked back through
-//! `(show_id, show_season, show_episode)`; multiple file rows for the
-//! same coordinate are exposed as variants on `Episode.copies`.
-//!
-//! Mirrors `Film` row-for-row at the entity layer; the structural
-//! difference is `Show.seasons` vs `Film.copies` — TV is hierarchical,
-//! movies aren't.
+//! `Show` — a logical TV series owning `seasons` + `episodes` tree. Mirrors `Film` at entity layer.
 
 use std::collections::HashMap;
 

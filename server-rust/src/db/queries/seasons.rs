@@ -1,10 +1,4 @@
-//! Seasons + episodes for the logical Show entity. The series identity
-//! lives in `shows`; the episode-file rows in `videos` carry
-//! `(show_id, show_season, show_episode)` and are joined back via those
-//! columns.
-//!
-//! See `docs/architecture/Library-Scan/03-Show-Entity.md` for the full
-//! schema picture.
+//! Seasons + episodes for the logical Show entity. See docs/architecture/Library-Scan/03-Show-Entity.md.
 
 use rusqlite::{params, Row};
 
@@ -103,8 +97,6 @@ pub fn upsert_episode(db: &Db, row: &EpisodeRow) -> DbResult<()> {
         Ok(())
     })
 }
-
-// ── Tests ────────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
 mod tests {

@@ -417,7 +417,6 @@ pub fn get_streams_by_video_id(db: &Db, video_id: &str) -> DbResult<Vec<VideoStr
     })
 }
 
-// ── Tests ────────────────────────────────────────────────────────────────────
 //
 // Read-only coverage of the get/count helpers, plus write coverage for the
 // scanner's upsert + replace-streams helpers.

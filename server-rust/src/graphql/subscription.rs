@@ -1,11 +1,4 @@
-//! Root Subscription. The `transcode_job_updated` event source still ships
-//! with the chunker work; both `library_scan_*` subscriptions are wired
-//! to the process-wide [`crate::services::scan_state::ScanState`] — they
-//! emit the current snapshot immediately, then forward every broadcast.
-//!
-//! Lagged subscribers (slower than the broadcast channel can buffer) get
-//! `Lagged` events skipped silently — the next live snapshot brings them
-//! back in sync, and the dashboard's UI is idempotent in `done`/`total`.
+//! Root Subscription — transcode_job_updated, library_scan_* events wired to ScanState.
 
 use async_graphql::{Context, Subscription, ID};
 use futures_util::stream::{self, BoxStream, StreamExt};

@@ -1,22 +1,4 @@
-//! ffmpeg subprocess pool — `Arc<Semaphore>` cap, dying-set bookkeeping,
-//! SIGTERM-then-SIGKILL escalation, server-shutdown sweep.
-//!
-//! The pool's job is one and only one thing: enforce the concurrent-encode
-//! cap and own subprocess lifecycle. The chunker decides what to encode and
-//! how to react to exits; the pool only knows how to start, kill, and
-//! report.
-//!
-//! Concurrency model:
-//! - `Arc<Semaphore::new(max_concurrent_jobs)>` — every reservation holds
-//!   an `OwnedSemaphorePermit`. Killed processes drop the permit
-//!   immediately so a slow-to-exit ffmpeg can't starve the next request.
-//! - `dying: DashSet<String>` records which jobs were killed
-//!   deliberately, so the exit handler can distinguish a planned kill
-//!   from a self-exit and emit the right `kill_reason`.
-//! - `live: DashMap<String, LivePid>` keeps the OS pid (for `kill(2)`)
-//!   alongside the `force_kill` token (a `Notify` the escalation task
-//!   waits on so it can short-circuit if the process exits cleanly within
-//!   the SIGTERM grace).
+//! ffmpeg subprocess pool with concurrency cap, SIGTERM/SIGKILL escalation, and kill tracking.
 
 use std::ffi::OsString;
 use std::path::Path;

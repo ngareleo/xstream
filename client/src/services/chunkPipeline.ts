@@ -1,18 +1,7 @@
 /**
  * Foreground + lookahead streaming slots feeding one BufferManager.
- *
- * Why this exists: the orphan_no_connection safety timer in chunker.ts kills
- * jobs whose `connections` count stays at 0 for 30 s. Before this class, the
- * client only opened chunk N+1's `/stream/<jobId>` fetch *after* chunk N's
- * stream completed — so a prefetched job sat at `connections === 0` for the
- * full duration of chunk N's stream (often >30 s under backpressure) and was
- * killed before the client could connect. Opening the lookahead fetch at
- * prefetch time makes `connections` jump to 1 immediately, satisfying the
- * orphan check without weakening the 30 s safety threshold.
- *
- * The two slots both call into one shared `BufferManager.appendSegment`
- * queue, which already serialises concurrent producers via its single-drain
- * promise chain. No new synchronisation primitive is required.
+ * Opens lookahead fetches at prefetch time to satisfy the server's
+ * orphan_no_connection safety timer without weakening the 30 s threshold.
  */
 import { type Span, SpanStatusCode, trace, type Tracer } from "@opentelemetry/api";
 
@@ -118,32 +107,24 @@ export class ChunkPipeline {
     private readonly videoEl: HTMLVideoElement
   ) {}
 
-  /** Opens the foreground stream. Replaces any existing foreground (used by
-   *  initial start, seek, and the resolution-switch promotion). */
+  /** Opens the foreground stream. Replaces any existing foreground. */
   startForeground(opts: ChunkOpts): void {
     this.foreground?.cancel("foreground_replaced");
     this.foreground = this.openSlot(opts, /* isLookahead */ false);
   }
 
-  /** Opens the lookahead stream at prefetch time. The fetch starts pumping
-   *  bytes immediately; segments funnel into the same BufferManager queue
-   *  behind any pending foreground appends. */
+  /** Opens the lookahead stream at prefetch time. */
   openLookahead(opts: ChunkOpts): void {
     this.lookahead?.cancel("lookahead_replaced");
     this.lookahead = this.openSlot(opts, /* isLookahead */ true);
   }
 
-  /** True if a lookahead slot is currently open. Used by PlaybackController
-   *  to gate prefetch fire ("don't prefetch if one is already in flight"). */
+  /** True if a lookahead slot is currently open. */
   hasLookahead(): boolean {
     return this.lookahead !== null;
   }
 
-  /** Returns the raw job IDs of every active slot (foreground + lookahead).
-   *  Used by `handleSeeking` to feed `cancelTranscode` so the server kills
-   *  obsolete prefetched chunks immediately, freeing pool slots for the
-   *  seek's foreground mutation. Returns `[]` when both slots are empty
-   *  (e.g. between teardown and the next session's first chunk). */
+  /** Returns the raw job IDs of every active slot (foreground + lookahead). */
   currentJobIds(): string[] {
     const ids: string[] = [];
     if (this.foreground) ids.push(this.foreground.jobId);
@@ -151,15 +132,7 @@ export class ChunkPipeline {
     return ids;
   }
 
-  /** Promotes the lookahead slot to foreground (called by PlaybackController
-   *  when the foreground stream's onStreamEnded fires). Returns the new
-   *  foreground's `[chunkStartS, chunkEndS)` bounds so the controller can
-   *  update its `chunkEnd` and timeline state synchronously without
-   *  re-deriving them (under the ramp, durations aren't recomputable from a
-   *  fixed steady-state). Also returns a `drain` promise for callers that
-   *  need to wait until the queued segments are appended + any deferred
-   *  outcome is dispatched. Production callers can ignore `drain`; tests
-   *  await it. */
+  /** Promotes the lookahead slot to foreground. Returns bounds and drain promise. */
   promoteLookahead(): {
     jobId: string;
     chunkStartS: number;
@@ -186,22 +159,12 @@ export class ChunkPipeline {
     };
   }
 
-  /** Drains a slot's queued lookahead segments through the same per-segment
-   *  pipeline that the live network path uses, then dispatches any
-   *  outcome captured while the slot was still a lookahead. Stops if the
-   *  slot is cancelled mid-drain.
-   *
-   *  Awaits `buffer.waitIfPaused()` between iterations so the drain respects
-   *  backpressure the same way the live `streamingService` reader loop does.
-   *  Without this gate the drain dumps every queued lookahead segment in a
-   *  tight loop at promotion — at 4k that's 200–400 MB into MSE in 1–2 s,
-   *  which is the chunk-handover bloat from trace `e699c0ae…`. */
+  /** Drains a slot's queued lookahead segments. Respects backpressure via
+   *  buffer.waitIfPaused(). See trace e699c0ae… for chunk-handover bloat rationale. */
   private async drainAndDispatch(slot: Slot): Promise<void> {
     const queue = slot.queuedSegments;
     slot.queuedSegments = [];
     for (const seg of queue) {
-      // `cancelled` (not `ended`) is the right signal: `ended` flips on
-      // natural span end too, which is exactly when drain SHOULD run.
       if (slot.cancelled) return;
       await this.buffer.waitIfPaused();
       if (slot.cancelled) return;
@@ -209,9 +172,6 @@ export class ChunkPipeline {
     }
     if (slot.pendingCompletion) {
       slot.pendingCompletion = false;
-      // Decide the outcome NOW with the post-drain byte counter — deferring
-      // to here is what lets the lookahead-queueing path produce the same
-      // outcome as the live foreground path would for the same content.
       const hasRealContent = slot.totalMediaBytes >= clientConfig.playback.minRealChunkBytes;
       if (!hasRealContent) {
         slot.span.addEvent("chunk_no_real_content");
@@ -220,7 +180,7 @@ export class ChunkPipeline {
     }
   }
 
-  /** Cancels both slots. Used on teardown, seek, resolution-switch. */
+  /** Cancels both slots. */
   cancel(reason: string): void {
     this.foreground?.cancel(reason);
     this.lookahead?.cancel(reason);
@@ -228,16 +188,13 @@ export class ChunkPipeline {
     this.lookahead = null;
   }
 
-  /** Cancels only the lookahead. Used when prefetch becomes invalid (e.g. seek
-   *  invalidates the prefetched chunk but the foreground keeps streaming). */
+  /** Cancels only the lookahead. */
   cancelLookahead(reason: string): void {
     this.lookahead?.cancel(reason);
     this.lookahead = null;
   }
 
-  /** Pause both slots' readers (called by BufferManager backpressure). Both
-   *  must pause together to bound the BufferManager append queue — if only
-   *  the foreground paused, the lookahead would keep reading and queueing. */
+  /** Pause both slots' readers. Must pause together to bound the append queue. */
   pauseAll(): void {
     this.foreground?.svc.pause();
     this.lookahead?.svc.pause();
@@ -249,27 +206,17 @@ export class ChunkPipeline {
     this.lookahead?.svc.resume();
   }
 
-  /** Pause only the lookahead's reader. Used by the user-pause prefetch path:
-   *  open chunk N+1 as a lookahead so server keeps the connection alive past
-   *  the orphan_no_connection 30 s timer, but immediately suspend the read so
-   *  segments don't accumulate in the slot's queuedSegments RAM buffer for
-   *  the duration of the pause (could otherwise reach 200-400 MB on a 4K
-   *  pre-encode). ffmpeg keeps writing segments to disk regardless. */
+  /** Pause only the lookahead's reader to prevent segment accumulation during user pause. */
   pauseLookahead(): void {
     this.lookahead?.svc.pause();
   }
 
-  /** Resume only the lookahead's reader. Paired with pauseLookahead — called
-   *  on user resume so the lookahead starts pulling its on-disk segments
-   *  through to the queue, ready for promotion at the next chunk handover. */
+  /** Resume only the lookahead's reader. */
   resumeLookahead(): void {
     this.lookahead?.svc.resume();
   }
 
-  /** Acts on a stream outcome — called for foreground naturally and for the
-   *  lookahead's deferred outcome on promotion. Owns the markStreamDone call
-   *  for `no_real_content`, which must NOT happen while the foreground is
-   *  still appending (would call MediaSource.endOfStream and break MSE). */
+  /** Acts on a stream outcome. Owns the markStreamDone call for no_real_content. */
   private dispatchOutcome(slot: Slot, outcome: StreamOutcome): void {
     if (outcome === "no_real_content") {
       this.log.info("Chunk had no real content — marking stream done", {
@@ -325,9 +272,6 @@ export class ChunkPipeline {
         if (slot.ended) return;
         slot.cancelled = true;
         span.addEvent(`chunk_cancelled_by_${reason}`);
-        // Drop any queued lookahead segments — caller is tearing down or
-        // replacing this slot, so appending them would just race the new
-        // slot's appends.
         slot.queuedSegments = [];
         slot.endSpan();
         slot.svc.cancel();
@@ -337,9 +281,6 @@ export class ChunkPipeline {
     void slot.svc.start(
       opts.jobId,
       async (segData, isInit) => {
-        // Lookahead slots queue segments instead of appending — see
-        // `Slot.isLookahead` doc for the elst/init-clash rationale. The
-        // queue is drained on promotion via `drainAndDispatch`.
         if (slot.isLookahead) {
           slot.queuedSegments.push({ data: segData, isInit });
           return;
@@ -356,12 +297,6 @@ export class ChunkPipeline {
       },
       () => {
         slot.endSpan();
-        // If still a lookahead, defer EVERYTHING until promotion-drain:
-        // the outcome decision (which depends on totalMediaBytes — only
-        // updated by processSegment, which the queueing path skips), the
-        // markStreamDone call (must not fire while foreground is still
-        // appending), and onStreamEnded (must not chain to next chunk
-        // until current chunk's data is in the SourceBuffer).
         if (slot.isLookahead) {
           slot.pendingCompletion = true;
           return;
@@ -380,23 +315,15 @@ export class ChunkPipeline {
     return slot;
   }
 
-  /** Single per-segment append path — used both by the live network handler
-   *  (foreground slot) and by the queue drain (post-promotion). Owns the
-   *  byte/segment counters, the chunk.first_segment_append span, and the
-   *  error path. */
+  /** Single per-segment append path — used by live network handler and queue drain. */
   private async processSegment(slot: Slot, segData: ArrayBuffer, isInit: boolean): Promise<void> {
     if (!isInit) {
       slot.totalMediaBytes += segData.byteLength;
       slot.segmentCount += 1;
     }
 
-    // Measures arrival-to-append latency for the first media segment of a
-    // continuation chunk — the chunk-handover seam where stalls live.
-    // Chunk 0 is excluded because its first-segment timing is dominated by
-    // the MSE init handshake, not the handover. For drained lookahead
-    // segments, "arrival" is the moment the drain reaches the segment, not
-    // the moment the network delivered it — that captures the visible
-    // append latency a user would experience.
+    // Measures arrival-to-append latency at the chunk-handover seam.
+    // Chunk 0 is excluded; drained lookahead "arrival" is drain-reach time, not network arrival.
     let firstAppendSpan: Span | null = null;
     if (!isInit && !slot.opts.isFirstChunk && !slot.firstMediaSegmentSeen) {
       slot.firstMediaSegmentSeen = true;
@@ -422,11 +349,7 @@ export class ChunkPipeline {
 
     try {
       if (isInit) {
-        // Re-anchor the SourceBuffer's coordinate system for this chunk —
-        // ffmpeg writes segments with relative tfdt (0+ within the chunk),
-        // so a chunk starting at chunkStartS=4200 needs the offset set
-        // before its first media segment lands. See `BufferManager.init`'s
-        // mode-comment for why MSE ignores ffmpeg's `elst` empty edit.
+        // See BufferManager.init for why MSE ignores ffmpeg's elst and relies on timestampOffset.
         await this.buffer.setTimestampOffset(slot.opts.chunkStartS);
       }
       await this.buffer.appendSegment(segData);

@@ -7,7 +7,6 @@ import { makeStyles, shorthands } from "@griffel/react";
  * the rendered ErrorPage.
  */
 export const useErrorBoundaryStyles = makeStyles({
-  // ── Shared ────────────────────────────────────────────────────────────────
   root: {
     position: "fixed",
     inset: "0",
@@ -31,7 +30,6 @@ export const useErrorBoundaryStyles = makeStyles({
     backgroundSize: "200px 200px",
   },
 
-  // ── Dev screen ────────────────────────────────────────────────────────────
   devRoot: {
     alignItems: "flex-start",
     background:
@@ -187,7 +185,6 @@ export const useErrorBoundaryStyles = makeStyles({
     fontSize: "10.5px",
   },
 
-  // ── Preview banner ────────────────────────────────────────────────────────
   previewBanner: {
     position: "fixed",
     top: "0",

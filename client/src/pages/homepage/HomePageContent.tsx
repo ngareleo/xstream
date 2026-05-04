@@ -27,9 +27,7 @@ import {
 } from "./HomePageContent.utils";
 import { useHeroMode } from "./useHeroMode";
 
-// Two co-located fragments — one on Video (TV row + each Film copy) and
-// one on Film (movie row). Spread unmasked so the page reads fields off
-// the response directly without per-tile useFragment indirection.
+// Spread unmasked so the page reads fields directly without per-tile useFragment.
 const _VIDEO_NODE_FRAGMENT = graphql`
   fragment HomePageContent_videoNode on Video {
     id
@@ -121,10 +119,7 @@ export const HomePageContent: FC = () => {
     () => (data.movies?.edges ?? []).map((edge) => toFilterRowFromFilm(edge.node)),
     [data]
   );
-  // Shows are kept separate from FilterRow — they're a distinct entity
-  // shape (Show, not Video) and render through ShowTile/ShowDetailsOverlay.
-  // Search/filter currently runs against Films only; Show search is
-  // declared tech debt (see docs/todo.md).
+  // Shows kept separate from FilterRow; search/filter currently Films-only (see docs/todo.md).
   const tvShowEdges = useMemo(() => data.tvShows?.edges ?? [], [data]);
   const rows = movies;
 
@@ -133,8 +128,7 @@ export const HomePageContent: FC = () => {
   const showId = params.get("show");
   const selectedShowEdge = showId ? tvShowEdges.find((e) => e.node.id === showId) : undefined;
 
-  // Hero slideshow: cycle up to 4 movies that have posters. Lab spec uses
-  // 7s interval + 0.7s crossfade + Ken Burns; matched here.
+  // Cycle up to 4 movies with posters (7s interval + 0.7s crossfade + Ken Burns).
   const heroFilms = useMemo(() => {
     return rows
       .filter((r) => r.node.mediaType === "MOVIES" && Boolean(r.node.metadata?.posterUrl))
@@ -147,7 +141,6 @@ export const HomePageContent: FC = () => {
   const HERO_FADE_MS = 700;
 
   useEffect(() => {
-    // No cycling when overlay is open or there's nothing to cycle.
     if (selectedRow || heroFilms.length <= 1) return;
     const id = window.setInterval(() => {
       setHeroFading(true);
@@ -352,9 +345,6 @@ export const HomePageContent: FC = () => {
                         )}
                       >
                         {active && (
-                          // Inner fill animates 0 → 100% width over the
-                          // 7s slide interval. Keying it on heroIndex
-                          // resets the animation on every slide change.
                           <span
                             key={heroIndex}
                             className={styles.slideDotFill}

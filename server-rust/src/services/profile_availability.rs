@@ -1,25 +1,4 @@
-//! Periodic library reachability probe.
-//!
-//! Each tick (default 30s, mirroring the periodic-scan cadence) the probe
-//! stats every library's path. The status column transitions through the
-//! states `unknown → online | offline`, with `last_seen_at` updated every
-//! cycle (the "we successfully probed at this time" timestamp, not "we
-//! last saw it online").
-//!
-//! On status flips:
-//! - `online → offline`: log warn; existing rows stay put (the user can
-//!   still browse what's catalogued while the drive is unplugged — only
-//!   playback is blocked).
-//! - `offline → online` (or `unknown → online`): log info; one-shot
-//!   `scan_one_library` to catch up on changes that happened while
-//!   offline.
-//!
-//! The first cycle's "flip" from the DB-default `unknown` to the
-//! observed status counts as offline→online (or stays unknown if probing
-//! fails outright). The probe is best-effort — it does not consume the
-//! scan-state slot and never blocks a foreground scan.
-//!
-//! See `docs/architecture/Library-Scan/04-Profile-Availability.md`.
+//! Periodic library reachability probe; triggers catch-up scans on status transitions. See docs/architecture/Library-Scan/04-Profile-Availability.md.
 
 use std::collections::HashMap;
 use std::path::Path;

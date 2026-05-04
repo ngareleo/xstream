@@ -6,11 +6,7 @@ import type { Decorator, Meta, StoryObj } from "storybook-react-rsbuild";
 
 import { AppShell } from "./AppShell.js";
 
-// AppShell wraps AppHeader, which calls `useMutation` — that requires a
-// RelayEnvironmentProvider above it in the tree. Stories don't make real
-// network calls, so a mock environment is enough; mirrors AppHeader's
-// own story decorator. The query-aware `~/storybook/withRelay` decorator
-// expects a `relay` parameter with a query and isn't needed here.
+// AppHeader calls useMutation; requires RelayEnvironmentProvider. Mock environment suffices for stories.
 const MockRelayProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const envRef = useRef<ReturnType<typeof createMockEnvironment> | null>(null);
   if (envRef.current === null) envRef.current = createMockEnvironment();

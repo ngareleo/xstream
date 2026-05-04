@@ -34,7 +34,6 @@ export interface VolumeChangedData {
   volume: number;
 }
 
-// ── Event factories ────────────────────────────────────────────────────────────
 // Use these to construct events before calling bubble(). They keep the originator
 // and type strings out of call sites and make the payload shape explicit.
 
@@ -86,7 +85,6 @@ export function createFullscreenRequestedEvent(): NovaEvent<void> {
   return { originator: CONTROL_BAR_ORIGINATOR, type: ControlBarEventTypes.FULLSCREEN_REQUESTED };
 }
 
-// ── Event guards ───────────────────────────────────────────────────────────────
 // Use these in NovaEventingInterceptor handlers instead of comparing raw strings.
 
 /** Returns true if the wrapper originated from ControlBar. */

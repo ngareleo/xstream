@@ -76,16 +76,11 @@ export const ControlBar: FC<Props> = ({
     const rect = e.currentTarget.getBoundingClientRect();
     const fraction = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
     const targetSeconds = fraction * data.durationSeconds;
-    // Fire a Nova event rather than setting currentTime directly. The browser
-    // clamps currentTime to the buffered range, so VideoPlayer must set it via
-    // seekTo() — which stores the intended target before triggering the seeking
-    // event, letting useChunkedPlayback use the unclamped position.
+    // Fire Nova event to preserve unclamped position before browser clamps currentTime.
     void bubble({ reactEvent: e, event: createSeekRequestedEvent(targetSeconds) });
   };
 
-  // Hover tooltip on the seek bar — shows the timestamp the click WOULD seek
-  // to. Same x→seconds math as handleSeek so the tooltip and the click target
-  // can never disagree.
+  // Hover tooltip: same x→seconds math as handleSeek to keep tooltip/click in sync.
   const [hoverPx, setHoverPx] = useState<number | null>(null);
   const [hoverSeconds, setHoverSeconds] = useState<number>(0);
   const handleSeekHover = (e: MouseEvent<HTMLDivElement>): void => {
@@ -133,7 +128,6 @@ export const ControlBar: FC<Props> = ({
 
   return (
     <div className={mergeClasses(styles.root, !isVisible && styles.rootHidden)}>
-      {/* Progress row: timestamp + 3px green track + duration */}
       <div className={styles.progressRow}>
         <span className={styles.timeLabel}>{formatDuration(currentTime)}</span>
         <div
@@ -159,7 +153,6 @@ export const ControlBar: FC<Props> = ({
         <span className={styles.timeLabelDim}>{formatDuration(data.durationSeconds)}</span>
       </div>
 
-      {/* Controls row: −10s · play · +10s · — · volume · res chip · fullscreen */}
       <div className={styles.controlsRow}>
         <button className={styles.ctrlBtn} aria-label="Rewind 10 seconds" onClick={handleSkip(-10)}>
           −10s

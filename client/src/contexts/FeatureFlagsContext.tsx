@@ -30,16 +30,7 @@ const SET_SETTING_MUTATION = graphql`
   }
 `;
 
-/**
- * Hydrates the module-level flag cache from the server on mount. All reads go
- * through `useFeatureFlag` (for React) or `getFlag` (for non-React code like
- * `PlaybackController`) — there is no React context object; the cache itself
- * is the source of truth.
- *
- * Note that `localStorage` is the *higher-trust* source: `featureFlags.ts`
- * populates the cache from `localStorage` at module load, and `hydrateFlags`
- * only fills entries that don't already have a localStorage override.
- */
+/** Hydrates flag cache from server; no React context object — cache is source of truth. */
 export const FeatureFlagsProvider: FC<{ children: ReactNode }> = ({ children }) => {
   const keys = FLAG_REGISTRY.map((f) => f.key);
   const data = useLazyLoadQuery<FeatureFlagsContextQuery>(
@@ -75,10 +66,7 @@ export function useFeatureFlag<T extends FlagValue>(
   return { value, setValue };
 }
 
-/**
- * Bulk operations on the flag cache. Used by the FlagsTab "Clear local
- * overrides" and "Reset all to defaults" buttons.
- */
+/** Bulk operations on flag cache; used by FlagsTab "Clear" and "Reset to defaults" buttons. */
 export function useFeatureFlagControls(): {
   clearLocalOverrides: () => void;
   resetAllToDefaults: () => void;
@@ -87,10 +75,6 @@ export function useFeatureFlagControls(): {
 
   const clearLocalOverrides = useCallback((): void => {
     clearLocalFlagOverrides();
-    // Cache is empty for these keys until the FeatureFlagsProvider's next
-    // hydration. A page reload (or a fresh `useLazyLoadQuery` re-run) refills
-    // it from the server. Telling the caller to reload is the right UX —
-    // surfaced from FlagsTab.
   }, []);
 
   const resetAllToDefaults = useCallback((): void => {

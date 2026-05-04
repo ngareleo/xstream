@@ -1,20 +1,4 @@
-//! Typed errors for the server.
-//!
-//! Two layers:
-//! - [`DbError`] — anything the persistence layer can fail on. Includes
-//!   underlying SQLite errors, mutex poisoning (another thread crashed
-//!   while holding the connection lock), invariant violations (e.g. a row
-//!   the caller just inserted is not findable), and malformed-JSON inside
-//!   text columns the DB layer otherwise treats as opaque.
-//! - [`AppError`] — top-level startup / shutdown / signal-handling errors
-//!   that bubble up to `main()`. Telemetry-init and bind/serve failures
-//!   live here.
-//!
-//! Both implement `std::error::Error`, both are `Send + Sync + 'static`,
-//! and both have explicit `From` conversions where a downstream module
-//! `?`-propagates a different error type. `DbError -> async_graphql::Error`
-//! is wired so resolvers stay terse: every `db::…?` call surfaces as a
-//! GraphQL error, never a panic.
+//! Typed errors — `DbError` for the persistence layer, `AppError` for startup/shutdown/signal-handling.
 
 use std::path::PathBuf;
 
@@ -48,11 +32,6 @@ pub enum DbError {
 }
 
 pub type DbResult<T> = Result<T, DbError>;
-
-// Resolvers `?`-propagate `DbError` into `async_graphql::Error` via the
-// blanket `impl<T: Display + Send + Sync + 'static> From<T> for Error` in
-// async-graphql. DbError satisfies all four bounds (thiserror generates
-// Display; the variants are owned types). No custom impl needed.
 
 /// Top-level application error. Returned from `main()`. Each variant points
 /// at exactly one failure surface, no `String`-typed catch-alls — the

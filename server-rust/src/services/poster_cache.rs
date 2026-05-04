@@ -1,15 +1,4 @@
-//! OMDb poster cache.
-//!
-//! When a metadata row gets a `poster_url` from OMDb but no
-//! `poster_local_path`, this background worker fetches the image and
-//! writes it to `AppConfig::poster_dir` keyed by `sha1(url)+ext`. Once
-//! the file lands, it persists the basename in the metadata row so the
-//! GraphQL resolver can hand the client a relative `/poster/<basename>`
-//! URL — same-origin and offline-friendly.
-//!
-//! The worker runs on a periodic interval. Per-row failures are logged
-//! and retried on the next cycle (no DB state recorded for failures).
-//! See `docs/architecture/Library-Scan/05-Poster-Caching.md`.
+//! Background poster fetcher for metadata rows; stores locally with SHA1 keying. See docs/architecture/Library-Scan/05-Poster-Caching.md.
 
 use std::collections::HashSet;
 use std::path::PathBuf;

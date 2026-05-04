@@ -96,12 +96,7 @@ const RECORD_SESSION_MUTATION = graphql`
   }
 `;
 
-/**
- * Thin React bridge over PlaybackController. Owns the Relay mutation plumbing
- * and bridges controller state transitions into useState, but delegates all
- * playback orchestration (chunk scheduling, MSE buffering, seeking, resolution
- * switching) to the controller.
- */
+/** React bridge over PlaybackController; owns Relay mutations. */
 export function useChunkedPlayback(
   videoRef: RefObject<HTMLVideoElement | null>,
   videoId: string,
@@ -117,10 +112,7 @@ export function useChunkedPlayback(
   const [status, setStatus] = useState<PlaybackStatus>("idle");
   const [error, setError] = useState<string | null>(null);
 
-  // Mirror mutable props/callbacks into refs so the controller (created once
-  // per mount) always reads the latest values without needing to be recreated.
-  // This preserves the original hook's behaviour where videoId changes didn't
-  // trigger a teardown.
+  // Controller created once per mount; refs prevent teardown on prop changes.
   const videoIdRef = useRef(videoId);
   videoIdRef.current = videoId;
   const videoDurationSRef = useRef(videoDurationS);
@@ -158,8 +150,6 @@ export function useChunkedPlayback(
           onCompleted: (response) => {
             const result = response.startTranscode;
             if (result.__typename === "PlaybackError") {
-              // Typed failure — preserve code/retryable/retryAfterMs so
-              // PlaybackController.requestChunk's retry policy can decide.
               reject(
                 new PlaybackError({
                   code: result.code as ConstructorParameters<typeof PlaybackError>[0]["code"],
@@ -202,10 +192,7 @@ export function useChunkedPlayback(
       });
 
     const cancelTranscodeChunks: CancelTranscodeChunksFn = (rawJobIds) => {
-      // Encode each raw job ID into the Relay global form the server's
-      // `from_global_id` expects. Fire-and-forget — the server's
-      // `pool.kill_job` is sync up to the SIGTERM send; the SIGKILL
-      // escalation is deferred. Errors are logged server-side.
+      // Fire-and-forget; SIGKILL escalation is deferred server-side.
       if (rawJobIds.length === 0) return;
       const jobIds = rawJobIds.map((raw) => btoa(`TranscodeJob:${raw}`));
       cancelChunksRef.current({
@@ -256,17 +243,7 @@ export function useChunkedPlayback(
   }, []);
 
   const prewarm = useCallback((res: Resolution): void => {
-    // Fire just the GraphQL mutation — no MSE init, no stream connection,
-    // no PlaybackController state. The server creates the job, ffmpeg
-    // starts encoding chunk 0 to disk. When the user clicks Play, the
-    // click-path mutation produces the same job-id (deterministic SHA1 of
-    // content_fp + res + 0 + ramp[0]) and the server returns the cached
-    // job — segments already written are pulled immediately.
-    //
-    // Errors are swallowed: if the warmup fails (network blip, server
-    // restart) the click-path mutation will retry from scratch via
-    // PlaybackController's three-tier retry, identical to today's
-    // behaviour. Re-surfacing the failure here would only add noise.
+    // See docs/architecture/Streaming/02-Chunk-Pipeline-Invariants.md.
     startChunkRef.current({
       variables: {
         videoId: videoIdRef.current,

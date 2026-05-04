@@ -1,16 +1,4 @@
-//! `GET /stream/:job_id` — length-prefixed binary fMP4 stream. Preserves
-//! the wire contract from `docs/architecture/Streaming/00-Protocol.md`:
-//!
-//! - 4-byte big-endian uint32 length prefix per chunk + raw fMP4 bytes.
-//! - Init segment is the first frame on every new stream.
-//! - Pull-based: chunks are emitted when the consumer reads, never
-//!   pushed. The `mpsc::channel(BACKPRESSURE_BUFFER)` is the per-
-//!   connection backpressure conduit — when the consumer stops reading
-//!   the channel fills and `tx.send` parks naturally, no manual sleep.
-//! - Per-connection isolation: each `GET /stream/:jobId` holds its own
-//!   `mpsc::Receiver` and its own subscription to the job's `Notify`
-//!   wake. A slow remote peer can't back-pressure a local user's
-//!   playback.
+//! `GET /stream/:job_id` — length-prefixed binary fMP4 stream. See docs/architecture/Streaming/00-Protocol.md.
 
 use std::convert::Infallible;
 use std::path::PathBuf;

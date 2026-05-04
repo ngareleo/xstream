@@ -81,38 +81,18 @@ export const VideoPlayer: FC<Props> = ({ video, onStatusChange }) => {
     setActiveJobId
   );
 
-  // Kick off chunk 0's transcode the moment the player page mounts, so
-  // ffmpeg encodes init.mp4 + the first segments while the user looks at
-  // the poster. By the time they click Play, the deterministic job-id
-  // cache hits and TTFF collapses to the buffer-fill cost. We warm at the
-  // resolution we'll start with (`nativeMax`); if the user toggles
-  // resolution before pressing Play, the click-path mutation simply
-  // produces a different job-id and spawns fresh — identical to today.
-  // Mount-only by design: re-warming on resolution change would double
-  // ffmpeg load on every selector toggle, with the abandoned warmup
-  // tearing itself down via the server's 30 s orphan-no-connection
-  // timer. eslint-disable-next-line: data.id is captured in the hook's
-  // own ref so we depend only on it, not on `prewarm` (stable callback)
-  // or `nativeMax` (derived).
+  // See docs/architecture/Streaming/02-Chunk-Pipeline-Invariants.md for prewarm strategy.
   useEffect(() => {
     prewarm(nativeMax);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-per-video, see comment above
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- data.id captured in hook's own ref
   }, [data.id]);
 
   useJobSubscription(activeJobId, (progress) => {
     setJobProgress(progress);
-    // Bridge server-side `transcodeJobUpdated → COMPLETE` into the
-    // controller's serial-prefetch gate. The controller filters stale
-    // updates (a previous foreground's job id) so it's safe to forward
-    // unconditionally on COMPLETE — `activeJobId` is the current
-    // foreground at the moment this callback was registered.
     if (progress.status === "COMPLETE" && activeJobId) {
       onTranscodeComplete(activeJobId);
     }
     if (progress.status === "ERROR") {
-      // Map the typed code to a user-facing line. We don't auto-retry from the
-      // subscription path: PROBE_FAILED / ENCODE_FAILED reflect file or
-      // encoder problems that aren't transient.
       const code = progress.errorCode ?? "INTERNAL";
       const detail = progress.error ?? "";
       const userMessage =
@@ -128,7 +108,6 @@ export const VideoPlayer: FC<Props> = ({ video, onStatusChange }) => {
     }
   });
 
-  // Auto-hide controls after HIDE_DELAY_MS of inactivity
   const showControls = useCallback((): void => {
     setControlsVisible(true);
     if (hideTimerRef.current !== null) clearTimeout(hideTimerRef.current);
@@ -149,19 +128,14 @@ export const VideoPlayer: FC<Props> = ({ video, onStatusChange }) => {
     return () => el.removeEventListener("ended", onEnded);
   }, [videoRef]);
 
-  // Reset ended state when the video changes (React Router reuses this component
-  // without remounting when navigating between player pages).
   useEffect(() => {
     setIsEnded(false);
   }, [data.id]);
 
-  // Notify parent on play-state transitions so the backdrop can fade out once
-  // real video frames start arriving.
   useEffect(() => {
     onStatusChange?.(status);
   }, [status, onStatusChange]);
 
-  // Track fullscreen state from the browser.
   useEffect(() => {
     const onChange = (): void => setIsFullscreen(!!document.fullscreenElement);
     document.addEventListener("fullscreenchange", onChange);
@@ -181,7 +155,6 @@ export const VideoPlayer: FC<Props> = ({ video, onStatusChange }) => {
     startPlayback(resolution);
   }, [resolution, startPlayback]);
 
-  // Spacebar toggles play/pause globally while on the player page.
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent): void => {
       const tag = (e.target as HTMLElement).tagName;
@@ -247,9 +220,6 @@ export const VideoPlayer: FC<Props> = ({ video, onStatusChange }) => {
         setControlsVisible(false);
       }}
     >
-      {/* Click-to-play/pause is handled directly on the video element.
-          The ControlBar and overlay siblings intercept their own clicks before
-          they can reach the video, so no manual filtering is needed. */}
       <video
         ref={videoRef}
         className={styles.video}
@@ -263,8 +233,6 @@ export const VideoPlayer: FC<Props> = ({ video, onStatusChange }) => {
         }}
       />
 
-      {/* Pre-play overlay — full-area click-to-play scrim. No visible button:
-          the primary play affordance is the green disc in the ControlBar. */}
       {status === "idle" && !isEnded && (
         <button
           type="button"
@@ -274,19 +242,10 @@ export const VideoPlayer: FC<Props> = ({ video, onStatusChange }) => {
         />
       )}
 
-      {/* No full-area loading overlay — the loading affordance is the
-          ControlBar's play disc, which morphs its inner icon to a spinner
-          when status === "loading" (see ControlBar.tsx playIcon). The
-          controls are forced visible during loading below so the morphed
-          disc is always on-screen during a stall. */}
-
-      {/* Transcode progress label */}
       {progressLabel && <div className={styles.progressLabel}>{progressLabel}</div>}
 
-      {/* Error overlay — show whichever side surfaced first (mutation or job-lifecycle) */}
       {(error || jobError) && <div className={styles.errorOverlay}>{error ?? jobError}</div>}
 
-      {/* End screen — shown when playback reaches the end (lazy-loaded) */}
       {isEnded && (
         <Suspense fallback={null}>
           <PlayerEndScreenAsync video={data} />
@@ -299,10 +258,6 @@ export const VideoPlayer: FC<Props> = ({ video, onStatusChange }) => {
           videoRef={videoRef}
           resolution={resolution}
           status={status}
-          // Force controls visible during loading so the play-disc spinner
-          // morph (the only loading affordance after the overlay was
-          // removed) stays on-screen even if the user hasn't moved the
-          // mouse for a few seconds.
           isVisible={(controlsVisible || status === "loading") && !isEnded}
           isFullscreen={isFullscreen}
         />

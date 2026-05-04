@@ -1,12 +1,4 @@
-/**
- * Design tokens — single source of truth for the Xstream visual language.
- * Mirrors the CSS custom properties declared in shared.css so Griffel
- * makeStyles() calls can reference values directly without indirection.
- *
- * Token names match the inline `--*` references in the Figma JSX
- * (`/home/dag/Downloads/app-mockups.jsx`, `logos.jsx`) so a future
- * port stays a one-to-one mapping.
- */
+/** Design tokens for Xstream visual language. */
 export const tokens = {
   // Backgrounds
   colorBg0: "#050706",

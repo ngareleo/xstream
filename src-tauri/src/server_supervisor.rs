@@ -1,13 +1,4 @@
-//! Embedded Rust server lifecycle.
-//!
-//! `spawn_server` picks a free port on `127.0.0.1`, then spawns
-//! `xstream_server::run` on the Tauri async runtime. The returned
-//! `ServerHandle` carries the port so the lib.rs setup can inject it
-//! into the webview via `window.__XSTREAM_SERVER_PORT__`.
-//!
-//! The brief race between picking and re-binding the port is acceptable
-//! for the single-user-loopback case prescribed by `08-Tauri-Packaging.md`
-//! §3 — no other process is competing for `127.0.0.1:0`.
+//! Embedded Rust server lifecycle: port selection and spawning on Tauri runtime.
 
 use std::net::SocketAddr;
 use std::path::PathBuf;

@@ -25,12 +25,8 @@ const CreateProfilePage: FC = () => {
   const [searchParams] = useSearchParams();
   const [commit, isInFlight] = useMutation<CreateProfilePageMutation>(CREATE_LIBRARY);
 
-  // Callers tack `?return_to=<encoded path>` onto the URL so post-create
-  // we land back where the user started instead of always dumping them
-  // at /profiles. Falls back to /profiles for direct URL visits.
+  // Return to caller's URL (?return_to=) or /profiles; validate same-origin to prevent open redirect.
   const rawReturn = searchParams.get("return_to");
-  // Only honour same-origin paths to avoid being weaponised as an open
-  // redirect.
   const returnTo = rawReturn && rawReturn.startsWith("/") ? rawReturn : "/profiles";
 
   const handleSubmit = (values: ProfileFormValues): void => {
@@ -41,10 +37,7 @@ const CreateProfilePage: FC = () => {
         mediaType: values.mediaType,
         extensions: values.extensions,
       },
-      // The destination page's useLazyLoadQuery uses
-      // fetchPolicy: "store-and-network" so it re-validates on mount —
-      // see the Relay rule in docs/code-style/Client-Conventions. No
-      // post-mutation cache work is needed here.
+      // Destination page's useLazyLoadQuery re-validates on mount (fetchPolicy: store-and-network).
       onCompleted: (_data, errors) => {
         if (errors && errors.length > 0) return;
         navigate(returnTo);

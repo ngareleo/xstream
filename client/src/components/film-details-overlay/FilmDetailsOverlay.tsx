@@ -17,11 +17,7 @@ import { withViewTransition } from "~/utils/viewTransition";
 import { strings } from "./FilmDetailsOverlay.strings";
 import { useFilmDetailsOverlayStyles } from "./FilmDetailsOverlay.styles";
 
-/**
- * Shape passed via the `copies` prop. Mirrors the relevant Video fields
- * the FilmVariants picker needs. The homepage sources it from
- * `Film.copies` (server-resolver order: highest resolution first).
- */
+/** Fields required by FilmVariants picker; sourced from Film.copies. */
 export interface OverlayCopy {
   readonly id: string;
   readonly filename: string;
@@ -64,10 +60,7 @@ const OVERLAY_FRAGMENT = graphql`
 
 interface FilmDetailsOverlayProps {
   video: FilmDetailsOverlay_video$key;
-  /**
-   * When set (movies only), all main copies of the Film. Drives the
-   * FilmVariants picker. Hidden when length <= 1.
-   */
+  /** All main copies of the Film (movies only); drives FilmVariants picker. */
   copies?: ReadonlyArray<OverlayCopy>;
   suggestions?: ReadonlyArray<FilmTile_video$key>;
   onClose: () => void;
@@ -107,9 +100,7 @@ export const FilmDetailsOverlay: FC<FilmDetailsOverlayProps> = ({
   const sanitisedTitle = data.metadata?.title ?? data.title;
   const altText = sanitisedTitle || data.filename;
   const titleText = sanitisedTitle || strings.unmatched;
-  // Variant selection: defaults to the video the overlay was opened with
-  // (caller passes Film.bestCopy). Switching retargets the play CTA only;
-  // poster/title/metadata are Film-level and don't change.
+  // Variant selection; switching retargets play CTA only, not Film-level metadata.
   const [selectedCopyId, setSelectedCopyId] = useState<string>(data.id);
   const variantOptions = useMemo<FilmVariantOption[]>(
     () =>
@@ -139,8 +130,7 @@ export const FilmDetailsOverlay: FC<FilmDetailsOverlayProps> = ({
   const duration = data.durationSeconds > 0 ? formatDurationHuman(data.durationSeconds) : null;
 
   const playWithTransition = (): void => {
-    // Use the picker's selected copy when set; falls back to the
-    // overlay's source video (bestCopy for movies, the show video for TV).
+    // Use picker's selected copy or overlay's source video (bestCopy/show).
     const target = selectedCopyId || data.id;
     withViewTransition(() => navigate(`/player/${target}`));
   };

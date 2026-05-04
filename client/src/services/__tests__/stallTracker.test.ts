@@ -5,12 +5,7 @@ import { StallTracker } from "~/services/stallTracker.js";
 
 const BUFFERING_SPINNER_DELAY_MS = 2_000;
 
-/** Test ticker — manual control of the tick callback so tests can advance the
- *  clock and assert what fires when. The real ticker uses RAF; for behavior
- *  testing of StallTracker we don't need RAF — we need a controllable handler
- *  registry that mimics ticker.register() / unregister() semantics. Cast to
- *  PlaybackTicker via unknown at the construction site (the StallTracker
- *  contract only uses register/shutdown). */
+// Manual control of tick callback; mimics ticker.register() semantics.
 class TestTicker {
   private handlers: TickHandler[] = [];
 
@@ -87,18 +82,14 @@ describe("StallTracker", () => {
   });
 
   it("onWaiting is suppressed during first-render grace (post-`play()` warmup)", () => {
-    // Repro of the seek-resume spinner-flash UX bug: tryPlay flips
-    // hasStartedPlayback=true and calls videoEl.play(); the decoder fires
-    // `waiting` while rendering the first frame, which previously armed the
-    // 2 s spinner-debounce and re-showed the spinner over playing video.
+    // Seek-resume spinner-flash bug: decoder fires `waiting` while rendering first frame,
+    // which armed 2s spinner-debounce and re-showed spinner over playing video.
     inFirstRenderGrace = true;
     const tracker = makeTracker();
     tracker.onWaiting();
     expect(ticker.pendingHandlers()).toBe(0);
     expect(spinnerShown).toBe(0);
 
-    // Once the first DOM `playing` event fires (controller clears the grace),
-    // subsequent waiting events behave normally again.
     inFirstRenderGrace = false;
     tracker.onWaiting();
     expect(ticker.pendingHandlers()).toBe(1);
@@ -111,27 +102,24 @@ describe("StallTracker", () => {
     tracker.onWaiting();
     expect(ticker.pendingHandlers()).toBe(1);
 
-    // Tick before threshold — no spinner
     ticker.tick(BUFFERING_SPINNER_DELAY_MS - 1);
     expect(spinnerShown).toBe(0);
-    expect(ticker.pendingHandlers()).toBe(1); // still scheduled
+    expect(ticker.pendingHandlers()).toBe(1);
 
-    // Tick at exactly threshold — fires
     ticker.tick(BUFFERING_SPINNER_DELAY_MS);
     expect(spinnerShown).toBe(1);
-    expect(ticker.pendingHandlers()).toBe(0); // self-deregistered
+    expect(ticker.pendingHandlers()).toBe(0);
   });
 
   it("spinner is cancelled if onPlaying fires before the threshold", () => {
     const tracker = makeTracker();
     tracker.onWaiting();
-    ticker.tick(500); // half a second in — not yet
+    ticker.tick(500);
     expect(spinnerShown).toBe(0);
 
     tracker.onPlaying();
     expect(ticker.pendingHandlers()).toBe(0);
 
-    // Tick beyond threshold — handler is gone, no spinner
     ticker.tick(BUFFERING_SPINNER_DELAY_MS + 100);
     expect(spinnerShown).toBe(0);
   });
@@ -164,14 +152,12 @@ describe("StallTracker", () => {
   });
 
   it("repeated onWaiting before resume only opens one stall span", () => {
-    // Verified indirectly: the second onWaiting should not double-register a
-    // handler (cancels and re-registers), and onPlaying should still close
-    // cleanly with no leftover handlers.
+    // Second onWaiting cancels and re-registers (not 2 handlers).
     const tracker = makeTracker();
     tracker.onWaiting();
     expect(ticker.pendingHandlers()).toBe(1);
     tracker.onWaiting();
-    expect(ticker.pendingHandlers()).toBe(1); // not 2 — old one cancelled
+    expect(ticker.pendingHandlers()).toBe(1);
 
     tracker.onPlaying();
     expect(ticker.pendingHandlers()).toBe(0);
@@ -185,7 +171,6 @@ describe("StallTracker", () => {
     tracker.onPlaying();
     expect(spinnerShown).toBe(0);
 
-    // New stall — fresh window opens at perfNow=10_000, threshold relative to it
     perfNow = 10_000;
     tracker.onWaiting();
     ticker.tick(10_000 + BUFFERING_SPINNER_DELAY_MS - 1);
@@ -197,14 +182,12 @@ describe("StallTracker", () => {
   it("onStalled does not interact with the spinner state", () => {
     const tracker = makeTracker();
     tracker.onWaiting();
-    tracker.onStalled(); // network-slow warning only
+    tracker.onStalled();
     ticker.tick(BUFFERING_SPINNER_DELAY_MS);
-    expect(spinnerShown).toBe(1); // spinner still fires from the waiting handler
+    expect(spinnerShown).toBe(1);
   });
 
   it("buffered_ahead === null is recorded as buffer.empty=true on the span", () => {
-    // We can't introspect the OTel span directly without setup, but we can
-    // verify the no-throw path under the empty buffer branch.
     bufferedAhead = null;
     const tracker = makeTracker();
     expect(() => tracker.onWaiting()).not.toThrow();

@@ -55,10 +55,7 @@ export const ProfilesPageContent: FC = () => {
   const filmId = params.get("film");
   const editingFilm = params.get("edit") === "1";
 
-  // Live scan state, keyed by library id. Subscribing to
-  // libraryScanProgress lets the row spinner + done/total label update in
-  // real time without a manual refresh; the post-scan refetch then
-  // surfaces the freshly-discovered videos.
+  // Live scan state keyed by library id; refetch post-scan to surface newly-discovered videos.
   const [scanByLibrary, setScanByLibrary] = useState<Map<string, LibraryScanSnapshot>>(new Map());
   const wasScanningRef = useRef(false);
 
@@ -73,9 +70,7 @@ export const ProfilesPageContent: FC = () => {
         });
         return;
       }
-      // scanning=false: clear any state we tracked. If we just transitioned
-      // from scanning, refetch the libraries list so newly-discovered
-      // videos populate without a manual refresh.
+      // On scan completion, clear state and refetch to surface newly-discovered videos.
       if (wasScanningRef.current) {
         wasScanningRef.current = false;
         setScanByLibrary(new Map());
@@ -86,8 +81,7 @@ export const ProfilesPageContent: FC = () => {
   );
   useLibraryScanSubscription(handleScanUpdate);
 
-  // Flatten { library, video } edges so we can resolve the selected film
-  // in O(1) and pre-expand its parent profile on mount / deep-link.
+  // Flatten { library, video } edges for O(1) film lookup.
   type Edge = (typeof data.libraries)[number]["videos"]["edges"][number]["node"];
   const flatVideos = useMemo(() => {
     const out: { libraryId: string; node: Edge }[] = [];
@@ -112,18 +106,14 @@ export const ProfilesPageContent: FC = () => {
   }, []);
   const { paneWidth, containerRef, onResizeMouseDown } = useSplitResize(defaultPaneWidth);
 
-  // First-mount default selection: pick the first matched movie so the
-  // page lands with the DetailPane already open. Skips if URL already
-  // carries a `?film=` (deep-link or back-nav) or `?empty=1`.
+  // Auto-select first movie on mount to open DetailPane; skip if URL has ?film= or ?empty=1.
   useEffect(() => {
     if (params.get("film") || params.get("empty") === "1") return;
     const firstMovie = flatVideos.find(
       (v) => v.node.mediaType === "MOVIES" && Boolean(v.node.title)
     );
     if (firstMovie) setParams({ film: firstMovie.node.id }, { replace: true });
-    // Run once on mount; re-firing on URL change would override an
-    // intentional close.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- run once on mount
   }, []);
 
   const openFilm = (id: string): void => {
@@ -142,8 +132,7 @@ export const ProfilesPageContent: FC = () => {
     navigate(`/profiles/new?return_to=${returnTo}`);
   };
 
-  // Empty state preview: `/profiles?empty=1` for the design lab. Production
-  // also falls back here when there are no libraries at all.
+  // Empty state: ?empty=1 (design lab) or no libraries available.
   if (params.get("empty") === "1" || data.libraries.length === 0) {
     return <EmptyLibrariesHero watermark={strings.emptyWatermark} />;
   }

@@ -1,5 +1,4 @@
-//! `Library` + `LibraryStats`. The `videos` field is paginated and the
-//! `stats` field aggregates totals across the library.
+//! `Library` + `LibraryStats` — paginated videos field, aggregated totals in stats.
 
 use async_graphql::{ComplexObject, Context, SimpleObject, ID};
 

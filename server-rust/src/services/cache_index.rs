@@ -1,15 +1,4 @@
-//! Content-addressed segment cache lookup.
-//!
-//! Cache hits are resolved structurally: a `SegmentCacheKey` tuple of
-//! `(video_id, resolution, start_s, end_s)` indexes the `transcode_jobs`
-//! table. The chunker also computes a sha1-derived `id` for the in-memory
-//! job store, but that hash is an implementation detail — the cache
-//! primitive is the structural tuple. This separation keeps a future
-//! sharing peer (which may compute a different internal id) able to
-//! resolve the same cached encode.
-//!
-//! Forward-constraint reference: `docs/architecture/Sharing/00-Peer-Streaming.md`.
-//! Cache-key tuple matches `Plan/02-Streaming.md` §"Sharing forward-constraints".
+//! Content-addressed segment cache lookup by (video_id, resolution, start_s, end_s) tuple.
 
 use crate::db::queries::jobs::TranscodeJobRow;
 use crate::db::Db;
@@ -73,7 +62,6 @@ fn from_job_row(r: &Row<'_>) -> rusqlite::Result<TranscodeJobRow> {
     })
 }
 
-// ── Tests ────────────────────────────────────────────────────────────────────
 //
 // Cover the structural lookup contract: the same content range produces
 // the same hit, a different range or resolution misses, and `status` is

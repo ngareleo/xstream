@@ -1,8 +1,4 @@
-//! Segment queries.
-//!
-//! Segments belong to a transcode job (FK CASCADE). The chunker writes one
-//! row per encoded segment as ffmpeg flushes it; the stream route reads
-//! them back when the in-memory job state has been evicted.
+//! Segment queries — written by chunker, read by stream route.
 
 use rusqlite::{params, OptionalExtension, Row};
 
@@ -94,7 +90,6 @@ pub fn delete_segments_by_job(db: &Db, job_id: &str) -> DbResult<usize> {
     })
 }
 
-// ── Tests ────────────────────────────────────────────────────────────────────
 //
 // Each test seeds the FK-parent chain (libraries → videos → transcode_jobs)
 // inline so a fresh `:memory:` db starts from a known state. Coverage spans

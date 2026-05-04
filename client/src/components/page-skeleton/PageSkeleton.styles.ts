@@ -3,7 +3,6 @@ import { makeStyles } from "@griffel/react";
 import { tokens } from "~/styles/tokens";
 
 export const usePageSkeletonStyles = makeStyles({
-  // ── Shimmer skeleton ──────────────────────────────────────────────────────
   skeleton: {
     background: "linear-gradient(90deg, #161616 25%, #1C1C1C 50%, #161616 75%)",
     backgroundSize: "200% 100%",
@@ -17,7 +16,6 @@ export const usePageSkeletonStyles = makeStyles({
     borderRadius: "4px",
   },
 
-  // ── Shared shell ──────────────────────────────────────────────────────────
   statsRow: {
     display: "flex",
     alignItems: "center",
@@ -61,7 +59,6 @@ export const usePageSkeletonStyles = makeStyles({
     flexDirection: "column",
     gap: "6px",
   },
-  // ── Dashboard skeletons ───────────────────────────────────────────────────
   hero: {
     height: "220px",
     flexShrink: "0",
@@ -94,7 +91,6 @@ export const usePageSkeletonStyles = makeStyles({
     gap: "8px",
     borderBottom: `1px solid rgba(255,255,255,0.04)`,
   },
-  // ── Watchlist skeletons ───────────────────────────────────────────────────
   listItem: {
     display: "grid",
     gridTemplateColumns: "60px 1fr auto auto",
@@ -113,7 +109,6 @@ export const usePageSkeletonStyles = makeStyles({
     flexDirection: "column",
     gap: "6px",
   },
-  // ── Settings skeletons ────────────────────────────────────────────────────
   settingsShell: {
     height: "100%",
     display: "grid",
@@ -149,7 +144,6 @@ export const usePageSkeletonStyles = makeStyles({
     paddingBottom: "14px",
     borderBottom: `1px solid ${tokens.colorBorderSoft}`,
   },
-  // ── Layout helpers ────────────────────────────────────────────────────────
   root: {
     display: "flex",
     flexDirection: "column",

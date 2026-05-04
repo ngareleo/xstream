@@ -1,9 +1,6 @@
 import { type Context, context } from "@opentelemetry/api";
 
-// Holds the OTel context for the active playback session so that log records
-// emitted from async callbacks (fetch completions, RAF, Promise chains) are
-// correlated to the session span. The browser has no AsyncLocalStorage, so
-// context.with() only covers the synchronous frame — this module bridges that.
+// Store OTel context for playback session; correlates async callback logs. Browser has no AsyncLocalStorage.
 
 let _sessionCtx: Context = context.active();
 

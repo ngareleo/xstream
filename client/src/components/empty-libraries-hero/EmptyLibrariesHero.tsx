@@ -17,10 +17,7 @@ interface EmptyLibrariesHeroProps {
 export const EmptyLibrariesHero: FC<EmptyLibrariesHeroProps> = ({ watermark }) => {
   const styles = useEmptyLibrariesHeroStyles();
   const location = useLocation();
-  // Encode the current URL into ?return_to= so CreateProfilePage knows
-  // where to send the user back after the mutation lands. URL-based
-  // (rather than Link state) so it survives HMR + browser refresh and
-  // is visible in the URL bar.
+  // Encode URL as return_to=; survives HMR/refresh and visible in address bar.
   const returnTo = encodeURIComponent(location.pathname + location.search);
   const createHref = `/profiles/new?return_to=${returnTo}`;
 

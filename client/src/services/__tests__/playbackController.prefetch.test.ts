@@ -23,9 +23,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite
 
 import { PlaybackController } from "~/services/playbackController.js";
 
-// Stub rAF for the node test environment — PlaybackTicker registers
-// callbacks via requestAnimationFrame; we drive the loop manually below
-// via `priv.ticker.tick()`.
+// Stub rAF; we drive the loop manually via priv.ticker.tick().
 beforeAll(() => {
   if (typeof globalThis.requestAnimationFrame === "undefined") {
     (
@@ -134,8 +132,6 @@ function setupPrefetchHarness(currentTime: number): {
     bufferedEnd: currentTime + 5,
   };
   priv.pipeline = makeFakePipeline();
-  // Replace the real PlaybackTicker with a synchronous fake so we can
-  // drive RAF iterations from the test.
   priv.ticker = makeFakeTicker();
   priv.requestChunk = vi.fn(() => Promise.resolve("next-job"));
   return { controller, priv, startTranscodeChunk };
@@ -151,36 +147,30 @@ describe("PlaybackController prefetch dual-gate", () => {
   });
 
   it("serial gate fires prefetch when foreground COMPLETE arrives well before threshold", () => {
-    // Setup: chunkEnd is far enough ahead that the RAF threshold (90s)
-    // would NOT trip on its own. timeUntilEnd = 1500 - 0 = 1500s.
     const { controller, priv } = setupPrefetchHarness(0);
     priv.chunkEnd = 1500;
     priv.foregroundJobId = "fg-job";
 
     priv.startPrefetchLoop("4k");
-    priv.ticker.tick(); // RAF gate alone wouldn't fire — verify silence
+    priv.ticker.tick();
     expect(priv.prefetchFired).toBe(false);
     expect(priv.requestChunk).not.toHaveBeenCalled();
 
-    // Simulate the subscription's COMPLETE update for the current foreground.
     controller.onTranscodeComplete("fg-job");
     expect(priv.foregroundTranscodeComplete).toBe(true);
 
     priv.ticker.tick();
     expect(priv.prefetchFired).toBe(true);
     expect(priv.requestChunk).toHaveBeenCalledTimes(1);
-    // chunkEnd was 1500; new request should start there.
     const callArgs = (priv.requestChunk as ReturnType<typeof vi.fn>).mock.calls[0];
-    expect(callArgs[1]).toBe(1500); // nextStart
-    expect(callArgs[3]).toBe(true); // isPrefetch
+    expect(callArgs[1]).toBe(1500);
+    expect(callArgs[3]).toBe(true);
   });
 
   it("RAF safety net still fires when foreground hasn't completed yet", () => {
-    // Setup: chunkEnd is close enough that timeUntilEnd ≤ 90s. No COMPLETE
-    // update arrives — the foreground's encode is lagging behind realtime.
-    // The RAF threshold should fire prefetch anyway.
+    // chunkEnd is close; timeUntilEnd ≤ 90s. No COMPLETE update — encode lags.
     const { priv } = setupPrefetchHarness(50);
-    priv.chunkEnd = 60; // timeUntilEnd = 10s, well under 90s threshold.
+    priv.chunkEnd = 60;
     priv.foregroundJobId = "fg-job";
     priv.foregroundTranscodeComplete = false;
 
@@ -192,9 +182,7 @@ describe("PlaybackController prefetch dual-gate", () => {
   });
 
   it("ignores stale COMPLETE updates for a previous chunk's job ID", () => {
-    // After a chunk transition, foregroundJobId points at the new chunk.
-    // A late-arriving subscription update for the OLD chunk's job ID
-    // should not open the gate prematurely.
+    // Late-arriving COMPLETE for old job should not open gate.
     const { controller, priv } = setupPrefetchHarness(0);
     priv.chunkEnd = 1500;
     priv.foregroundJobId = "current-fg-job";
@@ -210,9 +198,7 @@ describe("PlaybackController prefetch dual-gate", () => {
   });
 
   it("does not double-fire when both gates open in the same tick", () => {
-    // Both gates true simultaneously (encode completed AND chunkEnd is
-    // imminent). prefetchFired guards against a second mutation in the
-    // same tick or the very next tick.
+    // prefetchFired guards against second mutation in same/next tick.
     const { controller, priv } = setupPrefetchHarness(50);
     priv.chunkEnd = 60;
     priv.foregroundJobId = "fg-job";

@@ -37,10 +37,7 @@ export const Poster: FC<PosterProps> = ({ url, alt, className, width = 800 }) =>
     );
   }
 
-  // For locally cached posters (`/poster/<basename>`) prepend the
-  // server origin so the dev client (different port from the server)
-  // can fetch them. Then run the OMDb size upgrader, which is a no-op
-  // on local URLs.
+  // Prepend server origin for local posters; run OMDb upgrader (no-op on local URLs).
   const resolved = resolvePosterUrl(url) ?? url;
 
   return (

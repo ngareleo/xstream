@@ -1,13 +1,4 @@
-//! Tracing + OpenTelemetry initialisation.
-//!
-//! - OTLP/HTTP protobuf exporter.
-//! - Endpoint from `OTEL_EXPORTER_OTLP_ENDPOINT`, defaulting to
-//!   `http://localhost:5341/ingest/otlp` (Seq in dev).
-//! - W3C TraceContext propagator registered globally so the
-//!   `RequestContext` middleware can extract `traceparent` from any peer.
-//!
-//! `init` returns `AppResult<()>`. The caller (`main`) propagates failures
-//! out of the process via `Result<(), AppError>` instead of panicking.
+//! Tracing + OpenTelemetry initialisation — OTLP/HTTP exporter to Seq, W3C TraceContext propagator.
 
 use std::time::Duration;
 

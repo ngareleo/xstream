@@ -1,5 +1,4 @@
-//! `WatchlistItem` — one row per saved film. Watchlist is keyed on
-//! `film_id`; the player picks which file copy to play.
+//! `WatchlistItem` — one row per saved film, keyed on `film_id`.
 
 use async_graphql::{Context, Object, ID};
 

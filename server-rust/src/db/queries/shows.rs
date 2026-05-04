@@ -1,10 +1,4 @@
-//! Show queries — logical TV-series entities owning seasons + episodes,
-//! whose episode files live as `videos` rows linked by
-//! `(show_id, show_season, show_episode)`.
-//!
-//! Mirrors `films.rs`. The dedup contract — `imdb_id` canonical with
-//! `parsed_title_key` fallback — is identical: see
-//! `docs/architecture/Library-Scan/03-Show-Entity.md`.
+//! Show queries — logical TV-series entities. See docs/architecture/Library-Scan/03-Show-Entity.md.
 
 use rusqlite::{params, params_from_iter, OptionalExtension, Row, ToSql};
 
@@ -283,8 +277,6 @@ pub fn resolve_show_for_directory(
     upsert_show(db, &row)?;
     Ok(row)
 }
-
-// ── Tests ────────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
 mod tests {

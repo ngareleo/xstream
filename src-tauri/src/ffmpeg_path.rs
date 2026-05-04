@@ -1,20 +1,4 @@
-//! Tauri-aware ffmpeg + ffprobe path resolution.
-//!
-//! In packaged Tauri builds, `bun run setup-ffmpeg --target=tauri-bundle`
-//! stages the portable jellyfin-ffmpeg binaries under
-//! `src-tauri/resources/ffmpeg/<platform>/` at build time; Tauri's bundler
-//! preserves the source-relative path of every `bundle.resources` entry
-//! when copying into the installed app, so the runtime layout is
-//! `<resource_dir>/resources/ffmpeg/<platform>/{ffmpeg,ffprobe}`. The
-//! double `resources/` segment looks awkward but it's load-bearing — it
-//! keeps `tauri dev` (resources copied under `target/debug/resources/`)
-//! and `tauri build` (resources installed under the OS-specific resource
-//! root) symmetric, so the dev/prod path resolution is the same code.
-//!
-//! Platform key uses the same Node-style aliases as
-//! `xstream_server::services::ffmpeg_path::platform_key` (`linux-x64`,
-//! `darwin-arm64`, `win32-x64`) so a single staging convention works for
-//! both the bundled and the dev `vendor/ffmpeg/<platform>/` layouts.
+//! Resolve bundled ffmpeg paths from the Tauri resource directory.
 
 use std::path::{Path, PathBuf};
 

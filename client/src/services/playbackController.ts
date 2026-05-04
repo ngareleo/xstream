@@ -87,56 +87,38 @@ export class PlaybackController {
   private status: PlaybackStatus = "idle";
   private resolution: Resolution = "240p";
   private sessionSpan: Span | null = null;
-  // Wall-clock anchor for cold-start latency metrics — captured at session
-  // span creation, used to derive `playback.time_to_first_frame_ms` and
-  // `playback.time_to_first_prefetch_ms` as first-class span attributes.
+  // Cold-start anchors for `playback.time_to_first_frame_ms` and
+  // `playback.time_to_first_prefetch_ms` — see
+  // docs/architecture/Observability/client/00-Spans.md.
   private sessionStartMs: number | null = null;
-  // One-shot flag: only the very first `video.play()` of a session writes
-  // `time_to_first_frame_ms` (seek-resumes pass through the same code path
-  // but represent re-fills, not cold-start, so they must not overwrite).
   private firstFrameRecorded = false;
-  // Same shape for the first prefetch RAF fire — `prefetchFired` is reset on
-  // every chunk boundary, so a separate session-scoped flag is needed.
   private firstPrefetchRecorded = false;
-  // Wall-clock deadline during which `StallTracker.onWaiting` should skip
-  // its spinner-debounce. Set when `tryPlay` flips `hasStartedPlayback` →
-  // true (cold-start AND seek-resume) because the video element fires
-  // `waiting` for hundreds of ms while the decoder renders the first frame
-  // post-`play()`. Without this, the 2 s debounce can fire and re-show the
-  // spinner over already-playing video — the wrong UX impression on seek.
-  // Cleared in `handlePlaying` (decoder rendered) and naturally expires 5 s
-  // after the grace begins so an extreme-stall path still surfaces a
-  // spinner if `playing` never fires.
+  // First-render grace window — `waiting` fires for ~hundreds of ms while the
+  // decoder renders the first frame post-`play()`, which would otherwise
+  // re-show the spinner over already-playing video on seek-resume.
+  // Cleared in `handlePlaying`; auto-expires 5 s after grace begins.
   private firstRenderGraceUntil: number | null = null;
 
   private buffer: BufferManager | null = null;
   private pipeline: ChunkPipeline | null = null;
   private bgBuffer: BufferManager | null = null;
   private bgPipeline: ChunkPipeline | null = null;
-  // Forwarder for the background pipeline's foreground onStreamEnded — starts
-  // as a no-op while the bg buffer is being filled in the background, then is
-  // re-pointed to the real handleChunkEnded after the swap. The closure is
-  // captured by the slot's opts at openSlot time, so reassigning this variable
-  // (not the opts object) is what threads the new behaviour through.
+  // Forwarder — reassigning this variable threads new behaviour through
+  // the slot's captured `opts` after the bg→fg swap.
   private bgOnStreamEnded: (outcome: StreamOutcome) => void = () => {};
 
   private chunkEnd = 0;
   private prefetchFired = false;
 
-  // Tracks whether the *current foreground chunk's* server-side transcode
-  // has reached `status: COMPLETE` (per `transcodeJobUpdated`). Drives the
-  // serial-prefetch invariant: the next chunk's mutation can fire as soon
-  // as the previous chunk's encode is done, without waiting for the RAF
-  // threshold. Reset to false on every new foreground (start of session,
-  // chunk continuation, recovery, seek). The `foregroundJobId` mirror lets
-  // a late-arriving subscription update for a *previous* chunk's job ID
-  // be safely ignored.
+  // Drives the serial-prefetch invariant — see
+  // docs/architecture/Streaming/02-Chunk-Pipeline-Invariants.md §4.
+  // `foregroundJobId` mirrors the active job so late updates for a previous
+  // chunk's job can be ignored.
   private foregroundTranscodeComplete = false;
   private foregroundJobId: string | null = null;
 
   // Owns the cold-start chunk-duration ramp. Reset at every fresh-playhead
-  // anchor (session start, seek, MSE recovery, resolution swap) so the user
-  // gets a fast first frame after any user-visible reposition.
+  // anchor (session start, seek, MSE recovery, resolution swap).
   private readonly rampController = new RampController(
     clientConfig.playback.chunkRampS,
     clientConfig.playback.chunkSteadyStateS
@@ -145,14 +127,11 @@ export class PlaybackController {
   private hasStartedPlayback = false;
 
   private isHandlingSeek = false;
-  // The user's most-recent seek target (their actual position, not a snap).
-  // Filters out the asynchronously-queued "seeking" event fired by
-  // BufferManager.seek()'s own videoEl.currentTime assignment so it doesn't
-  // re-trigger a full seek/flush cycle. Cleared when the video fires
-  // "playing" (seek resolved, playback resumed).
+  // The user's most-recent seek target. Filters out the asynchronously-queued
+  // `seeking` event fired by `BufferManager.seek()`'s own currentTime assign.
   private seekTarget: number | null = null;
-  // Set by seekTo() before updating currentTime so handleSeeking can read the
-  // unclamped target instead of whatever the browser clamped currentTime to.
+  // Set by `seekTo()` before updating currentTime so `handleSeeking` reads the
+  // unclamped target instead of the browser-clamped value.
   private pendingSeekTarget: number | null = null;
 
   private readonly ticker: PlaybackTicker;
@@ -160,14 +139,8 @@ export class PlaybackController {
   private cancelStartupHandler: (() => void) | null = null;
   private cancelBgReadyHandler: (() => void) | null = null;
 
-  // ── User-pause state ───────────────────────────────────────────────────────
-  // While the video element is paused by the user, `timeupdate` is silent so
-  // the BufferManager's backpressure check never runs — the network fetch
-  // would keep appending until MSE detaches the SourceBuffer. The poller
-  // below drives `tickBackpressure` on a 1 s interval to plug that gap.
-  // Once the buffer fills past forwardTargetS the prefetch for chunk N+1 is
-  // fired (server-side encode-to-disk; lookahead svc immediately suspended
-  // so no segments accumulate in RAM during the pause).
+  // While paused, `timeupdate` is silent so backpressure never runs.
+  // Poller drives `tickBackpressure` on a 1 s interval to plug that gap.
   private userPauseInterval: ReturnType<typeof setInterval> | null = null;
   private userPausePrefetchFired = false;
 
@@ -224,12 +197,9 @@ export class PlaybackController {
     this.attachVideoListeners();
   }
 
-  // ── Public API ─────────────────────────────────────────────────────────────
-
   startPlayback(res: Resolution): void {
     const videoEl = this.deps.videoEl;
 
-    // Resolution switch while playing → background buffer swap
     if (this.status === "playing" && this.buffer) {
       this.resolution = res;
       this.switchResolution(res);
@@ -245,8 +215,6 @@ export class PlaybackController {
     const videoId = this.deps.getVideoId();
     const videoDurationS = this.deps.getVideoDurationS();
 
-    // Start a root span for this playback session. All child spans (fetch,
-    // buffer appends) will link to this trace via W3C traceparent propagation.
     const sessionSpan = playbackTracer.startSpan("playback.session", {
       attributes: { "video.id": videoId, "playback.resolution": res },
     });
@@ -254,7 +222,6 @@ export class PlaybackController {
     this.sessionStartMs = performance.now();
     const traceId = sessionSpan.spanContext().traceId;
 
-    // Record the session in the DB so the user can look it up in Seq later.
     this.deps.recordSession({ traceId, resolution: res });
 
     playbackLog.info(
@@ -267,16 +234,13 @@ export class PlaybackController {
       }
     );
 
-    // Store the session context module-wide so all log records emitted from
-    // async callbacks (fetch, RAF, Promise chains) carry this traceId.
-    // The browser has no AsyncLocalStorage, so context.with() alone is not
-    // enough — it only covers the synchronous frame.
+    // Browser has no AsyncLocalStorage — context.with() alone doesn't carry
+    // async callbacks (fetch, RAF, Promise chains); set module-wide context.
     const sessionCtx = trace.setSpan(context.active(), sessionSpan);
     setSessionContext(sessionCtx);
 
-    // Closure-capture the pipeline OBJECT (not `this.pipeline`) so the buffer's
-    // pause/resume keep working even if `this.pipeline` is reassigned during a
-    // resolution swap. Forward-declared because the pipeline needs the buffer.
+    // Closure-capture the pipeline OBJECT (not `this.pipeline`) so pause/resume
+    // survive resolution swaps. Forward-declared because pipeline needs buffer.
     // eslint-disable-next-line prefer-const -- captured by buffer's pause/resume closures, assigned after buffer construction
     let pipeline: ChunkPipeline;
     const buffer = new BufferManager(
@@ -291,23 +255,12 @@ export class PlaybackController {
     this.buffer = buffer;
     this.pipeline = pipeline;
 
-    // Fire the foreground chunk mutation in PARALLEL with `buffer.init()` —
-    // they have no causal dependency. The mutation's GraphQL RTT (~100–500 ms)
-    // and ffmpeg cold-start (10–30 s on 4K VAAPI before init.mp4 lands) now
-    // overlap with MSE bootstrap, instead of running serially after it. We
-    // still await both before opening the foreground stream — `pipeline.startForeground`
-    // requires the SourceBuffer (from init) and the rawJobId (from the
-    // mutation), so the order at that point is `Promise.all`-gated, not
-    // serial.
-    // Cold-start consumes ramp slot 0 (`chunkRampS[0]`) so the first ffmpeg
-    // job is small and time-to-first-frame is dominated by transcode latency
-    // for ~10 s of media instead of ~300 s. Subsequent chunks walk up the
-    // ramp via `handleChunkEnded` / prefetch. Caveat: `-ss 0 -t <small>` on
-    // VAAPI HDR 4K silently produces zero segments (trace 1bac05bd…); the
-    // ramp accepts that risk in exchange for the cold-start latency win and
-    // relies on the structural fix (zero-segment-on-clean-exit detection +
-    // SW fallback, `docs/server/Hardware-Acceleration/01-HDR-Pad-Artifact.md`)
-    // to recover when it bites.
+    // Parallel init + mutation: GraphQL RTT (~100–500 ms) and ffmpeg cold-start
+    // (10–30 s on 4K VAAPI) now overlap with MSE bootstrap. Promise.all gates
+    // at startForeground to wait for both. Cold-start ramp slot 0 makes first
+    // job small — ~10 s transcode dominates, not full ~300 s. See
+    // docs/server/Hardware-Acceleration/01-HDR-Pad-Artifact.md for VAAPI HDR 4K
+    // zero-segment caveat and recovery path.
     const firstChunkEnd = Math.min(this.rampController.next(), videoDurationS);
     void context.with(sessionCtx, () => {
       const initPromise = buffer.init(RESOLUTION_MIME_TYPE[res]).then(() => {
@@ -337,8 +290,8 @@ export class PlaybackController {
   }
 
   seekTo(targetSeconds: number): void {
-    // Store the intended target BEFORE setting currentTime so that the
-    // synchronous "seeking" DOM event fires while pendingSeekTarget is set.
+    // Capture target before currentTime assignment so synchronous seeking event
+    // fires with pendingSeekTarget already set.
     this.pendingSeekTarget = targetSeconds;
     this.deps.videoEl.currentTime = targetSeconds;
   }
@@ -360,14 +313,10 @@ export class PlaybackController {
     this.detachListeners = [];
   }
 
-  // ── State helpers ──────────────────────────────────────────────────────────
-
   private setStatus(s: PlaybackStatus): void {
     const from = this.status;
     this.status = s;
-    // Record every real transition so Seq can answer "during the seek window,
-    // did status flip back to playing prematurely?" — the spinner-race
-    // regression shape from before the handlePlaying isHandlingSeek guard.
+    // Record transitions for Seq to diagnose seek-window spinner races.
     if (from !== s) {
       this.sessionSpan?.addEvent("playback.status_changed", {
         from,
@@ -423,7 +372,6 @@ export class PlaybackController {
     clearSessionContext();
 
     this.events.onJobCreated(null);
-    playbackLog.info("Playback teardown");
   }
 
   /**
@@ -437,26 +385,18 @@ export class PlaybackController {
     const videoEl = this.deps.videoEl;
     const tryPlay = (): void => {
       if (this.hasStartedPlayback) return;
-      // Compare seconds-buffered-AHEAD-of-currentTime, not absolute bufferedEnd.
-      // After a seek to e.g. 600s, the first appended segment lands at PTS≈600
-      // (chunker emits with -output_ts_offset), so absolute bufferedEnd≈602 vs
-      // a target of 5s would trivially pass after one segment — video.play()
-      // would fire with only ~2s of data ahead and immediately stall.
+      // Check ahead-of-currentTime, not absolute bufferedEnd. After seek to 600s,
+      // first segment at PTS≈600, so abs bufferedEnd≈602 would trivially pass a 5s
+      // target after one segment, leaving only ~2s ahead → immediate stall.
       const ahead = buffer.getBufferedAheadSeconds(videoEl.currentTime);
       if (ahead !== null && ahead >= target) {
         this.hasStartedPlayback = true;
-        // Open the first-render grace window so StallTracker doesn't arm
-        // its 2 s spinner-debounce while the decoder is rendering the first
-        // frame after `play()`. The video element fires `waiting` for the
-        // hundreds-of-ms decoder warmup; that's not a user-visible freeze
-        // and shouldn't show the spinner. Cleared by `handlePlaying`; also
-        // self-expires after 5 s so a true post-resume stall still surfaces.
+        // Grace window blocks StallTracker spinner while decoder renders first
+        // frame post-play (hundreds of ms, not user-visible freeze). Self-expires
+        // in 5 s if no recovery; cleared by handlePlaying.
         this.firstRenderGraceUntil = performance.now() + clientConfig.playback.firstRenderGraceMs;
-        // Promote time-to-first-frame to a first-class session-span attribute
-        // so cold-start regressions show up as a single Seq column instead of
-        // log-line correlation. `firstFrameRecorded` is the one-shot guard —
-        // seek-resumes also pass through this code path but represent re-fills,
-        // not cold-start, so they must not overwrite the metric.
+        // Record cold-start time-to-first-frame as session attribute for Seq.
+        // Guard with firstFrameRecorded since seek-resumes also use this path.
         if (!this.firstFrameRecorded && this.sessionSpan && this.sessionStartMs !== null) {
           this.firstFrameRecorded = true;
           this.sessionSpan.setAttribute(
@@ -469,8 +409,8 @@ export class PlaybackController {
       }
     };
     buffer.setAfterAppend(tryPlay);
-    // Cancel any pre-existing startup handler — possible during a seek-resume
-    // that fires before the previous one resolved.
+    // Cancel pre-existing handler — possible during seek-resume firing before
+    // the previous startup handler resolved.
     this.cancelStartupHandler?.();
     this.cancelStartupHandler = this.ticker.register(() => {
       tryPlay();
@@ -490,14 +430,12 @@ export class PlaybackController {
     outcome: StreamOutcome
   ): void {
     const videoDurationS = this.deps.getVideoDurationS();
-    // `chunkEndS` is what the *caller* actually requested (relevant under the
-    // ramp because each chunk's duration is consumed when the request fires,
-    // not derivable here from a fixed steady-state).
+    // chunkEndS is the caller's actual request (under ramp, duration consumed
+    // at request time, not derivable here from steady-state).
     const chunkEnd = Math.min(chunkEndS, videoDurationS);
     const isLast = chunkEnd >= videoDurationS;
 
     if (outcome === "no_real_content") {
-      // Pipeline already called buffer.markStreamDone() — nothing more to play.
       this.events.onJobCreated(null);
       return;
     }
@@ -505,26 +443,18 @@ export class PlaybackController {
     if (isLast) {
       buffer.markStreamDone();
       this.events.onJobCreated(null);
-      playbackLog.info("Final chunk done");
       return;
     }
 
     const nextStart = chunkEnd;
     this.prefetchFired = false;
-    // The previous foreground's COMPLETE no longer applies to the new
-    // foreground. Reset before either branch sets up the new foreground
-    // so a stale subscription update can't accidentally open the gate
-    // for the wrong chunk.
+    // Reset before wiring new foreground so stale transcodeJobUpdated → COMPLETE
+    // can't accidentally open the serial prefetch gate for the wrong chunk.
     this.foregroundTranscodeComplete = false;
 
     if (this.pipeline?.hasLookahead()) {
-      // Lookahead's stream + onStreamEnded are already wired (set at openLookahead
-      // time). Promotion just transfers control — its onStreamEnded will fire
-      // again when this chunk completes, calling handleChunkEnded recursively.
-      // The lookahead's bounds were captured at prefetch time and now live on
-      // the slot; we read them back instead of re-deriving (under the ramp,
-      // the duration was consumed by the prefetch's `rampController.next()` and
-      // can't be recomputed here without double-billing the cursor).
+      // Lookahead already has stream + onStreamEnded wired. Promotion transfers
+      // control; bounds were captured at prefetch time and live on the slot.
       const { jobId, chunkStartS, chunkEndS } = this.pipeline.promoteLookahead();
       this.chunkEnd = chunkEndS;
       this.foregroundJobId = jobId;
@@ -532,19 +462,14 @@ export class PlaybackController {
       this.timeline.setForegroundChunk(chunkStartS, chunkEndS);
       this.updateSessionTimelineAttrs();
     } else {
-      // Prefetch never fired (e.g. very short chunk, slow server) — request
-      // fresh. startChunkSeries consumes the next ramp slot and updates
-      // `this.chunkEnd` itself.
+      // Prefetch never fired (short chunk or slow server) — request fresh.
       this.startChunkSeries(res, nextStart, buffer, false);
     }
   }
 
-  /** Snapshots the timeline and writes the predictions as attributes on the
-   *  session span. Called at every transition that may change the timeline
-   *  state (foreground change, lookahead open, lookahead promote/clear). The
-   *  most-recent attribute values overwrite prior ones — Seq surfaces the
-   *  span's final attribute set so a trace inspector sees the timeline at
-   *  the time of teardown. */
+  /** Snapshots the timeline and writes predictions as session-span attributes.
+   *  Called at every timeline state transition. Most-recent values overwrite
+   *  prior ones — Seq surfaces the final set at teardown. */
   private updateSessionTimelineAttrs(): void {
     if (!this.sessionSpan) return;
     const snapshot = this.timeline.snapshot(this.deps.videoEl.currentTime);
@@ -591,22 +516,12 @@ export class PlaybackController {
     this.waitForStartupBuffer(buffer, startupTarget, () => {
       videoEl.play().catch(() => {});
       this.setStatus("playing");
-      playbackLog.info(
-        `video.play() — buffered ${buffer.bufferedEnd.toFixed(1)}s >= ${startupTarget}s threshold`,
-        {
-          buffered_s: parseFloat(buffer.bufferedEnd.toFixed(1)),
-          startup_target_s: startupTarget,
-        }
-      );
     });
   }
 
-  // ── Chunk scheduler ────────────────────────────────────────────────────────
-
   /** Fires a startTranscode mutation for the given time window and returns the raw job ID.
-   * `isPrefetch` distinguishes RAF-driven prefetch requests from on-demand chain calls
-   * on the `transcode.request` span so Seq queries like
-   * `SpanName = 'transcode.request' and chunk.is_prefetch = true` are one click away. */
+   * `isPrefetch` distinguishes RAF-driven prefetch from on-demand requests on the
+   * `transcode.request` span for Seq filtering. */
   private requestChunk(
     res: Resolution,
     startS: number,
@@ -654,17 +569,12 @@ export class PlaybackController {
   }
 
   /**
-   * Three-tier retry around `startTranscodeChunk`. Mirrors `BufferManager`'s
-   * QuotaExceededError loop — named attempts, structured per-attempt logging,
-   * fatal break for non-retryable codes. The mutation handler in
-   * `useChunkedPlayback` already discriminates the union and rejects with a
-   * typed `PlaybackError`, so this loop only needs to inspect `code` /
-   * `retryable` / `retryAfterMs`.
-   *
-   * IMPORTANT: do NOT trigger `playback.stalled` for retryable rejections —
-   * `CAPACITY_EXHAUSTED` is healthy backpressure, not a freeze. The retry is
-   * recorded as a `playback.recovery_attempt` event on the surrounding
-   * `transcode.request` span instead.
+   * Three-tier retry around `startTranscodeChunk` with named attempts and
+   * per-attempt logging. Mutation handler in `useChunkedPlayback` discriminates
+   * the union and rejects with typed `PlaybackError`, so this only inspects
+   * `code` / `retryable` / `retryAfterMs`. IMPORTANT: do NOT trigger
+   * `playback.stalled` for retryable rejections — `CAPACITY_EXHAUSTED` is
+   * healthy backpressure, not a freeze.
    */
   private async runStartChunkWithRetry(
     res: Resolution,
@@ -683,8 +593,6 @@ export class PlaybackController {
       } catch (err) {
         lastErr = err as Error;
         if (!isPlaybackError(err) || !err.retryable) {
-          // Non-retryable code (or untyped error) — record the outcome and
-          // propagate immediately; the caller sets the span ERROR status.
           requestSpan.addEvent("recovery.outcome", {
             outcome: isPlaybackError(err) ? "non_retryable" : "untyped_error",
             "error.code": isPlaybackError(err) ? err.code : "unknown",
@@ -719,8 +627,6 @@ export class PlaybackController {
         await new Promise((r) => setTimeout(r, waitMs));
       }
     }
-    // Loop only exits via return or throw above; this is unreachable. Keep
-    // the throw so TS sees a definite return path without a non-null bang.
     throw lastErr ?? new Error("Retry loop exited without resolution");
   }
 
@@ -735,31 +641,21 @@ export class PlaybackController {
     startS: number,
     buffer: BufferManager,
     isFirstChunk: boolean,
-    /** Optional overrides. `endS` lets the seek path clamp the chunk end to
-     *  `nextSnap` so the continuation re-aligns with the canonical 300s grid.
-     *  `preIssuedJobId` lets startPlayback hand in a jobId already fetched in
-     *  parallel with `buffer.init()` — avoiding a second mutation for the
-     *  same `(start, end)` tuple. */
+    /** Optional overrides. `endS` lets the seek path clamp the chunk end.
+     *  `preIssuedJobId` lets startPlayback reuse a jobId already fetched in
+     *  parallel with `buffer.init()`. */
     override?: { endS?: number; preIssuedJobId?: string }
   ): void {
     const videoDurationS = this.deps.getVideoDurationS();
-    // Window size comes from the ramp when the caller hasn't passed an
-    // explicit `endS`. Cold-start and seek paths use the override (they
-    // computed the end before calling us so the value is captured in their
-    // logs / spans); MSE-detached recovery and handleChunkEnded continuation
-    // fall through to the ramp here. The ramp index is reset at fresh-
-    // playhead anchors elsewhere — this callsite consumes whatever slot is
-    // current.
+    // Window size from ramp, unless caller passed explicit endS. Cold-start
+    // and seek paths use override; handleChunkEnded falls through to ramp.
     const chunkEnd =
       override?.endS ?? Math.min(startS + this.rampController.next(), videoDurationS);
     this.chunkEnd = chunkEnd;
-    // NOTE: `prefetchFired` is intentionally NOT reset here. Every caller
-    // (handleChunkEnded, handleSeeking, handleMseDetached, switchResolution,
-    // startPlayback via fresh state) already resets it before reaching this
-    // point. Resetting again here would double-reset across the async gap in
-    // the seek/MSE-recreate paths (caller reset → RAF fires prefetch #1 →
-    // .then() reaches us → reset again → RAF fires prefetch #2), causing a
-    // duplicate prefetch mutation observed in trace b3dbbc34… on a seek.
+    // prefetchFired is intentionally NOT reset here — every caller resets before
+    // reaching this point. Double-reset across async gap (caller reset → RAF
+    // fires #1 → .then() resets → RAF fires #2) causes duplicate prefetch.
+    // See trace b3dbbc34…
 
     const jobIdPromise = override?.preIssuedJobId
       ? Promise.resolve(override.preIssuedJobId)
@@ -767,12 +663,10 @@ export class PlaybackController {
 
     void jobIdPromise
       .then((rawJobId) => {
-        if (!this.pipeline) return; // Tore down between request and response.
-        // Track the foreground's job ID so a `transcodeJobUpdated → COMPLETE`
-        // subscription update on this exact chunk can open the
-        // serial-prefetch gate. A subsequent foreground (next chunk,
-        // recovery, seek) overwrites this, so a late update for an old
-        // chunk's job is safely filtered in `onTranscodeComplete`.
+        if (!this.pipeline) return;
+        // Track foreground job ID so transcodeJobUpdated → COMPLETE can open
+        // the serial-prefetch gate. Late updates for old chunks are filtered
+        // in onTranscodeComplete.
         this.foregroundJobId = rawJobId;
         this.foregroundTranscodeComplete = false;
         this.timeline.setForegroundChunk(startS, chunkEnd);
@@ -798,41 +692,23 @@ export class PlaybackController {
       });
   }
 
-  // ── MSE recovery (SourceBuffer detached by Chrome) ─────────────────────────
-
   /**
    * Fired by BufferManager when `appendBuffer` rejects with InvalidStateError
    * AND the SB is no longer in `mediaSource.sourceBuffers` — Chrome's
-   * cumulative-budget watchdog detached us. Recovery:
-   *   1. Snapshot currentTime and floor-align to the previous chunk boundary
-   *      so the resume request re-asks for a chunk we know the server will
-   *      serve (not a mid-chunk byte offset).
-   *   2. Tear down the current pipeline + buffer. Recreating in place would
-   *      leave the same BufferManager instance with a dead SB reference.
-   *   3. Build a fresh BufferManager + ChunkPipeline at the same resolution
-   *      and wire a new `handleMseDetached(res)` callback (decrements the
-   *      per-session budget).
-   *   4. Restart `init()` and then startChunkSeries at the floor-aligned
-   *      timestamp. The video element's currentTime is preserved by
-   *      re-assigning after the new MediaSource is attached — the same seek
-   *      machinery handles the jump.
-   *
-   * Budget-exhausted path surfaces MSE_DETACHED as a fatal user-facing error
-   * instead of looping recreates — if 3 recreates in one session weren't
-   * enough, we're not going to fix it with a 4th.
+   * cumulative-budget watchdog detached us. See docs/architecture/Streaming/
+   * for recovery mechanics. Budget-exhausted path surfaces MSE_DETACHED as
+   * fatal instead of looping recreates — if 3 weren't enough, a 4th won't fix.
    */
   private handleMseDetached(res: Resolution): void {
-    if (this.recreateInProgress) return; // already rebuilding; ignore duplicate signals
+    if (this.recreateInProgress) return;
     this.recreateInProgress = true;
 
     const videoEl = this.deps.videoEl;
     const savedTime = videoEl.currentTime;
-    // Recovery is seek-anchored — resume at the user's exact position so the
-    // new ffmpeg run starts at `-ss savedTime` and produces the user's first
-    // useful segment immediately. Same rationale as the seek path; matches
-    // Invariant #1 in `02-Chunk-Pipeline-Invariants.md`.
+    // Recovery is seek-anchored — resume at the user's exact position. See
+    // docs/architecture/Streaming/02-Chunk-Pipeline-Invariants.md § 1.
     const chunkStart = savedTime;
-    const attempt = 4 - this.mseRecreatesRemaining; // 1-based for span/log readability
+    const attempt = 4 - this.mseRecreatesRemaining;
 
     playbackLog.warn(
       `MSE recovery — rebuilding MediaSource (attempt ${attempt}/3, resume at ${chunkStart.toFixed(2)}s)`,
@@ -860,9 +736,6 @@ export class PlaybackController {
     }
     this.mseRecreatesRemaining -= 1;
 
-    // Tear down the dead pipeline + buffer. BufferManager.teardown clears the
-    // MediaSource and revokes the ObjectURL; ChunkPipeline.cancel stops the
-    // foreground + lookahead readers.
     this.pipeline?.cancel("mse_recreate");
     this.pipeline = null;
     this.buffer?.teardown();
@@ -871,14 +744,12 @@ export class PlaybackController {
     this.prefetchFired = false;
     this.foregroundTranscodeComplete = false;
     this.foregroundJobId = null;
-    // Recovery is a fresh-playhead anchor — small first chunk so playback
-    // resumes quickly without re-encoding the full steady-state window.
+    // Fresh-playhead anchor — small first chunk for quick resume.
     this.rampController.reset();
 
-    // Rebuild — same shape as startPlayback's init block but anchored at
-    // `chunkStart` rather than 0. Kept inline (not extracted to a helper)
-    // because the forward-declaration dance with pipeline/buffer is
-    // localised here and easier to read than threading through a shared fn.
+    // Rebuild same shape as startPlayback's init but anchored at chunkStart.
+    // Kept inline because forward-declaration dance with pipeline/buffer is
+    // localized here.
     // eslint-disable-next-line prefer-const -- captured by buffer's pause/resume closures, assigned after buffer construction
     let pipeline: ChunkPipeline;
     const videoDurationS = this.deps.getVideoDurationS();
@@ -897,9 +768,8 @@ export class PlaybackController {
     void buffer
       .init(RESOLUTION_MIME_TYPE[res])
       .then(() => {
-        // Restore playback position; browsers clamp currentTime once the
-        // new MediaSource duration is known — setting it here nudges the
-        // decoder to resume where we left off.
+        // Restore playback position; browsers clamp currentTime to new
+        // MediaSource duration, so setting it nudges decoder back.
         videoEl.currentTime = savedTime;
         this.startChunkSeries(res, chunkStart, buffer, /* isFirstChunk */ true);
         this.startPrefetchLoop(res);
@@ -914,40 +784,25 @@ export class PlaybackController {
       });
   }
 
-  // ── Prefetch RAF loop ──────────────────────────────────────────────────────
-
   private startPrefetchLoop(res: Resolution): void {
     const videoEl = this.deps.videoEl;
-    // Cancel any pre-existing prefetch handler — happens during resolution
-    // swap when a new prefetch loop starts for the new resolution.
+    // Cancel pre-existing handler — happens during resolution swap.
     this.cancelPrefetchHandler?.();
     this.cancelPrefetchHandler = this.ticker.register(() => {
-      if (!this.buffer || !this.pipeline) return false; // Session torn down — deregister.
+      if (!this.buffer || !this.pipeline) return false;
       const videoDurationS = this.deps.getVideoDurationS();
       const chunkEnd = this.chunkEnd;
-      // Gate: only fire when we don't already have a lookahead open AND haven't
-      // already fired one whose request is still in flight (prefetchFired covers
-      // the gap between requestChunk start and openLookahead).
+      // Fire only when no lookahead open and no in-flight prefetch request.
       const hasLookahead = this.pipeline.hasLookahead();
       if (!hasLookahead && !this.prefetchFired && chunkEnd > 0 && chunkEnd < videoDurationS) {
         const timeUntilEnd = chunkEnd - videoEl.currentTime;
-        // Dual-gate: serial primary + RAF safety net. The serial gate
-        // (`foregroundTranscodeComplete`) admits as soon as the current
-        // foreground's `transcode.job` ends with COMPLETE — caps speculative
-        // parallelism at "one prefetched lookahead in flight at a time" so
-        // a seek can't queue behind an old prefetched chunk. The RAF
-        // threshold (`timeUntilEnd ≤ prefetchThresholdS`) stays as a
-        // fallback: if encode falls below realtime and the foreground's
-        // COMPLETE hasn't arrived yet, fire anyway so the playhead doesn't
-        // catch the buffer.
+        // Dual-gate: serial (foregroundTranscodeComplete) caps parallelism at
+        // one lookahead in flight; RAF fallback fires anyway if encoder lags.
         const serialGateOpen = this.foregroundTranscodeComplete;
         const rafGateOpen = timeUntilEnd <= clientConfig.playback.prefetchThresholdS;
         if (serialGateOpen || rafGateOpen) {
           this.prefetchFired = true;
-          // Record the FIRST prefetch fire of the session as a span attribute —
-          // a key signal for the cold-start ramp doing its job (expected ≤1 s
-          // post-Play with `chunkRampS[0]=10`; pre-ramp baseline at the fixed
-          // 300 s window was ~9.5 s on a 4K cold start).
+          // Record first prefetch fire for cold-start ramp diagnostics.
           if (!this.firstPrefetchRecorded && this.sessionSpan && this.sessionStartMs !== null) {
             this.firstPrefetchRecorded = true;
             this.sessionSpan.setAttribute(
@@ -968,10 +823,9 @@ export class PlaybackController {
           );
           void this.requestChunk(res, nextStart, nextEnd, true)
             .then((rawJobId) => {
-              if (!this.pipeline) return; // Tore down between request and response.
-              // Open the /stream/<jobId> fetch immediately — the server's
-              // orphan timer sees connections > 0 and the prefetched job
-              // survives even if the foreground is still streaming.
+              if (!this.pipeline) return;
+              // Open /stream/<jobId> fetch immediately so server's orphan timer
+              // sees connections > 0 and job survives.
               this.timeline.recordLookaheadOpened(rawJobId);
               this.updateSessionTimelineAttrs();
               this.pipeline.openLookahead({
@@ -988,24 +842,20 @@ export class PlaybackController {
               });
             })
             .catch(() => {
-              this.prefetchFired = false; // allow retry on next tick
+              this.prefetchFired = false;
             });
         }
       }
-      return true; // keep ticking
+      return true;
     });
   }
-
-  // ── Resolution switch (background buffer) ──────────────────────────────────
 
   private switchResolution(newRes: Resolution): void {
     const videoEl = this.deps.videoEl;
     const videoDurationS = this.deps.getVideoDurationS();
     const savedTime = videoEl.currentTime;
-    // The background buffer is a fresh-playhead anchor at `savedTime` — same
-    // model as a seek. Reset the ramp so the bg's first chunk is small and
-    // the swap happens fast; the new resolution's startup-buffer threshold is
-    // hit in seconds rather than waiting for a full steady-state encode.
+    // Background buffer is fresh-playhead anchor at savedTime, like a seek.
+    // Reset ramp for small first chunk so swap happens fast.
     this.rampController.reset();
     const chunkStart = savedTime;
     const newChunkEnd = Math.min(chunkStart + this.rampController.next(), videoDurationS);
@@ -1019,15 +869,12 @@ export class PlaybackController {
       }
     );
 
-    // Cancel any in-flight background pipeline + buffer
     this.bgPipeline?.cancel("resolution_switch_restart");
     this.bgPipeline = null;
     this.bgBuffer?.teardown(false);
     this.bgOnStreamEnded = (): void => {};
 
-    // Closure-capture the pipeline OBJECT (not `this.bgPipeline`) so the buffer's
-    // pause/resume keep working through the swap — after swap `this.bgPipeline`
-    // is set to null but the same pipeline object lives on as `this.pipeline`.
+    // Closure-capture pipeline OBJECT so pause/resume survive the swap.
     // eslint-disable-next-line prefer-const -- captured by buffer's pause/resume closures, assigned after buffer construction
     let bgPipeline: ChunkPipeline;
     const bgBuffer = new BufferManager(
@@ -1047,20 +894,16 @@ export class PlaybackController {
         const startupTarget = clientConfig.playback.startupBufferS[newRes];
 
         const onReady = (): void => {
-          // Swap: save currentTime, reassign src, seek, play
           const swapTime = videoEl.currentTime;
           playbackLog.info(`Resolution swapped to ${newRes} at ${swapTime.toFixed(1)}s`, {
             to: newRes,
             swap_time_s: parseFloat(swapTime.toFixed(1)),
           });
 
-          // Tear down old foreground (cancels its foreground + lookahead).
           this.pipeline?.cancel("resolution_switch");
           this.buffer?.teardown(false);
 
-          // Cancel the prefetch loop for the old foreground chunk (a new one
-          // starts via startPrefetchLoop below) and the bg readiness handler
-          // (swap has succeeded).
+          // Cancel prefetch loop and bg readiness handler; swap succeeded.
           this.cancelPrefetchHandler?.();
           this.cancelPrefetchHandler = null;
           this.cancelBgReadyHandler?.();
@@ -1074,24 +917,18 @@ export class PlaybackController {
           this.bgBuffer = null;
           this.pipeline = bgPipeline;
           this.bgPipeline = null;
-          // Re-point the bg slot's onStreamEnded forwarder so the now-foreground
-          // chunk's natural completion drives chunk continuation. `newChunkEnd`
-          // was captured at request time from the same ramp slot the bg
-          // chunk was opened with.
+          // Re-point bgOnStreamEnded so chunk continuation works post-swap.
           this.bgOnStreamEnded = (outcome): void =>
             this.handleChunkEnded(newRes, chunkStart, newChunkEnd, bgBuffer, outcome);
 
           this.resolution = newRes;
-          // Resume chunk series from the swapped position
           this.chunkEnd = newChunkEnd;
           this.prefetchFired = false;
           this.startPrefetchLoop(newRes);
         };
 
         const checkReady = (): void => {
-          // Cancel any pre-existing handler from a prior swap that didn't
-          // finish (rare — two swaps fired before the first crossed the
-          // threshold). Then register a per-frame readiness check.
+          // Cancel pre-existing handler from prior unfinished swap (rare).
           this.cancelBgReadyHandler?.();
           this.cancelBgReadyHandler = this.ticker.register(() => {
             if (bgBuffer.bufferedEnd >= startupTarget) {
@@ -1104,15 +941,14 @@ export class PlaybackController {
 
         void this.requestChunk(newRes, chunkStart, newChunkEnd, false)
           .then((rawJobId) => {
-            if (!this.bgPipeline) return; // Tore down between request and response.
+            if (!this.bgPipeline) return;
             this.bgPipeline.startForeground({
               jobId: rawJobId,
               chunkStartS: chunkStart,
               chunkEndS: newChunkEnd,
-              isFirstChunk: true, // background buffer is fresh — needs the init segment
+              isFirstChunk: true,
               resolution: newRes,
-              // Forwarder — initially a no-op while bg is filling; re-pointed
-              // post-swap to handleChunkEnded so chunk continuation works.
+              // Forwarder — initially no-op; re-pointed post-swap.
               onStreamEnded: (outcome) => this.bgOnStreamEnded(outcome),
               onError: (err) => {
                 playbackLog.error("Background stream error", { message: err.message });
@@ -1134,26 +970,21 @@ export class PlaybackController {
       });
   }
 
-  // ── Video event handlers ───────────────────────────────────────────────────
-
   private handleSeeking = (): void => {
     if (this.isHandlingSeek) return;
     if (this.status !== "playing") return;
     if (!this.buffer) return;
 
     const videoEl = this.deps.videoEl;
-    // Read the intended target from seekTo() if available; fall back to
-    // videoEl.currentTime which the browser may have clamped to the buffered
-    // range (e.g. seeking beyond the end of buffered data).
+    // Read intended target from seekTo() if available; fall back to
+    // currentTime which browser may have clamped to buffered range.
     const seekTime = this.pendingSeekTarget ?? videoEl.currentTime;
 
-    // If the seek target is already in the SourceBuffer, the browser resumes
-    // naturally without any flush. Clear the pending target and return — no
-    // need to tear down the stream or show a spinner.
+    // If seek target already in SourceBuffer, resume naturally without flush.
     let alreadyBuffered = false;
     for (let i = 0; i < videoEl.buffered.length; i++) {
-      // The -0.5s tolerance avoids false positives right at the buffered end
-      // where the decoder may still stall briefly.
+      // -0.5s tolerance avoids false positives at buffered end where decoder
+      // may still stall briefly.
       if (
         seekTime >= videoEl.buffered.start(i) &&
         seekTime < videoEl.buffered.end(i) - clientConfig.playback.seekBufferedToleranceS
@@ -1172,20 +1003,12 @@ export class PlaybackController {
 
     this.isHandlingSeek = true;
     this.pendingSeekTarget = null;
-    // A seek flushes and reloads the buffer; any currently-open stall span
-    // would not naturally resolve via a `playing` event tied to the old buffer
-    // range, so close it here with a distinct reason. Also clears the pending
-    // buffering-debounce timer so we don't double-fire the spinner.
+    // Seek flushes buffer; close any open stall span and debounce timer.
     this.stallTracker.end("seek");
-    // Evict obsolete server-side jobs at the OLD playhead so the seek's
-    // own foreground mutation doesn't queue behind them in the pool. We
-    // gather IDs from BOTH pipelines (foreground + lookahead, plus any
-    // bgPipeline still warming a resolution swap) before pipeline.cancel
-    // tears the slots down — once cancelled, currentJobIds() may yield
-    // stale state. Fire-and-forget; the server's `pool.kill_job` drops
-    // the semaphore permit synchronously so the seek's mutation usually
-    // sees free capacity in <50 ms (versus ~1.2 s pre-fix, see trace
-    // `6f0ef574…`).
+    // Evict obsolete jobs from pool before new mutation. Gather IDs before
+    // pipeline.cancel. Server's pool.kill_job drops permit synchronously —
+    // seek mutation usually sees capacity in <50 ms (vs ~1.2 s pre-fix, trace
+    // 6f0ef574…).
     const obsoleteJobIds = [
       ...(this.pipeline?.currentJobIds() ?? []),
       ...(this.bgPipeline?.currentJobIds() ?? []),
@@ -1193,58 +1016,43 @@ export class PlaybackController {
     if (obsoleteJobIds.length > 0) {
       this.deps.cancelTranscodeChunks(obsoleteJobIds);
     }
-    // Seek is a fresh-playhead anchor. Reset the ramp so the seek-anchored
-    // first chunk is small (fast time-to-first-frame after seek, parity with
-    // cold start) and let the prefetch RAF eager-warm the continuation in
-    // parallel. ffmpeg's `-ss seekTime` produces the user's first segment
-    // immediately; we don't snap to any grid since the ramp model has no
-    // canonical boundary to re-align to. See
-    // `02-Chunk-Pipeline-Invariants.md` § 1.
+    // Fresh-playhead anchor — small first chunk for fast resume. See
+    // docs/architecture/Streaming/02-Chunk-Pipeline-Invariants.md § 1.
     this.rampController.reset();
     const videoDurationS = this.deps.getVideoDurationS();
     const seekChunkEnd = Math.min(seekTime + this.rampController.next(), videoDurationS);
 
-    // Guard against re-entrancy: BufferManager.seek() sets videoEl.currentTime
-    // to reposition the playhead, which queues a second "seeking" task. By the
-    // time that task fires, .then() has already reset isHandlingSeek (a
-    // microtask), so the second event would re-enter and cancel the streaming
-    // that just started. Storing seekTime (not a snap-derived value) keeps
-    // distinct in-chunk seeks distinguishable. Cleared when "playing" fires.
+    // Guard against re-entrancy: BufferManager.seek() sets currentTime, queuing
+    // a second seeking event. By the time it fires, .then() reset isHandlingSeek
+    // (microtask), so re-entry would cancel the streaming just started. Storing
+    // seekTime keeps in-chunk seeks distinguishable.
     if (this.seekTarget === seekTime) {
       this.isHandlingSeek = false;
       return;
     }
     this.seekTarget = seekTime;
 
-    // Show spinner immediately — seek requires flushing and reloading the buffer.
+    // Show spinner immediately.
     this.setStatus("loading");
-    // Reset hasStartedPlayback NOW (not inside the buf.seek().then) so that any
-    // residual `playing` event the video element fires while the buffer flush
-    // is in flight does not flip status back to "playing" via handlePlaying —
-    // which would briefly hide the spinner until the StallTracker debounce
-    // (~2s) re-shows it from the eventual `waiting` event.
+    // Reset hasStartedPlayback NOW so residual `playing` event from buffer
+    // flush doesn't flip status back via handlePlaying.
     this.hasStartedPlayback = false;
 
     playbackLog.info(
-      `Seek to ${seekTime.toFixed(1)}s → flushing buffer, requesting [${seekTime.toFixed(1)}, ${seekChunkEnd}) anchored at the seek position`,
+      `Seek to ${seekTime.toFixed(1)}s → flushing buffer, requesting [${seekTime.toFixed(1)}, ${seekChunkEnd})`,
       {
         seek_target_s: parseFloat(seekTime.toFixed(1)),
         seek_chunk_end_s: seekChunkEnd,
       }
     );
 
-    // Cancel both pipeline slots (foreground + lookahead) and flush the buffer.
     this.pipeline?.cancel("seek");
     this.timeline.clearLookahead();
     this.prefetchFired = false;
     this.foregroundTranscodeComplete = false;
     this.foregroundJobId = null;
-    // Set chunkEnd to the small seek-chunk's end so the RAF prefetch fires
-    // immediately (timeUntilEnd ≤ `prefetchThresholdS = 90` trivially holds
-    // for a ramp[0]-sized window), eager-warming ffmpeg for the continuation chunk.
+    // chunkEnd = small seek-chunk's end triggers RAF prefetch immediately.
     this.chunkEnd = seekChunkEnd;
-    // Seek invalidates the user-pause prefetch (different chunk now). Cleanup
-    // is idempotent so it's safe to call even when not paused.
     this.clearUserPauseState();
 
     const buf = this.buffer;
@@ -1252,16 +1060,9 @@ export class PlaybackController {
       this.isHandlingSeek = false;
       if (!this.buffer) return;
 
-      // Wait for the startup buffer threshold before resuming playback so the
-      // video doesn't immediately stall after seeking to an unbuffered region.
       const startupTarget = clientConfig.playback.startupBufferS[this.resolution];
       this.waitForStartupBuffer(buf, startupTarget, () => {
-        // Respect the user's pause state. If they paused before seeking (or
-        // paused during the seek-fill), don't auto-resume — show the
-        // seek-target frame and stay paused, matching the browser's default
-        // behaviour on `<video>`. Checking `videoEl.paused` at onPlay time
-        // (not at handleSeeking start) means a pause/play toggle DURING the
-        // seek-fill takes effect.
+        // Respect user's pause state — if paused before/during seek, stay paused.
         if (!videoEl.paused) {
           videoEl.play().catch(() => {});
         }
@@ -1278,16 +1079,10 @@ export class PlaybackController {
         );
       });
 
-      // Anchor the chunk REQUEST at seekTime — ffmpeg's `-ss seekTime`
-      // produces the user's first segment in ~1-2 s. Every segment ffmpeg
-      // emits is at-or-ahead of seekTime, so the chunk consumer doesn't
-      // need to skip any leading segments. `endS: seekChunkEnd` carries
-      // the ramp slot already consumed above (passing the same `endS`
-      // through to startChunkSeries prevents a second `rampController.next()`
-      // there). `isFirstChunk: false` keeps the existing seek startup-buffer
-      // wiring (waitForStartupBuffer call above) — armStartupBufferCheck is
-      // reserved for the very first chunk of a session, not for re-fills
-      // after seek.
+      // Anchor chunk REQUEST at seekTime — ffmpeg's -ss produces user's first
+      // segment in ~1-2 s. endS: seekChunkEnd carries ramp slot already consumed
+      // (prevents second rampController.next()). isFirstChunk: false keeps
+      // existing seek startup-buffer wiring.
       this.startChunkSeries(this.resolution, seekTime, buf, false, {
         endS: seekChunkEnd,
       });
@@ -1295,56 +1090,35 @@ export class PlaybackController {
   };
 
   private handlePlaying = (): void => {
-    // If a seek is mid-flight (buffer flushing, new chunk requested), do not
-    // touch state. A residual `playing` event from the pre-flush playhead
-    // would otherwise revert status to "playing" and hide the seek spinner.
+    // If seek mid-flight, skip — residual playing event would hide spinner.
+    // Logged so Seq sees mid-session guard without waiting for span close.
     if (this.isHandlingSeek) {
-      // Logged (not just span-evented) so Seq surfaces it mid-session — the
-      // residual-`playing` race is timing-dependent and we need to see the
-      // guard catching it without waiting for the session span to close.
       playbackLog.info("Skipping `playing` event — seek in flight");
       this.sessionSpan?.addEvent("playback.playing_event_skipped_during_seek");
       return;
     }
-    // Seek has resolved — clear the dedup guard so future seeks can proceed.
     this.seekTarget = null;
-    // First frame is on screen — close the post-`play()` decoder-warmup
-    // grace so subsequent mid-playback stalls aren't suppressed.
+    // Close post-play() decoder-warmup grace.
     this.firstRenderGraceUntil = null;
-    // StallTracker closes its span + clears its debounce timer.
     this.stallTracker.onPlaying();
-    // Restore "playing" whenever the video element genuinely starts rendering
-    // frames after a "loading" state. Two cases land here:
-    //   1. Mid-playback stall recovery — `hasStartedPlayback` is still true,
-    //      `onSpinnerShow` flipped status to "loading" via the 2 s debounce,
-    //      and the resume's `playing` event clears it.
-    //   2. Seek-resume auto-resume — the video element auto-resumes as soon
-    //      as the new buffer is available (we never `pause()` during seek),
-    //      firing `playing` BEFORE `tryPlay`'s startup-buffer threshold is
-    //      met. Without this branch, status would stay "loading" for the
-    //      whole startup-buffer fill — the user sees video playing under a
-    //      spinner for several seconds.
-    // `firstFrameRecorded` (set once per session in `tryPlay`'s threshold
-    // branch, only reset by `resetForNewSession`) is the load-bearing gate:
-    // it filters out spurious cold-start `playing` events (which can't
-    // actually fire because the video is paused until `videoEl.play()` runs
-    // in `onPlay`), but admits everything mid-session.
+    // Restore "playing" when video genuinely renders after "loading". Two cases:
+    // 1. Mid-playback stall recovery — status flipped to loading, resume's
+    //    playing clears it.
+    // 2. Seek-resume auto-resume — browser auto-resumes before startup-buffer
+    //    threshold; without this, spinner stays during startup fill.
+    // firstFrameRecorded gate filters spurious cold-start events, admits mid-session.
     if (this.status === "loading" && this.firstFrameRecorded) {
       this.setStatus("playing");
     }
   };
 
   private handleUserPause = (): void => {
-    // Don't react to the implicit pause that fires when playback ends.
     if (this.deps.videoEl.ended) return;
-    // Don't react to pauses we haven't started yet, or to the pause-side of
-    // a seek (the browser fires pause/seeking/play in some seek paths).
     if (!this.hasStartedPlayback || this.isHandlingSeek) return;
     if (this.userPauseInterval !== null) return;
 
     playbackLog.info("User paused — driving backpressure check until buffer fills");
-    // Tick once immediately so the buffer-fill threshold is checked before the
-    // first interval tick — saves up to 1 s on the prefetch fire.
+    // Tick immediately so buffer-fill threshold is checked before first tick.
     this.checkUserPauseTick();
     this.userPauseInterval = setInterval(
       () => this.checkUserPauseTick(),
@@ -1356,9 +1130,7 @@ export class PlaybackController {
     if (this.userPauseInterval === null && !this.userPausePrefetchFired) return;
     playbackLog.info("User resumed — clearing pause poller, resuming lookahead");
     this.clearUserPauseState();
-    // Wake the lookahead's reader so it pulls its on-disk segments through to
-    // the queue, ready for promotion when the foreground chunk ends. Safe if
-    // no lookahead exists.
+    // Wake lookahead reader so it pulls on-disk segments for promotion.
     this.pipeline?.resumeLookahead();
   };
 
@@ -1374,8 +1146,6 @@ export class PlaybackController {
     const forwardTargetS = getEffectiveBufferConfig().forwardTargetS;
     if (ahead === null || ahead < forwardTargetS) return;
 
-    // Buffer is full. Fire the prefetch for chunk N+1 if there's a next chunk
-    // and we don't already have a lookahead in flight.
     const videoDurationS = this.deps.getVideoDurationS();
     const nextStart = this.chunkEnd;
     if (nextStart <= 0 || nextStart >= videoDurationS) return;
@@ -1392,11 +1162,9 @@ export class PlaybackController {
     void this.requestChunk(res, nextStart, nextEnd, true)
       .then((rawJobId) => {
         if (!this.pipeline) return;
-        // Open the lookahead so the orphan_no_connection 30 s timer doesn't
-        // fire server-side, then immediately suspend the reader so segments
-        // don't accumulate in queuedSegments RAM during the pause. ffmpeg
-        // keeps writing to disk regardless; on resume, the lookahead reader
-        // wakes up and pulls them through to the queue for promotion.
+        // Open lookahead so orphan_no_connection timer doesn't fire, then
+        // suspend reader so segments don't accumulate in RAM during pause.
+        // ffmpeg keeps writing to disk; on resume, reader wakes and pulls.
         this.timeline.recordLookaheadOpened(rawJobId);
         this.updateSessionTimelineAttrs();
         this.pipeline.openLookahead({
@@ -1412,12 +1180,10 @@ export class PlaybackController {
             this.timeline.recordLookaheadFirstByte(rawJobId, atMs),
         });
         this.pipeline.pauseLookahead();
-        // Mirror startPrefetchLoop's bookkeeping so the RAF loop doesn't
-        // re-fire the same prefetch on its next tick.
+        // Mirror startPrefetchLoop bookkeeping so RAF loop doesn't re-fire.
         this.prefetchFired = true;
       })
       .catch(() => {
-        // Allow a retry on the next pause-tick (or RAF prefetch when playing).
         this.userPausePrefetchFired = false;
       });
   }

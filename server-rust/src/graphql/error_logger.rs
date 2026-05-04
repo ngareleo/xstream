@@ -1,25 +1,4 @@
-//! Async-graphql `Extension` that logs every `errors[]` entry on a
-//! response via `tracing::error!`.
-//!
-//! Why this lives here, not in resolvers:
-//! - Resolvers `?`-propagate `DbError` / `GlobalIdError` etc. into
-//!   `async_graphql::Error`. Those errors flow through async-graphql's
-//!   own machinery and end up in the response's `errors[]` array — but
-//!   nothing along that path emits a tracing event, so without this
-//!   extension a failed query is *invisible to the operator*. The user
-//!   sees the typed error in the response; the operator sees nothing.
-//!
-//! - The extension's `request` hook runs **inside the per-request
-//!   `http.request` span** (created by `request_context::extract_request_context`),
-//!   so the resulting `tracing::error!` events inherit the W3C trace
-//!   context. `tracing-opentelemetry` translates that into the OTLP
-//!   payload's TraceId, and Seq surfaces them under the same trace as
-//!   the originating GraphQL request — clickable correlation, no manual
-//!   trace_id field needed.
-//!
-//! Pairs with the "Never swallow errors" invariant in
-//! `docs/code-style/Invariants/00-Never-Violate.md` §14: propagation
-//! alone isn't enough; the error has to be *seen*.
+//! Async-graphql `Extension` that logs every `errors[]` entry via `tracing::error!` inside the per-request span. See docs/architecture/Observability/.
 
 use std::sync::Arc;
 

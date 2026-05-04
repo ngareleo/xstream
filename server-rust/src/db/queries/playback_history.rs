@@ -59,7 +59,6 @@ pub fn get_playback_history(db: &Db, limit: i64) -> DbResult<Vec<PlaybackHistory
     })
 }
 
-// ── Tests ────────────────────────────────────────────────────────────────────
 //
 // DESC-by-started_at ordering and the limit semantic are the load-bearing
 // assertions for the client's "trace history" Settings tab. Both are

@@ -1,14 +1,4 @@
-//! Boot-time job restoration sweep.
-//!
-//! Any job still in `status = 'running'` when the server died was interrupted
-//! mid-encode. Its segment directory may contain a partial (truncated) output
-//! that would stall playback. We mark all such jobs as `error` here so the
-//! next `start_transcode` for the same (video_id, resolution, range) tuple
-//! wipes the stale directory and re-encodes cleanly.
-//!
-//! Called once from `main()` after `db::migrate::run` and before the router
-//! is bound — between schema setup and the first inbound request, so no
-//! reader can see a half-restored state.
+//! Boot-time sweep: mark interrupted `running` jobs as `error` to trigger re-encode.
 
 use tracing::info;
 
@@ -44,8 +34,6 @@ pub fn sweep_interrupted(db: &Db) -> DbResult<usize> {
     }
     Ok(count)
 }
-
-// ── Tests ────────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
 mod tests {

@@ -1,6 +1,4 @@
-//! GraphQL schema — async-graphql. The SDL is the wire contract: every type,
-//! field name, enum value, and nullability is locked. `scripts/check-sdl-parity.ts`
-//! enforces this against the published schema.
+//! GraphQL schema — async-graphql. SDL is the wire contract (enforced by `scripts/check-sdl-parity.ts`).
 
 pub mod error_logger;
 pub mod mutation;

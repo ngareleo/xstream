@@ -1,13 +1,4 @@
-//! Tauri shell for xstream.
-//!
-//! Wraps the Rust server (`xstream-server`) and the React/Relay client
-//! (`client/dist/`) into a single desktop binary. The server runs
-//! in-process on a free `127.0.0.1:<port>`; the webview reaches it over
-//! HTTP — no Tauri IPC in the request path, so the length-prefixed
-//! `/stream/:job_id` binary protocol survives unchanged.
-//!
-//! Layer reference: `docs/migrations/rust-rewrite/08-Tauri-Packaging.md`.
-//! Step playbook: `docs/migrations/rust-rewrite/Plan/03-Tauri-Packaging.md`.
+//! Tauri desktop shell: wraps embedded Rust server and React client. See docs/architecture/Deployment/.
 
 mod ffmpeg_path;
 mod server_supervisor;

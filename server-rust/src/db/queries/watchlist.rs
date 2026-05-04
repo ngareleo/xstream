@@ -1,7 +1,4 @@
-//! Watchlist CRUD — keyed on `film_id`. A user adds a Film to their
-//! watchlist; the player picks which file copy to play. See
-//! `docs/architecture/Library-Scan/01-Filename-Conventions.md` for the
-//! Film entity contract.
+//! Watchlist CRUD — keyed on `film_id`. See docs/architecture/Library-Scan/01-Filename-Conventions.md.
 
 use rusqlite::{params, OptionalExtension, Row};
 
@@ -102,8 +99,6 @@ pub fn update_watchlist_progress(
     })?;
     get_watchlist_item_by_film_id(db, film_id)
 }
-
-// ── Tests ────────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
 mod tests {

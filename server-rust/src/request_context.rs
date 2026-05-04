@@ -104,7 +104,6 @@ pub(crate) fn otel_context_from_headers(headers: &HeaderMap) -> OtelContext {
     })
 }
 
-// ── Tests ────────────────────────────────────────────────────────────────────
 //
 // Verifies the load-bearing primitive `otel_context_from_headers` — the
 // W3C `traceparent` header is parsed into an `OtelContext` whose SpanContext
