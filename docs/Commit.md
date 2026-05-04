@@ -15,6 +15,13 @@ Entry shape (each entry ends with the divider line described above):
 
 <!-- ENTRIES BELOW — newest first; each ends with a bare `---` line. The architect's next invocation will treat the no-entries state as the first-run case and prepend a bootstrap entry at HEAD. -->
 
+## Current HEAD — 2026-05-04 — Homepage Relay refactor: fragment ownership to component level (same-session curation)
+
+**Files:** `docs/client/Components/Library.md`, `docs/client/Components/README.md`
+**Why:** Curator sync for user feedback on page-level query shape. Lifted two page-level Relay fragments (`HomePageContent_videoNode`, `HomePageContent_filmNode`) into a new `HomeFilmsSection` component; the page query now contains only fragment spreads at the boundary. Data masking enforced at component level, no `@relay(mask: false)` at page boundary. No schema/contract changes; UI behavior identical.
+
+---
+
 ## Current HEAD — 2026-05-04 — Sized poster cache + wipe utilities (same-session curation)
 
 **Files:** `docs/SUMMARY.md`, `docs/INDEX.md`, `docs/architecture/Library-Scan/05-Poster-Caching.md`, `docs/server/GraphQL-Schema/00-Surface.md`, `docs/client/Components/Poster.md`, `docs/client/Components/DangerTab.md`

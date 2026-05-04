@@ -374,8 +374,17 @@ Ranks all films except the input film by scoring:
 
 ## Subcomponents
 
-The Library page delegates to several extracted child components, each with
-its own spec:
+The Library page delegates the entire films-side concern (hero carousel,
+search bar + slide, filter slide, films row, search results grid, and the
+`FilmDetailsOverlay` short-circuit) to **`HomeFilmsSection`**
+(`client/src/components/home-films-section/`) — see
+[HomeFilmsSection](HomeFilmsSection.md). The page itself is now a thin
+shell: empty-libraries check, show-details overlay short-circuit, page
+container, and the TV shows `<PosterRow>` passed in as a prop. The films
+Relay fragment lives on `HomeFilmsSection`, so the page query is just
+`...HomeFilmsSection_films` plus the shows fragment spreads.
+
+The shared leaf components (each with its own spec):
 
 - **`SearchSlide`** (`client/src/components/search-slide/`) — TUI search results
   panel with query display and filter affordance.

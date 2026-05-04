@@ -46,6 +46,7 @@ Outstanding work that hasn't yet shipped is tracked separately in
 | [FilmVariants](FilmVariants.md) | `client/src/components/film-variants/` |
 | [FilmTile](FilmTile.md) | `client/src/components/film-tile/` |
 | [FilterSlide](FilterSlide.md) | `client/src/components/filter-slide/` |
+| [HomeFilmsSection](HomeFilmsSection.md) | `client/src/components/home-films-section/` |
 | [LinkSearch](LinkSearch.md) | `client/src/components/link-search/` |
 | [MediaKindBadge](MediaKindBadge.md) | `client/src/components/media-kind-badge/` |
 | [Poster](Poster.md) | `client/src/components/poster/` |
