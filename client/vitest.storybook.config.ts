@@ -31,6 +31,13 @@ export default defineConfig({
         plugins: [storybookTest({ configDir: path.join(dirname, ".storybook") })],
         test: {
           name: "storybook",
+          // Retry once on flaky module-fetch failures from the storybook
+          // vitest deps server under CI (`Failed to fetch dynamically
+          // imported module: .../sb-vitest/deps/react-18-...`). The
+          // browser pool occasionally races the Vite dep optimiser; a
+          // single retry resolves it without hiding real regressions
+          // (any genuine failure reproduces twice).
+          retry: 1,
           browser: {
             enabled: true,
             headless: true,
