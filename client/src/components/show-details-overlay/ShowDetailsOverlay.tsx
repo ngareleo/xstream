@@ -12,7 +12,7 @@ import { useShowDetailsOverlayStyles } from "./ShowDetailsOverlay.styles";
 
 const SHOW_FRAGMENT = graphql`
   fragment ShowDetailsOverlay_show on Show
-  @argumentDefinitions(posterSize: { type: "PosterSize!", defaultValue: W1600 }) {
+  @argumentDefinitions(posterSize: { type: "PosterSize!", defaultValue: W3200 }) {
     id
     title
     year

@@ -117,6 +117,16 @@ query HomePageContentQuery {
 No `@relay(mask: false)` at the page boundary. The shows side is
 unchanged and remains owned by `ShowTile` / `ShowDetailsOverlay`.
 
+The hero slideshow renders the poster at viewport width × `75vh` with
+`object-fit: cover`. Both fragments select `heroPoster: posterUrl(size:
+W3200)` as a literal — the largest cached variant — so the image is
+downscaled by the browser rather than upscaled. W3200 is the same alias
+the detail-overlay and player-backdrop fragments use; co-spread
+fragments must agree on the size, and W3200 is the right ceiling for
+any full-area rendering at 2× DPR. See
+[`docs/architecture/Library-Scan/05-Poster-Caching.md`](../../architecture/Library-Scan/05-Poster-Caching.md)
+for the full alias / size table.
+
 ## Notes
 
 - `useHeroMode` is a films-specific hook colocated under

@@ -30,7 +30,7 @@ export const Poster: FC<PosterProps> = ({ url, alt, className }) => {
   const resolved = resolvePosterUrl(url) ?? url;
 
   return (
-    <span className={mergeClasses(styles.frame, className)}>
+    <div className={mergeClasses(styles.frame, className)}>
       <span className={styles.placeholder}>{label}</span>
       <img
         src={resolved}
@@ -41,6 +41,6 @@ export const Poster: FC<PosterProps> = ({ url, alt, className }) => {
         }}
         className={styles.image}
       />
-    </span>
+    </div>
   );
 };

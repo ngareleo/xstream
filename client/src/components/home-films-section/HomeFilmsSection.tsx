@@ -42,7 +42,7 @@ const _VIDEO_FRAGMENT = graphql`
       year
       genre
       director
-      heroPoster: posterUrl(size: W1600)
+      heroPoster: posterUrl(size: W3200)
     }
     videoStream {
       codec
@@ -61,7 +61,7 @@ const _FILM_FRAGMENT = graphql`
       year
       genre
       director
-      heroPoster: posterUrl(size: W1600)
+      heroPoster: posterUrl(size: W3200)
     }
     bestCopy {
       ...HomeFilmsSection_video @relay(mask: false)

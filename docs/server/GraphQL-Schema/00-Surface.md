@@ -327,6 +327,7 @@ enum PosterSize {
   W400
   W800
   W1600
+  W3200
 }
 
 enum JobStatus {
@@ -493,6 +494,7 @@ GraphQL enums use ALL_CAPS. Internally the server uses lowercase / snake_case Ru
 | `W400` | `w400` (PosterSize variant) |
 | `W800` | `w800` (PosterSize variant) |
 | `W1600` | `w1600` (PosterSize variant) |
+| `W3200` | `w3200` (PosterSize variant) |
 | `PENDING` | `pending` |
 | `RUNNING` | `running` |
 | `COMPLETE` | `complete` |

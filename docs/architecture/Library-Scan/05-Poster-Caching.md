@@ -17,7 +17,9 @@ The poster cache fixes this by downloading every OMDb poster into the user's loc
 
 The path is set via `AppConfig.poster_dir`, mirroring `segment_dir`. `ServerConfig` plumbs it through `with_paths` / `dev_defaults` and the Tauri shell wires it from `app.path().app_cache_dir()`.
 
-Files inside the directory are content-addressed by `sha1(poster_url)` (without extension). The worker downloads once, resizes to 4 sized variants (240px, 400px, 800px, 1600px) using Lanczos3 resampling, and encodes each as WebP (q75). Files are written atomically as `<sha1>.w{N}.webp` (e.g. `abc123…ef.w240.webp`). A given OMDb poster URL maps to exactly four cached files — one per size. The same URL across films / shows shares the same four WebP variants.
+Files inside the directory are content-addressed by `sha1(poster_url)` (without extension). The worker downloads once, resizes to 5 sized variants (240px, 400px, 800px, 1600px, 3200px) using Lanczos3 resampling, and encodes each as WebP (q75). Files are written atomically as `<sha1>.w{N}.webp` (e.g. `abc123…ef.w240.webp`). A given OMDb poster URL maps to exactly five cached files — one per size. The same URL across films / shows shares the same five WebP variants.
+
+The source fetch from Amazon's CDN uses `_V1_SX{SOURCE_FETCH_WIDTH}` (currently `3200`) so every variant downscales rather than upscaling. `image::resize` only ever shrinks: if Amazon delivers fewer pixels than the requested width, the encoded file simply matches the source resolution.
 
 ## DB shape
 
@@ -30,14 +32,17 @@ Each gains a sibling `poster_local_path TEXT` (basename without extension, e.g. 
 
 `upsert_*_metadata` does **not** write `poster_local_path` — it's worker-managed. On conflict the existing local path is preserved (COALESCE pattern) so a re-match against the same OMDb URL doesn't bounce a freshly-resized set. Stale-cache invalidation when the OMDb URL itself changes is logged tech debt.
 
-## Legacy cache migration
+## Startup purge
 
-At startup, `services::poster_cache::purge_legacy_cache(ctx)` runs to clean up pre-sized-variant files (the old single-file `<sha1>.<ext>` format):
+At startup, `services::poster_cache::purge_legacy_cache(ctx)` runs two reaping passes (one disk walk, both colocated):
 
-1. Enumerates `poster_dir` and deletes any files NOT matching the regex `^[a-f0-9]+\.w\d+\.webp$` (i.e., not a sized-variant).
-2. For any `poster_local_path` rows still containing a legacy `<sha1>.<ext>` pattern, nulls out the column so the worker re-downloads and creates the sized variants on the next cycle.
+1. **Pre-`PosterSize` files.** Enumerates `poster_dir` and deletes any files NOT matching the regex `^[a-f0-9]+\.w\d+\.webp$` (the old single-file `<sha1>.<ext>` format). For any `poster_local_path` rows still in the legacy `<sha1>.<ext>` form (caught with `LIKE '%.%'`), nulls the column so the worker re-fetches.
+2. **Required-set incompleteness.** Pulls every DB-recorded bare-hex `poster_local_path` and groups remaining sized files on disk by `<sha1>` root. Cross-references the two: a recorded root is incomplete when its on-disk suffix set fails to satisfy `PosterSize::ALL`. Two shapes share this branch:
+   - **Partial-on-disk** — when `PosterSize::ALL` grows (e.g. a new `W3200` for hero), pre-existing roots only have N-1 of the now-N required variants.
+   - **Missing-on-disk** — `poster_dir` was wiped externally (manual `rm`, dev wipe, OS cache eviction) but the DB still records the path. The root has zero on-disk files and would otherwise stay invisible to the original disk-grouping pass.
+   Without this sweep the GraphQL resolver would hand the client a path to a file that doesn't exist and the `<img>` would silently 404, while the worker stayed dormant because `poster_local_path IS NOT NULL`. Deletes any partial files and nulls the matching DB rows so the worker re-encodes the full set on the next cycle.
 
-After purge, all rows have either a modern `.w{N}.webp` path or `NULL`, and all stray legacy files are gone. The cache is idempotent — running purge multiple times is safe.
+After purge, every surviving root has the full variant set and every DB `poster_local_path` is either a complete bare-hex root or `NULL`. The pass is idempotent — repeating it is a no-op.
 
 ## Worker
 
@@ -47,8 +52,8 @@ After purge, all rows have either a modern `.w{N}.webp` path or `NULL`, and all 
 2. Dedupe in-flight URLs across cycles (a slow download from cycle N+1 doesn't re-download for cycle N+2).
 3. Concurrent fetch with `MAX_CONCURRENCY = 4` (`reqwest::Client` with a 20 s timeout and a `User-Agent: xstream/poster-cache`).
 4. Decode the downloaded image (handles JPEG, PNG, WebP, GIF via the `image` crate).
-5. `spawn_blocking` resize via Lanczos3 to each of the 4 widths (240, 400, 800, 1600 pixels), then encode as WebP at q75.
-6. Atomic write: stage all 4 variants to `.part` suffixes, then rename each atomically to `.w{N}.webp`. A crash mid-batch leaves some `.part` files behind but never half-written `.w{N}.webp` files.
+5. `spawn_blocking` resize via Lanczos3 to each of the 5 widths (240, 400, 800, 1600, 3200 pixels), then encode as WebP at q75.
+6. Atomic write: stage all 5 variants to `.part` suffixes, then rename each atomically to `.w{N}.webp`. A crash mid-batch leaves some `.part` files behind but never half-written `.w{N}.webp` files.
 7. `set_*_poster_local_path(owner_id, basename)` — single UPDATE per row (basename is `sha1`, without the suffix; resolvers append `.w{N}.webp` based on the requested size).
 
 Per-row failures (decode error, resize OOM, encode failure) log a `warn!` and are retried on the next cycle (no failure-state recorded in DB). Network blips, OMDb outages, and 4xx all heal automatically once the upstream comes back.
@@ -73,6 +78,7 @@ enum PosterSize {
   W400
   W800
   W1600
+  W3200
 }
 
 type VideoMetadata {
@@ -91,18 +97,18 @@ The resolver (`graphql::types::poster_url_for_metadata`) appends the size suffix
 
 ## Client fragment alias convention
 
-Multiple fragments on the same Video or Show entity select `posterUrl` at different sizes (e.g., `FilmTile` wants W400, `VideoArea` wants W1600). Relay forbids identical field selections with conflicting args, so each fragment aliases `posterUrl` uniquely:
+Multiple fragments on the same Video or Show entity select `posterUrl` at different sizes (e.g., `FilmTile` wants W400, `HomeFilmsSection` wants W3200 for the full-viewport hero slideshow). Relay forbids identical field selections with conflicting args, so each fragment aliases `posterUrl` uniquely. Crucially, when two fragments are spread on the same parent entity their `<alias>: posterUrl(size: …)` selections must agree on the size — co-spread fragments share the alias.
 
 | Fragment | Alias | Size |
 |---|---|---|
 | `FilmRow_video` | `thumbPoster` | W240 |
 | `FilmTile_video`, `ShowTile_show`, `PlayerEndScreen_video`, `PlayerSidebar_video`, `WatchlistPageContentQuery` (film tile) | `tilePoster` | W400 |
 | `DetailPane_video` | `panelPoster` | W800 |
-| `VideoArea_video` | `backdropPoster` | W1600 |
-| `FilmDetailsOverlay_video`, `ShowDetailsOverlay_show` | `overlayPoster` | W1600 |
-| `HomePageContent_videoNode`, `HomePageContent_filmNode`, `HOMEPAGE_QUERY tvShows.metadata` | `heroPoster` | W1600 |
+| `HomeFilmsSection_video`, `HomeFilmsSection_film`, `FilmDetailsOverlay_video`, `ShowDetailsOverlay_show`, `VideoArea_video` | `heroPoster` | W3200 |
 
-Each fragment declares its default size via `@argumentDefinitions(posterSize: { type: "PosterSize!", defaultValue: <bin> })` so the parent query can override the default if needed.
+W3200 is the right size for any "full-area" rendering — viewport-width hero slideshow, full-screen detail overlay backdrop, in-player paused-state backdrop. On a typical 1920px desktop at 2× DPR retina the rendered surface is ~3680 physical pixels wide; W3200 keeps browser upscaling under ~1.15×.
+
+Fragments other than the home page declare the default via `@argumentDefinitions(posterSize: { type: "PosterSize!", defaultValue: W3200 })` so a parent query can override per-context if a smaller variant is sufficient. The home fragments use a literal `posterUrl(size: W3200)` since they're always the full-viewport hero.
 
 ## Failure modes
 

@@ -312,6 +312,7 @@ enum PosterSize {
 	W400
 	W800
 	W1600
+	W3200
 }
 
 enum ProfileStatus {
