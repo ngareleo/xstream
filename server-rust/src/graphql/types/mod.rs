@@ -81,7 +81,7 @@ mod tests {
         let got = poster_url_for_metadata(
             None,
             Some("https://m.media-amazon.com/images/M/foo.jpg"),
-            PosterSize::W1600,
+            PosterSize::W3200,
         );
         assert_eq!(
             got,

@@ -1,6 +1,6 @@
 //! Background poster fetcher; downloads each OMDb poster once and writes one WebP variant per `PosterSize`. See docs/architecture/Library-Scan/05-Poster-Caching.md.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
@@ -27,7 +27,7 @@ const WEBP_QUALITY: f32 = 75.0;
 /// Pixel width we request from Amazon's `m.media-amazon.com` CDN. Must
 /// be ≥ the largest `PosterSize` so every variant downscales from the
 /// source rather than upscaling from a 300px default.
-const SOURCE_FETCH_WIDTH: u32 = 2000;
+const SOURCE_FETCH_WIDTH: u32 = 3200;
 
 /// How often the worker wakes up to look for new pending downloads.
 const POLL_INTERVAL: Duration = Duration::from_secs(15);
@@ -294,14 +294,12 @@ pub fn is_sized_variant_name(name: &str) -> bool {
     !digits.is_empty() && digits.chars().all(|c| c.is_ascii_digit())
 }
 
-/// One-shot startup hook: delete every file in `poster_dir` that isn't
-/// a sized variant, AND null out `poster_local_path` rows still in the
-/// legacy `<sha>.<ext>` form so the worker treats them as "needs
-/// download" again. Without the DB pass, the worker would think the
-/// posters are still cached and never re-encode them.
+/// Idempotent startup reconciler — see docs/architecture/Library-Scan/05-Poster-Caching.md §"Startup purge".
 pub async fn purge_legacy_cache(ctx: &AppContext) {
     let poster_dir = &ctx.config.poster_dir;
-    let mut purged_files: u64 = 0;
+
+    let mut purged_legacy_files: u64 = 0;
+    let mut roots_on_disk: HashMap<String, HashSet<String>> = HashMap::new();
     match tokio::fs::read_dir(poster_dir).await {
         Ok(mut iter) => {
             while let Ok(Some(entry)) = iter.next_entry().await {
@@ -309,14 +307,22 @@ pub async fn purge_legacy_cache(ctx: &AppContext) {
                 let Some(name_str) = name.to_str() else {
                     continue;
                 };
-                if is_sized_variant_name(name_str) {
+                if !is_sized_variant_name(name_str) {
+                    let path = entry.path();
+                    if let Err(err) = tokio::fs::remove_file(&path).await {
+                        warn!(path = %path.display(), error = %err, "purge_legacy_cache: remove failed");
+                    } else {
+                        purged_legacy_files += 1;
+                    }
                     continue;
                 }
-                let path = entry.path();
-                if let Err(err) = tokio::fs::remove_file(&path).await {
-                    warn!(path = %path.display(), error = %err, "purge_legacy_cache: remove failed");
-                } else {
-                    purged_files += 1;
+                if let Some((root, rest)) = name_str.split_once('.') {
+                    if let Some((suffix, _ext)) = rest.split_once('.') {
+                        roots_on_disk
+                            .entry(root.to_string())
+                            .or_default()
+                            .insert(suffix.to_string());
+                    }
                 }
             }
         }
@@ -326,22 +332,95 @@ pub async fn purge_legacy_cache(ctx: &AppContext) {
         Err(_) => {}
     }
 
-    // Legacy rows wrote `<sha>.<ext>` to poster_local_path; the new
-    // worker writes just `<sha>`. Null any value containing a `.` so
-    // the worker queues a re-download. Idempotent — once the next
-    // cycle finishes, every row's value is dot-free and the UPDATE is
-    // a no-op.
+    let required: HashSet<String> = PosterSize::ALL
+        .iter()
+        .map(|s| s.suffix().to_string())
+        .collect();
+
+    let mut purged_orphan_files: u64 = 0;
+    for (root, present) in &roots_on_disk {
+        for suffix in present.difference(&required) {
+            let path = poster_dir.join(format!("{root}.{suffix}.webp"));
+            if let Err(err) = tokio::fs::remove_file(&path).await {
+                warn!(path = %path.display(), error = %err, "purge_legacy_cache: remove orphan failed");
+            } else {
+                purged_orphan_files += 1;
+            }
+        }
+    }
+
+    let db_recorded_roots: Vec<String> = ctx
+        .db
+        .with(|c| {
+            let mut stmt = c.prepare(
+                "SELECT poster_local_path FROM video_metadata \
+                    WHERE poster_local_path IS NOT NULL \
+                      AND poster_local_path NOT LIKE '%.%' \
+                 UNION \
+                 SELECT poster_local_path FROM show_metadata \
+                    WHERE poster_local_path IS NOT NULL \
+                      AND poster_local_path NOT LIKE '%.%'",
+            )?;
+            let rows = stmt.query_map([], |r| r.get::<_, String>(0))?;
+            let out: Vec<String> = rows.filter_map(Result::ok).collect();
+            Ok::<_, crate::error::DbError>(out)
+        })
+        .unwrap_or_default();
+
+    let mut incomplete_set: HashSet<String> = roots_on_disk
+        .iter()
+        .filter(|(_, present)| !required.is_subset(present))
+        .map(|(root, _)| root.clone())
+        .collect();
+    for root in &db_recorded_roots {
+        let complete = roots_on_disk
+            .get(root)
+            .is_some_and(|present| required.is_subset(present));
+        if !complete {
+            incomplete_set.insert(root.clone());
+        }
+    }
+    let incomplete_roots: Vec<String> = incomplete_set.into_iter().collect();
+
+    let mut purged_incomplete_files: u64 = 0;
+    for root in &incomplete_roots {
+        if let Some(present) = roots_on_disk.get(root) {
+            for suffix in present {
+                let path = poster_dir.join(format!("{root}.{suffix}.webp"));
+                if let Err(err) = tokio::fs::remove_file(&path).await {
+                    warn!(path = %path.display(), error = %err, "purge_legacy_cache: remove incomplete failed");
+                } else {
+                    purged_incomplete_files += 1;
+                }
+            }
+        }
+    }
+
+    // Per-row UPDATE rather than dynamic-SQL IN-clause: this fires once per
+    // cache-schema bump for ≤ a few hundred rows, so the cost is bounded.
     let result = ctx.db.with(|c| {
-        let v = c.execute(
+        let mut v = c.execute(
             "UPDATE video_metadata SET poster_local_path = NULL \
              WHERE poster_local_path LIKE '%.%'",
             [],
         )?;
-        let s = c.execute(
+        let mut s = c.execute(
             "UPDATE show_metadata SET poster_local_path = NULL \
              WHERE poster_local_path LIKE '%.%'",
             [],
         )?;
+        for root in &incomplete_roots {
+            v += c.execute(
+                "UPDATE video_metadata SET poster_local_path = NULL \
+                 WHERE poster_local_path = ?1",
+                [root],
+            )?;
+            s += c.execute(
+                "UPDATE show_metadata SET poster_local_path = NULL \
+                 WHERE poster_local_path = ?1",
+                [root],
+            )?;
+        }
         Ok::<_, crate::error::DbError>((v, s))
     });
     let (videos_nulled, shows_nulled) = match result {
@@ -351,13 +430,21 @@ pub async fn purge_legacy_cache(ctx: &AppContext) {
             (0, 0)
         }
     };
-    if purged_files > 0 || videos_nulled > 0 || shows_nulled > 0 {
+    if purged_legacy_files > 0
+        || purged_orphan_files > 0
+        || purged_incomplete_files > 0
+        || videos_nulled > 0
+        || shows_nulled > 0
+    {
         info!(
-            files = purged_files,
+            legacy_files = purged_legacy_files,
+            orphan_files = purged_orphan_files,
+            incomplete_files = purged_incomplete_files,
+            incomplete_roots = incomplete_roots.len(),
             video_rows = videos_nulled,
             show_rows = shows_nulled,
             dir = %poster_dir.display(),
-            "purged legacy poster cache",
+            "purged stale poster cache",
         );
     }
 }
@@ -405,8 +492,8 @@ mod tests {
             "abc123.w240.webp"
         );
         assert_eq!(
-            variant_basename("abc123", PosterSize::W1600),
-            "abc123.w1600.webp"
+            variant_basename("abc123", PosterSize::W3200),
+            "abc123.w3200.webp"
         );
     }
 

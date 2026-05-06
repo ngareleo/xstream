@@ -59,7 +59,7 @@ Reuses the `FilmDetailsOverlay` styles file (`useShowDetailsOverlayStyles` is st
 
 ### Hero
 
-- `Poster` from `Show.metadata.posterUrl` at width 1600.
+- `Poster` from `Show.metadata.posterUrl` at W3200 (aliased `heroPoster`; co-spread with the home / player fragments which share the alias).
 - Vertical + horizontal gradients identical to `FilmDetailsOverlay`.
 - Close button top-right.
 

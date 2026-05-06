@@ -29,7 +29,7 @@ export interface OverlayCopy {
 
 const OVERLAY_FRAGMENT = graphql`
   fragment FilmDetailsOverlay_video on Video
-  @argumentDefinitions(posterSize: { type: "PosterSize!", defaultValue: W1600 }) {
+  @argumentDefinitions(posterSize: { type: "PosterSize!", defaultValue: W3200 }) {
     id
     title
     filename

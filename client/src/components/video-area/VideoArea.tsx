@@ -22,7 +22,7 @@ export interface SeriesPick {
 
 const VIDEO_FRAGMENT = graphql`
   fragment VideoArea_video on Video
-  @argumentDefinitions(posterSize: { type: "PosterSize!", defaultValue: W1600 }) {
+  @argumentDefinitions(posterSize: { type: "PosterSize!", defaultValue: W3200 }) {
     title
     durationSeconds
     metadata {

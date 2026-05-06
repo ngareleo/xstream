@@ -84,7 +84,7 @@ When PlayerContent sets `controlsHidden = true` (3000ms inactivity), VideoArea's
 
 ## Data
 
-- **Fragment**: Spreads `...VideoPlayer_video`. Carries `title`, `durationSeconds`, `metadata { title, year, genre, posterUrl }`.
+- **Fragment**: Spreads `...VideoPlayer_video`. Carries `title`, `durationSeconds`, `metadata { title, year, genre, heroPoster: posterUrl(size: $posterSize) }` with `@argumentDefinitions(posterSize: { type: "PosterSize!", defaultValue: W3200 })`. The `heroPoster` alias is shared with the home, detail-overlay, and show-overlay fragments; co-spread fragments must agree on the size, hence the W3200 default.
 - **Derived**: Episode code, formatted duration, metadata line text.
 
 ## Notes
