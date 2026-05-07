@@ -189,3 +189,38 @@ Load-bearing rules — the Rust port must respect these from day one even though
 - **No app-level peer ID in trace fields.** A `peer_pubkey` may appear as a span attribute on inbound peer requests but is NOT used for correlation — `trace_id` is the only correlation key.
 
 Cross-reference: `docs/architecture/Sharing/00-Peer-Streaming.md` §5 (Cross-peer observability) and §8 (Invariants 5 + 8).
+
+## PII Redaction
+
+When the resolved OTLP endpoint is non-localhost (i.e., the production self-hosted Seq), a custom processor scrubs PII from spans and log records before they enter the export queue. Local dev exports to `localhost:5341` continue to ship raw attributes so engineers see full context while debugging.
+
+Implementation:
+
+- **Rust** — `server-rust/src/telemetry/redaction.rs` wraps `BatchSpanProcessor`. `on_start` mutates attributes before they enter the batch. The wrapper is only installed when `OTEL_EXPORTER_OTLP_ENDPOINT` resolves to a non-loopback host.
+- **Client TS** — `client/src/telemetry/redaction.ts` wraps both `BatchSpanProcessor` (traces) and `BatchLogRecordProcessor` (logs). For log records it also runs a best-effort regex pass over the message body matching absolute paths (`/[^\s]+/[^\s]+`, `[A-Z]:\\[^\s]+`) and replacing them with `<redacted-path>`. Body scrubbing is a backstop, not the primary defence — see the discipline rule below.
+
+Attribute policy — deny + allow + hash-default:
+
+| Bucket | Keys | Treatment |
+|---|---|---|
+| **Hash** | `path`, `library.path`, `file`, `directory` | SHA-256 → first 16 hex chars, salted with a per-process random nonce so the same input is consistent within one process lifetime. Preserves correlation without leaking content. |
+| **Strip** | `title`, `movie_title`, `episode_title`, `show_name`, `omdb*`, `query` (unless numeric IMDb ID) | Replaced with empty string. Hashing titles is pointless; the goal is "Seq never sees the title at all." |
+| **Allow unchanged** | `job_id`, `video_id`, `library_name`, `kill_reason`, all `*_ms` / `*_s` numeric attributes, `service.name`, `component`, OTel-internal keys (`http.*`, `net.*`, `db.*`) | Operationally load-bearing; not user-identifying. |
+
+**Load-bearing discipline — pass PII via named attributes, not log message bodies.** The redactor recognises attribute keys; it cannot reliably parse arbitrary message text. This emits a path that the redactor catches:
+
+```rust
+// Good — path lives in a named attribute, redactor hashes it.
+info!(scan.path = %path, "Library scan starting");
+```
+
+This emits a path that may slip past the regex backstop and leak to Seq:
+
+```rust
+// Bad — path is interpolated into the message body.
+info!("Library scan starting at {path}");
+```
+
+The same rule applies on the client side (`getClientLogger("…").info(message, attributes)`).
+
+Cross-reference: [`../Deployment/03-Remote-Seq-DigitalOcean.md`](../Deployment/03-Remote-Seq-DigitalOcean.md) for the production Seq instance these rules ship into; [`../../product/Privacy/00-Telemetry.md`](../../product/Privacy/00-Telemetry.md) for the user-facing guarantee they uphold.
