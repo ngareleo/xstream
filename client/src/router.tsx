@@ -2,6 +2,7 @@ import { type FC, lazy, Suspense } from "react";
 import { createBrowserRouter, Outlet } from "react-router-dom";
 
 import { AppShell } from "~/components/app-shell/AppShell.js";
+import { AuthLayout } from "~/components/auth-layout/AuthLayout.js";
 import { ErrorBoundary } from "~/components/error-boundary/ErrorBoundary.js";
 
 const HomePage = lazy(
@@ -43,6 +44,18 @@ const GoodbyePage = lazy(
 );
 const ErrorPage = lazy(
   () => import(/* webpackChunkName: "ErrorPage" */ "./pages/error-page/ErrorPage.js")
+);
+const SignInPage = lazy(
+  () => import(/* webpackChunkName: "SignInPage" */ "./pages/signin-page/SignInPage.js")
+);
+const SignUpPage = lazy(
+  () => import(/* webpackChunkName: "SignUpPage" */ "./pages/signup-page/SignUpPage.js")
+);
+const ResetPasswordPage = lazy(
+  () =>
+    import(
+      /* webpackChunkName: "ResetPasswordPage" */ "./pages/reset-password-page/ResetPasswordPage.js"
+    )
 );
 
 const ShellLayout: FC = () => (
@@ -95,5 +108,40 @@ export const router: ReturnType<typeof createBrowserRouter> = createBrowserRoute
         <ErrorPage />
       </Suspense>
     ),
+  },
+  {
+    element: (
+      <ErrorBoundary>
+        <Suspense fallback={null}>
+          <AuthLayout />
+        </Suspense>
+      </ErrorBoundary>
+    ),
+    children: [
+      {
+        path: "/signin",
+        element: (
+          <Suspense fallback={null}>
+            <SignInPage />
+          </Suspense>
+        ),
+      },
+      {
+        path: "/signup",
+        element: (
+          <Suspense fallback={null}>
+            <SignUpPage />
+          </Suspense>
+        ),
+      },
+      {
+        path: "/reset-password",
+        element: (
+          <Suspense fallback={null}>
+            <ResetPasswordPage />
+          </Suspense>
+        ),
+      },
+    ],
   },
 ]);

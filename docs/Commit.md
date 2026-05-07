@@ -15,6 +15,13 @@ Entry shape (each entry ends with the divider line described above):
 
 <!-- ENTRIES BELOW — newest first; each ends with a bare `---` line. The architect's next invocation will treat the no-entries state as the first-run case and prepend a bootstrap entry at HEAD. -->
 
+## Current HEAD — 2026-05-07 — Auth UI scaffold: SignIn, SignUp, ResetPassword pages + AuthLayout chrome (same-session curation)
+
+**Files:** `docs/client/Components/AuthLayout.md` (new), `docs/client/Components/SignInPage.md` (new), `docs/client/Components/SignUpPage.md` (new), `docs/client/Components/ResetPasswordPage.md` (new), `docs/client/Components/README.md`
+**Why:** New unauthenticated UI scaffold — `/signin`, `/signup`, `/reset-password` routes + shared AuthLayout chrome (full-bleed hero, scrim, grain, glass panel). Four per-component specs land describing layout, form behavior, validation, and state machine. Pages follow GoodbyePage solo-route pattern; no Relay, Nova events, GraphQL mutations, or auth gate yet (wired backend TBD). Components README updated with four new rows. Pre-prod, no migration concerns.
+
+---
+
 ## Current HEAD — 2026-05-04 — Homepage Relay refactor: fragment ownership to component level (same-session curation)
 
 **Files:** `docs/client/Components/Library.md`, `docs/client/Components/README.md`
