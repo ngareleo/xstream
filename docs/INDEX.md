@@ -73,4 +73,5 @@ Keep rows short (≤ ~120 chars). When adding a new topic file to `docs/`, add i
 | Architect narrative history — paired with `docs/Commit.md`, read recent ~5 entries to build familiarity | `docs/History.md` |
 | Design spec — tokens, type scale, spacing, behavioural contracts | `docs/design/UI-Design-Spec/00-Tokens-And-Layout.md` |
 | Product spec | `docs/product/Product-Spec/00-Scope.md` |
+| User-facing telemetry disclosure (what's collected, redaction guarantee, data retention, where it goes) | `docs/product/Privacy/00-Telemetry.md` |
 | Tech-choice question ("should we use X?") | No read required — use the template in `.claude/agents/architect.md` |

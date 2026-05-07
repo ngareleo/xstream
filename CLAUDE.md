@@ -40,7 +40,7 @@ xstream/
 │   ├── server/                     # server-only topics (Config, GraphQL-Schema, DB-Schema, Hardware-Acceleration)
 │   ├── design/                     # UI design spec — tokens, type, spacing, behavioural contracts
 │   ├── release/                    # outstanding redesign work (working document)
-│   ├── product/                    # product spec, customers, roadmap
+│   ├── product/                    # product spec, customers, roadmap, user-facing privacy policy
 │   ├── code-style/                 # conventions, invariants, anti-patterns, naming, testing policy
 │   ├── diagrams/                   # .mmd + .png (stable filenames; owned by `update-docs` skill)
 │   └── todo.md                     # owned by `todo` skill
