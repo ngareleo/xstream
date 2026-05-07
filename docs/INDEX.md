@@ -37,6 +37,7 @@ Keep rows short (≤ ~120 chars). When adding a new topic file to `docs/`, add i
 | Tauri desktop shell — `tauri.conf.json`, in-process server, bundled ffmpeg, VAAPI Linux fallback, code-signing, CI matrix | `docs/architecture/Deployment/00-Tauri-Desktop-Shell.md` |
 | Tauri packaging internals — build pipeline, installed-app layout per OS, `tauri-plugin-updater` mechanics | `docs/architecture/Deployment/01-Packaging-Internals.md` |
 | Shipping ffmpeg — manifest pinning, portable strategy for every OS, runtime resolution under Tauri, GPL compliance | `docs/architecture/Deployment/02-Shipping-FFmpeg.md` |
+| Self-hosted Seq on DigitalOcean (production OTel sink, bring-up runbook, Caddy + HTTPS, API-key setup, data retention) | `docs/architecture/Deployment/03-Remote-Seq-DigitalOcean.md` |
 | Per-component design specs (style, layout, behaviour, data) — agent-facing reference for every UI component | `docs/client/Components/README.md` |
 | FilmVariants component spec (multi-copy variant picker) | `docs/client/Components/FilmVariants.md` |
 | ShowTile component spec (homepage TV row tile, Show fragment, sibling to FilmTile) | `docs/client/Components/ShowTile.md` |
@@ -72,4 +73,5 @@ Keep rows short (≤ ~120 chars). When adding a new topic file to `docs/`, add i
 | Architect narrative history — paired with `docs/Commit.md`, read recent ~5 entries to build familiarity | `docs/History.md` |
 | Design spec — tokens, type scale, spacing, behavioural contracts | `docs/design/UI-Design-Spec/00-Tokens-And-Layout.md` |
 | Product spec | `docs/product/Product-Spec/00-Scope.md` |
+| User-facing telemetry disclosure (what's collected, redaction guarantee, data retention, where it goes) | `docs/product/Privacy/00-Telemetry.md` |
 | Tech-choice question ("should we use X?") | No read required — use the template in `.claude/agents/architect.md` |
