@@ -9,6 +9,7 @@ The Rust server runs **in-process** inside the Tauri shell on a free `127.0.0.1`
 | [`00-Tauri-Desktop-Shell.md`](00-Tauri-Desktop-Shell.md) | Prescriptive spec: `tauri.conf.json` shape, the in-process server, bundled ffmpeg, VAAPI Linux soft fallback, Ed25519-signed self-hosted updates, code-signing per OS, the GitHub Actions release matrix, and the open release-engineering questions. |
 | [`01-Packaging-Internals.md`](01-Packaging-Internals.md) | Internals walkthrough: source on disk → `cargo` + `tauri build` → OS-specific installer → installed app layout per OS → `tauri-plugin-updater` mechanics. Corrects the Electron-derived intuition that desktop apps ship a bundled browser engine and run their server logic in a sidecar. |
 | [`02-Shipping-FFmpeg.md`](02-Shipping-FFmpeg.md) | How `jellyfin-ffmpeg` gets bundled — manifest pinning, the portable strategy used for every OS, where binaries live in the Tauri resource tree (`resources/ffmpeg/<plat>/`), how `src-tauri/src/ffmpeg_path.rs` resolves them at runtime, build-time SHA256 verification, segment-cache invalidation on manifest bumps, and GPL compliance. |
+| [`03-Remote-Seq-DigitalOcean.md`](03-Remote-Seq-DigitalOcean.md) | Self-hosted Seq for production telemetry — droplet provisioning, the Docker Compose stack (Seq + Caddy + Let's Encrypt), API-key setup, operator access patterns (public UI vs SSH tunnel), backup / restore / cert / key rotation, and how shipped Tauri installs are wired to it. |
 
 ## What's still open
 

@@ -16,21 +16,37 @@
 | `PUBLIC_OTEL_ENDPOINT` | `/ingest/otlp` | OTLP base URL for browser. Relative path works in dev (proxied). Use full URL in prod. |
 | `PUBLIC_OTEL_HEADERS` | _(empty)_ | Comma-separated `Key=Value` headers for browser OTLP export |
 
-## Switching to a production backend
+## Production backend: self-hosted Seq
 
-To route telemetry to Axiom in production, update the env vars (no code changes needed):
+Production Tauri installs ship telemetry to a self-hosted Seq instance running on a DigitalOcean droplet behind Caddy + Let's Encrypt. The bring-up runbook is at [`../Deployment/03-Remote-Seq-DigitalOcean.md`](../Deployment/03-Remote-Seq-DigitalOcean.md).
+
+Env-var contract (baked into the release Tauri bundle via the CI build env):
 
 ```bash
-# Server
+# Server (xstream-server-rust running inside the Tauri shell)
+OTEL_EXPORTER_OTLP_ENDPOINT=https://seq.<your-domain>/ingest/otlp
+OTEL_EXPORTER_OTLP_HEADERS=X-Seq-ApiKey=<ingestion-api-key>
+
+# Client (Rsbuild bakes PUBLIC_* into the JS bundle at build time)
+PUBLIC_OTEL_ENDPOINT=https://seq.<your-domain>/ingest/otlp
+PUBLIC_OTEL_HEADERS=X-Seq-ApiKey=<ingestion-api-key>
+```
+
+The same ingestion API key works for both server and browser clients (Seq API keys are per-application bearer tokens with rate limits, not per-user credentials). When the resolved endpoint is non-localhost, the PII-redaction layer activates automatically — see [`01-Logging-Policy.md` § PII Redaction](01-Logging-Policy.md#pii-redaction).
+
+### Alternative: Axiom or another OTLP SaaS
+
+The env-var contract is provider-agnostic — to route telemetry to Axiom instead of self-hosted Seq:
+
+```bash
 OTEL_EXPORTER_OTLP_ENDPOINT=https://api.axiom.co
 OTEL_EXPORTER_OTLP_HEADERS=Authorization=Bearer <axiom-token>,X-Axiom-Dataset=xstream-prod
 
-# Client (set before running bun run build)
 PUBLIC_OTEL_ENDPOINT=https://api.axiom.co
 PUBLIC_OTEL_HEADERS=Authorization=Bearer <axiom-token>,X-Axiom-Dataset=xstream-prod
 ```
 
-Axiom accepts OTLP/HTTP natively. Other OTLP-compatible backends (Grafana Cloud, Honeycomb, Jaeger, etc.) follow the same pattern — just change the endpoint and headers.
+Axiom accepts OTLP/HTTP natively. Grafana Cloud, Honeycomb, Jaeger, etc. follow the same pattern — change the endpoint and headers. The trade-off vs self-hosted Seq is recorded in [`../Deployment/03-Remote-Seq-DigitalOcean.md` § Why self-hosted Seq](../Deployment/03-Remote-Seq-DigitalOcean.md#why-self-hosted-seq-vs-axiom--saas).
 
 ## Seq API key setup
 
