@@ -29,3 +29,9 @@ thiserror = "2"
 # Embedded server — runs in-process on a free 127.0.0.1 port. See
 # docs/migrations/rust-rewrite/08-Tauri-Packaging.md §3.
 xstream-server = { path = "../server-rust" }
+
+[features]
+default = []
+# Pass-through: dev artifacts enable this so the embedded server keeps
+# its dev-only resolvers (trace history). Prod artifacts compile without.
+dev-features = ["xstream-server/dev-features"]

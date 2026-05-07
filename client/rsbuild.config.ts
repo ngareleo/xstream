@@ -23,6 +23,13 @@ export default defineConfig({
 
   source: {
     entry: { index: "./src/main.tsx" },
+    // Statically replaced by Rspack so dev-only branches dead-code-eliminate
+    // in prod. Truthy iff XSTREAM_VARIANT=dev when the bundler runs.
+    define: {
+      "process.env.PUBLIC_XSTREAM_DEV_FEATURES": JSON.stringify(
+        process.env.XSTREAM_VARIANT === "dev" ? "true" : "false"
+      ),
+    },
   },
 
   resolve: {

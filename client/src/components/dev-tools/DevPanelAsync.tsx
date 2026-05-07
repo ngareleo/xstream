@@ -1,32 +1,28 @@
 /**
  * DevPanelAsync — lazy-loaded wrapper around DevPanelInner.
  *
- * In development: DevPanelInner is dynamically imported into its own chunk so
- * it is not part of the initial bundle. The chunk is only fetched when the
- * component first renders.
+ * In dev builds (XSTREAM_VARIANT=dev): DevPanelInner is dynamically imported
+ * into its own chunk, fetched lazily on first render.
  *
- * In production: the conditional is statically replaced by the bundler
- * (process.env.NODE_ENV → "production"), the dynamic import is dead code, and
- * tree-shaking removes it entirely. Nothing from DevPanel ships to users.
+ * In prod builds: PUBLIC_XSTREAM_DEV_FEATURES is statically replaced with
+ * "false" by Rspack's DefinePlugin during parsing, the ternary collapses
+ * before the dynamic import is registered, and Rspack drops the DevPanel
+ * chunk file from the bundle entirely.
+ *
+ * The literal `process.env.PUBLIC_XSTREAM_DEV_FEATURES === "true"` MUST be
+ * inlined at the call site — importing IS_DEV_BUILD from devChunk.ts breaks
+ * chunk-level dead-code elimination, since cross-module const propagation
+ * runs after dynamic imports have already been registered as chunks.
  */
 
-import { type FC, type LazyExoticComponent, Suspense } from "react";
+import { type FC } from "react";
 
-import { lazyNamedExport } from "~/utils/lazy.js";
+import { NoopFC, wrapDevImport } from "~/utils/devChunk.js";
 
-import type { DevPanelInner as DevPanelInnerType } from "./DevPanel.js";
-
-const Inner: LazyExoticComponent<typeof DevPanelInnerType> = lazyNamedExport(
-  () => import(/* webpackChunkName: "DevPanel" */ "./DevPanel.js"),
-  (m) => m.DevPanelInner
-);
-
-const DevPanelLazy: FC = () => (
-  <Suspense fallback={null}>
-    <Inner />
-  </Suspense>
-);
-
-const Noop: FC = () => null;
-
-export const DevPanelAsync: FC = process.env.NODE_ENV !== "production" ? DevPanelLazy : Noop;
+export const DevPanelAsync: FC =
+  process.env.PUBLIC_XSTREAM_DEV_FEATURES === "true"
+    ? wrapDevImport(
+        () => import(/* webpackChunkName: "DevPanel" */ "./DevPanel.js"),
+        (m) => m.DevPanelInner
+      )
+    : NoopFC;

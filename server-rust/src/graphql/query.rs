@@ -9,10 +9,11 @@ use crate::db::{
 };
 use crate::graphql::scalars::MediaType;
 use crate::graphql::types::{
-    DirEntry, Film, FilmConnection, FilmEdge, Library, Node, OmdbSearchResult, PlaybackSession,
-    SettingEntry, Show, ShowConnection, ShowEdge, TranscodeJob, Video, VideoConnection, VideoEdge,
-    WatchlistItem,
+    DirEntry, Film, FilmConnection, FilmEdge, Library, Node, OmdbSearchResult, SettingEntry, Show,
+    ShowConnection, ShowEdge, TranscodeJob, Video, VideoConnection, VideoEdge, WatchlistItem,
 };
+#[cfg(feature = "dev-features")]
+use crate::graphql::types::PlaybackSession;
 use crate::relay::from_global_id;
 
 #[derive(Default)]
@@ -254,6 +255,7 @@ impl Query {
         Ok(out)
     }
 
+    #[cfg(feature = "dev-features")]
     async fn playback_history(
         &self,
         ctx: &Context<'_>,

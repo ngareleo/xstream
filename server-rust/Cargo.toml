@@ -75,6 +75,13 @@ sha1 = "0.10"
 tokio-stream = { version = "0.1", features = ["sync"] }
 tokio-util = { version = "0.7", features = ["io"] }
 
+[features]
+default = []
+# Compile in dev-only surfaces (trace history table, GraphQL resolvers
+# that read/write it). Prod artifacts are built without this; the
+# matching frontend strip lives behind PUBLIC_XSTREAM_DEV_FEATURES.
+dev-features = []
+
 [dev-dependencies]
 tempfile = "3"
 # Local HTTP mock server for omdb tests — lets us assert the

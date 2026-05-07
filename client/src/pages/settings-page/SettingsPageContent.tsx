@@ -1,18 +1,24 @@
 import { mergeClasses } from "@griffel/react";
-import { type FC, Suspense } from "react";
+import { type FC } from "react";
 import { useSearchParams } from "react-router-dom";
 
 import { DangerTab } from "~/components/danger-tab/DangerTab.js";
-import { FlagsTab } from "~/components/flags-tab/FlagsTab.js";
+import { FlagsTabAsync } from "~/components/flags-tab/FlagsTabAsync.js";
 import { LibraryTab } from "~/components/library-tab/LibraryTab.js";
 import { MetadataTab } from "~/components/metadata-tab/MetadataTab.js";
-import { TraceHistoryTab } from "~/components/trace-history-tab/TraceHistoryTab.js";
+import { TraceHistoryTabAsync } from "~/components/trace-history-tab/TraceHistoryTabAsync.js";
+import { IS_DEV_BUILD } from "~/utils/devChunk.js";
 
 import { strings } from "./SettingsPage.strings.js";
 import { useSettingsStyles } from "./SettingsPage.styles.js";
 
-const SECTIONS = ["library", "metadata", "flags", "trace", "danger"] as const;
-type Section = (typeof SECTIONS)[number];
+const ALL_SECTIONS = ["library", "metadata", "flags", "trace", "danger"] as const;
+type Section = (typeof ALL_SECTIONS)[number];
+
+// Flags + Trace History are dev-only — drop the buttons from the prod nav.
+const SECTIONS: readonly Section[] = IS_DEV_BUILD
+  ? ALL_SECTIONS
+  : ALL_SECTIONS.filter((s): s is Section => s !== "flags" && s !== "trace");
 
 const SECTION_LABELS: Record<Section, string> = {
   library: strings.sectionLibrary,
@@ -61,12 +67,8 @@ export const SettingsPageContent: FC = () => {
         <div className={styles.sectionWrap}>
           {active === "library" && <LibraryTab />}
           {active === "metadata" && <MetadataTab />}
-          {active === "flags" && <FlagsTab />}
-          {active === "trace" && (
-            <Suspense fallback={null}>
-              <TraceHistoryTab />
-            </Suspense>
-          )}
+          {active === "flags" && <FlagsTabAsync />}
+          {active === "trace" && <TraceHistoryTabAsync />}
           {active === "danger" && <DangerTab />}
         </div>
       </div>

@@ -98,6 +98,7 @@ pub use queries::libraries::{
     create_library, delete_library, get_all_libraries, get_library_by_id, update_library,
     update_library_status, upsert_library, LibraryRow, LibraryUpdate,
 };
+#[cfg(feature = "dev-features")]
 pub use queries::playback_history::{
     get_playback_history, insert_playback_session, PlaybackHistoryRow,
 };
