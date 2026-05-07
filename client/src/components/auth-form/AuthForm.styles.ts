@@ -47,7 +47,11 @@ export const useAuthFormStyles = makeStyles({
     outlineStyle: "none",
     transitionProperty: "border-color, box-shadow",
     transitionDuration: tokens.transition,
-    "::placeholder": { color: tokens.colorTextFaint },
+    "::placeholder": {
+      color: tokens.colorTextFaint,
+      fontFamily: tokens.fontBody,
+      fontSize: "14px",
+    },
     ":hover": {
       borderTopColor: tokens.colorTextFaint,
       borderRightColor: tokens.colorTextFaint,
