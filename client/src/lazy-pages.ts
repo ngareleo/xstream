@@ -1,26 +1,6 @@
-/**
- * Lazy-loaded page chunks for the React Router config in `router.tsx`.
- *
- * Every route lazy-imports its page so the initial bundle stays small.
- * Each `lazy(() => import(...))` carries an explicit `webpackChunkName`
- * so the resulting chunks have stable, human-readable names in network
- * panels, source maps, and the rsbuild build manifest — useful when a
- * specific page is the suspected cause of a slow first paint.
- *
- * Two import shapes are in use:
- *
- *   1. **Default-exported pages** — `lazy(() => import("./X.js"))`.
- *   2. **Named-exported pages** — wrap with
- *      `.then((m) => ({ default: m.X }))` because `lazy` requires the
- *      resolved module to have a `default` export.
- *
- * Order below: shelled pages (under `<AppShell>`), then full-screen
- * solo routes, then unauthenticated auth pages.
- */
+/** Lazy-loaded page chunks for `router.tsx`. See docs/code-style/Client-Conventions/00-Patterns.md. */
 
 import { lazy } from "react";
-
-// ── Shelled pages (children of <ShellLayout> in router.tsx) ──────────
 
 export const HomePage = lazy(
   () => import(/* webpackChunkName: "HomePage" */ "./pages/homepage/HomePage.js")
@@ -58,8 +38,6 @@ export const NotFoundPage = lazy(() =>
   )
 );
 
-// ── Full-screen solo routes (bypass <AppShell>) ──────────────────────
-
 export const PlayerPage = lazy(() =>
   import(/* webpackChunkName: "PlayerPage" */ "./pages/player-page/PlayerPage.js").then((m) => ({
     default: m.PlayerPage,
@@ -73,8 +51,6 @@ export const GoodbyePage = lazy(
 export const ErrorPage = lazy(
   () => import(/* webpackChunkName: "ErrorPage" */ "./pages/error-page/ErrorPage.js")
 );
-
-// ── Unauthenticated auth pages (children of <AuthLayout>) ────────────
 
 export const SignInPage = lazy(
   () => import(/* webpackChunkName: "SignInPage" */ "./pages/signin-page/SignInPage.js")
