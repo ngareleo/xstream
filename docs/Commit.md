@@ -15,6 +15,13 @@ Entry shape (each entry ends with the divider line described above):
 
 <!-- ENTRIES BELOW — newest first; each ends with a bare `---` line. The architect's next invocation will treat the no-entries state as the first-run case and prepend a bootstrap entry at HEAD. -->
 
+## d89076f — 2026-05-07 — Lazy-pages extraction: consolidated route chunk declarations (same-session curation)
+
+**Files:** `docs/code-style/Client-Conventions/00-Patterns.md`
+**Why:** Code review feedback on PR #64 — extracted 13 inline `lazy(...)` declarations from `router.tsx` into a new canonical home `client/src/lazy-pages.ts`. File documents two import shapes + ordering convention; no chunk semantics change, no route change. Docs updated with a new router-patterns subsection in Client-Conventions/00-Patterns.md pointing to the file and explaining the convention.
+
+---
+
 ## Current HEAD — 2026-05-07 — Auth UI scaffold: SignIn, SignUp, ResetPassword pages + AuthLayout chrome (same-session curation)
 
 **Files:** `docs/client/Components/AuthLayout.md` (new), `docs/client/Components/SignInPage.md` (new), `docs/client/Components/SignUpPage.md` (new), `docs/client/Components/ResetPasswordPage.md` (new), `docs/client/Components/README.md`
