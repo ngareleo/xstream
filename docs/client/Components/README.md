@@ -22,7 +22,10 @@ Outstanding work that hasn't yet shipped is tracked separately in
 | [NotFound](NotFound.md) | `*` (catch-all) | `client/src/pages/not-found-page/` |
 | [Player](Player.md) | `/player/:id` | `client/src/pages/player-page/` |
 | [Profiles](Profiles.md) | `/profiles` | `client/src/pages/profiles-page/` |
+| [ResetPasswordPage](ResetPasswordPage.md) | `/reset-password` | `client/src/pages/reset-password-page/` |
 | [Settings](Settings.md) | `/settings` | `client/src/pages/settings-page/` |
+| [SignInPage](SignInPage.md) | `/signin` | `client/src/pages/signin-page/` |
+| [SignUpPage](SignUpPage.md) | `/signup` | `client/src/pages/signup-page/` |
 | [Watchlist](Watchlist.md) | `/watchlist` | `client/src/pages/watchlist-page/` |
 
 ### Shell + chrome
@@ -32,6 +35,7 @@ Outstanding work that hasn't yet shipped is tracked separately in
 | [AccountMenu](AccountMenu.md) | `client/src/components/account-menu/` |
 | [AppHeader](AppHeader.md) | `client/src/components/app-header/` |
 | [AppShell](AppShell.md) | `client/src/components/app-shell/` |
+| [AuthLayout](AuthLayout.md) | `client/src/components/auth-layout/` |
 | [Logo](Logo.md) | `client/src/components/logo/` |
 
 ### Library / Profiles surfaces
