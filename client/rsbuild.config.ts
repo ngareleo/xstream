@@ -23,12 +23,15 @@ export default defineConfig({
 
   source: {
     entry: { index: "./src/main.tsx" },
-    // Statically replaced by Rspack so dev-only branches dead-code-eliminate
-    // in prod. Truthy iff XSTREAM_VARIANT=dev when the bundler runs.
+    // Bare-identifier global substituted by Rspack's DefinePlugin during
+    // parsing. Any `if (IS_DEV_BUILD)` / `IS_DEV_BUILD ? … : …` branch becomes
+    // statically dead in prod, so dynamic `import()` calls inside the dead
+    // branch are dropped before chunks are emitted.
+    //
+    // Declared as a global in `src/types/env.d.ts` so call sites don't need
+    // to import anything to reference it.
     define: {
-      "process.env.PUBLIC_XSTREAM_DEV_FEATURES": JSON.stringify(
-        process.env.XSTREAM_VARIANT === "dev" ? "true" : "false"
-      ),
+      IS_DEV_BUILD: JSON.stringify(process.env.XSTREAM_VARIANT === "dev"),
     },
   },
 

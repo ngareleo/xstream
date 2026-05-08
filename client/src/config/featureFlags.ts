@@ -1,7 +1,5 @@
 /** Feature-flag runtime: module cache + pub/sub. localStorage has higher trust than server. See docs/client/Feature-Flags/. */
 
-import { IS_DEV_BUILD } from "~/utils/devChunk.js";
-
 import { type BufferConfig, clientConfig } from "./appConfig.js";
 import { FLAG_KEYS, FLAG_REGISTRY, type FlagValue, type FlagValueType } from "./flagRegistry.js";
 

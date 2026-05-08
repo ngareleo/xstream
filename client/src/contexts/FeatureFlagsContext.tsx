@@ -14,7 +14,6 @@ import {
 import { FLAG_REGISTRY, type FlagValue } from "~/config/flagRegistry.js";
 import type { FeatureFlagsContextQuery } from "~/relay/__generated__/FeatureFlagsContextQuery.graphql.js";
 import type { FeatureFlagsContextSetMutation } from "~/relay/__generated__/FeatureFlagsContextSetMutation.graphql.js";
-import { IS_DEV_BUILD } from "~/utils/devChunk.js";
 
 const FLAGS_QUERY = graphql`
   query FeatureFlagsContextQuery($keys: [String!]!) {

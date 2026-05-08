@@ -7,7 +7,6 @@ import { FlagsTabAsync } from "~/components/flags-tab/FlagsTabAsync.js";
 import { LibraryTab } from "~/components/library-tab/LibraryTab.js";
 import { MetadataTab } from "~/components/metadata-tab/MetadataTab.js";
 import { TraceHistoryTabAsync } from "~/components/trace-history-tab/TraceHistoryTabAsync.js";
-import { IS_DEV_BUILD } from "~/utils/devChunk.js";
 
 import { strings } from "./SettingsPage.strings.js";
 import { useSettingsStyles } from "./SettingsPage.styles.js";

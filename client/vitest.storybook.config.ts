@@ -24,6 +24,11 @@ export default defineConfig({
       "~": path.resolve(dirname, "src"),
     },
   },
+  // Mirror the Rsbuild `source.define` so IS_DEV_BUILD references in source
+  // resolve under Vite. Stories always run as the dev variant.
+  define: {
+    IS_DEV_BUILD: "true",
+  },
   // Pre-bundle the heavy shared deps so Vite seals the deps cache once at
   // startup. Without this, vitest-browser navigates to story files one at
   // a time; each new story can introduce a not-yet-seen dep, triggering a
