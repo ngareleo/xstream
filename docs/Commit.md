@@ -15,6 +15,13 @@ Entry shape (each entry ends with the divider line described above):
 
 <!-- ENTRIES BELOW — newest first; each ends with a bare `---` line. The architect's next invocation will treat the no-entries state as the first-run case and prepend a bootstrap entry at HEAD. -->
 
+## 2026-05-11 — Axiom exporter flag-gating curation verification (curator check, no edits needed)
+
+**Files:** no doc updates needed
+**Why:** Curator notification for PR #67 (second commit: Axiom exporter flag-gating). Verification confirms `docs/architecture/Observability/03-Config-And-Backends.md`, `docs/client/Feature-Flags/00-Registry.md`, `docs/architecture/Deployment/04-Axiom-Production-Backend.md`, and `.env.example` all correctly document the four-token contract and env-var growth. INDEX.md row for `03-Config-And-Backends.md` generic enough to cover new table content. No `code-style/` files reference OTel env vars. SUMMARY.md stable. All cross-references coherent.
+
+---
+
 ## bed5407 — 2026-05-11 — Build variants doc consolidation: prod/dev split, chunk stripping, Cargo features (same-session curation)
 
 **Files:** `docs/architecture/Deployment/03-Build-Variants.md` (new), `docs/architecture/Deployment/README.md`, `docs/INDEX.md`, `client/src/components/dev-tools/DevPanelAsync.tsx`, `client/src/utils/devChunk.tsx`
