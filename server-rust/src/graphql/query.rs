@@ -8,12 +8,12 @@ use crate::db::{
     list_films, list_shows, Db, FilmsFilter, ShowsFilter,
 };
 use crate::graphql::scalars::MediaType;
+#[cfg(feature = "dev-features")]
+use crate::graphql::types::PlaybackSession;
 use crate::graphql::types::{
     DirEntry, Film, FilmConnection, FilmEdge, Library, Node, OmdbSearchResult, SettingEntry, Show,
     ShowConnection, ShowEdge, TranscodeJob, Video, VideoConnection, VideoEdge, WatchlistItem,
 };
-#[cfg(feature = "dev-features")]
-use crate::graphql::types::PlaybackSession;
 use crate::relay::from_global_id;
 
 #[derive(Default)]

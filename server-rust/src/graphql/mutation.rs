@@ -4,15 +4,15 @@ use async_graphql::{Context, Object, ID};
 
 use crate::db::{
     self, add_watchlist_item, create_library, delete_library, delete_video_metadata,
-    get_video_by_id, remove_watchlist_item, set_setting, update_library,
-    update_watchlist_progress, upsert_video_metadata, Db, LibraryUpdate, VideoMetadataRow,
+    get_video_by_id, remove_watchlist_item, set_setting, update_library, update_watchlist_progress,
+    upsert_video_metadata, Db, LibraryUpdate, VideoMetadataRow,
 };
 #[cfg(feature = "dev-features")]
 use crate::db::{insert_playback_session, PlaybackHistoryRow};
 use crate::graphql::scalars::{MediaType, Resolution};
-use crate::graphql::types::{Library, PlaybackError, StartTranscodeResult, Video, WatchlistItem};
 #[cfg(feature = "dev-features")]
 use crate::graphql::types::PlaybackSession;
+use crate::graphql::types::{Library, PlaybackError, StartTranscodeResult, Video, WatchlistItem};
 use crate::relay::from_global_id;
 
 #[derive(Default)]
