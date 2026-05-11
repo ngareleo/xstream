@@ -201,6 +201,10 @@ jobs:
         run: bun run test
 
       - name: Test stories
+        # Bound the step so a hang inside vitest-browser / Playwright
+        # bootstrap fails fast instead of consuming the job's full 6h
+        # quota. The green path is ~15 s; 5 min is generous.
+        timeout-minutes: 5
         run: bun run test-storybook
 
       - name: Build Storybook
