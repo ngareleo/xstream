@@ -15,6 +15,13 @@ Entry shape (each entry ends with the divider line described above):
 
 <!-- ENTRIES BELOW — newest first; each ends with a bare `---` line. The architect's next invocation will treat the no-entries state as the first-run case and prepend a bootstrap entry at HEAD. -->
 
+## bed5407 — 2026-05-11 — Build variants doc consolidation: prod/dev split, chunk stripping, Cargo features (same-session curation)
+
+**Files:** `docs/architecture/Deployment/03-Build-Variants.md` (new), `docs/architecture/Deployment/README.md`, `docs/INDEX.md`, `client/src/components/dev-tools/DevPanelAsync.tsx`, `client/src/utils/devChunk.tsx`
+**Why:** PR #66 reviewer flagged multi-paragraph file-top JSDoc blocks violating the commenting policy. Consolidated the design story (XSTREAM_VARIANT switch, IS_DEV_BUILD DefinePlugin strip, devChunk helper + empirical evidence for why the check can't move into the helper, dev-features Cargo feature, migration backward-compat, verification recipes, adding-new-surface checklist) into a single canonical doc at `03-Build-Variants.md`. Source files now carry one-line cross-references instead of prose.
+
+---
+
 ## d89076f — 2026-05-07 — Lazy-pages extraction: consolidated route chunk declarations (same-session curation)
 
 **Files:** `docs/code-style/Client-Conventions/00-Patterns.md`

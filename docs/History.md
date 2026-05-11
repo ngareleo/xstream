@@ -35,6 +35,15 @@ Entry shape (the entry ends with a single line containing exactly three hyphens 
 
 <!-- ENTRIES BELOW — newest first; each ends with a bare three-hyphen divider line. -->
 
+## 2026-05-11 — Build variants doc consolidation — prod/dev split and chunk stripping
+
+PR #66 reviewer flagged a design-pattern anti-pattern: multi-paragraph file-top `/** */` doc blocks in source files (`DevPanelAsync.tsx` and `devChunk.tsx` each carried 5–10 lines of explanation about why the `IS_DEV_BUILD` check has to stay at the call site, not move into the helper). The commenting policy says file-top blocks should be ≤1 sentence or a pointer to `docs/`; anything longer belongs there. The consolidated doc `03-Build-Variants.md` now covers the entire prod/dev story: the `XSTREAM_VARIANT` env switch driving `XSTREAM_VARIANT` in build scripts, Rspack `DefinePlugin` substitution of `IS_DEV_BUILD`, the `devChunk` helper + empirical evidence for why inlining the check defeats chunk stripping (Rspack scans `import()` at parse time, not within lambdas; it registers chunks before runtime analysis can prove a path is dead), server `dev-features` Cargo feature gating GraphQL fields and DB writes, `playback_history` table migration backward-compat (runs on all variants, only dev inserts), Tauri config overlay for bundle identity + window title, verification recipes (schema dump, chunk listing), and the checklist for adding new dev surfaces (client shim pattern, server `cfg` gate). The two source files now carry one-line cross-references. This unblocks the next phase: the agent can now point any reviewer at a single canonical document instead of repeating the rationale in PR comments or code reviews.
+
+**Files:** `docs/architecture/Deployment/03-Build-Variants.md` (new), `docs/architecture/Deployment/README.md`, `docs/INDEX.md`, `client/src/components/dev-tools/DevPanelAsync.tsx`, `client/src/utils/devChunk.tsx`
+**Related Commit.md entry:** `bed5407`
+
+---
+
 ## 2026-05-07 — Lazy-pages extraction — consolidated route chunk declarations
 
 Reviewer feedback on PR #64 asked to extract the scattered inline `lazy(...)` declarations from `router.tsx` into a dedicated file "for organization and documentation". The constraint was: keep chunk semantics unchanged (stable `webpackChunkName` on each import, no route changes). The result: `client/src/lazy-pages.ts` is a new canonical home for all 13 page lazy imports, annotated with a thorough header comment explaining the two import shapes (default-exported pages vs named-exported pages wrapped with `.then()` to produce a default export), the ordering convention (shelled pages under AppShell, then full-screen solo routes, then unauthenticated auth pages), and the purpose of `webpackChunkName` (stable naming in build manifests + dev tools). This keeps `router.tsx` focused on route tree shape and pushes chunk naming and import conventions into a single, well-documented place. The doc update is minimal: a new subsection in `Client-Conventions/00-Patterns.md` pointing agents to the file and the convention when they work on router concerns. The change is pre-prod (no migrations, no contract breaks).
