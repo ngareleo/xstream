@@ -273,6 +273,8 @@ The private key + its password live in CI secrets:
 
 **Never commit the private key.** A compromised signing key is the most damaging incident this app can have — an attacker can ship a "signed" update that runs arbitrary code on every user's machine. Store the private key in CI secrets only; if rotated, every user must reinstall once via a non-update path.
 
+This signed-update model protects **binary integrity** — an attacker cannot push a tampered installer to our users. It is adjacent to but distinct from **secret extraction** from a legitimate binary: an attacker who runs the genuine signed installer can still dump the embedded telemetry ingestion API key. That separate threat (and the mitigations — Ingest-scope-only key, rate limit, easy rotation) is documented in [`04-Telemetry-Ingestion-Security.md`](04-Telemetry-Ingestion-Security.md).
+
 ### Endpoint hosting
 
 Any static file host works. Recommended:

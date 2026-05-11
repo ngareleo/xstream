@@ -38,6 +38,9 @@ Keep rows short (≤ ~120 chars). When adding a new topic file to `docs/`, add i
 | Tauri packaging internals — build pipeline, installed-app layout per OS, `tauri-plugin-updater` mechanics | `docs/architecture/Deployment/01-Packaging-Internals.md` |
 | Shipping ffmpeg — manifest pinning, portable strategy for every OS, runtime resolution under Tauri, GPL compliance | `docs/architecture/Deployment/02-Shipping-FFmpeg.md` |
 | Self-hosted Seq on DigitalOcean (production OTel sink, bring-up runbook, Caddy + HTTPS, API-key setup, data retention) | `docs/architecture/Deployment/03-Remote-Seq-DigitalOcean.md` |
+| Telemetry ingestion security (threat model, ingest-key blast radius, rate limit + rotation, alpha non-goals, tripwires) | `docs/architecture/Deployment/04-Telemetry-Ingestion-Security.md` |
+| Accessing remote Seq during dev (public UI, SSH tunnel, per-developer access, dev-traffic filtering, Seq-down fallback) | `docs/architecture/Deployment/05-Accessing-Remote-Seq.md` |
+| Seq bootstrap directory (`docker-compose.yml`, Caddyfile template, `setup.sh`) cloned onto the production droplet | `seq/README.md` |
 | Per-component design specs (style, layout, behaviour, data) — agent-facing reference for every UI component | `docs/client/Components/README.md` |
 | FilmVariants component spec (multi-copy variant picker) | `docs/client/Components/FilmVariants.md` |
 | ShowTile component spec (homepage TV row tile, Show fragment, sibling to FilmTile) | `docs/client/Components/ShowTile.md` |

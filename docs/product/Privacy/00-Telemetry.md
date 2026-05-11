@@ -36,7 +36,7 @@ For the engineering policy this rule is implemented against, see [`../../archite
 
 ## Where the data is sent
 
-To a self-hosted [Seq](https://datalust.co/seq) instance running on a server we operate. No third-party telemetry processor is involved. The server is documented at [`../../architecture/Deployment/03-Remote-Seq-DigitalOcean.md`](../../architecture/Deployment/03-Remote-Seq-DigitalOcean.md).
+To a self-hosted [Seq](https://datalust.co/seq) instance running on a server we operate. No third-party telemetry processor is involved. The server is documented at [`../../architecture/Deployment/03-Remote-Seq-DigitalOcean.md`](../../architecture/Deployment/03-Remote-Seq-DigitalOcean.md), and the engineering safeguards around the ingestion endpoint (who can write to it, how an abused key is contained, why always-on telemetry is a defensible posture for this app) are documented at [`../../architecture/Deployment/04-Telemetry-Ingestion-Security.md`](../../architecture/Deployment/04-Telemetry-Ingestion-Security.md).
 
 ## How long it's kept
 

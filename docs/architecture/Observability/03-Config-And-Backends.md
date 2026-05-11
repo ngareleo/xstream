@@ -18,7 +18,7 @@
 
 ## Production backend: self-hosted Seq
 
-Production Tauri installs ship telemetry to a self-hosted Seq instance running on a DigitalOcean droplet behind Caddy + Let's Encrypt. The bring-up runbook is at [`../Deployment/03-Remote-Seq-DigitalOcean.md`](../Deployment/03-Remote-Seq-DigitalOcean.md).
+Production Tauri installs ship telemetry to a self-hosted Seq instance running on a DigitalOcean droplet behind Caddy + Let's Encrypt. The bring-up runbook is at [`../Deployment/03-Remote-Seq-DigitalOcean.md`](../Deployment/03-Remote-Seq-DigitalOcean.md); the executable Docker Compose stack lives in [`seq/`](../../../seq/) at the repo root. For dev-time access patterns (public UI, SSH tunnel, dev-traffic filtering, fallback to local Seq), see [`../Deployment/05-Accessing-Remote-Seq.md`](../Deployment/05-Accessing-Remote-Seq.md). For ingestion-key security and the alpha-posture trade-offs, see [`../Deployment/04-Telemetry-Ingestion-Security.md`](../Deployment/04-Telemetry-Ingestion-Security.md).
 
 Env-var contract (baked into the release Tauri bundle via the CI build env):
 
