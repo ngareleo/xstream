@@ -4,20 +4,33 @@ import type { FetchFunction, SubscribeFunction } from "relay-runtime";
 import { Environment, Network, Observable, RecordSource, Store } from "relay-runtime";
 
 import { graphqlHttpUrl, graphqlWsUrl } from "~/config/rustOrigin.js";
+import { getAccessToken } from "~/services/auth.js";
 import { getSessionContext } from "~/services/playbackSession.js";
 
 const SERVER_URL = graphqlHttpUrl();
 const WS_URL = graphqlWsUrl();
 
-const wsClient = createClient({ url: WS_URL });
+// Function form so the handshake sees the latest token after auto-refresh.
+const wsClient = createClient({
+  url: WS_URL,
+  connectionParams: async () => {
+    const token = await getAccessToken();
+    return token ? { authorization: `Bearer ${token}` } : {};
+  },
+});
 
 const fetchFn: FetchFunction = async (operation, variables) => {
-  // Wrap fetch in the active session context so FetchInstrumentation injects
-  // the correct traceparent, linking GraphQL mutations to the playback trace.
+  // Per-request read avoids racing Supabase's background refresh.
+  const accessToken = await getAccessToken();
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (accessToken) {
+    headers.Authorization = `Bearer ${accessToken}`;
+  }
+  // FetchInstrumentation inherits the active playback context for traceparent linking.
   const response = await context.with(getSessionContext(), () =>
     fetch(SERVER_URL, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers,
       body: JSON.stringify({ query: operation.text, variables }),
     })
   );

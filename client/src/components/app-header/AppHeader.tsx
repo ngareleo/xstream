@@ -2,7 +2,7 @@ import { mergeClasses } from "@griffel/react";
 import { NovaEventingInterceptor } from "@nova/react";
 import type { EventWrapper } from "@nova/types";
 import { type FC, useEffect, useRef, useState } from "react";
-import { graphql, useMutation } from "react-relay";
+import { commitLocalUpdate, graphql, useMutation, useRelayEnvironment } from "react-relay";
 import { Link, NavLink, useNavigate } from "react-router-dom";
 
 import {
@@ -12,6 +12,8 @@ import {
 import { AccountMenu } from "~/components/account-menu/AccountMenu.js";
 import { IconRefresh } from "~/lib/icons.js";
 import type { AppHeaderScanMutation } from "~/relay/__generated__/AppHeaderScanMutation.graphql.js";
+import { signOut } from "~/services/auth.js";
+import { clearSessionContext } from "~/services/playbackSession.js";
 
 import { strings } from "./AppHeader.strings.js";
 import { useAppHeaderStyles } from "./AppHeader.styles.js";
@@ -45,6 +47,7 @@ const USER = {
 export const AppHeader: FC = () => {
   const styles = useAppHeaderStyles();
   const navigate = useNavigate();
+  const environment = useRelayEnvironment();
   const [scan, mutationPending] = useMutation<AppHeaderScanMutation>(SCAN_MUTATION);
   const [menuOpen, setMenuOpen] = useState(false);
   const [spinHoldover, setSpinHoldover] = useState(false);
@@ -84,7 +87,13 @@ export const AppHeader: FC = () => {
       navigate("/settings");
     } else if (isAccountMenuSignOutRequestedEvent(wrapper)) {
       setMenuOpen(false);
-      navigate("/goodbye");
+      // Order is load-bearing — see docs/architecture/Identity/01-Sign-In-Flow.md §"Sign out".
+      await signOut();
+      clearSessionContext();
+      commitLocalUpdate(environment, (store) => {
+        store.invalidateStore();
+      });
+      navigate("/signin", { replace: true });
     }
     return wrapper;
   };

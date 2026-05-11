@@ -12,9 +12,25 @@ avatar button).
 ## Role
 
 Presentational dropdown for the post-avatar menu surface. Two actions:
-**Settings** (navigates to `/settings`) and **Sign out** (navigates to
-`/goodbye`). The component owns no state — all visibility is controlled
-by AppHeader and the callbacks fire navigation in the parent.
+**Settings** (navigates to `/settings`) and **Sign out** (runs the full
+Supabase signout teardown via the parent). The component itself owns no
+state — visibility is controlled by AppHeader and the callbacks fire
+business logic in the parent.
+
+## Sign-out wiring (parent)
+
+`AppHeader` intercepts the `AccountMenuSignOutRequested` Nova event and runs:
+
+1. `authService.signOut()` — invalidates the Supabase refresh token and
+   clears the local SDK session. `userContext` clears as a side effect.
+2. `clearSessionContext()` — drops any active playback OTel context.
+3. `commitLocalUpdate(env, store => store.invalidateStore())` — marks
+   every Relay record stale so the next signed-in session refetches.
+4. `navigate("/signin", { replace: true })`.
+
+The `AccountTab` (Settings → Account) duplicates this teardown for the
+in-settings sign-out button — both surfaces must run the same sequence
+in the same order.
 
 ## Props
 

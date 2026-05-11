@@ -1,8 +1,9 @@
-import { type FC, useState } from "react";
-import { Link } from "react-router-dom";
+import { type FC, type FormEvent, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 
 import { useAuthFormStyles } from "~/components/auth-form/AuthForm.styles.js";
 import { useAuthLayoutStyles } from "~/components/auth-layout/AuthLayout.styles.js";
+import { signIn } from "~/services/auth.js";
 
 import { strings } from "./SignInPage.strings.js";
 import { useSignInStyles } from "./SignInPage.styles.js";
@@ -11,8 +12,25 @@ const SignInPage: FC = () => {
   const layout = useAuthLayoutStyles();
   const form = useAuthFormStyles();
   const styles = useSignInStyles();
+  const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  const onSubmit = async (e: FormEvent<HTMLFormElement>): Promise<void> => {
+    e.preventDefault();
+    if (submitting) return;
+    setSubmitting(true);
+    setError(null);
+    const result = await signIn(email, password);
+    if (result.error) {
+      setError(result.error);
+      setSubmitting(false);
+      return;
+    }
+    navigate("/", { replace: true });
+  };
 
   return (
     <>
@@ -20,12 +38,7 @@ const SignInPage: FC = () => {
       <div className={layout.title}>{strings.title}</div>
       <div className={layout.subtitle}>{strings.subtitle}</div>
 
-      <form
-        className={form.form}
-        onSubmit={(e) => {
-          e.preventDefault();
-        }}
-      >
+      <form className={form.form} onSubmit={onSubmit}>
         <div className={form.field}>
           <label className={form.label} htmlFor="signin-email">
             {strings.emailLabel}
@@ -64,8 +77,10 @@ const SignInPage: FC = () => {
           </Link>
         </div>
 
-        <button type="submit" className={form.primaryBtn}>
-          {strings.submit}
+        {error && <div className={form.fieldError}>{error}</div>}
+
+        <button type="submit" className={form.primaryBtn} disabled={submitting}>
+          {submitting ? strings.submitting : strings.submit}
         </button>
 
         <div className={form.helpRow}>

@@ -1,6 +1,6 @@
 use axum::{
-    extract::Request,
-    http::{HeaderMap, StatusCode},
+    extract::{Extension, Request},
+    http::{header, HeaderMap, StatusCode},
     middleware::Next,
     response::Response,
 };
@@ -10,18 +10,15 @@ use opentelemetry_http::HeaderExtractor;
 use tracing::Instrument;
 use tracing_opentelemetry::OpenTelemetrySpanExt;
 
-/// Per-request context threaded through every handler from day one.
-///
-/// The struct shape is forward-constrained for peer-sharing
-/// (`docs/migrations/rust-rewrite/04-Web-Server-Layer.md` §3.3 / §4.3):
-/// `peer_node_id` and `share_grant` will be populated by an auth middleware
-/// when sharing ships, without rewriting every handler signature. Today
-/// both forward fields are always `None` — the *shape* exists.
+use crate::config::AppContext;
+
+/// Per-request context. Identity in `docs/architecture/Identity/`, sharing in `docs/architecture/Sharing/`.
 #[derive(Clone, Debug, Default)]
 pub struct RequestContext {
     pub otel_ctx: OtelContext,
     pub peer_node_id: Option<String>,
     pub share_grant: Option<ShareGrant>,
+    pub user_id: Option<String>,
 }
 
 #[derive(Clone, Debug)]
@@ -35,6 +32,7 @@ pub async fn extract_request_context(mut req: Request, next: Next) -> Result<Res
         otel_ctx: otel_ctx.clone(),
         peer_node_id: None,
         share_grant: None,
+        user_id: None,
     };
     req.extensions_mut().insert(ctx);
 
@@ -63,6 +61,7 @@ pub async fn extract_request_context(mut req: Request, next: Next) -> Result<Res
         http.status = tracing::field::Empty,
         duration_ms = tracing::field::Empty,
         trace_id = %trace_id,
+        user.id = tracing::field::Empty,
     );
     // Inbound `traceparent` becomes the parent of this span — so the OTel
     // export carries the same trace_id the client started.
@@ -102,6 +101,50 @@ pub(crate) fn otel_context_from_headers(headers: &HeaderMap) -> OtelContext {
     opentelemetry::global::get_text_map_propagator(|propagator| {
         propagator.extract(&HeaderExtractor(headers))
     })
+}
+
+/// Verify the Bearer JWT and record `user.id` on the http.request span. See `docs/architecture/Identity/02-Session-And-Refresh.md`.
+pub async fn extract_auth_identity(
+    Extension(app_ctx): Extension<AppContext>,
+    mut req: Request,
+    next: Next,
+) -> Response {
+    let Some(jwks) = app_ctx.jwks_cache.clone() else {
+        return next.run(req).await;
+    };
+
+    let bearer = req
+        .headers()
+        .get(header::AUTHORIZATION)
+        .and_then(|v| v.to_str().ok())
+        .and_then(strip_bearer_prefix);
+
+    if let Some(token) = bearer {
+        match jwks.verify_token(token).await {
+            Ok(claims) => {
+                if let Some(req_ctx) = req.extensions_mut().get_mut::<RequestContext>() {
+                    req_ctx.user_id = Some(claims.sub.clone());
+                }
+                tracing::Span::current().record("user.id", claims.sub.as_str());
+            }
+            Err(err) => {
+                tracing::debug!(error = %err, "JWT verification failed; continuing as anonymous");
+            }
+        }
+    }
+
+    next.run(req).await
+}
+
+fn strip_bearer_prefix(value: &str) -> Option<&str> {
+    let trimmed = value.trim();
+    // `Bearer ` is case-insensitive on the wire per RFC 6750.
+    let lower = trimmed.get(..7)?;
+    if lower.eq_ignore_ascii_case("Bearer ") {
+        Some(trimmed[7..].trim())
+    } else {
+        None
+    }
 }
 
 //

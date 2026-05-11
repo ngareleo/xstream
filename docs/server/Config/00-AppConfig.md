@@ -49,6 +49,7 @@ The chunker's `run_cascade` first checks `ctx.probe_cache.get(&video_id)` before
 | `availability_interval_ms` | — | `0` (= `scan_interval_ms`) | same | Period of the profile-availability probe. `0` falls back to `scan_interval_ms`. See [`../../architecture/Library-Scan/04-Profile-Availability.md`](../../architecture/Library-Scan/04-Profile-Availability.md). |
 | `hardware_acceleration` | `HW_ACCEL` | `"auto"` | `"auto"` | `"off"` forces software encode |
 | `omdb_api_key` | `OMDB_API_KEY` | `None` (auto-match disabled) | env override or persisted `omdbApiKey` user setting | Free-tier 1000/day cap — exhaustion logs warn + skips remaining calls. |
+| `supabase_jwks_url` | `SUPABASE_JWKS_URL` | `None` (auth soft-disabled) | `https://<project>.supabase.co/.well-known/jwks.json` | RS256 public-key endpoint for JWT verification. `None` → middleware soft-fails to `user_id = None`. No shared secrets in the bundle. See [`../../architecture/Identity/`](../../architecture/Identity/README.md). |
 
 `SEGMENT_DIR` and `DB_PATH` are honored in dev (not just prod) so the test harness can route writes to a per-PID temp dir — see [`../../architecture/Testing/00-Side-Effects-Policy.md`](../../architecture/Testing/00-Side-Effects-Policy.md). Don't set them by hand in your dev shell unless you know what you're doing.
 

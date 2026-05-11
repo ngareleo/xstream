@@ -13,6 +13,7 @@ export const strings = new LocalizedStrings({
     confirmPlaceholder: "Repeat your password",
     confirmMismatch: "Passwords don't match",
     submit: "Create account",
+    submitting: "Creating account…",
     haveAccountPrefix: "Already have an account?",
     haveAccountLink: "Sign in",
   },

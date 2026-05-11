@@ -25,7 +25,7 @@ Keep rows short (≤ ~120 chars). When adding a new topic file to `docs/`, add i
 | Client spans (`playback.session`, `chunk.stream`, `buffer.backpressure`) | `docs/architecture/Observability/client/00-Spans.md` |
 | Seq search filters | `docs/architecture/Observability/02-Searching-Seq.md` |
 | Trace-first verification workflow (decide signal, add logs, query Seq; span.addEvent gotcha) | `docs/architecture/Observability/04-Verification-Workflow.md` |
-| OTel env vars, switching backends, Seq API-key setup | `docs/architecture/Observability/03-Config-And-Backends.md` |
+| OTel env vars, switching backends, local-dev Seq API-key setup | `docs/architecture/Observability/03-Config-And-Backends.md` |
 | Server boot sequence + graceful shutdown | `docs/architecture/Startup/00-Boot-And-Shutdown.md` |
 | Library scanner pipeline (flow, passes) | `docs/architecture/Library-Scan/00-Flow.md` |
 | Filename + folder conventions (movies, TV) | `docs/architecture/Library-Scan/01-Filename-Conventions.md` |
@@ -38,6 +38,14 @@ Keep rows short (≤ ~120 chars). When adding a new topic file to `docs/`, add i
 | Tauri packaging internals — build pipeline, installed-app layout per OS, `tauri-plugin-updater` mechanics | `docs/architecture/Deployment/01-Packaging-Internals.md` |
 | Shipping ffmpeg — manifest pinning, portable strategy for every OS, runtime resolution under Tauri, GPL compliance | `docs/architecture/Deployment/02-Shipping-FFmpeg.md` |
 | Build variants (prod/dev artifacts via `XSTREAM_VARIANT`, `IS_DEV_BUILD` client strip, `dev-features` Cargo gate, side-by-side install) | `docs/architecture/Deployment/03-Build-Variants.md` |
+| Axiom production OTel backend (datasets, ingest-only tokens, build-env wiring, rotation, bring-up checklist) | `docs/architecture/Deployment/04-Axiom-Production-Backend.md` |
+| Telemetry ingestion security (embedded-token threat model, defence in depth, what we are NOT doing for alpha, tripwires) | `docs/architecture/Deployment/05-Telemetry-Ingestion-Security.md` |
+| Supabase project setup (operator runbook — auth provider, asymmetric JWT keys, redirect URLs, env wiring) | `docs/architecture/Deployment/06-Supabase-Project-Setup.md` |
+| Supabase identity security (what ships, what doesn't, leak posture, key rotation; sibling to 05) | `docs/architecture/Deployment/07-Supabase-Identity-Security.md` |
+| Identity overview (Supabase + RS256/JWKS, in-process server framing, alpha gates) | `docs/architecture/Identity/00-System-Overview.md` |
+| Identity sign-in flow (signin / signup / reset / change-password / sign-out sequences) | `docs/architecture/Identity/01-Sign-In-Flow.md` |
+| Identity session lifecycle (token refresh, offline, JWKS unreachable, known gaps including WS subscription auth) | `docs/architecture/Identity/02-Session-And-Refresh.md` |
+| Identity telemetry correlation (how `user.id` lands on server spans + client log records) | `docs/architecture/Identity/03-Telemetry-Correlation.md` |
 | Per-component design specs (style, layout, behaviour, data) — agent-facing reference for every UI component | `docs/client/Components/README.md` |
 | FilmVariants component spec (multi-copy variant picker) | `docs/client/Components/FilmVariants.md` |
 | ShowTile component spec (homepage TV row tile, Show fragment, sibling to FilmTile) | `docs/client/Components/ShowTile.md` |
@@ -73,4 +81,5 @@ Keep rows short (≤ ~120 chars). When adding a new topic file to `docs/`, add i
 | Architect narrative history — paired with `docs/Commit.md`, read recent ~5 entries to build familiarity | `docs/History.md` |
 | Design spec — tokens, type scale, spacing, behavioural contracts | `docs/design/UI-Design-Spec/00-Tokens-And-Layout.md` |
 | Product spec | `docs/product/Product-Spec/00-Scope.md` |
+| User-facing telemetry disclosure (what's collected, redaction guarantee, data retention, where it goes) | `docs/product/Privacy/00-Telemetry.md` |
 | Tech-choice question ("should we use X?") | No read required — use the template in `.claude/agents/architect.md` |

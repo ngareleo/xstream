@@ -35,12 +35,12 @@ xstream/
 ├── tmp/                            # gitignored — SQLite DB + ffmpeg segment cache (dev)
 ├── docs/                           # knowledge base owned by the architect subagent (see docs/README.md)
 │   ├── README.md                   # super-domain index
-│   ├── architecture/               # cross-cutting concepts (Streaming, Relay, Observability, Startup, Library-Scan, Deployment, Sharing, Testing)
+│   ├── architecture/               # cross-cutting concepts (Streaming, Relay, Observability, Startup, Library-Scan, Deployment, Sharing, Identity, Testing)
 │   ├── client/                     # client-only topics (Components, Feature-Flags, Debugging-Playbooks)
 │   ├── server/                     # server-only topics (Config, GraphQL-Schema, DB-Schema, Hardware-Acceleration)
 │   ├── design/                     # UI design spec — tokens, type, spacing, behavioural contracts
 │   ├── release/                    # outstanding redesign work (working document)
-│   ├── product/                    # product spec, customers, roadmap
+│   ├── product/                    # product spec, customers, roadmap, user-facing privacy policy
 │   ├── code-style/                 # conventions, invariants, anti-patterns, naming, testing policy
 │   ├── diagrams/                   # .mmd + .png (stable filenames; owned by `update-docs` skill)
 │   └── todo.md                     # owned by `todo` skill
@@ -108,6 +108,7 @@ Most domain knowledge lives in skills, subagents, or `docs/`. The main agent sho
 | Relay fragment contract | `docs/architecture/Relay/` |
 | Nova eventing rule + event taxonomy + exceptions | `docs/code-style/Client-Conventions/02-Nova-Eventing.md` |
 | Tauri bundling, code-signing, auto-updates, ffmpeg distribution | `docs/architecture/Deployment/` |
+| Identity / auth / sessions (Supabase + JWKS) | `docs/architecture/Identity/` |
 | Config (AppConfig, library configuration, resolution profiles) | `docs/server/Config/` |
 | GraphQL schema surface | `docs/server/GraphQL-Schema/` |
 | DB schema | `docs/server/DB-Schema/` |

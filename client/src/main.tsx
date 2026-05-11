@@ -17,6 +17,7 @@ import { ErrorBoundary } from "./components/error-boundary/ErrorBoundary.js";
 import { FeatureFlagsProvider } from "./contexts/FeatureFlagsContext.js";
 import { environment } from "./relay/environment.js";
 import { router } from "./router.js";
+import { restoreSession, subscribeToAuthChanges } from "./services/auth.js";
 
 /**
  * Root eventing handler. Terminal handler for any event not consumed by an
@@ -40,18 +41,22 @@ const AppEventing: FC<{ children: ReactNode }> = ({ children }) => {
 const rootEl = document.getElementById("root");
 if (!rootEl) throw new Error("Root element #root not found");
 
-ReactDOM.createRoot(rootEl).render(
-  <React.StrictMode>
-    <ErrorBoundary>
-      <RelayEnvironmentProvider environment={environment}>
-        <Suspense fallback={null}>
-          <FeatureFlagsProvider>
-            <AppEventing>
-              <RouterProvider router={router} />
-            </AppEventing>
-          </FeatureFlagsProvider>
-        </Suspense>
-      </RelayEnvironmentProvider>
-    </ErrorBoundary>
-  </React.StrictMode>
-);
+// Hydrate Supabase session before mount so the first Relay fetch carries the JWT.
+void restoreSession().then(() => {
+  subscribeToAuthChanges(() => {});
+  ReactDOM.createRoot(rootEl).render(
+    <React.StrictMode>
+      <ErrorBoundary>
+        <RelayEnvironmentProvider environment={environment}>
+          <Suspense fallback={null}>
+            <FeatureFlagsProvider>
+              <AppEventing>
+                <RouterProvider router={router} />
+              </AppEventing>
+            </FeatureFlagsProvider>
+          </Suspense>
+        </RelayEnvironmentProvider>
+      </ErrorBoundary>
+    </React.StrictMode>
+  );
+});

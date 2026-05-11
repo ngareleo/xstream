@@ -33,6 +33,7 @@ Outstanding work that hasn't yet shipped is tracked separately in
 | Spec | Source |
 |---|---|
 | [AccountMenu](AccountMenu.md) | `client/src/components/account-menu/` |
+| [AccountTab](AccountTab.md) | `client/src/components/account-tab/` |
 | [AppHeader](AppHeader.md) | `client/src/components/app-header/` |
 | [AppShell](AppShell.md) | `client/src/components/app-shell/` |
 | [AuthLayout](AuthLayout.md) | `client/src/components/auth-layout/` |

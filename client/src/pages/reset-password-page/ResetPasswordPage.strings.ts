@@ -8,6 +8,7 @@ export const strings = new LocalizedStrings({
     emailLabel: "Email",
     emailPlaceholder: "you@example.com",
     submit: "Send reset link",
+    submitting: "Sending…",
     back: "Back to sign in",
     sentEyebrow: "· LINK SENT",
     sentTitle: "Check your email",
