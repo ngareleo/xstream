@@ -18,7 +18,7 @@
     "stop": "bash scripts/stop.sh",
     "check-env": "bash scripts/check-env.sh",
     "setup-ffmpeg": "bun scripts/setup-ffmpeg.ts",
-    "schema:emit": "cargo run --quiet --bin print_schema -p xstream-server > server-rust/schema.graphql",
+    "schema:emit": "cargo run --quiet --bin print_schema -p xstream-server --features dev-features > server-rust/schema.graphql",
     "tauri:dev": "command -v cargo-tauri >/dev/null 2>&1 || { echo 'cargo-tauri not found — install once with: cargo install tauri-cli --version ^2 --locked'; exit 127; } && cd src-tauri && XSTREAM_VARIANT=dev cargo tauri dev --features dev-features --config tauri.dev.conf.json",
     "tauri:build": "command -v cargo-tauri >/dev/null 2>&1 || { echo 'cargo-tauri not found — install once with: cargo install tauri-cli --version ^2 --locked'; exit 127; } && cd src-tauri && XSTREAM_VARIANT=prod cargo tauri build --bundles deb,appimage",
     "tauri:build:dev": "command -v cargo-tauri >/dev/null 2>&1 || { echo 'cargo-tauri not found — install once with: cargo install tauri-cli --version ^2 --locked'; exit 127; } && cd src-tauri && XSTREAM_VARIANT=dev cargo tauri build --bundles deb,appimage --features dev-features --config tauri.dev.conf.json",

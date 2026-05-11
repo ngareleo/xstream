@@ -106,6 +106,8 @@ dev-features = ["xstream-server/dev-features"]
 
 The prod GraphQL schema therefore omits `playbackHistory` and `recordPlaybackSession` entirely — confirmable via `cargo run --bin print_schema -p xstream-server`.
 
+The checked-in `server-rust/schema.graphql` is the **dev** schema (i.e. emitted with `--features dev-features`), because Relay codegen reads it and dev-only client modules reference both fields. `bun run schema:emit` and the CI drift check (`.github/workflows/ci.yml`) both pass `--features dev-features` for that reason; the strip happens at the chunk level (§2), not the schema level.
+
 ## 4. Migration backward-compat
 
 The `playback_history` table migration in [`server-rust/src/db/migrate.rs`](../../../server-rust/src/db/migrate.rs) runs unconditionally — *not* behind `cfg(feature = "dev-features")`. This is deliberate: a user who installs the dev variant, accumulates rows, then switches to the prod install must not see a "no such table" error if the schema is ever inspected. Prod simply never inserts.
@@ -160,7 +162,7 @@ Server GraphQL field:
 
 1. Add `#[cfg(feature = "dev-features")]` on the resolver method.
 2. Add `#[cfg(feature = "dev-features")]` on every type and `db::` re-export that is only used by that resolver.
-3. Regenerate `server-rust/schema.graphql` from the *prod* schema (`bun run schema:emit`) so client codegen sees the user-visible surface.
+3. Regenerate `server-rust/schema.graphql` via `bun run schema:emit` (which builds with `--features dev-features`) so client Relay codegen picks up the new field.
 
 Server DB write path:
 
