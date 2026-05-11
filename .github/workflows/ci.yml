@@ -1,10 +1,13 @@
 name: CI
 
 on:
+  # CI runs on every PR; feature branches don't need a duplicate `push` run
+  # firing in parallel — that doubles runner load and amplifies Storybook /
+  # Chromium flakes. `push` stays armed for `main` so post-merge regressions
+  # still get caught.
   push:
-    branches: ["**"]
+    branches: [main]
   pull_request:
-    branches: ["**"]
 
 jobs:
   server-rust:
