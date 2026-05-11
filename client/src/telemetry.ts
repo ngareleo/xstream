@@ -37,7 +37,14 @@ function parseHeadersEnv(raw: string | undefined): Record<string, string> {
 const defaultEndpoint =
   (import.meta.env.PUBLIC_OTEL_ENDPOINT as string | undefined) ?? "/ingest/otlp";
 const defaultHeaders = parseHeadersEnv(import.meta.env.PUBLIC_OTEL_HEADERS as string | undefined);
-const axiomEndpoint = (import.meta.env.PUBLIC_OTEL_AXIOM_ENDPOINT as string | undefined) ?? "";
+// Axiom path. In DEV builds we never POST directly to *.axiom.co from the
+// browser — that triggers CORS preflight which Axiom's edge endpoint rejects
+// for `http://localhost:5173`. Instead we POST to same-origin /relay/axiom/...
+// and let Rsbuild's dev proxy forward server-to-server. In PROD builds the
+// embedded URL goes direct (Tauri's tauri://localhost origin is fine).
+const axiomEndpoint = IS_DEV_BUILD
+  ? "/relay/axiom"
+  : ((import.meta.env.PUBLIC_OTEL_AXIOM_ENDPOINT as string | undefined) ?? "");
 const axiomHeaders = parseHeadersEnv(
   import.meta.env.PUBLIC_OTEL_AXIOM_HEADERS as string | undefined
 );
