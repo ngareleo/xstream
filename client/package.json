@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "bun run relay && XSTREAM_VARIANT=dev rsbuild dev",
+    "dev": "bash -c '[ -f ../.env ] && { set -a; . ../.env; set +a; }; bun run relay && XSTREAM_VARIANT=dev rsbuild dev'",
     "build": "tsc && rsbuild build",
     "analyze": "BUNDLE_ANALYZE=1 tsc && BUNDLE_ANALYZE=1 rsbuild build",
     "relay": "mkdir -p src/relay/__generated__ && relay-compiler",

@@ -101,9 +101,11 @@ The default dev backend stays local Seq (faster to query, no quota, no SaaS depe
 - **Server.** Reads the flag from `user_settings` at boot. **Flag flips require an app restart on the server side.** The in-process OTLP exporter is constructed once at server startup; hot-swap is possible in the OTel Rust SDK but adds complexity for marginal value in a dev tool. The Flags-tab description surfaces this constraint.
 
 What you need locally:
-1. Both `xstream-server-dev` and `xstream-client-dev` tokens in `.env` (see § "API tokens" above).
-2. The four `*_AXIOM_*` env vars set in `.env` (the env-var contract is in [`../Observability/03-Config-And-Backends.md`](../Observability/03-Config-And-Backends.md)).
+1. Both `xstream-server-dev` and `xstream-client-dev` tokens minted in the Axiom UI (see § "API tokens" above).
+2. The four `*_AXIOM_*` env vars set in `.env` at the repo root (NOT `~/.zshrc` — see "Why `.env`, not `~/.zshrc`" below). Use `.env.example` as the template; the env-var contract is in [`../Observability/03-Config-And-Backends.md`](../Observability/03-Config-And-Backends.md).
 3. Toggle the flag in Settings → Flags. Close + reopen the app.
+
+**Why `.env`, not `~/.zshrc`.** Both `bun run dev` scripts (client and server-rust) source `.env` at startup via `set -a; . ../.env; set +a`, so vars defined there reach Rsbuild (which bakes `PUBLIC_*` into the bundle) and the Rust server process. Putting them in `~/.zshrc` instead means they only flow through if the tmux pane / shell that launched mprocs was created *after* the export. Tmux sessions preserve the env of the shell that started them — a `.zshrc` edit + `source ~/.zshrc` in one pane does not propagate to new panes, so the dev procs end up with stale env and telemetry silently goes to the wrong backend.
 
 Verify in the Axiom UI: open the `xstream` dataset, filter `where ['attributes.deployment.environment'] == 'development'`, trigger a playback session, confirm a single trace contains both client `playback.session` and server `stream.request` + `transcode.job` spans. Switching the flag back off (and restarting the app) returns to local Seq.
 
