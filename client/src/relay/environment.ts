@@ -10,10 +10,7 @@ import { getSessionContext } from "~/services/playbackSession.js";
 const SERVER_URL = graphqlHttpUrl();
 const WS_URL = graphqlWsUrl();
 
-// `connectionParams` is read once per upgrade by graphql-ws; supplying a
-// function lets the WS handshake pick up the latest access token even
-// after the SDK has auto-refreshed it. Subscription resolvers do not
-// gate on identity in alpha, but the field is in place for follow-up.
+// Function form so the handshake sees the latest token after auto-refresh.
 const wsClient = createClient({
   url: WS_URL,
   connectionParams: async () => {
@@ -23,16 +20,13 @@ const wsClient = createClient({
 });
 
 const fetchFn: FetchFunction = async (operation, variables) => {
-  // Pull the JWT per request — Supabase auto-refreshes in the
-  // background, so a stale module-level read could race against a
-  // refresh.
+  // Per-request read avoids racing Supabase's background refresh.
   const accessToken = await getAccessToken();
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (accessToken) {
     headers.Authorization = `Bearer ${accessToken}`;
   }
-  // Wrap fetch in the active session context so FetchInstrumentation injects
-  // the correct traceparent, linking GraphQL mutations to the playback trace.
+  // FetchInstrumentation inherits the active playback context for traceparent linking.
   const response = await context.with(getSessionContext(), () =>
     fetch(SERVER_URL, {
       method: "POST",

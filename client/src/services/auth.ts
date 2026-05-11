@@ -1,30 +1,14 @@
-/**
- * Supabase auth service. Wraps the JS SDK with the operations the auth
- * pages and Settings → Account tab need:
- *
- *   - `restoreSession()` — boot-time hydration from localStorage.
- *   - `signIn` / `signUp` / `signOut` — auth-page handlers.
- *   - `resetPassword` — signed-out flow (sends Supabase email).
- *   - `changePassword` — Settings → Account flow (reauth-then-update).
- *   - `getSession` — read current session for the Relay network layer.
- *   - `getAccessToken` — convenience for the Authorization header.
- *   - `subscribeToAuthChanges` — push session deltas (token refresh,
- *     remote signout) so the route guard and userContext stay in sync.
- *
- * Threat model: only the public `PUBLIC_SUPABASE_URL` and
- * `PUBLIC_SUPABASE_ANON_KEY` are read here. Both are designed to be
- * embeddable in client bundles (Supabase RLS protects user data).
- * See `docs/architecture/Deployment/07-Supabase-Identity-Security.md`.
- *
- * If the build was packaged without these env vars, `getSupabase()`
- * throws on first use — the auth pages catch it and render a "auth not
- * configured" error rather than silently failing. That keeps the
- * misconfiguration loud during dev / staging.
- */
+/** Supabase auth wrapper. See `docs/architecture/Identity/`. */
 
 import { createClient, type Session, type SupabaseClient, type User } from "@supabase/supabase-js";
 
+import { getClientLogger } from "~/telemetry.js";
+
 import { clearUserContext, setUserContext } from "./userContext.js";
+
+function log() {
+  return getClientLogger("auth");
+}
 
 const SUPABASE_URL = import.meta.env.PUBLIC_SUPABASE_URL as string | undefined;
 const SUPABASE_ANON_KEY = import.meta.env.PUBLIC_SUPABASE_ANON_KEY as string | undefined;
@@ -51,19 +35,11 @@ function getSupabase(): SupabaseClient {
 export interface AuthResult {
   user: User | null;
   session: Session | null;
-  /**
-   * Human-readable error message when the operation failed. Pages
-   * render this inline below the form. `null` on success.
-   */
+  /** Human-readable error message; `null` on success. */
   error: string | null;
 }
 
-/**
- * Read the session from localStorage and (if present) refresh it, then
- * mirror the user id into `userContext` so telemetry emitted before the
- * first render still carries `user.id`. Called once from `main.tsx` —
- * must complete before Relay queries fire.
- */
+/** Hydrate the Supabase session from localStorage and mirror into `userContext`. */
 export async function restoreSession(): Promise<Session | null> {
   try {
     const supabase = getSupabase();
@@ -72,10 +48,8 @@ export async function restoreSession(): Promise<Session | null> {
       setUserContext(data.session.user.id);
     }
     return data.session ?? null;
-  } catch {
-    // Misconfigured Supabase or transient storage error — treat as
-    // signed-out. The route guard will redirect to /signin where the
-    // error surfaces visibly.
+  } catch (err) {
+    log().warn("restoreSession failed; treating as signed-out", { error: errorMessage(err) });
     return null;
   }
 }
@@ -85,7 +59,8 @@ export async function getSession(): Promise<Session | null> {
     const supabase = getSupabase();
     const { data } = await supabase.auth.getSession();
     return data.session ?? null;
-  } catch {
+  } catch (err) {
+    log().warn("getSession failed", { error: errorMessage(err) });
     return null;
   }
 }
@@ -100,6 +75,7 @@ export async function signIn(email: string, password: string): Promise<AuthResul
     const supabase = getSupabase();
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) {
+      log().warn("signIn rejected by Supabase", { error: error.message });
       return { user: null, session: null, error: error.message };
     }
     if (data.user?.id) {
@@ -107,6 +83,7 @@ export async function signIn(email: string, password: string): Promise<AuthResul
     }
     return { user: data.user, session: data.session, error: null };
   } catch (err) {
+    log().error("signIn threw", { error: errorMessage(err) });
     return { user: null, session: null, error: errorMessage(err) };
   }
 }
@@ -116,18 +93,16 @@ export async function signUp(email: string, password: string): Promise<AuthResul
     const supabase = getSupabase();
     const { data, error } = await supabase.auth.signUp({ email, password });
     if (error) {
+      log().warn("signUp rejected by Supabase", { error: error.message });
       return { user: null, session: null, error: error.message };
     }
-    // With "Confirm email" disabled in the Supabase project (alpha
-    // policy), signUp returns a live session immediately. If the
-    // project ever flips on email confirmation, `session` will be null
-    // and the caller is responsible for rendering a "check your inbox"
-    // state instead of redirecting to /.
+    // Session is null when email confirmation is on; caller redirects to /signin in that case.
     if (data.user?.id && data.session) {
       setUserContext(data.user.id);
     }
     return { user: data.user, session: data.session, error: null };
   } catch (err) {
+    log().error("signUp threw", { error: errorMessage(err) });
     return { user: null, session: null, error: errorMessage(err) };
   }
 }
@@ -136,6 +111,8 @@ export async function signOut(): Promise<void> {
   try {
     const supabase = getSupabase();
     await supabase.auth.signOut();
+  } catch (err) {
+    log().warn("signOut threw; clearing local state anyway", { error: errorMessage(err) });
   } finally {
     clearUserContext();
   }
@@ -149,8 +126,12 @@ export async function resetPassword(email: string): Promise<ResetPasswordResult>
   try {
     const supabase = getSupabase();
     const { error } = await supabase.auth.resetPasswordForEmail(email);
+    if (error) {
+      log().warn("resetPassword rejected by Supabase", { error: error.message });
+    }
     return { error: error?.message ?? null };
   } catch (err) {
+    log().error("resetPassword threw", { error: errorMessage(err) });
     return { error: errorMessage(err) };
   }
 }
@@ -159,14 +140,7 @@ export interface ChangePasswordResult {
   error: string | null;
 }
 
-/**
- * Settings → Account flow. Supabase's `updateUser({ password })` does
- * NOT challenge the current password — anyone who steals an active
- * session could rotate it silently. We reauthenticate first by signing
- * in with `(email, current)` and only update on success. The signin
- * step replaces the session in localStorage, then `updateUser` rotates
- * the password and emits a fresh session.
- */
+/** Reauth-then-update password change. See `docs/architecture/Identity/01-Sign-In-Flow.md` §"Change password". */
 export async function changePassword(
   currentPassword: string,
   nextPassword: string
@@ -180,23 +154,22 @@ export async function changePassword(
     }
     const reauth = await supabase.auth.signInWithPassword({ email, password: currentPassword });
     if (reauth.error) {
+      log().warn("changePassword reauth rejected", { error: reauth.error.message });
       return { error: "Current password is incorrect." };
     }
     const { error } = await supabase.auth.updateUser({ password: nextPassword });
     if (error) {
+      log().warn("changePassword updateUser rejected", { error: error.message });
       return { error: error.message };
     }
     return { error: null };
   } catch (err) {
+    log().error("changePassword threw", { error: errorMessage(err) });
     return { error: errorMessage(err) };
   }
 }
 
-/**
- * Subscribe to auth state changes — token refreshes, remote signouts,
- * SIGNED_IN broadcasts from other tabs. Used by `main.tsx` to keep
- * `userContext` in lockstep with the canonical Supabase session.
- */
+/** Subscribe to Supabase auth-state changes. Keeps `userContext` in lockstep. */
 export function subscribeToAuthChanges(callback: (session: Session | null) => void): () => void {
   try {
     const supabase = getSupabase();
@@ -209,10 +182,11 @@ export function subscribeToAuthChanges(callback: (session: Session | null) => vo
       callback(session);
     });
     return () => data.subscription.unsubscribe();
-  } catch {
-    return () => {
-      /* no-op when Supabase wasn't configured */
-    };
+  } catch (err) {
+    log().warn("subscribeToAuthChanges failed; auth state will not propagate", {
+      error: errorMessage(err),
+    });
+    return () => {};
   }
 }
 

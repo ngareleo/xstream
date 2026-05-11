@@ -87,10 +87,7 @@ export const AppHeader: FC = () => {
       navigate("/settings");
     } else if (isAccountMenuSignOutRequestedEvent(wrapper)) {
       setMenuOpen(false);
-      // Same teardown sequence as Settings → Account → Sign out: stop
-      // the Supabase session first so subsequent fetches can't carry a
-      // stale Bearer token, then clear telemetry/playback context, then
-      // invalidate Relay's cache before navigating to /signin.
+      // Order is load-bearing — see docs/architecture/Identity/01-Sign-In-Flow.md §"Sign out".
       await signOut();
       clearSessionContext();
       commitLocalUpdate(environment, (store) => {

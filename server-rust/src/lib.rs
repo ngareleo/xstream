@@ -42,20 +42,7 @@ pub fn build_router(state: AppState) -> AppResult<Router> {
     use async_graphql_axum::GraphQLSubscription;
     use axum::routing::MethodRouter;
 
-    // POST /graphql → custom handler that bridges axum extensions
-    //                 (RequestContext.user_id from extract_auth_identity)
-    //                 into async-graphql Data, so the `currentUser`
-    //                 resolver can read the verified identity.
-    // GET  /graphql → WebSocket upgrade for subscriptions
-    //                 (graphql-transport-ws). NOTE: alpha does NOT verify
-    //                 the JWT in the connection_init payload —
-    //                 async-graphql-axum 7.x pins axum 0.8 while the rest
-    //                 of the server is on axum 0.7, so a custom
-    //                 on_connection_init handler can't share types with
-    //                 the rest of the router. Subscription resolvers
-    //                 don't currently read RequestContext.user_id;
-    //                 tracked in docs/architecture/Identity/02-Session-And-Refresh.md
-    //                 §Known gaps.
+    // WS subscription auth gap tracked in docs/architecture/Identity/02-Session-And-Refresh.md.
     let graphql_method: MethodRouter<()> = MethodRouter::new()
         .post(routes::graphql_http::graphql_post)
         .get_service(GraphQLSubscription::new(state.schema.clone()))
@@ -68,16 +55,10 @@ pub fn build_router(state: AppState) -> AppResult<Router> {
         .route("/graphql", graphql_method)
         .route("/stream/:job_id", get(routes::stream::stream_handler))
         .route("/poster/:basename", get(routes::poster::get_poster))
-        // Layer order (axum `.layer()` adds OUTSIDE the existing stack, so
-        // the LAST .layer() call wraps everything):
-        //   inbound: cors → extract_request_context → Extension(AppContext)
-        //           → extract_auth_identity → handler
-        // extract_auth_identity must run INSIDE Extension so it can pull
-        // the JWKS cache, and INSIDE extract_request_context so its
-        // `span.record("user.id", …)` lands on the http.request span.
+        // Inbound: cors → extract_request_context → Extension → extract_auth_identity → handler.
+        // extract_auth_identity must be inner to Extension (needs AppContext) and inner to
+        // extract_request_context (records on its span).
         .layer(axum::middleware::from_fn(extract_auth_identity))
-        // Pass AppContext + Schema via Extension. graphql_post pulls the
-        // schema; extract_auth_identity pulls AppContext for its JWKS cache.
         .layer(axum::Extension(schema))
         .layer(axum::Extension(ctx))
         // Outer middleware: extract W3C traceparent, build RequestContext,
@@ -244,10 +225,6 @@ pub async fn run(config: ServerConfig) -> AppResult<()> {
         tracing::info!("OMDb auto-match disabled — set OMDB_API_KEY env or omdbApiKey setting");
     }
 
-    // Supabase JWKS URL — when set, the auth middleware verifies inbound
-    // Bearer JWTs against these public keys and stamps `user.id` on the
-    // request span. When unset, identity is always `None` and Seq events
-    // land unattributed (acceptable for un-credentialled dev shells).
     app_config.supabase_jwks_url = std::env::var("SUPABASE_JWKS_URL")
         .ok()
         .filter(|s| !s.is_empty());

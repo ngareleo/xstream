@@ -32,15 +32,6 @@ const ShellLayout: FC = () => (
   </AppShell>
 );
 
-/**
- * Block authenticated areas of the app behind a signed-in session.
- * Auth pages have an inverse guard so a signed-in user landing on
- * `/signin` skips straight to the library.
- *
- * Returning a `redirect()` Response from a loader is how React Router
- * v6 implements server-side-style redirects — the new URL is pushed
- * onto history and the loader of the destination runs next.
- */
 async function requireSession(): Promise<Response | null> {
   const session = await getSession();
   return session ? null : redirect("/signin");

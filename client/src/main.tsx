@@ -41,18 +41,9 @@ const AppEventing: FC<{ children: ReactNode }> = ({ children }) => {
 const rootEl = document.getElementById("root");
 if (!rootEl) throw new Error("Root element #root not found");
 
-// Hydrate the Supabase session before React mounts so the route-guard
-// loader sees a populated session and the first Relay fetch carries the
-// JWT in its Authorization header. `restoreSession` always resolves
-// (never throws — misconfig falls through to a signed-out state).
-//
-// We also subscribe to auth-state changes for the lifetime of the app
-// so token refreshes, remote signouts, and cross-tab broadcasts keep
-// `userContext` (and therefore telemetry) in lockstep with Supabase.
+// Hydrate Supabase session before mount so the first Relay fetch carries the JWT.
 void restoreSession().then(() => {
-  subscribeToAuthChanges(() => {
-    /* No-op router refresh — the route guards re-check on next nav. */
-  });
+  subscribeToAuthChanges(() => {});
   ReactDOM.createRoot(rootEl).render(
     <React.StrictMode>
       <ErrorBoundary>

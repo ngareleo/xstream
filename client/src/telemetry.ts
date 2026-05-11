@@ -101,12 +101,7 @@ export interface ClientLog {
   error(message: string, attributes?: Record<string, string | number | boolean>): void;
 }
 
-/**
- * Read `user.id` at emit time so the attribute reflects the *current*
- * signed-in user even when the logger instance was constructed before
- * the auth bootstrap completed. Returns an empty object when no user is
- * signed in so log records stay clean (no `user.id: null` noise).
- */
+/** `user.id` read at emit time. Empty when signed-out. */
 function userAttrs(): Record<string, string> {
   const userId = getUserContext();
   return userId ? { "user.id": userId } : {};

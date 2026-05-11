@@ -36,10 +36,7 @@ const SignUpPage: FC = () => {
       setSubmitting(false);
       return;
     }
-    // Auto-confirm is ON for alpha, so signUp returns an active session
-    // and we drop the user straight into the library. If the project
-    // flips on email confirmation later, `session` will be null —
-    // navigate to a "check your inbox" page instead.
+    // Null session = email confirmation is on; user must verify before signin.
     if (result.session) {
       navigate("/", { replace: true });
     } else {

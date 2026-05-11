@@ -1,14 +1,4 @@
-/**
- * Module-scoped identity context used by telemetry exporters.
- *
- * OTel resource attributes are frozen at provider init when the user is
- * unknown. Instead of attaching `user.id` as a resource attr, exporters
- * read `getUserContext()` at log/span emit time so the attribute attaches
- * per-record. See `docs/architecture/Identity/03-Telemetry-Correlation.md`.
- *
- * The auth service calls `setUserContext` after a successful signin /
- * session restore, and `clearUserContext` on signout.
- */
+/** Module-scoped `user.id` read by telemetry exporters at emit time. See `docs/architecture/Identity/03-Telemetry-Correlation.md`. */
 
 let currentUserId: string | null = null;
 

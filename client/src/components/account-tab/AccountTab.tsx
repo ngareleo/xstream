@@ -57,11 +57,8 @@ export const AccountTab: FC = () => {
     setConfirmNext("");
   };
 
+  // Order is load-bearing — see docs/architecture/Identity/01-Sign-In-Flow.md §"Sign out".
   const onSignOut = async (): Promise<void> => {
-    // Order matters: stop Supabase session first so subsequent fetches
-    // do not carry a stale Bearer token, then clear telemetry/playback
-    // context, then invalidate the Relay store so the next signin (with
-    // any account) starts from a clean cache.
     await signOut();
     clearSessionContext();
     commitLocalUpdate(environment, (store) => {

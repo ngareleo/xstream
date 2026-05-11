@@ -29,9 +29,6 @@ const SignInPage: FC = () => {
       setSubmitting(false);
       return;
     }
-    // The Relay environment reads the JWT per-request, so the first
-    // post-signin query already carries the new token. Replace history
-    // so the back button doesn't return to /signin.
     navigate("/", { replace: true });
   };
 

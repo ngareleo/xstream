@@ -12,18 +12,7 @@ use tracing_opentelemetry::OpenTelemetrySpanExt;
 
 use crate::config::AppContext;
 
-/// Per-request context threaded through every handler from day one.
-///
-/// The struct shape is forward-constrained for peer-sharing
-/// (`docs/migrations/rust-rewrite/04-Web-Server-Layer.md` §3.3 / §4.3):
-/// `peer_node_id` and `share_grant` will be populated by an auth middleware
-/// when sharing ships, without rewriting every handler signature. Today
-/// both forward fields are always `None` — the *shape* exists.
-///
-/// `user_id` is populated by `extract_auth_identity` from a verified
-/// Supabase JWT (`sub` claim). `None` for unauthenticated requests; alpha
-/// does not gate on this — it flows into the request span so Seq events
-/// carry `user.id` when present.
+/// Per-request context. Identity in `docs/architecture/Identity/`, sharing in `docs/architecture/Sharing/`.
 #[derive(Clone, Debug, Default)]
 pub struct RequestContext {
     pub otel_ctx: OtelContext,
@@ -114,16 +103,7 @@ pub(crate) fn otel_context_from_headers(headers: &HeaderMap) -> OtelContext {
     })
 }
 
-/// Inner middleware — runs **inside** `extract_request_context`'s span
-/// scope (mounted after it in the layer chain). Reads
-/// `Authorization: Bearer <jwt>`, verifies the signature via the cached
-/// JWKS, updates the in-flight `RequestContext` with the user id, and
-/// records `user.id` on the current span so OTel exports carry it.
-///
-/// Soft-fail: a missing / malformed / unverifiable token leaves
-/// `user_id = None` and the request proceeds. Alpha doesn't gate on
-/// identity; this middleware exists purely to populate telemetry. The
-/// debug log on the failure path is enough for operator diagnosis.
+/// Verify the Bearer JWT and record `user.id` on the http.request span. See `docs/architecture/Identity/02-Session-And-Refresh.md`.
 pub async fn extract_auth_identity(
     Extension(app_ctx): Extension<AppContext>,
     mut req: Request,

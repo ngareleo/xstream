@@ -136,11 +136,7 @@ pub struct AppConfig {
     /// midnight; exhaustion logs a warn and skips further calls without
     /// failing the surrounding scan.
     pub omdb_daily_budget: u32,
-    /// Supabase JWKS endpoint
-    /// (`https://<project>.supabase.co/.well-known/jwks.json`). When
-    /// `None`, auth middleware soft-fails to `user_id = None` for every
-    /// request — fine for an unauthenticated dev shell, but identity
-    /// telemetry won't carry a user. Set via `SUPABASE_JWKS_URL` env.
+    /// Supabase JWKS endpoint (env `SUPABASE_JWKS_URL`). See `docs/architecture/Identity/`.
     pub supabase_jwks_url: Option<String>,
 }
 
@@ -232,10 +228,7 @@ pub struct AppContext {
     /// skips the metadata fetch step. Cheap-clone: wraps a shared
     /// `reqwest::Client` so the connection pool spans every call.
     pub omdb: Option<OmdbClient>,
-    /// `Some` when `SUPABASE_JWKS_URL` is set. The auth middleware
-    /// (`extract_auth_identity`) reads `Authorization: Bearer <jwt>` and
-    /// validates against the cached public keys here; on success it
-    /// populates `RequestContext.user_id`. `None` ⇒ middleware no-ops.
+    /// `Some` when `SUPABASE_JWKS_URL` is set; `None` makes auth middleware a no-op.
     pub jwks_cache: Option<JwksCache>,
 }
 

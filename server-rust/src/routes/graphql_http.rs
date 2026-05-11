@@ -1,21 +1,4 @@
-//! Custom POST /graphql handler that bridges axum extensions into
-//! async-graphql `Data`.
-//!
-//! Why not `async_graphql_axum::GraphQL::new(schema)`? Its Service
-//! wrapper doesn't expose a hook for per-request data — the
-//! `request.data(RequestContext)` step is the only way an async-graphql
-//! resolver can see what `extract_auth_identity` stamped on the axum
-//! `RequestContext`. And we can't write a handler that uses
-//! `GraphQLRequest`/`GraphQLResponse` extractors either: async-graphql-axum
-//! 7.x pins axum 0.8, while the rest of the server is on axum 0.7, so the
-//! `Handler` trait the two crates produce don't unify.
-//!
-//! The workaround is to skip the async-graphql-axum extractors entirely:
-//! collect the request body ourselves and deserialize into async-graphql's
-//! own `BatchRequest`, attach `RequestContext`, execute, then JSON-encode
-//! the response. The shape is the standard GraphQL-over-HTTP body
-//! (`{"query": "...", "variables": {...}, "operationName": "..."}` or a
-//! JSON array for batches).
+//! POST /graphql handler. See `docs/architecture/Identity/02-Session-And-Refresh.md` §"Known gaps".
 
 use async_graphql::http::GraphiQLSource;
 use async_graphql::BatchRequest;
@@ -29,9 +12,7 @@ use axum::{
 use crate::graphql::XstreamSchema;
 use crate::request_context::RequestContext;
 
-/// Maximum request body size — defensive cap to keep a hostile client
-/// from streaming an unbounded JSON document at the parser. 4 MiB is
-/// well above any realistic GraphQL query (typical bodies are <4 KiB).
+/// Defensive cap on GraphQL request body; typical bodies are <4 KiB.
 const MAX_BODY_BYTES: usize = 4 * 1024 * 1024;
 
 pub async fn graphql_post(
@@ -76,9 +57,7 @@ pub async fn graphql_post(
     resp
 }
 
-/// Optional GraphiQL playground — useful in dev. The Tauri shell never
-/// hits this route in production. Kept here as a sibling of the POST
-/// handler so the schema URL stays consistent.
+/// Dev-only GraphiQL playground.
 #[allow(dead_code)]
 pub async fn graphiql() -> impl IntoResponse {
     axum::response::Html(GraphiQLSource::build().endpoint("/graphql").finish())
