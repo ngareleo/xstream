@@ -1,0 +1,6 @@
+# Populated by the operator at bring-up time. Contains the admin password hash.
+.env
+
+# Rendered by setup.sh from Caddyfile.template. The template is committed; the
+# rendered output is per-deployment and stays out of git.
+Caddyfile

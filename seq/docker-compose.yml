@@ -1,0 +1,36 @@
+services:
+  seq:
+    image: datalust/seq:latest
+    container_name: seq
+    restart: unless-stopped
+    environment:
+      ACCEPT_EULA: "Y"
+      # Hash with: docker run --rm datalust/seq config hash <password>
+      # Only consumed on the container's first boot.
+      SEQ_FIRSTRUN_ADMINPASSWORDHASH: "${SEQ_ADMIN_PASSWORD_HASH}"
+    volumes:
+      - seq-data:/data
+    ports:
+      # Bind to loopback — Caddy terminates TLS and proxies to here.
+      - "127.0.0.1:5341:80"
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      # ./Caddyfile is rendered by setup.sh from Caddyfile.template.
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - seq
+
+volumes:
+  seq-data:
+  caddy-data:
+  caddy-config:

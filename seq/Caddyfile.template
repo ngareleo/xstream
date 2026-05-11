@@ -1,0 +1,6 @@
+{{DOMAIN}} {
+    reverse_proxy seq:80
+    encode zstd gzip
+    # Caddy obtains a Let's Encrypt cert on first boot and auto-renews.
+    # Logs land in `docker compose logs caddy`.
+}
