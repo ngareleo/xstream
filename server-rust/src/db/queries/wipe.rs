@@ -12,16 +12,20 @@ use crate::db::{Db, DbResult};
 /// - `shows` → `seasons`, `episodes`, `show_metadata`.
 ///
 /// `playback_history` carries no FK back to videos, so it gets its own
-/// explicit DELETE.
+/// explicit DELETE — but only when the dev-features build keeps reads/writes
+/// to that table alive. Prod artifacts skip the row entirely (the table
+/// migration still runs, but nothing inserts into it).
 pub fn wipe_content(db: &Db) -> DbResult<()> {
     db.with(|conn| {
         let tx = conn.unchecked_transaction()?;
-        for stmt in [
+        let stmts: &[&str] = &[
+            #[cfg(feature = "dev-features")]
             "DELETE FROM playback_history",
             "DELETE FROM libraries",
             "DELETE FROM films",
             "DELETE FROM shows",
-        ] {
+        ];
+        for stmt in stmts {
             tx.execute(stmt, [])?;
         }
         tx.commit()?;

@@ -3,6 +3,7 @@
 pub mod films;
 pub mod jobs;
 pub mod libraries;
+#[cfg(feature = "dev-features")]
 pub mod playback_history;
 pub mod seasons;
 pub mod segments;

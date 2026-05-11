@@ -30,8 +30,7 @@ const SET_SETTING_MUTATION = graphql`
   }
 `;
 
-/** Hydrates flag cache from server; no React context object — cache is source of truth. */
-export const FeatureFlagsProvider: FC<{ children: ReactNode }> = ({ children }) => {
+const FeatureFlagsProviderDev: FC<{ children: ReactNode }> = ({ children }) => {
   const keys = FLAG_REGISTRY.map((f) => f.key);
   const data = useLazyLoadQuery<FeatureFlagsContextQuery>(
     FLAGS_QUERY,
@@ -45,6 +44,13 @@ export const FeatureFlagsProvider: FC<{ children: ReactNode }> = ({ children }) 
 
   return <>{children}</>;
 };
+
+const FeatureFlagsProviderProd: FC<{ children: ReactNode }> = ({ children }) => <>{children}</>;
+
+/** Hydrates flag cache from server in dev; passthrough in prod. */
+export const FeatureFlagsProvider: FC<{ children: ReactNode }> = IS_DEV_BUILD
+  ? FeatureFlagsProviderDev
+  : FeatureFlagsProviderProd;
 
 export function useFeatureFlag<T extends FlagValue>(
   key: string,

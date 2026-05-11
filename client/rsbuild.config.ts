@@ -23,6 +23,16 @@ export default defineConfig({
 
   source: {
     entry: { index: "./src/main.tsx" },
+    // Bare-identifier global substituted by Rspack's DefinePlugin during
+    // parsing. Any `if (IS_DEV_BUILD)` / `IS_DEV_BUILD ? … : …` branch becomes
+    // statically dead in prod, so dynamic `import()` calls inside the dead
+    // branch are dropped before chunks are emitted.
+    //
+    // Declared as a global in `src/types/env.d.ts` so call sites don't need
+    // to import anything to reference it.
+    define: {
+      IS_DEV_BUILD: JSON.stringify(process.env.XSTREAM_VARIANT === "dev"),
+    },
   },
 
   resolve: {

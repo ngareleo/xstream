@@ -2,13 +2,14 @@
 
 How xstream ships to end users — Tauri desktop bundles for Linux, Windows, and macOS, with bundled jellyfin-ffmpeg, code-signing per OS, and self-hosted Ed25519-signed auto-updates.
 
-The Rust server runs **in-process** inside the Tauri shell on a free `127.0.0.1` loopback port — there is no sidecar process and no separate runtime. Read [`00-Tauri-Desktop-Shell.md`](00-Tauri-Desktop-Shell.md) first; it is the prescriptive spec for the bundle. Then read [`01-Packaging-Internals.md`](01-Packaging-Internals.md) for the underlying mechanics, and [`02-Shipping-FFmpeg.md`](02-Shipping-FFmpeg.md) for how `jellyfin-ffmpeg` ends up in the bundle and on disk after install.
+The Rust server runs **in-process** inside the Tauri shell on a free `127.0.0.1` loopback port — there is no sidecar process and no separate runtime. Read [`00-Tauri-Desktop-Shell.md`](00-Tauri-Desktop-Shell.md) first; it is the prescriptive spec for the bundle. Then read [`01-Packaging-Internals.md`](01-Packaging-Internals.md) for the underlying mechanics, [`02-Shipping-FFmpeg.md`](02-Shipping-FFmpeg.md) for how `jellyfin-ffmpeg` ends up in the bundle and on disk after install, and [`03-Build-Variants.md`](03-Build-Variants.md) for how prod and dev artifacts are produced from one source tree.
 
 | File | Hook |
 |---|---|
 | [`00-Tauri-Desktop-Shell.md`](00-Tauri-Desktop-Shell.md) | Prescriptive spec: `tauri.conf.json` shape, the in-process server, bundled ffmpeg, VAAPI Linux soft fallback, Ed25519-signed self-hosted updates, code-signing per OS, the GitHub Actions release matrix, and the open release-engineering questions. |
 | [`01-Packaging-Internals.md`](01-Packaging-Internals.md) | Internals walkthrough: source on disk → `cargo` + `tauri build` → OS-specific installer → installed app layout per OS → `tauri-plugin-updater` mechanics. Corrects the Electron-derived intuition that desktop apps ship a bundled browser engine and run their server logic in a sidecar. |
 | [`02-Shipping-FFmpeg.md`](02-Shipping-FFmpeg.md) | How `jellyfin-ffmpeg` gets bundled — manifest pinning, the portable strategy used for every OS, where binaries live in the Tauri resource tree (`resources/ffmpeg/<plat>/`), how `src-tauri/src/ffmpeg_path.rs` resolves them at runtime, build-time SHA256 verification, segment-cache invalidation on manifest bumps, and GPL compliance. |
+| [`03-Build-Variants.md`](03-Build-Variants.md) | Prod/dev artifact split driven by `XSTREAM_VARIANT` — separate bundle identity for side-by-side install, client strip via `IS_DEV_BUILD` DefinePlugin + `devChunk` helper (and why the env check can't move into the helper), server strip via the `dev-features` Cargo feature on `xstream-server` and `xstream-tauri`, migration backward-compat. |
 
 ## What's still open
 

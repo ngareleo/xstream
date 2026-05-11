@@ -51,17 +51,21 @@ function lsRemove(key: string): void {
 }
 
 // Module-init: populate cache from localStorage so getFlag() works synchronously.
-for (const desc of FLAG_REGISTRY) {
-  const raw = lsGet(desc.key);
-  if (raw === null) continue;
-  const parsed = parseValue(raw, desc.valueType);
-  if (parsed !== null) cache.set(desc.key, parsed);
+// Prod builds skip this — flags always resolve to caller-provided fallbacks.
+if (IS_DEV_BUILD) {
+  for (const desc of FLAG_REGISTRY) {
+    const raw = lsGet(desc.key);
+    if (raw === null) continue;
+    const parsed = parseValue(raw, desc.valueType);
+    if (parsed !== null) cache.set(desc.key, parsed);
+  }
 }
 
-/** Hydrate cache from server; local overrides always win. */
+/** Hydrate cache from server; local overrides always win. Noop in prod builds. */
 export function hydrateFlags(
   entries: readonly { key: string; value: string | null | undefined }[]
 ): void {
+  if (!IS_DEV_BUILD) return;
   for (const entry of entries) {
     const desc = FLAG_REGISTRY.find((f) => f.key === entry.key);
     if (!desc || entry.value == null) continue;
@@ -73,19 +77,22 @@ export function hydrateFlags(
 }
 
 export function getFlag<T extends FlagValue>(key: string, fallback: T): T {
+  if (!IS_DEV_BUILD) return fallback;
   const cached = cache.get(key);
   return (cached ?? fallback) as T;
 }
 
-/** Optimistic update: cache + localStorage. Caller persists to server via setSetting mutation. */
+/** Optimistic update: cache + localStorage. Caller persists to server via setSetting mutation. Noop in prod. */
 export function setFlagLocal(key: string, value: FlagValue): void {
+  if (!IS_DEV_BUILD) return;
   cache.set(key, value);
   lsSet(key, serializeValue(value));
   notify();
 }
 
-/** Clear all localStorage overrides; revert to registry defaults until next server hydration. */
+/** Clear all localStorage overrides; revert to registry defaults until next server hydration. Noop in prod. */
 export function clearLocalFlagOverrides(): void {
+  if (!IS_DEV_BUILD) return;
   for (const desc of FLAG_REGISTRY) {
     lsRemove(desc.key);
     cache.delete(desc.key);
@@ -93,8 +100,9 @@ export function clearLocalFlagOverrides(): void {
   notify();
 }
 
-/** Reset all flags to registry defaults; return serialized values for batch server persistence. */
+/** Reset all flags to registry defaults; return serialized values for batch server persistence. Noop in prod. */
 export function resetAllFlagsToDefaults(): Array<{ key: string; value: string }> {
+  if (!IS_DEV_BUILD) return [];
   const writes: Array<{ key: string; value: string }> = [];
   for (const desc of FLAG_REGISTRY) {
     setFlagLocal(desc.key, desc.defaultValue);
@@ -104,13 +112,14 @@ export function resetAllFlagsToDefaults(): Array<{ key: string; value: string }>
 }
 
 export function subscribeFlags(cb: () => void): () => void {
+  if (!IS_DEV_BUILD) return () => {};
   subscribers.add(cb);
   return () => {
     subscribers.delete(cb);
   };
 }
 
-/** Snapshot for useSyncExternalStore; bumped on flag change. */
+/** Snapshot for useSyncExternalStore; bumped on flag change. Constant in prod. */
 export function getFlagsSnapshot(): number {
   return snapshotVersion;
 }

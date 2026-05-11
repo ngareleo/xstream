@@ -1,10 +1,13 @@
 name: CI
 
 on:
+  # CI runs on every PR; feature branches don't need a duplicate `push` run
+  # firing in parallel — that doubles runner load and amplifies Storybook /
+  # Chromium flakes. `push` stays armed for `main` so post-merge regressions
+  # still get caught.
   push:
-    branches: ["**"]
+    branches: [main]
   pull_request:
-    branches: ["**"]
 
 jobs:
   server-rust:
@@ -58,14 +61,17 @@ jobs:
       - name: GraphQL schema drift check
         # The client's relay-compiler reads `server-rust/schema.graphql`,
         # which is the checked-in SDL emitted by the `print_schema` binary.
-        # If a server-side type changed without `bun run schema:emit`, the
-        # checked-in file would be stale and the client would generate
+        # Built with `--features dev-features` because client Relay queries
+        # reference dev-only fields (`recordPlaybackSession`,
+        # `playbackHistory`); the prod artifact strips them at the bundle
+        # level. If a server-side type changed without `bun run schema:emit`,
+        # the checked-in file would be stale and the client would generate
         # outdated relay artefacts. Catch that here while we already have
         # the Rust toolchain warm.
         shell: bash
         run: |
           set -euo pipefail
-          cargo run --quiet --bin print_schema -p xstream-server > /tmp/fresh-schema.graphql
+          cargo run --quiet --bin print_schema -p xstream-server --features dev-features > /tmp/fresh-schema.graphql
           if ! diff -u server-rust/schema.graphql /tmp/fresh-schema.graphql; then
             echo "::error::server-rust/schema.graphql is stale — run 'bun run schema:emit' and commit the diff."
             exit 1
@@ -195,6 +201,10 @@ jobs:
         run: bun run test
 
       - name: Test stories
+        # Bound the step so a hang inside vitest-browser / Playwright
+        # bootstrap fails fast instead of consuming the job's full 6h
+        # quota. The green path is ~15 s; 5 min is generous.
+        timeout-minutes: 5
         run: bun run test-storybook
 
       - name: Build Storybook

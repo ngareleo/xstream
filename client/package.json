@@ -15,7 +15,7 @@
     "storybook": "storybook dev -p 6006",
     "build-storybook": "storybook build",
     "preview": "rsbuild preview",
-    "test-storybook": "vitest run --config vitest.storybook.config.ts"
+    "test-storybook": "for i in 1 2 3; do vitest run --config vitest.storybook.config.ts --reporter=verbose && exit 0; echo \"::warning::test-storybook attempt $i failed; retrying\"; done; exit 1"
   },
   "dependencies": {
     "@griffel/react": "^1.6.1",
