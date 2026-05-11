@@ -60,9 +60,6 @@ export default defineConfig({
         plugins: [storybookTest({ configDir: path.join(dirname, ".storybook") })],
         test: {
           name: "storybook",
-          // Verbose reporter prints each story file as it starts so when a
-          // CI run hangs we can read which story was last in progress.
-          reporters: ["verbose"],
           // Retry once on flaky module-fetch failures from the storybook
           // vitest deps server under CI (`Failed to fetch dynamically
           // imported module: .../sb-vitest/deps/react-18-...`). The
