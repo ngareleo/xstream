@@ -6,15 +6,22 @@
 
 | Variable | Default | Description |
 |---|---|---|
-| `OTEL_EXPORTER_OTLP_ENDPOINT` | `http://localhost:5341/ingest/otlp` | OTLP base URL (no trailing slash, no `/v1/...` path) |
-| `OTEL_EXPORTER_OTLP_HEADERS` | _(empty)_ | Comma-separated `Key=Value` headers, e.g. `X-Seq-ApiKey=abc123` |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | `http://localhost:5341/ingest/otlp` | Default OTLP base URL (no trailing slash, no `/v1/...` path). Points at local Seq in dev. |
+| `OTEL_EXPORTER_OTLP_HEADERS` | _(empty)_ | Comma-separated `Key=Value` headers for the default endpoint, e.g. `X-Seq-ApiKey=abc123`. |
+| `OTEL_EXPORTER_OTLP_AXIOM_ENDPOINT` | _(empty)_ | OTLP base URL used when `flag.useAxiomExporter` is ON. Typically `https://api.axiom.co`. |
+| `OTEL_EXPORTER_OTLP_AXIOM_HEADERS` | _(empty)_ | Comma-separated `Key=Value` headers for the Axiom endpoint, e.g. `Authorization=Bearer <token>,X-Axiom-Dataset=xstream`. |
+| `XSTREAM_VARIANT` | _(unset → "dev")_ | Drives the prod/dev build split (`03-Build-Variants.md`) and the `deployment.environment` resource attribute on every span (`development` vs `production`). |
 
 ### Client (baked at build time by Rsbuild)
 
 | Variable | Default | Description |
 |---|---|---|
-| `PUBLIC_OTEL_ENDPOINT` | `/ingest/otlp` | OTLP base URL for browser. Relative path works in dev (proxied). Use full URL in prod. |
-| `PUBLIC_OTEL_HEADERS` | _(empty)_ | Comma-separated `Key=Value` headers for browser OTLP export |
+| `PUBLIC_OTEL_ENDPOINT` | `/ingest/otlp` | Default OTLP base URL for browser. Relative path works in dev (proxied). |
+| `PUBLIC_OTEL_HEADERS` | _(empty)_ | Comma-separated `Key=Value` headers for the default endpoint. |
+| `PUBLIC_OTEL_AXIOM_ENDPOINT` | _(empty)_ | OTLP base URL used when `flag.useAxiomExporter` is ON. Typically `https://api.axiom.co`. |
+| `PUBLIC_OTEL_AXIOM_HEADERS` | _(empty)_ | Comma-separated `Key=Value` headers for the Axiom endpoint. |
+
+The `flag.useAxiomExporter` feature flag in [`../../client/Feature-Flags/00-Registry.md`](../../client/Feature-Flags/00-Registry.md) chooses between the default and `*_AXIOM_*` pair at boot. Client picks up the change on the next page load; the server reads the flag from SQLite at startup and therefore requires an app restart. The flag is dead-code-eliminated in production builds — release bundles always use the values that CI bakes into `PUBLIC_OTEL_ENDPOINT` / `OTEL_EXPORTER_OTLP_ENDPOINT`.
 
 ## Production backend: Axiom
 

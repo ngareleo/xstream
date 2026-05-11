@@ -143,13 +143,28 @@ pub struct ServerConfig {
 /// exporter; calling `run` twice would re-init both and trip the
 /// "global default subscriber already set" guard.
 pub async fn run(config: ServerConfig) -> AppResult<()> {
-    telemetry::init()?;
-
-    tracing::info!(db_path = %config.db_path.display(), "opening sqlite database");
+    // Open the DB before telemetry init so we can read `flag.useAxiomExporter`
+    // from `user_settings` and pick the correct OTLP destination at boot.
+    // Server-side flag flips therefore only take effect on next restart — the
+    // documented contract surfaced in the FlagsTab description.
     let db = db::Db::open(&config.db_path).map_err(|source| AppError::DbOpen {
         path: config.db_path.clone(),
         source,
     })?;
+
+    let use_axiom = db::get_setting(&db, "flag.useAxiomExporter")
+        .ok()
+        .flatten()
+        .map(|v| v == "1" || v == "true")
+        .unwrap_or(false);
+
+    telemetry::init(use_axiom)?;
+
+    tracing::info!(
+        db_path = %config.db_path.display(),
+        telemetry_axiom = use_axiom,
+        "sqlite open, telemetry initialised"
+    );
 
     let restored = services::job_restore::sweep_interrupted(&db)
         .map_err(|source| AppError::JobRestore { source })?;

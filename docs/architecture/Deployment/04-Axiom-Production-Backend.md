@@ -28,26 +28,32 @@ If real-install traffic balloons past 500 GB/mo we revisit (Axiom Cloud Team is 
 
 We provision **one** Axiom dataset on the free plan:
 
-- **`xstream`** — production telemetry from release Tauri installs.
+- **`xstream`** — telemetry from release Tauri installs, plus opt-in dev traffic tagged with `deployment.environment=development` for filtering.
 
 The second dataset slot is reserved (e.g. for `xstream-staging` once we cut a beta channel, or for a load-test capture).
 
-**Why not split dev into Axiom?** Two reasons:
+**Why one dataset for both prod and dev?** Two reasons:
 1. The 2-dataset cap is tight; spending one slot on dev work would burn the spare.
-2. Local Seq is already in place via `scripts/seq-start.sh` — it's faster to query, has no quota, and keeps dev signal off the production-cost meter.
+2. The OTel `deployment.environment` resource attribute does the separation server-side at query time — every event carries `development` or `production`, so dev traffic is one APL filter away from being invisible to prod queries.
 
-The boundary stays clean: **a release build hits Axiom; everything else hits local Seq**. The `dev` vs `prod` switch is the OTLP endpoint env-var, not a dataset attribute.
+Default behaviour: **a release build hits Axiom; dev hits local Seq** (via `scripts/seq-start.sh`). The `flag.useAxiomExporter` feature flag (see § "Dev flow" below) lets a developer flip a single dev session to Axiom to verify the end-to-end pipeline.
 
 ## API tokens
 
-Two **Basic API tokens** — Axiom's ingest-only token type, scoped at the dataset level. Created in **Settings → API tokens → New API token**, with **Allowed actions = Ingest** and **Datasets = `xstream`**.
+Four **Basic API tokens** — Axiom's ingest-only token type, scoped at the dataset level. Created in **Settings → API tokens → New API token**, with **Allowed actions = Ingest** and **Datasets = `xstream`**.
 
-- `xstream-server` — used by `xstream-server-rust` inside the Tauri shell.
-- `xstream-client` — used by the browser-side OTel exporter.
+| Token | Used by | Lives in |
+|---|---|---|
+| `xstream-server-prod` | release Tauri server-side OTLP exporter | GitHub Actions secret (release workflow only) |
+| `xstream-client-prod` | release Tauri client-side OTLP exporter | GitHub Actions secret (release workflow only) |
+| `xstream-server-dev` | local dev server when `flag.useAxiomExporter` is ON | repo-root `.env` (gitignored) |
+| `xstream-client-dev` | local dev client when `flag.useAxiomExporter` is ON | repo-root `.env` (gitignored), baked into `bun run dev` build |
 
-Two tokens, not one, so either can be revoked without taking down the other side. Both are baked into the release Tauri bundle (the client one via Rsbuild at build time, the server one via the release env). Token rotation = cut a new release with new tokens, then revoke the old ones in the Axiom UI — see § "Rotating a token" below.
+**Two tokens per environment** (server vs client) so either can be revoked without taking down the other side — extracting from the JS bundle is a different attack surface from extracting from the native binary. **Two environment tiers** (prod vs dev) so a leaked `.env` only burns dev credentials; production tokens live exclusively in CI secrets and never touch a developer machine.
 
 Basic API tokens cannot read data, cannot list datasets, cannot manage users. A leaked token's worst case is rate-limited spam into a single dataset. The threat model is documented in full at [`05-Telemetry-Ingestion-Security.md`](05-Telemetry-Ingestion-Security.md).
+
+Prod token rotation = cut a new release with new tokens + revoke old (see § "Rotating a token"). Dev tokens rotate independently with just a `.env` edit and an app restart.
 
 ## Build-env contract
 
@@ -85,6 +91,22 @@ Single admin login at `https://app.axiom.co`, credentials in the team password m
 
 For trace/log query syntax, Axiom uses **APL** (Axiom Processing Language). It is *not* the same as Seq's SQL-like filter. APL primer: <https://axiom.co/docs/apl/introduction>. We'll add a `docs/architecture/Observability/02-Searching-Axiom.md` sibling to the existing Seq guide once someone actually needs to query prod regularly.
 
+## Dev flow — flipping a session to Axiom
+
+The default dev backend stays local Seq (faster to query, no quota, no SaaS dependency). To verify the production pipeline end-to-end, flip the `flag.useAxiomExporter` feature flag in **Settings → Flags → telemetry**. See the [Feature-Flags registry row](../../client/Feature-Flags/00-Registry.md#telemetry) for the canonical description.
+
+**Both sides must align.** Every meaningful xstream trace spans the browser → Rust server boundary via `traceparent` propagation. If the client posts to Axiom and the server posts to local Seq (or vice versa), the trace gets split between backends and is unqueryable in either. The flag therefore gates **both sides atomically**:
+
+- **Client.** Picks up the change on next page reload — the browser exporter is reconstructed at module init.
+- **Server.** Reads the flag from `user_settings` at boot. **Flag flips require an app restart on the server side.** The in-process OTLP exporter is constructed once at server startup; hot-swap is possible in the OTel Rust SDK but adds complexity for marginal value in a dev tool. The Flags-tab description surfaces this constraint.
+
+What you need locally:
+1. Both `xstream-server-dev` and `xstream-client-dev` tokens in `.env` (see § "API tokens" above).
+2. The four `*_AXIOM_*` env vars set in `.env` (the env-var contract is in [`../Observability/03-Config-And-Backends.md`](../Observability/03-Config-And-Backends.md)).
+3. Toggle the flag in Settings → Flags. Close + reopen the app.
+
+Verify in the Axiom UI: open the `xstream` dataset, filter `where ['attributes.deployment.environment'] == 'development'`, trigger a playback session, confirm a single trace contains both client `playback.session` and server `stream.request` + `transcode.job` spans. Switching the flag back off (and restarting the app) returns to local Seq.
+
 ## Rotating a token
 
 Token rotation is **release-bound** because the tokens are baked into the bundle at build time:
@@ -103,18 +125,19 @@ Executable top-to-bottom for someone with no prior Axiom setup.
 
 - [ ] Sign up at <https://axiom.co/signup> (free, no card). Use the team email so the account is recoverable.
 - [ ] **Settings → Datasets → New dataset** → name: `xstream`. Retention defaults to 30 days; leave it.
-- [ ] **Settings → API tokens → New API token** for `xstream-server`:
-  - Description: `xstream-server (release build)`
-  - Allowed actions: **Ingest** only
-  - Datasets: `xstream`
-  - Copy the displayed token immediately — Axiom won't show it again.
-- [ ] Repeat for `xstream-client`.
-- [ ] Store both tokens in the team password manager (master record + one entry per token).
-- [ ] **GitHub repo → Settings → Secrets and variables → Actions → New repository secret**:
-  - `AXIOM_INGEST_TOKEN_SERVER` = the server token
-  - `AXIOM_INGEST_TOKEN_CLIENT` = the client token
+- [ ] **Settings → API tokens → New API token** — mint **four** tokens, all with Allowed actions: **Ingest** only, Datasets: `xstream`. Copy each immediately (Axiom won't show them again):
+  - `xstream-server-prod` — release Tauri server-side OTLP.
+  - `xstream-client-prod` — release Tauri client-side OTLP.
+  - `xstream-server-dev` — dev server-side OTLP (used when `flag.useAxiomExporter` is ON).
+  - `xstream-client-dev` — dev client-side OTLP (used when `flag.useAxiomExporter` is ON).
+- [ ] Store the two `*-prod` tokens in the team password manager. **Never put them on a developer machine.**
+- [ ] Drop the two `*-dev` tokens into the repo-root `.env` against the four `*_AXIOM_*` keys documented in `.env.example`.
+- [ ] **GitHub repo → Settings → Secrets and variables → Actions → New repository secret** (prod only):
+  - `AXIOM_INGEST_TOKEN_SERVER` = the `xstream-server-prod` token
+  - `AXIOM_INGEST_TOKEN_CLIENT` = the `xstream-client-prod` token
 - [ ] In the release workflow YAML (separate PR, not in this docs PR), wire the secrets into the build env. See the env-var contract above for the exact mapping.
-- [ ] Cut a release tag. Watch the **Stream** view in Axiom for the `xstream` dataset — events should appear within ~30 seconds of an install opening the app for the first time.
+- [ ] **Dev smoke test:** in the running app, flip **Settings → Flags → telemetry → `flag.useAxiomExporter`** to ON, close + reopen the app. Open the **Stream** view in Axiom for the `xstream` dataset filtered to `deployment.environment == 'development'` — events should appear within ~30 s of triggering a playback session.
+- [ ] Cut a release tag. Watch the **Stream** view filtered to `deployment.environment == 'production'` — events from real installs should appear within ~30 s of someone opening the app.
 - [ ] **Settings → Notifications** → set a low-volume monitor for ingest spikes (>10× baseline) so we notice if a token is being abused (see [`05-Telemetry-Ingestion-Security.md` § Tripwires](05-Telemetry-Ingestion-Security.md)).
 
 ## Open questions

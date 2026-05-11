@@ -16,6 +16,8 @@ import {
 } from "@opentelemetry/sdk-logs";
 import { BatchSpanProcessor, WebTracerProvider } from "@opentelemetry/sdk-trace-web";
 
+import { getFlag } from "~/config/featureFlags.js";
+import { FLAG_KEYS } from "~/config/flagRegistry.js";
 import { getSessionContext } from "~/services/playbackSession.js";
 
 /** Parse "Key1=Val1,Key2=Val2" into a plain object, ignoring malformed pairs. */
@@ -32,8 +34,13 @@ function parseHeadersEnv(raw: string | undefined): Record<string, string> {
 
 // PUBLIC_ prefix is required for Rsbuild to expose env vars to the browser bundle.
 // Default to the Rsbuild dev proxy path so no extra config is needed in dev.
-const endpoint = (import.meta.env.PUBLIC_OTEL_ENDPOINT as string | undefined) ?? "/ingest/otlp";
-const headers = parseHeadersEnv(import.meta.env.PUBLIC_OTEL_HEADERS as string | undefined);
+const defaultEndpoint =
+  (import.meta.env.PUBLIC_OTEL_ENDPOINT as string | undefined) ?? "/ingest/otlp";
+const defaultHeaders = parseHeadersEnv(import.meta.env.PUBLIC_OTEL_HEADERS as string | undefined);
+const axiomEndpoint = (import.meta.env.PUBLIC_OTEL_AXIOM_ENDPOINT as string | undefined) ?? "";
+const axiomHeaders = parseHeadersEnv(
+  import.meta.env.PUBLIC_OTEL_AXIOM_HEADERS as string | undefined
+);
 
 let loggerProvider: LoggerProvider | null = null;
 let initialized = false;
@@ -46,9 +53,17 @@ export function initTelemetry(): void {
   if (initialized) return;
   initialized = true;
 
+  // Flag is dev-only — in prod builds `getFlag` returns the fallback and this
+  // branch dead-code-eliminates. Prod always uses the baked PUBLIC_OTEL_*
+  // values which CI sets to Axiom for release bundles.
+  const useAxiom = IS_DEV_BUILD && getFlag(FLAG_KEYS.useAxiomExporter, false);
+  const endpoint = useAxiom && axiomEndpoint ? axiomEndpoint : defaultEndpoint;
+  const headers = useAxiom && axiomEndpoint ? axiomHeaders : defaultHeaders;
+  const deploymentEnvironment = IS_DEV_BUILD ? "development" : "production";
+
   const resource = resourceFromAttributes({
     "service.name": "xstream-client",
-    "deployment.environment": import.meta.env.MODE ?? "development",
+    "deployment.environment": deploymentEnvironment,
   });
 
   const tracerProvider = new WebTracerProvider({
