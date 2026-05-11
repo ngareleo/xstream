@@ -17,6 +17,7 @@ import { ErrorBoundary } from "./components/error-boundary/ErrorBoundary.js";
 import { FeatureFlagsProvider } from "./contexts/FeatureFlagsContext.js";
 import { environment } from "./relay/environment.js";
 import { router } from "./router.js";
+import { restoreSession, subscribeToAuthChanges } from "./services/auth.js";
 
 /**
  * Root eventing handler. Terminal handler for any event not consumed by an
@@ -40,18 +41,31 @@ const AppEventing: FC<{ children: ReactNode }> = ({ children }) => {
 const rootEl = document.getElementById("root");
 if (!rootEl) throw new Error("Root element #root not found");
 
-ReactDOM.createRoot(rootEl).render(
-  <React.StrictMode>
-    <ErrorBoundary>
-      <RelayEnvironmentProvider environment={environment}>
-        <Suspense fallback={null}>
-          <FeatureFlagsProvider>
-            <AppEventing>
-              <RouterProvider router={router} />
-            </AppEventing>
-          </FeatureFlagsProvider>
-        </Suspense>
-      </RelayEnvironmentProvider>
-    </ErrorBoundary>
-  </React.StrictMode>
-);
+// Hydrate the Supabase session before React mounts so the route-guard
+// loader sees a populated session and the first Relay fetch carries the
+// JWT in its Authorization header. `restoreSession` always resolves
+// (never throws — misconfig falls through to a signed-out state).
+//
+// We also subscribe to auth-state changes for the lifetime of the app
+// so token refreshes, remote signouts, and cross-tab broadcasts keep
+// `userContext` (and therefore telemetry) in lockstep with Supabase.
+void restoreSession().then(() => {
+  subscribeToAuthChanges(() => {
+    /* No-op router refresh — the route guards re-check on next nav. */
+  });
+  ReactDOM.createRoot(rootEl).render(
+    <React.StrictMode>
+      <ErrorBoundary>
+        <RelayEnvironmentProvider environment={environment}>
+          <Suspense fallback={null}>
+            <FeatureFlagsProvider>
+              <AppEventing>
+                <RouterProvider router={router} />
+              </AppEventing>
+            </FeatureFlagsProvider>
+          </Suspense>
+        </RelayEnvironmentProvider>
+      </ErrorBoundary>
+    </React.StrictMode>
+  );
+});

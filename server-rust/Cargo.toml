@@ -53,6 +53,10 @@ hex = "0.4"
 # Tauri bundle has no per-platform OpenSSL dependency.
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 
+# Supabase JWT verification — RS256 via JWKS. We hold only public keys;
+# no shared secrets ship in the bundle.
+jsonwebtoken = "9.3"
+
 # Poster resize + WebP encode. `image` decodes JPEG/PNG/WebP/GIF (no
 # AVIF — avoids a native libavif dep); `webp` wraps libwebp for fast
 # q75 lossy encoding. Used by services::poster_cache.

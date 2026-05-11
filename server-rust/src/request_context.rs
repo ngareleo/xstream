@@ -1,6 +1,6 @@
 use axum::{
-    extract::Request,
-    http::{HeaderMap, StatusCode},
+    extract::{Extension, Request},
+    http::{header, HeaderMap, StatusCode},
     middleware::Next,
     response::Response,
 };
@@ -10,6 +10,8 @@ use opentelemetry_http::HeaderExtractor;
 use tracing::Instrument;
 use tracing_opentelemetry::OpenTelemetrySpanExt;
 
+use crate::config::AppContext;
+
 /// Per-request context threaded through every handler from day one.
 ///
 /// The struct shape is forward-constrained for peer-sharing
@@ -17,11 +19,17 @@ use tracing_opentelemetry::OpenTelemetrySpanExt;
 /// `peer_node_id` and `share_grant` will be populated by an auth middleware
 /// when sharing ships, without rewriting every handler signature. Today
 /// both forward fields are always `None` — the *shape* exists.
+///
+/// `user_id` is populated by `extract_auth_identity` from a verified
+/// Supabase JWT (`sub` claim). `None` for unauthenticated requests; alpha
+/// does not gate on this — it flows into the request span so Seq events
+/// carry `user.id` when present.
 #[derive(Clone, Debug, Default)]
 pub struct RequestContext {
     pub otel_ctx: OtelContext,
     pub peer_node_id: Option<String>,
     pub share_grant: Option<ShareGrant>,
+    pub user_id: Option<String>,
 }
 
 #[derive(Clone, Debug)]
@@ -35,6 +43,7 @@ pub async fn extract_request_context(mut req: Request, next: Next) -> Result<Res
         otel_ctx: otel_ctx.clone(),
         peer_node_id: None,
         share_grant: None,
+        user_id: None,
     };
     req.extensions_mut().insert(ctx);
 
@@ -63,6 +72,7 @@ pub async fn extract_request_context(mut req: Request, next: Next) -> Result<Res
         http.status = tracing::field::Empty,
         duration_ms = tracing::field::Empty,
         trace_id = %trace_id,
+        user.id = tracing::field::Empty,
     );
     // Inbound `traceparent` becomes the parent of this span — so the OTel
     // export carries the same trace_id the client started.
@@ -102,6 +112,59 @@ pub(crate) fn otel_context_from_headers(headers: &HeaderMap) -> OtelContext {
     opentelemetry::global::get_text_map_propagator(|propagator| {
         propagator.extract(&HeaderExtractor(headers))
     })
+}
+
+/// Inner middleware — runs **inside** `extract_request_context`'s span
+/// scope (mounted after it in the layer chain). Reads
+/// `Authorization: Bearer <jwt>`, verifies the signature via the cached
+/// JWKS, updates the in-flight `RequestContext` with the user id, and
+/// records `user.id` on the current span so OTel exports carry it.
+///
+/// Soft-fail: a missing / malformed / unverifiable token leaves
+/// `user_id = None` and the request proceeds. Alpha doesn't gate on
+/// identity; this middleware exists purely to populate telemetry. The
+/// debug log on the failure path is enough for operator diagnosis.
+pub async fn extract_auth_identity(
+    Extension(app_ctx): Extension<AppContext>,
+    mut req: Request,
+    next: Next,
+) -> Response {
+    let Some(jwks) = app_ctx.jwks_cache.clone() else {
+        return next.run(req).await;
+    };
+
+    let bearer = req
+        .headers()
+        .get(header::AUTHORIZATION)
+        .and_then(|v| v.to_str().ok())
+        .and_then(strip_bearer_prefix);
+
+    if let Some(token) = bearer {
+        match jwks.verify_token(token).await {
+            Ok(claims) => {
+                if let Some(req_ctx) = req.extensions_mut().get_mut::<RequestContext>() {
+                    req_ctx.user_id = Some(claims.sub.clone());
+                }
+                tracing::Span::current().record("user.id", claims.sub.as_str());
+            }
+            Err(err) => {
+                tracing::debug!(error = %err, "JWT verification failed; continuing as anonymous");
+            }
+        }
+    }
+
+    next.run(req).await
+}
+
+fn strip_bearer_prefix(value: &str) -> Option<&str> {
+    let trimmed = value.trim();
+    // `Bearer ` is case-insensitive on the wire per RFC 6750.
+    let lower = trimmed.get(..7)?;
+    if lower.eq_ignore_ascii_case("Bearer ") {
+        Some(trimmed[7..].trim())
+    } else {
+        None
+    }
 }
 
 //

@@ -18,5 +18,6 @@ Cross-cutting concepts that span client and server, or that describe the system 
 | [`Startup/`](Startup/README.md) | Server boot sequence + graceful shutdown. |
 | [`Library-Scan/`](Library-Scan/README.md) | How the library scanner walks media directories and fingerprints files. |
 | [`Sharing/`](Sharing/README.md) | Forward-looking peer-to-peer media sharing model — invite tokens, content-addressed cache reuse, cross-peer traceparent. |
+| [`Identity/`](Identity/README.md) | Supabase password auth + RS256/JWKS verification + `user.id` correlation on OTel events. In-process server framing, alpha gates, known gaps. |
 | [`Deployment/`](Deployment/README.md) | Rust+Tauri desktop app deployment — HW-accel, platform-specific packaging, ffmpeg bundling, release testing. |
 | [`Testing/`](Testing/README.md) | Test side-effects policy, encode-pipeline real-media tests, encoder edge-case test policy. |

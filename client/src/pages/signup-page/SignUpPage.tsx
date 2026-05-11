@@ -1,9 +1,10 @@
 import { mergeClasses } from "@griffel/react";
-import { type FC, useState } from "react";
-import { Link } from "react-router-dom";
+import { type FC, type FormEvent, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 
 import { useAuthFormStyles } from "~/components/auth-form/AuthForm.styles.js";
 import { useAuthLayoutStyles } from "~/components/auth-layout/AuthLayout.styles.js";
+import { signUp } from "~/services/auth.js";
 
 import { strings } from "./SignUpPage.strings.js";
 import { useSignUpStyles } from "./SignUpPage.styles.js";
@@ -12,12 +13,39 @@ const SignUpPage: FC = () => {
   const layout = useAuthLayoutStyles();
   const form = useAuthFormStyles();
   const styles = useSignUpStyles();
+  const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [showMismatch, setShowMismatch] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
   const mismatch = showMismatch && confirm.length > 0 && password !== confirm;
+
+  const onSubmit = async (e: FormEvent<HTMLFormElement>): Promise<void> => {
+    e.preventDefault();
+    setShowMismatch(true);
+    if (password !== confirm) return;
+    if (submitting) return;
+    setSubmitting(true);
+    setError(null);
+    const result = await signUp(email, password);
+    if (result.error) {
+      setError(result.error);
+      setSubmitting(false);
+      return;
+    }
+    // Auto-confirm is ON for alpha, so signUp returns an active session
+    // and we drop the user straight into the library. If the project
+    // flips on email confirmation later, `session` will be null —
+    // navigate to a "check your inbox" page instead.
+    if (result.session) {
+      navigate("/", { replace: true });
+    } else {
+      navigate("/signin", { replace: true });
+    }
+  };
 
   return (
     <>
@@ -25,13 +53,7 @@ const SignUpPage: FC = () => {
       <div className={layout.title}>{strings.title}</div>
       <div className={layout.subtitle}>{strings.subtitle}</div>
 
-      <form
-        className={form.form}
-        onSubmit={(e) => {
-          e.preventDefault();
-          setShowMismatch(true);
-        }}
-      >
+      <form className={form.form} onSubmit={onSubmit}>
         <div className={form.field}>
           <label className={form.label} htmlFor="signup-email">
             {strings.emailLabel}
@@ -83,8 +105,10 @@ const SignUpPage: FC = () => {
           {mismatch ? <span className={form.fieldError}>{strings.confirmMismatch}</span> : null}
         </div>
 
-        <button type="submit" className={form.primaryBtn}>
-          {strings.submit}
+        {error && <div className={form.fieldError}>{error}</div>}
+
+        <button type="submit" className={form.primaryBtn} disabled={submitting}>
+          {submitting ? strings.submitting : strings.submit}
         </button>
 
         <div className={form.helpRow}>

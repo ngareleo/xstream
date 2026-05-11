@@ -1,6 +1,7 @@
 //! Server services: transcoding, library scanning, job storage, HW acceleration, caching.
 
 pub mod active_job;
+pub mod auth;
 pub mod cache_index;
 pub mod chunker;
 pub mod ffmpeg_file;

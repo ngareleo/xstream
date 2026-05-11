@@ -11,16 +11,31 @@ use crate::graphql::scalars::MediaType;
 #[cfg(feature = "dev-features")]
 use crate::graphql::types::PlaybackSession;
 use crate::graphql::types::{
-    DirEntry, Film, FilmConnection, FilmEdge, Library, Node, OmdbSearchResult, SettingEntry, Show,
-    ShowConnection, ShowEdge, TranscodeJob, Video, VideoConnection, VideoEdge, WatchlistItem,
+    CurrentUser, DirEntry, Film, FilmConnection, FilmEdge, Library, Node, OmdbSearchResult,
+    SettingEntry, Show, ShowConnection, ShowEdge, TranscodeJob, Video, VideoConnection, VideoEdge,
+    WatchlistItem,
 };
 use crate::relay::from_global_id;
+use crate::request_context::RequestContext;
 
 #[derive(Default)]
 pub struct Query;
 
 #[Object]
 impl Query {
+    /// Verified identity for the current request. `Some` when the caller
+    /// presented a valid Supabase JWT (RS256, verified via JWKS).
+    /// `None` for unauthenticated callers or when SUPABASE_JWKS_URL is
+    /// unset — alpha doesn't gate any other resolver on this; it exists
+    /// for the client to render the signed-in state.
+    async fn current_user(&self, ctx: &Context<'_>) -> Option<CurrentUser> {
+        let req_ctx = ctx.data_opt::<RequestContext>()?;
+        let user_id = req_ctx.user_id.clone()?;
+        Some(CurrentUser {
+            id: ID(user_id),
+        })
+    }
+
     async fn node(&self, ctx: &Context<'_>, id: ID) -> async_graphql::Result<Option<Node>> {
         let db = ctx.data_unchecked::<Db>();
         let (type_name, local_id) = match from_global_id(&id) {

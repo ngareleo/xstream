@@ -17,6 +17,7 @@ import {
 import { BatchSpanProcessor, WebTracerProvider } from "@opentelemetry/sdk-trace-web";
 
 import { getSessionContext } from "~/services/playbackSession.js";
+import { getUserContext } from "~/services/userContext.js";
 
 /** Parse "Key1=Val1,Key2=Val2" into a plain object, ignoring malformed pairs. */
 function parseHeadersEnv(raw: string | undefined): Record<string, string> {
@@ -100,6 +101,17 @@ export interface ClientLog {
   error(message: string, attributes?: Record<string, string | number | boolean>): void;
 }
 
+/**
+ * Read `user.id` at emit time so the attribute reflects the *current*
+ * signed-in user even when the logger instance was constructed before
+ * the auth bootstrap completed. Returns an empty object when no user is
+ * signed in so log records stay clean (no `user.id: null` noise).
+ */
+function userAttrs(): Record<string, string> {
+  const userId = getUserContext();
+  return userId ? { "user.id": userId } : {};
+}
+
 /** Returns a structured logger for the given component. Log records are forwarded to the OTLP backend. */
 export function getClientLogger(component: string): ClientLog {
   const logger = loggerProvider?.getLogger(component);
@@ -109,7 +121,7 @@ export function getClientLogger(component: string): ClientLog {
         severityNumber: SeverityNumber.INFO,
         severityText: "INFO",
         body: message,
-        attributes: { component, ...attributes },
+        attributes: { component, ...userAttrs(), ...attributes },
         context: getSessionContext(),
       });
     },
@@ -118,7 +130,7 @@ export function getClientLogger(component: string): ClientLog {
         severityNumber: SeverityNumber.WARN,
         severityText: "WARN",
         body: message,
-        attributes: { component, ...attributes },
+        attributes: { component, ...userAttrs(), ...attributes },
         context: getSessionContext(),
       });
     },
@@ -127,7 +139,7 @@ export function getClientLogger(component: string): ClientLog {
         severityNumber: SeverityNumber.ERROR,
         severityText: "ERROR",
         body: message,
-        attributes: { component, ...attributes },
+        attributes: { component, ...userAttrs(), ...attributes },
         context: getSessionContext(),
       });
     },

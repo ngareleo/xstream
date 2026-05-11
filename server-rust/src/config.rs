@@ -7,6 +7,7 @@ use dashmap::DashMap;
 
 use crate::db::Db;
 use crate::graphql::scalars::Resolution;
+use crate::services::auth::JwksCache;
 use crate::services::ffmpeg_file::FileMetadata;
 use crate::services::ffmpeg_file::HwAccelConfig;
 use crate::services::ffmpeg_path::FfmpegPaths;
@@ -135,6 +136,12 @@ pub struct AppConfig {
     /// midnight; exhaustion logs a warn and skips further calls without
     /// failing the surrounding scan.
     pub omdb_daily_budget: u32,
+    /// Supabase JWKS endpoint
+    /// (`https://<project>.supabase.co/.well-known/jwks.json`). When
+    /// `None`, auth middleware soft-fails to `user_id = None` for every
+    /// request — fine for an unauthenticated dev shell, but identity
+    /// telemetry won't carry a user. Set via `SUPABASE_JWKS_URL` env.
+    pub supabase_jwks_url: Option<String>,
 }
 
 /// Library-scanner tunables.
@@ -202,6 +209,7 @@ impl AppConfig {
             scan: ScanConfig::default(),
             omdb_api_key: None,
             omdb_daily_budget: crate::services::omdb::DEFAULT_DAILY_BUDGET,
+            supabase_jwks_url: None,
         }
     }
 }
@@ -224,6 +232,11 @@ pub struct AppContext {
     /// skips the metadata fetch step. Cheap-clone: wraps a shared
     /// `reqwest::Client` so the connection pool spans every call.
     pub omdb: Option<OmdbClient>,
+    /// `Some` when `SUPABASE_JWKS_URL` is set. The auth middleware
+    /// (`extract_auth_identity`) reads `Authorization: Bearer <jwt>` and
+    /// validates against the cached public keys here; on success it
+    /// populates `RequestContext.user_id`. `None` ⇒ middleware no-ops.
+    pub jwks_cache: Option<JwksCache>,
 }
 
 impl AppContext {
@@ -235,14 +248,19 @@ impl AppContext {
     ) -> Self {
         let pool = FfmpegPool::new(config.transcode.clone());
         let daily_budget = config.omdb_daily_budget;
+        let http = reqwest::Client::new();
         let omdb = config.omdb_api_key.clone().map(|key| {
             // One Client → shared connection pool across every auto-match
             // call. reqwest::Client is internally Arc'd, so cloning it
             // for the OmdbClient wrapper is cheap. The budget counter
             // lives inside OmdbClient (Arc<Mutex<…>>) so every clone
             // shares the same daily quota.
-            OmdbClient::production(reqwest::Client::new(), key, daily_budget)
+            OmdbClient::production(http.clone(), key, daily_budget)
         });
+        let jwks_cache = config
+            .supabase_jwks_url
+            .clone()
+            .map(|url| JwksCache::new(url, http));
         Self {
             db,
             config,
@@ -254,6 +272,7 @@ impl AppContext {
             job_store: JobStore::new(),
             scan_state: ScanState::new(),
             omdb,
+            jwks_cache,
         }
     }
 
@@ -273,6 +292,7 @@ impl AppContext {
             scan: ScanConfig::default(),
             omdb_api_key: None,
             omdb_daily_budget: crate::services::omdb::DEFAULT_DAILY_BUDGET,
+            supabase_jwks_url: None,
         };
         let paths = Arc::new(FfmpegPaths {
             ffmpeg: PathBuf::from("/bin/true"),

@@ -17,7 +17,7 @@ use axum::{response::IntoResponse, routing::get, Router};
 use crate::config::{AppConfig, AppContext};
 use crate::error::{AppError, AppResult};
 use crate::graphql::{build_schema, XstreamSchema};
-use crate::request_context::extract_request_context;
+use crate::request_context::{extract_auth_identity, extract_request_context};
 use crate::services::ffmpeg_path::{resolve_ffmpeg_paths, FfmpegPaths};
 use crate::services::hw_accel::{resolve_hw_accel, HwAccelMode};
 
@@ -39,26 +39,48 @@ impl AppState {
 /// programmer typo, but propagating it through the type system means we
 /// catch it at startup with a clear `AppError::Cors`, not via panic.
 pub fn build_router(state: AppState) -> AppResult<Router> {
-    use async_graphql_axum::{GraphQL, GraphQLSubscription};
+    use async_graphql_axum::GraphQLSubscription;
     use axum::routing::MethodRouter;
 
-    // POST /graphql → query/mutation handler
-    // GET  /graphql → WebSocket upgrade for subscriptions (graphql-transport-ws)
+    // POST /graphql → custom handler that bridges axum extensions
+    //                 (RequestContext.user_id from extract_auth_identity)
+    //                 into async-graphql Data, so the `currentUser`
+    //                 resolver can read the verified identity.
+    // GET  /graphql → WebSocket upgrade for subscriptions
+    //                 (graphql-transport-ws). NOTE: alpha does NOT verify
+    //                 the JWT in the connection_init payload —
+    //                 async-graphql-axum 7.x pins axum 0.8 while the rest
+    //                 of the server is on axum 0.7, so a custom
+    //                 on_connection_init handler can't share types with
+    //                 the rest of the router. Subscription resolvers
+    //                 don't currently read RequestContext.user_id;
+    //                 tracked in docs/architecture/Identity/02-Session-And-Refresh.md
+    //                 §Known gaps.
     let graphql_method: MethodRouter<()> = MethodRouter::new()
-        .post_service(GraphQL::new(state.schema.clone()))
+        .post(routes::graphql_http::graphql_post)
         .get_service(GraphQLSubscription::new(state.schema.clone()))
         .options(|| async { axum::http::StatusCode::NO_CONTENT });
 
     let ctx = state.ctx.clone();
+    let schema = state.schema.clone();
     Ok(Router::new()
         .route("/healthz", get(healthz))
         .route("/graphql", graphql_method)
         .route("/stream/:job_id", get(routes::stream::stream_handler))
         .route("/poster/:basename", get(routes::poster::get_poster))
-        // Pass AppContext via Extension rather than State so we don't have
-        // to thread an `S` type parameter through every router builder.
+        // Layer order (axum `.layer()` adds OUTSIDE the existing stack, so
+        // the LAST .layer() call wraps everything):
+        //   inbound: cors → extract_request_context → Extension(AppContext)
+        //           → extract_auth_identity → handler
+        // extract_auth_identity must run INSIDE Extension so it can pull
+        // the JWKS cache, and INSIDE extract_request_context so its
+        // `span.record("user.id", …)` lands on the http.request span.
+        .layer(axum::middleware::from_fn(extract_auth_identity))
+        // Pass AppContext + Schema via Extension. graphql_post pulls the
+        // schema; extract_auth_identity pulls AppContext for its JWKS cache.
+        .layer(axum::Extension(schema))
         .layer(axum::Extension(ctx))
-        // Single outer middleware: extract W3C traceparent, build RequestContext,
+        // Outer middleware: extract W3C traceparent, build RequestContext,
         // create a per-request `http.request` span whose parent is the inbound
         // OTel context. Spans created downstream inherit it via Instrument.
         // We deliberately do NOT use `tower_http::TraceLayer`; its spans don't
@@ -220,6 +242,19 @@ pub async fn run(config: ServerConfig) -> AppResult<()> {
         tracing::info!("OMDb auto-match enabled");
     } else {
         tracing::info!("OMDb auto-match disabled — set OMDB_API_KEY env or omdbApiKey setting");
+    }
+
+    // Supabase JWKS URL — when set, the auth middleware verifies inbound
+    // Bearer JWTs against these public keys and stamps `user.id` on the
+    // request span. When unset, identity is always `None` and Seq events
+    // land unattributed (acceptable for un-credentialled dev shells).
+    app_config.supabase_jwks_url = std::env::var("SUPABASE_JWKS_URL")
+        .ok()
+        .filter(|s| !s.is_empty());
+    if app_config.supabase_jwks_url.is_some() {
+        tracing::info!("Supabase identity verification enabled");
+    } else {
+        tracing::info!("Supabase identity disabled — set SUPABASE_JWKS_URL to enable");
     }
 
     let ctx = AppContext::new(db, app_config, Arc::new(ffmpeg_paths), hw_accel);

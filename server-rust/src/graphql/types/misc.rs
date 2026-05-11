@@ -2,6 +2,15 @@
 
 use async_graphql::{SimpleObject, ID};
 
+/// The currently-authenticated user. Sourced from the verified JWT's
+/// `sub` claim — `id` is the Supabase UUID. `null` query result means no
+/// valid `Authorization` header was attached (or `SUPABASE_JWKS_URL` is
+/// not configured); resolvers do not gate on this in alpha.
+#[derive(SimpleObject, Clone)]
+pub struct CurrentUser {
+    pub id: ID,
+}
+
 #[derive(SimpleObject, Clone)]
 pub struct DirEntry {
     pub name: String,
