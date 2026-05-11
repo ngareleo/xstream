@@ -48,65 +48,20 @@ systemctl enable --now docker
 
 ## The Docker Compose stack
 
-Place at `/home/ops/seq/docker-compose.yml`:
-
-```yaml
-services:
-  seq:
-    image: datalust/seq:latest
-    container_name: seq
-    restart: unless-stopped
-    environment:
-      ACCEPT_EULA: "Y"
-      # Initial admin password is set on first boot only. Hash with:
-      #   docker run --rm datalust/seq config hash <password>
-      SEQ_FIRSTRUN_ADMINPASSWORDHASH: "<hash-from-above>"
-    volumes:
-      - seq-data:/data
-    ports:
-      # Bind to loopback only — Caddy proxies in front.
-      - "127.0.0.1:5341:80"
-
-  caddy:
-    image: caddy:2-alpine
-    container_name: caddy
-    restart: unless-stopped
-    ports:
-      - "80:80"
-      - "443:443"
-      - "443:443/udp"
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy-data:/data
-      - caddy-config:/config
-    depends_on:
-      - seq
-
-volumes:
-  seq-data:
-  caddy-data:
-  caddy-config:
-```
-
-`Caddyfile` (next to the compose file):
-
-```caddyfile
-seq.<your-domain> {
-    reverse_proxy seq:80
-    encode zstd gzip
-    # Caddy auto-renews the cert. Logs go to docker logs caddy.
-}
-```
-
-Bring it up:
+The executable form of this section lives at [`seq/`](../../../seq/) at the repo root — `docker-compose.yml` + `Caddyfile.template` + a bootstrap `setup.sh`. On the droplet:
 
 ```bash
-cd /home/ops/seq
-docker compose up -d
-docker compose logs -f caddy   # watch the cert acquire
+git clone https://github.com/<owner>/xstream
+cd xstream/seq
+cp .env.example .env
+$EDITOR .env       # set SEQ_HOSTNAME + SEQ_ADMIN_PASSWORD_HASH
+./setup.sh         # validates env, installs Docker if missing, renders Caddyfile,
+                   # brings the stack up, waits for the Let's Encrypt cert
 ```
 
-Caddy obtains a Let's Encrypt cert on first boot. If DNS hasn't propagated yet you'll see `acme: error: …` — wait for DNS, then `docker compose restart caddy`.
+What `setup.sh` does and does not do is detailed in [`../../../seq/README.md`](../../../seq/README.md). The short version: it's a non-idempotent bootstrap that assumes the droplet is already provisioned, DNS is in place, and the firewall allows 80/443. It does not provision the droplet, manage DNS, touch SSH, or mint Seq API keys — those are operator concerns covered in this runbook.
+
+If DNS hasn't propagated when Caddy starts, the ACME challenge fails. `setup.sh` detects this in the Caddy logs and exits with a hint; fix DNS, then `docker compose restart caddy` and `./setup.sh` again (it's safe to re-run after the env is correct).
 
 ## First-run Seq setup
 
@@ -134,19 +89,7 @@ The same four vars are baked into release Tauri bundles via the CI build env —
 
 ## Operator access patterns
 
-Two ways the operator (the developer) inspects telemetry:
-
-1. **Public UI.** Browse to `https://seq.<your-domain>`, sign in as admin. This is the everyday inspection path.
-2. **SSH tunnel.** For box-level work (Docker logs, container restart, retention adjustment, on-call debugging when the cert is misbehaving):
-
-   ```bash
-   ssh -L 5341:localhost:5341 ops@<droplet-ip>
-   # In another terminal:
-   open http://localhost:5341
-   docker compose logs -f seq      # also via SSH session
-   ```
-
-   The tunnel reaches the loopback-bound Seq port, bypassing Caddy. Useful when the public hostname is broken or the cert is in a bad state.
+Two ways the operator (the developer) inspects telemetry: the public UI for everyday work, and an SSH tunnel for box-level operations when the public hostname is misbehaving. Both — plus per-developer access policy, dev-traffic filtering, and Seq-down fallback to local Seq — are documented in [`05-Accessing-Remote-Seq.md`](05-Accessing-Remote-Seq.md).
 
 ## Steady-state operations
 
@@ -197,18 +140,18 @@ Caddy auto-renews ~30 days before expiry. Verify via `docker compose logs caddy 
 ## Risks and trade-offs
 
 - **Single-node, no HA.** A droplet outage means a telemetry gap, not user-visible breakage. Acceptable for v1.
-- **Embedded ingestion key in shipped binaries.** A leaked key allows arbitrary parties to spam our Seq. Mitigations: per-key Seq rate limit, easy rotation. Per-install enrollment is a future-stretch (see "Open questions" below).
+- **Embedded ingestion key in shipped binaries.** A leaked key allows arbitrary parties to spam our Seq. Threat model, mitigations (Ingest-scope-only key, per-key rate limit, easy rotation, separate keys per shipping component), and explicit alpha non-goals are documented in [`04-Telemetry-Ingestion-Security.md`](04-Telemetry-Ingestion-Security.md).
 - **Always-on telemetry.** Defensible only because of the redaction policy upstream — the privacy disclosure at [`../../product/Privacy/00-Telemetry.md`](../../product/Privacy/00-Telemetry.md) is load-bearing for this.
-- **Operator login = single point.** One admin user; loss of that password = restore from backup or re-provision. Document the password storage in the team password manager.
+- **Operator login = single point.** One admin user; loss of that password = restore from backup or re-provision. Document the password storage in the team password manager. Per-developer access policy is in [`05-Accessing-Remote-Seq.md` § Per-developer access policy](05-Accessing-Remote-Seq.md#per-developer-access-policy).
 
 ## Open questions
 
 These are recorded so the runbook doesn't lose them when the migration playbook retires.
 
-1. **Per-install API-key enrollment.** Right now every shipped binary embeds the same ingestion key. A future "first-run handshake" flow could mint a per-install key, capping blast radius if any one binary is reverse-engineered. Defer until a leak actually happens.
+1. **Per-install API-key enrollment.** Right now every shipped binary embeds the same ingestion key. A future "first-run handshake" could mint a per-install key, capping blast radius if any one binary is reverse-engineered. Authoritative discussion (threat model, why we defer for alpha, when to revisit) lives in [`04-Telemetry-Ingestion-Security.md` § Open questions](04-Telemetry-Ingestion-Security.md#open-questions).
 2. **Geographic placement of the droplet.** Operator UX is most sensitive — pick the region closest to the developer, not the users (ingestion latency doesn't matter; UI latency does).
 3. **Retention vs disk budget calibration.** 14 days is a guess. Re-evaluate after a month of real ingest with the disk usage graph in DO.
-4. **Multi-operator access.** Today this assumes one operator. If teammates need read-only access, create non-admin Seq users with read-only project permissions; do not share the admin login.
+4. **Multi-operator access.** Today this assumes one operator. Per-developer access policy and the path to read-only-per-teammate Seq users is documented in [`05-Accessing-Remote-Seq.md` § Per-developer access policy](05-Accessing-Remote-Seq.md#per-developer-access-policy).
 5. **Sentry-style crash reporting.** Out of scope here; tracked alongside the open question in [`00-Tauri-Desktop-Shell.md`](00-Tauri-Desktop-Shell.md). Crash reports are not a Seq concern.
 
 ## Appendix: bring-up checklist
@@ -219,15 +162,13 @@ These are recorded so the runbook doesn't lose them when the migration playbook 
 [ ] Cloud Firewall: 22 / 80 / 443 inbound only
 [ ] Non-root ops user with sudo + docker group, key-only SSH
 [ ] Root SSH disabled
-[ ] Docker installed, daemon running
-[ ] /home/ops/seq/docker-compose.yml + Caddyfile in place
-[ ] SEQ_FIRSTRUN_ADMINPASSWORDHASH set, password stashed in pw manager
-[ ] docker compose up -d → both containers Up
-[ ] Caddy obtained Let's Encrypt cert (logs confirm)
+[ ] git clone <repo> on droplet; cd xstream/seq
+[ ] cp .env.example .env; fill in SEQ_HOSTNAME + SEQ_ADMIN_PASSWORD_HASH
+[ ] ./setup.sh → both containers Up + Let's Encrypt cert obtained
 [ ] Seq UI reachable at https://seq.<your-domain>
-[ ] Admin password rotated on first login
-[ ] Ingestion API key created (Ingest scope, ~10k/min rate limit)
-[ ] Retention set to 14 days
+[ ] Admin password rotated on first login (manual UI step)
+[ ] Ingestion API key created — Ingest scope, ~10k/min rate limit (manual UI step)
+[ ] Retention set to 14 days (manual UI step)
 [ ] xstream env vars updated, smoke trace lands in remote Seq
 [ ] Backup cron / weekly snapshot scheduled
 ```
