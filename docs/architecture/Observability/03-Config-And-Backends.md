@@ -16,39 +16,43 @@
 | `PUBLIC_OTEL_ENDPOINT` | `/ingest/otlp` | OTLP base URL for browser. Relative path works in dev (proxied). Use full URL in prod. |
 | `PUBLIC_OTEL_HEADERS` | _(empty)_ | Comma-separated `Key=Value` headers for browser OTLP export |
 
-## Production backend: self-hosted Seq
+## Production backend: Axiom
 
-Production Tauri installs ship telemetry to a self-hosted Seq instance running on a DigitalOcean droplet behind Caddy + Let's Encrypt. The bring-up runbook is at [`../Deployment/03-Remote-Seq-DigitalOcean.md`](../Deployment/03-Remote-Seq-DigitalOcean.md).
+Production Tauri installs ship telemetry to a single Axiom dataset (`xstream`). Axiom accepts OTLP/HTTP natively, so the exporters above post directly with no collector in front. The operational runbook (account setup, datasets, API tokens, build-env wiring, rotation, bring-up checklist) is at [`../Deployment/04-Axiom-Production-Backend.md`](../Deployment/04-Axiom-Production-Backend.md). Threat model and embedded-token safeguards live at [`../Deployment/05-Telemetry-Ingestion-Security.md`](../Deployment/05-Telemetry-Ingestion-Security.md).
 
 Env-var contract (baked into the release Tauri bundle via the CI build env):
 
 ```bash
 # Server (xstream-server-rust running inside the Tauri shell)
-OTEL_EXPORTER_OTLP_ENDPOINT=https://seq.<your-domain>/ingest/otlp
-OTEL_EXPORTER_OTLP_HEADERS=X-Seq-ApiKey=<ingestion-api-key>
+OTEL_EXPORTER_OTLP_ENDPOINT=https://api.axiom.co
+OTEL_EXPORTER_OTLP_HEADERS=Authorization=Bearer <xstream-server-token>,X-Axiom-Dataset=xstream
 
 # Client (Rsbuild bakes PUBLIC_* into the JS bundle at build time)
-PUBLIC_OTEL_ENDPOINT=https://seq.<your-domain>/ingest/otlp
-PUBLIC_OTEL_HEADERS=X-Seq-ApiKey=<ingestion-api-key>
+PUBLIC_OTEL_ENDPOINT=https://api.axiom.co
+PUBLIC_OTEL_HEADERS=Authorization=Bearer <xstream-client-token>,X-Axiom-Dataset=xstream
 ```
 
-The same ingestion API key works for both server and browser clients (Seq API keys are per-application bearer tokens with rate limits, not per-user credentials). When the resolved endpoint is non-localhost, the PII-redaction layer activates automatically — see [`01-Logging-Policy.md` § PII Redaction](01-Logging-Policy.md#pii-redaction).
+Two distinct **Basic API tokens** (ingest-only, dataset-scoped) — one per surface — so either side can be revoked without taking down the other. When the resolved endpoint is non-localhost, the PII-redaction layer activates automatically — see [`01-Logging-Policy.md` § PII Redaction](01-Logging-Policy.md#pii-redaction).
 
-### Alternative: Axiom or another OTLP SaaS
+### Alternative: Grafana Cloud, Honeycomb, self-hosted Seq, etc.
 
-The env-var contract is provider-agnostic — to route telemetry to Axiom instead of self-hosted Seq:
+The env-var contract is provider-agnostic — Axiom is just the values we ship at alpha. Any OTLP/HTTP backend works by swapping the endpoint and the auth header:
 
 ```bash
-OTEL_EXPORTER_OTLP_ENDPOINT=https://api.axiom.co
-OTEL_EXPORTER_OTLP_HEADERS=Authorization=Bearer <axiom-token>,X-Axiom-Dataset=xstream-prod
+# Grafana Cloud OTLP
+OTEL_EXPORTER_OTLP_ENDPOINT=https://otlp-gateway-<region>.grafana.net/otlp
+OTEL_EXPORTER_OTLP_HEADERS=Authorization=Basic <base64 user:token>
 
-PUBLIC_OTEL_ENDPOINT=https://api.axiom.co
-PUBLIC_OTEL_HEADERS=Authorization=Bearer <axiom-token>,X-Axiom-Dataset=xstream-prod
+# Honeycomb
+OTEL_EXPORTER_OTLP_ENDPOINT=https://api.honeycomb.io
+OTEL_EXPORTER_OTLP_HEADERS=x-honeycomb-team=<api-key>,x-honeycomb-dataset=xstream
 ```
 
-Axiom accepts OTLP/HTTP natively. Grafana Cloud, Honeycomb, Jaeger, etc. follow the same pattern — change the endpoint and headers. The trade-off vs self-hosted Seq is recorded in [`../Deployment/03-Remote-Seq-DigitalOcean.md` § Why self-hosted Seq](../Deployment/03-Remote-Seq-DigitalOcean.md#why-self-hosted-seq-vs-axiom--saas).
+Self-hosted Seq behind Caddy + Let's Encrypt is also an option (we ran the spike for it; the data footprint did not justify the operational cost — see commit history on `docs/remote-seq` for the abandoned runbook).
 
-## Seq API key setup
+## Local dev: Seq API key setup
+
+Production points at Axiom; local dev still runs an embedded Seq container so engineers see full unredacted attribute content while debugging. This section is for the local dev flow only — production tokens follow the runbook at [`../Deployment/04-Axiom-Production-Backend.md`](../Deployment/04-Axiom-Production-Backend.md).
 
 1. Run `bun run seq:start` — this auto-generates `.seq-credentials` on first run (gitignored, project root) and boots the container. Open [http://localhost:5341](http://localhost:5341).
 2. Sign in with the username + password from `.seq-credentials`:

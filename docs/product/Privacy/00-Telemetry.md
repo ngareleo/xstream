@@ -36,11 +36,11 @@ For the engineering policy this rule is implemented against, see [`../../archite
 
 ## Where the data is sent
 
-To a self-hosted [Seq](https://datalust.co/seq) instance running on a server we operate. No third-party telemetry processor is involved. The server is documented at [`../../architecture/Deployment/03-Remote-Seq-DigitalOcean.md`](../../architecture/Deployment/03-Remote-Seq-DigitalOcean.md).
+To a single dataset on [Axiom](https://axiom.co), a hosted OpenTelemetry backend. The OTel exporter inside the app posts directly to Axiom over HTTPS — no other third-party processor sits in front of it. The dataset is owned by us; only the small group of maintainers listed in the team has access to query it. The operational runbook lives at [`../../architecture/Deployment/04-Axiom-Production-Backend.md`](../../architecture/Deployment/04-Axiom-Production-Backend.md), and the engineering safeguards around the ingestion endpoint are documented at [`../../architecture/Deployment/05-Telemetry-Ingestion-Security.md`](../../architecture/Deployment/05-Telemetry-Ingestion-Security.md).
 
 ## How long it's kept
 
-**14 days.** After that, telemetry events expire and are deleted by Seq's built-in retention. Backups (which exist for disaster recovery) follow the same window.
+**30 days.** After that, telemetry events expire and are deleted by Axiom's built-in retention. We do not back up telemetry data — once it ages out, it is gone.
 
 ## In an offline app
 

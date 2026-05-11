@@ -1,6 +1,6 @@
 # Observability Architecture
 
-xstream uses OpenTelemetry (OTel) for structured logs and distributed traces. The telemetry backend is configured entirely through environment variables — switching the production sink (e.g. from self-hosted Seq to Axiom or Grafana Cloud) requires no code changes.
+xstream uses OpenTelemetry (OTel) for structured logs and distributed traces. The telemetry backend is configured entirely through environment variables — switching the production sink (e.g. from Axiom to Grafana Cloud or back to a self-hosted Seq) requires no code changes.
 
 ```
 Browser (client)
@@ -8,8 +8,8 @@ Browser (client)
     BatchSpanProcessor → OTLPTraceExporter  → POST <endpoint>/v1/traces
     BatchLogRecordProcessor → OTLPLogExporter → POST <endpoint>/v1/logs
               │
-              │  Dev: Rsbuild proxy /ingest/otlp → http://localhost:5341
-              │  Prod (packaged Tauri): PUBLIC_OTEL_ENDPOINT baked at build time
+              │  Dev: Rsbuild proxy /ingest/otlp → http://localhost:5341 (local Seq)
+              │  Prod (packaged Tauri): PUBLIC_OTEL_ENDPOINT baked at build time → Axiom
               │
               ▼
 Server (Rust)
@@ -18,10 +18,10 @@ Server (Rust)
     PeriodicBatchLogProcessor  → OTLPExporter  → OTEL_EXPORTER_OTLP_ENDPOINT/v1/logs
               │
               ▼
-        Seq local (dev)  /  Seq self-hosted on a droplet (prod)
+        Local Seq (dev)  /  Axiom (prod)
 ```
 
-The production sink is a self-hosted Seq instance — same image as local dev, just behind Caddy + Let's Encrypt on a DigitalOcean droplet. See [`../Deployment/03-Remote-Seq-DigitalOcean.md`](../Deployment/03-Remote-Seq-DigitalOcean.md) for the bring-up runbook and [`03-Config-And-Backends.md`](03-Config-And-Backends.md) for the env-var contract. Axiom remains a documented drop-in alternative for projects that prefer a SaaS sink.
+The production sink is [Axiom](https://axiom.co) — a hosted OTLP/HTTP backend. We use it for the alpha because our data footprint (~180 MB/month) fits comfortably inside the free tier and we avoid the operational overhead of self-hosting. See [`../Deployment/04-Axiom-Production-Backend.md`](../Deployment/04-Axiom-Production-Backend.md) for the bring-up runbook, [`../Deployment/05-Telemetry-Ingestion-Security.md`](../Deployment/05-Telemetry-Ingestion-Security.md) for the threat model around the embedded ingestion tokens, and [`03-Config-And-Backends.md`](03-Config-And-Backends.md) for the env-var contract. Grafana Cloud, Honeycomb, and self-hosted Seq remain documented drop-in alternatives.
 
 When the resolved endpoint is non-localhost, a redaction layer scrubs PII attributes before export — see [`01-Logging-Policy.md` § PII Redaction](01-Logging-Policy.md#pii-redaction). Local dev exports unredacted so engineers see full attribute content while debugging.
 
