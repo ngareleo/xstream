@@ -6,33 +6,60 @@
 
 | Variable | Default | Description |
 |---|---|---|
-| `OTEL_EXPORTER_OTLP_ENDPOINT` | `http://localhost:5341/ingest/otlp` | OTLP base URL (no trailing slash, no `/v1/...` path) |
-| `OTEL_EXPORTER_OTLP_HEADERS` | _(empty)_ | Comma-separated `Key=Value` headers, e.g. `X-Seq-ApiKey=abc123` |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | `http://localhost:5341/ingest/otlp` | Default OTLP base URL (no trailing slash, no `/v1/...` path). Points at local Seq in dev. |
+| `OTEL_EXPORTER_OTLP_HEADERS` | _(empty)_ | Comma-separated `Key=Value` headers for the default endpoint, e.g. `X-Seq-ApiKey=abc123`. |
+| `OTEL_EXPORTER_OTLP_AXIOM_ENDPOINT` | _(empty)_ | OTLP base URL used when `flag.useAxiomExporter` is ON. Typically `https://api.axiom.co`. |
+| `OTEL_EXPORTER_OTLP_AXIOM_HEADERS` | _(empty)_ | Comma-separated `Key=Value` headers for the Axiom endpoint, e.g. `Authorization=Bearer <token>,X-Axiom-Dataset=xstream`. |
+| `XSTREAM_VARIANT` | _(unset → "dev")_ | Drives the prod/dev build split (`03-Build-Variants.md`) and the `deployment.environment` resource attribute on every span (`development` vs `production`). |
 
 ### Client (baked at build time by Rsbuild)
 
 | Variable | Default | Description |
 |---|---|---|
-| `PUBLIC_OTEL_ENDPOINT` | `/ingest/otlp` | OTLP base URL for browser. Relative path works in dev (proxied). Use full URL in prod. |
-| `PUBLIC_OTEL_HEADERS` | _(empty)_ | Comma-separated `Key=Value` headers for browser OTLP export |
+| `PUBLIC_OTEL_ENDPOINT` | `/ingest/otlp` | Default OTLP base URL for browser. Relative path works in dev (proxied). |
+| `PUBLIC_OTEL_HEADERS` | _(empty)_ | Comma-separated `Key=Value` headers for the default endpoint. |
+| `PUBLIC_OTEL_AXIOM_ENDPOINT` | _(empty)_ | OTLP base URL used when `flag.useAxiomExporter` is ON. Typically `https://api.axiom.co`. |
+| `PUBLIC_OTEL_AXIOM_HEADERS` | _(empty)_ | Comma-separated `Key=Value` headers for the Axiom endpoint. |
 
-## Switching to a production backend
+The `flag.useAxiomExporter` feature flag in [`../../client/Feature-Flags/00-Registry.md`](../../client/Feature-Flags/00-Registry.md) chooses between the default and `*_AXIOM_*` pair at boot. Client picks up the change on the next page load; the server reads the flag from SQLite at startup and therefore requires an app restart. The flag is dead-code-eliminated in production builds — release bundles always use the values that CI bakes into `PUBLIC_OTEL_ENDPOINT` / `OTEL_EXPORTER_OTLP_ENDPOINT`.
 
-To route telemetry to Axiom in production, update the env vars (no code changes needed):
+## Production backend: Axiom
+
+Production Tauri installs ship telemetry to a single Axiom dataset (`xstream`). Axiom accepts OTLP/HTTP natively, so the exporters above post directly with no collector in front. The operational runbook (account setup, datasets, API tokens, build-env wiring, rotation, bring-up checklist) is at [`../Deployment/04-Axiom-Production-Backend.md`](../Deployment/04-Axiom-Production-Backend.md). Threat model and embedded-token safeguards live at [`../Deployment/05-Telemetry-Ingestion-Security.md`](../Deployment/05-Telemetry-Ingestion-Security.md).
+
+Env-var contract (baked into the release Tauri bundle via the CI build env):
 
 ```bash
-# Server
+# Server (xstream-server-rust running inside the Tauri shell)
 OTEL_EXPORTER_OTLP_ENDPOINT=https://api.axiom.co
-OTEL_EXPORTER_OTLP_HEADERS=Authorization=Bearer <axiom-token>,X-Axiom-Dataset=xstream-prod
+OTEL_EXPORTER_OTLP_HEADERS=Authorization=Bearer <xstream-server-token>,X-Axiom-Dataset=xstream
 
-# Client (set before running bun run build)
+# Client (Rsbuild bakes PUBLIC_* into the JS bundle at build time)
 PUBLIC_OTEL_ENDPOINT=https://api.axiom.co
-PUBLIC_OTEL_HEADERS=Authorization=Bearer <axiom-token>,X-Axiom-Dataset=xstream-prod
+PUBLIC_OTEL_HEADERS=Authorization=Bearer <xstream-client-token>,X-Axiom-Dataset=xstream
 ```
 
-Axiom accepts OTLP/HTTP natively. Other OTLP-compatible backends (Grafana Cloud, Honeycomb, Jaeger, etc.) follow the same pattern — just change the endpoint and headers.
+Two distinct **Basic API tokens** (ingest-only, dataset-scoped) — one per surface — so either side can be revoked without taking down the other. When the resolved endpoint is non-localhost, the PII-redaction layer activates automatically — see [`01-Logging-Policy.md` § PII Redaction](01-Logging-Policy.md#pii-redaction).
 
-## Seq API key setup
+### Alternative: Grafana Cloud, Honeycomb, self-hosted Seq, etc.
+
+The env-var contract is provider-agnostic — Axiom is just the values we ship at alpha. Any OTLP/HTTP backend works by swapping the endpoint and the auth header:
+
+```bash
+# Grafana Cloud OTLP
+OTEL_EXPORTER_OTLP_ENDPOINT=https://otlp-gateway-<region>.grafana.net/otlp
+OTEL_EXPORTER_OTLP_HEADERS=Authorization=Basic <base64 user:token>
+
+# Honeycomb
+OTEL_EXPORTER_OTLP_ENDPOINT=https://api.honeycomb.io
+OTEL_EXPORTER_OTLP_HEADERS=x-honeycomb-team=<api-key>,x-honeycomb-dataset=xstream
+```
+
+Self-hosted Seq behind Caddy + Let's Encrypt is also an option (we ran the spike for it; the data footprint did not justify the operational cost — see commit history on `docs/remote-seq` for the abandoned runbook).
+
+## Local dev: Seq API key setup
+
+Production points at Axiom; local dev still runs an embedded Seq container so engineers see full unredacted attribute content while debugging. This section is for the local dev flow only — production tokens follow the runbook at [`../Deployment/04-Axiom-Production-Backend.md`](../Deployment/04-Axiom-Production-Backend.md).
 
 1. Run `bun run seq:start` — this auto-generates `.seq-credentials` on first run (gitignored, project root) and boots the container. Open [http://localhost:5341](http://localhost:5341).
 2. Sign in with the username + password from `.seq-credentials`:

@@ -38,7 +38,13 @@ Flags are grouped by `category` in the Settings → Flags tab.
 
 For the full tradeoff explainer (mental model, memory table per resolution, chunks vs segments vs buffer), see [`Streaming Protocol → Hysteresis: tuning the gap`](./Streaming%20Protocol.md#hysteresis-tuning-the-gap).
 
-### telemetry, ui
+### telemetry
+
+| Key | Type | Default | Range | Purpose |
+|---|---|---|---|---|
+| `flag.useAxiomExporter` | boolean | `false` | — | Routes OTel traces and logs to the team's Axiom dataset (`xstream`) instead of the default local Seq endpoint. **Client picks up the change on next page reload; the in-process Rust server reads the flag from `user_settings` at boot, so it only takes effect after an app restart.** Both sides must align or cross-boundary traces split between backends. Tagged with `deployment.environment=development` resource attribute so dev traffic is filterable in the shared dataset. Tree-shaken in production builds — release bundles always send to Axiom unconditionally. See [`../../architecture/Deployment/04-Axiom-Production-Backend.md`](../../architecture/Deployment/04-Axiom-Production-Backend.md). |
+
+### ui
 
 (No experimental flags currently active. Removed `flag.devForceShortChunkAtZero` in PR #59 when the ramp-controller landed — the new model's cold-start parity across all anchor points renders the escape hatch obsolete.)
 

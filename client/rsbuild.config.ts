@@ -8,6 +8,9 @@ import { pluginReact } from "@rsbuild/plugin-react";
 const dirname =
   typeof __dirname !== "undefined" ? __dirname : path.dirname(fileURLToPath(import.meta.url));
 
+// Dev proxy upstream for /relay/axiom. See docs/architecture/Deployment/04-Axiom-Production-Backend.md.
+const AXIOM_PROXY_TARGET = process.env.PUBLIC_OTEL_AXIOM_ENDPOINT ?? "https://api.axiom.co";
+
 export default defineConfig({
   plugins: [
     pluginReact(),
@@ -54,6 +57,12 @@ export default defineConfig({
       // In production the client bundle is configured to POST directly to the
       // cloud OTLP endpoint (e.g. Axiom) via PUBLIC_OTEL_ENDPOINT.
       "/ingest/otlp": { target: "http://localhost:5341", changeOrigin: true },
+      // Same-origin Axiom relay. See docs/architecture/Deployment/04-Axiom-Production-Backend.md § "Dev flow".
+      "/relay/axiom": {
+        target: AXIOM_PROXY_TARGET,
+        changeOrigin: true,
+        pathRewrite: { "^/relay/axiom": "" },
+      },
       "/stream": {
         target: "http://localhost:3001",
         // Streaming responses are long-lived — disable proxy timeout so the

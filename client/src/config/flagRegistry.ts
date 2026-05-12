@@ -39,6 +39,7 @@ export const FLAG_KEYS = {
   experimentalBuffer: "flag.experimentalBuffer",
   bufferForwardTargetS: "config.bufferForwardTargetS",
   bufferForwardResumeS: "config.bufferForwardResumeS",
+  useAxiomExporter: "flag.useAxiomExporter",
 } as const;
 
 export const FLAG_REGISTRY: readonly FlagDescriptor[] = [
@@ -73,5 +74,14 @@ export const FLAG_REGISTRY: readonly FlagDescriptor[] = [
     min: 0,
     max: 60,
     step: 1,
+  },
+  {
+    key: FLAG_KEYS.useAxiomExporter,
+    name: "Route telemetry to Axiom (dev)",
+    description:
+      "Sends OTel traces and logs to the team's Axiom dataset instead of local Seq. Requires app restart so the in-process Rust server picks up the change. No effect in production builds — those always send to Axiom.",
+    valueType: "boolean",
+    defaultValue: false,
+    category: "telemetry",
   },
 ];

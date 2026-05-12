@@ -10,6 +10,8 @@ The Rust server runs **in-process** inside the Tauri shell on a free `127.0.0.1`
 | [`01-Packaging-Internals.md`](01-Packaging-Internals.md) | Internals walkthrough: source on disk → `cargo` + `tauri build` → OS-specific installer → installed app layout per OS → `tauri-plugin-updater` mechanics. Corrects the Electron-derived intuition that desktop apps ship a bundled browser engine and run their server logic in a sidecar. |
 | [`02-Shipping-FFmpeg.md`](02-Shipping-FFmpeg.md) | How `jellyfin-ffmpeg` gets bundled — manifest pinning, the portable strategy used for every OS, where binaries live in the Tauri resource tree (`resources/ffmpeg/<plat>/`), how `src-tauri/src/ffmpeg_path.rs` resolves them at runtime, build-time SHA256 verification, segment-cache invalidation on manifest bumps, and GPL compliance. |
 | [`03-Build-Variants.md`](03-Build-Variants.md) | Prod/dev artifact split driven by `XSTREAM_VARIANT` — separate bundle identity for side-by-side install, client strip via `IS_DEV_BUILD` DefinePlugin + `devChunk` helper (and why the env check can't move into the helper), server strip via the `dev-features` Cargo feature on `xstream-server` and `xstream-tauri`, migration backward-compat. |
+| [`04-Axiom-Production-Backend.md`](04-Axiom-Production-Backend.md) | Axiom (hosted OTel backend) for production telemetry — account + dataset setup, ingest-only API tokens, build-env wiring, dev-time access, token rotation, free-tier headroom, and the bring-up checklist. |
+| [`05-Telemetry-Ingestion-Security.md`](05-Telemetry-Ingestion-Security.md) | Threat model for the embedded ingestion tokens in distributed Tauri bundles — defence in depth, what we are NOT doing for alpha (per-install enrollment, mTLS, POW), tripwires. |
 
 ## What's still open
 
