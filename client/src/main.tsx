@@ -1,16 +1,5 @@
-// Bootstrap order is load-bearing:
-//
-//  1. Fetch `flag.useAxiomExporter` from the server (dev only) — telemetry
-//     init must know which OTLP endpoint to target. localStorage isn't a
-//     reliable source on first page load (a fresh browser profile has it
-//     empty even if the SQLite flag is ON), so we synchronously block on
-//     a one-shot GraphQL query before initialising.
-//
-//  2. `initTelemetry()` — must run before any Relay/StreamingService fetch
-//     so FetchInstrumentation has patched `window.fetch`.
-//
-//  3. Render — Relay then issues its first request through the patched
-//     fetch with the correctly-configured OTLP exporter.
+// Bootstrap order: flag fetch → initTelemetry → render. See
+// docs/architecture/Deployment/04-Axiom-Production-Backend.md § "Bootstrap timing".
 
 import "./styles/global.css";
 import "./styles/shared.css";
@@ -64,8 +53,7 @@ async function bootstrapTelemetryFlag(): Promise<void> {
       await resp.json();
     hydrateFlags(json?.data?.settings ?? []);
   } catch {
-    // Best-effort. If the server is unreachable during boot the exporter
-    // falls back to its default endpoint — same as a fresh install.
+    // Best-effort — falls back to default endpoint on failure.
   }
 }
 

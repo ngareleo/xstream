@@ -32,16 +32,12 @@ function parseHeadersEnv(raw: string | undefined): Record<string, string> {
   );
 }
 
-// PUBLIC_ prefix is required for Rsbuild to expose env vars to the browser bundle.
-// Default to the Rsbuild dev proxy path so no extra config is needed in dev.
+// PUBLIC_ prefix required for Rsbuild to expose env vars to the browser bundle.
 const defaultEndpoint =
   (import.meta.env.PUBLIC_OTEL_ENDPOINT as string | undefined) ?? "/ingest/otlp";
 const defaultHeaders = parseHeadersEnv(import.meta.env.PUBLIC_OTEL_HEADERS as string | undefined);
-// Axiom path. In DEV builds we never POST directly to *.axiom.co from the
-// browser — that triggers CORS preflight which Axiom's edge endpoint rejects
-// for `http://localhost:5173`. Instead we POST to same-origin /relay/axiom/...
-// and let Rsbuild's dev proxy forward server-to-server. In PROD builds the
-// embedded URL goes direct (Tauri's tauri://localhost origin is fine).
+// Dev posts to same-origin /relay/axiom to bypass CORS. See
+// docs/architecture/Deployment/04-Axiom-Production-Backend.md § "Dev flow".
 const axiomEndpoint = IS_DEV_BUILD
   ? "/relay/axiom"
   : ((import.meta.env.PUBLIC_OTEL_AXIOM_ENDPOINT as string | undefined) ?? "");
@@ -60,9 +56,7 @@ export function initTelemetry(): void {
   if (initialized) return;
   initialized = true;
 
-  // Flag is dev-only — in prod builds `getFlag` returns the fallback and this
-  // branch dead-code-eliminates. Prod always uses the baked PUBLIC_OTEL_*
-  // values which CI sets to Axiom for release bundles.
+  // Dead-code-eliminated in prod builds via IS_DEV_BUILD; prod uses baked PUBLIC_OTEL_* values.
   const useAxiom = IS_DEV_BUILD && getFlag(FLAG_KEYS.useAxiomExporter, false);
   const endpoint = useAxiom && axiomEndpoint ? axiomEndpoint : defaultEndpoint;
   const headers = useAxiom && axiomEndpoint ? axiomHeaders : defaultHeaders;

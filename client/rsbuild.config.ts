@@ -8,12 +8,7 @@ import { pluginReact } from "@rsbuild/plugin-react";
 const dirname =
   typeof __dirname !== "undefined" ? __dirname : path.dirname(fileURLToPath(import.meta.url));
 
-// Dev-only proxy target for the Axiom relay. The browser can't POST OTLP
-// directly to `*.axiom.co` from a `http://localhost:5173` origin (CORS), so
-// when `flag.useAxiomExporter` is ON the client posts to same-origin
-// `/relay/axiom/v1/...` and Rsbuild forwards server-to-server to whatever
-// host PUBLIC_OTEL_AXIOM_ENDPOINT points at (loaded from repo-root .env via
-// the dev script).
+// Dev proxy upstream for /relay/axiom. See docs/architecture/Deployment/04-Axiom-Production-Backend.md.
 const AXIOM_PROXY_TARGET = process.env.PUBLIC_OTEL_AXIOM_ENDPOINT ?? "https://api.axiom.co";
 
 export default defineConfig({
@@ -62,11 +57,7 @@ export default defineConfig({
       // In production the client bundle is configured to POST directly to the
       // cloud OTLP endpoint (e.g. Axiom) via PUBLIC_OTEL_ENDPOINT.
       "/ingest/otlp": { target: "http://localhost:5341", changeOrigin: true },
-      // Axiom relay (dev only). Browser POSTs to same-origin /relay/axiom/v1/...
-      // so there is no CORS preflight; Rsbuild forwards to AXIOM_PROXY_TARGET
-      // server-to-server with the Authorization + X-Axiom-Dataset headers from
-      // the client bundle. See docs/architecture/Deployment/04-Axiom-Production-Backend.md
-      // § "Dev flow".
+      // Same-origin Axiom relay. See docs/architecture/Deployment/04-Axiom-Production-Backend.md § "Dev flow".
       "/relay/axiom": {
         target: AXIOM_PROXY_TARGET,
         changeOrigin: true,

@@ -2,7 +2,7 @@
   "name": "server-rust",
   "private": true,
   "scripts": {
-    "dev": "PATH=\"$HOME/.cargo/bin:$PATH\" DB_PATH=\"${DB_PATH:-$PWD/../tmp/xstream-rust.db}\" XSTREAM_PROJECT_ROOT=\"${XSTREAM_PROJECT_ROOT:-$PWD/..}\" bash -c '[ -f ../.env ] && { set -a; . ../.env; set +a; }; command -v cargo >/dev/null 2>&1 || { echo \"[server-rust] cargo not found on PATH (looked in $HOME/.cargo/bin too). Install rustup: https://rustup.rs\"; exit 127; }; echo \"[server-rust] starting xstream-server (cold build can take 30–60s)…\"; exec cargo run --manifest-path Cargo.toml'",
+    "dev": "PATH=\"$HOME/.cargo/bin:$PATH\" DB_PATH=\"${DB_PATH:-$PWD/../tmp/xstream-rust.db}\" XSTREAM_PROJECT_ROOT=\"${XSTREAM_PROJECT_ROOT:-$PWD/..}\" bash -c '[ -f ../.env ] && { set -a; . ../.env; set +a; }; command -v cargo >/dev/null 2>&1 || { echo \"[server-rust] cargo not found on PATH (looked in $HOME/.cargo/bin too). Install rustup: https://rustup.rs\"; exit 127; }; echo \"[server-rust] starting xstream-server (cold build can take 30–60s)…\"; exec cargo run --manifest-path Cargo.toml --features dev-features'",
     "build": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo build --release",
     "lint": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo build --quiet"
   }
