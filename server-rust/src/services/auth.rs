@@ -6,7 +6,7 @@ use std::time::{Duration, Instant};
 
 use jsonwebtoken::{
     decode, decode_header,
-    jwk::{AlgorithmParameters, JwkSet},
+    jwk::{AlgorithmParameters, EllipticCurve, JwkSet},
     Algorithm, DecodingKey, Validation,
 };
 use serde::Deserialize;
@@ -73,8 +73,14 @@ struct Inner {
 
 #[derive(Default)]
 struct CacheState {
-    keys: HashMap<String, DecodingKey>,
+    keys: HashMap<String, CachedKey>,
     fetched_at: Option<Instant>,
+}
+
+#[derive(Clone)]
+struct CachedKey {
+    algorithm: Algorithm,
+    key: DecodingKey,
 }
 
 impl JwksCache {
@@ -93,7 +99,7 @@ impl JwksCache {
         let header = decode_header(token).map_err(AuthError::MalformedHeader)?;
         let kid = header.kid.ok_or(AuthError::MissingKid)?;
 
-        let key = match self.get_key(&kid).await? {
+        let cached = match self.get_key(&kid).await? {
             Some(k) => k,
             None => {
                 // Force-refresh on miss in case the kid was just rotated.
@@ -104,14 +110,14 @@ impl JwksCache {
             }
         };
 
-        let mut validation = Validation::new(Algorithm::RS256);
+        let mut validation = Validation::new(cached.algorithm);
         validation.validate_aud = false;
-        let data =
-            decode::<Claims>(token, &key, &validation).map_err(AuthError::SignatureOrClaims)?;
+        let data = decode::<Claims>(token, &cached.key, &validation)
+            .map_err(AuthError::SignatureOrClaims)?;
         Ok(data.claims)
     }
 
-    async fn get_key(&self, kid: &str) -> Result<Option<DecodingKey>, AuthError> {
+    async fn get_key(&self, kid: &str) -> Result<Option<CachedKey>, AuthError> {
         let needs_refresh = {
             let state = self.inner.state.read().await;
             match state.fetched_at {
@@ -148,23 +154,48 @@ impl JwksCache {
                 source,
             })?;
 
-        let mut decoded = HashMap::with_capacity(jwks.keys.len());
-        for jwk in jwks.keys {
-            let Some(kid) = jwk.common.key_id.clone() else {
-                continue;
-            };
-            let key = match &jwk.algorithm {
-                AlgorithmParameters::RSA(rsa) => DecodingKey::from_rsa_components(&rsa.n, &rsa.e)
-                    .map_err(AuthError::KeyConversion)?,
-                _ => continue,
-            };
-            decoded.insert(kid, key);
-        }
+        let decoded = decode_jwks(jwks)?;
         let mut state = self.inner.state.write().await;
         state.keys = decoded;
         state.fetched_at = Some(Instant::now());
         Ok(())
     }
+}
+
+/// Decode every kid'd JWK in the set into a `CachedKey`. Unsupported
+/// algorithms / curves are silently skipped — a server with a mixed JWKS
+/// still verifies tokens signed with the supported subset.
+fn decode_jwks(jwks: JwkSet) -> Result<HashMap<String, CachedKey>, AuthError> {
+    let mut decoded = HashMap::with_capacity(jwks.keys.len());
+    for jwk in jwks.keys {
+        let Some(kid) = jwk.common.key_id.clone() else {
+            continue;
+        };
+        let cached = match &jwk.algorithm {
+            AlgorithmParameters::RSA(rsa) => CachedKey {
+                algorithm: Algorithm::RS256,
+                key: DecodingKey::from_rsa_components(&rsa.n, &rsa.e)
+                    .map_err(AuthError::KeyConversion)?,
+            },
+            AlgorithmParameters::EllipticCurve(ec) => {
+                let algorithm = match ec.curve {
+                    EllipticCurve::P256 => Algorithm::ES256,
+                    EllipticCurve::P384 => Algorithm::ES384,
+                    // P-521 isn't supported by ring (jsonwebtoken's backend),
+                    // and Ed25519 lands here as EdDSA — skip until needed.
+                    _ => continue,
+                };
+                CachedKey {
+                    algorithm,
+                    key: DecodingKey::from_ec_components(&ec.x, &ec.y)
+                        .map_err(AuthError::KeyConversion)?,
+                }
+            }
+            _ => continue,
+        };
+        decoded.insert(kid, cached);
+    }
+    Ok(decoded)
 }
 
 #[cfg(test)]
@@ -176,6 +207,66 @@ mod tests {
         let err = AuthError::MissingKid;
         let rendered = format!("{}", err);
         assert!(rendered.contains("kid"), "rendered = {rendered}");
+    }
+
+    #[test]
+    fn decode_jwks_resolves_es256_p256_key() {
+        // The actual JWKS shape Supabase serves for an asymmetric ES256
+        // project. The x/y coordinates are base64url-encoded P-256
+        // public-key components; jsonwebtoken validates them on decode.
+        let raw = r#"{
+            "keys": [{
+                "x": "bRC55wVytXBJGaCPHhfmdQIWyVYcbB7XOFu1kkTqqOg",
+                "y": "etV7kM3YSF0qBpjUSm4jtGx-eine6S-wgK-goSOcFjY",
+                "alg": "ES256",
+                "crv": "P-256",
+                "kid": "28f672e7-b3e4-4ac1-af85-9683010013a9",
+                "kty": "EC",
+                "key_ops": ["verify"]
+            }]
+        }"#;
+        let jwks: JwkSet = serde_json::from_str(raw).expect("static fixture parses");
+        let decoded = decode_jwks(jwks).expect("EC P-256 key decodes");
+        let cached = decoded
+            .get("28f672e7-b3e4-4ac1-af85-9683010013a9")
+            .expect("kid is present");
+        assert_eq!(cached.algorithm, Algorithm::ES256);
+    }
+
+    #[test]
+    fn decode_jwks_resolves_rs256_key() {
+        // Minimal RSA JWK — the modulus is a real 2048-bit public key
+        // (any valid RSA pubkey works; the value isn't load-bearing for
+        // the parse step).
+        let raw = r#"{
+            "keys": [{
+                "kty": "RSA",
+                "alg": "RS256",
+                "kid": "rsa-kid-1",
+                "n": "0vx7agoebGcQSuuPiLJXZptN9nndrQmbXEps2aiAFbWhM78LhWx4cbbfAAtVT86zwu1RK7aPFFxuhDR1L6tSoc_BJECPebWKRXjBZCiFV4n3oknjhMstn64tZ_2W-5JsGY4Hc5n9yBXArwl93lqt7_RN5w6Cf0h4QyQ5v-65YGjQR0_FDW2QvzqY368QQMicAtaSqzs8KJZgnYb9c7d0zgdAZHzu6qMQvRL5hajrn1n91CbOpbISD08qNLyrdkt-bFTWhAI4vMQFh6WeZu0fM4lFd2NcRwr3XPksINHaQ-G_xBniIqbw0Ls1jF44-csFCur-kEgU8awapJzKnqDKgw",
+                "e": "AQAB"
+            }]
+        }"#;
+        let jwks: JwkSet = serde_json::from_str(raw).expect("static fixture parses");
+        let decoded = decode_jwks(jwks).expect("RSA key decodes");
+        let cached = decoded.get("rsa-kid-1").expect("kid is present");
+        assert_eq!(cached.algorithm, Algorithm::RS256);
+    }
+
+    #[test]
+    fn decode_jwks_skips_kidless_entries() {
+        let raw = r#"{
+            "keys": [{
+                "x": "bRC55wVytXBJGaCPHhfmdQIWyVYcbB7XOFu1kkTqqOg",
+                "y": "etV7kM3YSF0qBpjUSm4jtGx-eine6S-wgK-goSOcFjY",
+                "alg": "ES256",
+                "crv": "P-256",
+                "kty": "EC"
+            }]
+        }"#;
+        let jwks: JwkSet = serde_json::from_str(raw).expect("static fixture parses");
+        let decoded = decode_jwks(jwks).expect("decode succeeds");
+        assert!(decoded.is_empty(), "kidless entries cannot be looked up");
     }
 
     #[tokio::test]
