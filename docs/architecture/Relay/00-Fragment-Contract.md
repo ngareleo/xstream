@@ -31,6 +31,8 @@ const data = useLazyLoadQuery<LibraryPageQuery>(LIBRARIES_QUERY, {});
 const data = useLazyLoadQuery<PosterCardQuery>(SOME_QUERY, { id }); // don't do this
 ```
 
+**Critical:** Page queries must not be exported or imported across page boundaries. If two pages need the same data shape, each defines its own operation (duplicate instead of importing). This is both a Relay pattern enforcement (queries scope to their page) and a **load-bearing bundler constraint** — exporting page queries leaks page-specific code into shared chunks, bloating routes that never render it. See [`docs/client/Bundle-Chunks/00-Strategy.md` → "Route-affinity `shared` chunks"](../../client/Bundle-Chunks/00-Strategy.md) for the anti-patterns that result from cross-page imports.
+
 ### 2. Components declare data with fragments
 
 Every component that reads GraphQL data must declare a fragment on the exact type it needs and call `useFragment` to access it. The fragment key (`$key` type) is the only prop the component receives from its parent.

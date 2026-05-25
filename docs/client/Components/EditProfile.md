@@ -100,9 +100,8 @@ selection, extension list, delete affordance).
 
 ### Relay query
 
-- Root query: `EditProfilePageQuery` fetching the profile by `profileId`.
-- Profile fields: `id`, `name`, `path`, `type` ("movies" or "tv"), file count,
-  match status, scanning state.
+- **Root query:** `EditProfilePageContentQuery` — issued by `useLazyLoadQuery` in this page only, fetching the profile by `profileId`. The page also defines a **separate refetch query** (`EditProfilePageContentRefetchQuery`) used after mutations to pre-warm the profiles-page cache before navigating. Both are owned by this page and must not be imported elsewhere; another page needing to refetch profiles defines its own query (see [`architecture/Relay/00-Fragment-Contract.md`](../../architecture/Relay/00-Fragment-Contract.md) → "Queries only at the page level" for the bundler rationale).
+- Profile fields: `id`, `name`, `path`, `type` ("movies" or "tv"), file count, match status, scanning state.
 
 ## Notes
 
