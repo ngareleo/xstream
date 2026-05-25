@@ -60,9 +60,15 @@ export const useAuthFormStyles = makeStyles({
     color: tokens.colorRed,
   },
   primaryBtn: {
+    position: "relative",
+    overflow: "hidden",
     marginTop: "8px",
     width: "100%",
     height: "44px",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    columnGap: "10px",
     backgroundColor: tokens.colorGreen,
     color: tokens.colorGreenInk,
     borderTopWidth: 0,
@@ -85,7 +91,54 @@ export const useAuthFormStyles = makeStyles({
     },
     ":active": { transform: "translateY(1px)" },
     ":focus-visible": { boxShadow: `0 0 0 3px ${tokens.colorGreenSoft}` },
+    ":disabled": { cursor: "progress" },
   },
+
+  // Busy state: a thin indeterminate sweep crosses the button surface while
+  // the request is in flight, behind a trio of pulsing dots. Reads as "the
+  // button is working" without swapping the whole label out.
+  primaryBtnBusy: {
+    "::after": {
+      content: '""',
+      position: "absolute",
+      top: 0,
+      bottom: 0,
+      left: "-40%",
+      width: "40%",
+      backgroundImage: `linear-gradient(90deg, transparent, ${tokens.colorGreenSoft}, transparent)`,
+      animationName: {
+        from: { transform: "translateX(0)" },
+        to: { transform: "translateX(350%)" },
+      },
+      animationDuration: "1.1s",
+      animationIterationCount: "infinite",
+      animationTimingFunction: "ease-in-out",
+    },
+  },
+
+  busyDots: {
+    display: "inline-flex",
+    alignItems: "center",
+    columnGap: "5px",
+  },
+
+  busyDot: {
+    width: "5px",
+    height: "5px",
+    borderRadius: "50%",
+    backgroundColor: "currentColor",
+    animationName: {
+      "0%, 80%, 100%": { opacity: 0.25, transform: "scale(0.7)" },
+      "40%": { opacity: 1, transform: "scale(1)" },
+    },
+    animationDuration: "1.2s",
+    animationIterationCount: "infinite",
+    animationTimingFunction: "ease-in-out",
+  },
+
+  // Per-dot phase offset so the trio ripples left-to-right.
+  busyDot2: { animationDelay: "0.16s" },
+  busyDot3: { animationDelay: "0.32s" },
   helpRow: {
     marginTop: "20px",
     paddingTop: "20px",

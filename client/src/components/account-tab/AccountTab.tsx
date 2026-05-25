@@ -64,7 +64,7 @@ export const AccountTab: FC = () => {
     commitLocalUpdate(environment, (store) => {
       store.invalidateStore();
     });
-    navigate("/signin", { replace: true });
+    navigate("/goodbye");
   };
 
   return (

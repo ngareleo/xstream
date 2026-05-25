@@ -2,6 +2,7 @@ import { type FC, type FormEvent, useState } from "react";
 import { Link } from "react-router-dom";
 
 import { useAuthFormStyles } from "~/components/auth-form/AuthForm.styles.js";
+import { AuthSubmitButton } from "~/components/auth-form/AuthSubmitButton.js";
 import { useAuthLayoutStyles } from "~/components/auth-layout/AuthLayout.styles.js";
 import { resetPassword } from "~/services/auth.js";
 
@@ -84,9 +85,11 @@ const ResetPasswordPage: FC = () => {
 
         {error && <div className={form.fieldError}>{error}</div>}
 
-        <button type="submit" className={form.primaryBtn} disabled={submitting}>
-          {submitting ? strings.submitting : strings.submit}
-        </button>
+        <AuthSubmitButton
+          submitting={submitting}
+          idleLabel={strings.submit}
+          busyLabel={strings.submitting}
+        />
 
         <div className={styles.backRow}>
           <Link to="/signin" className={form.textLink}>

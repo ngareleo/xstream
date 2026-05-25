@@ -43,7 +43,7 @@ export async function restoreSession(): Promise<Session | null> {
     const supabase = getSupabase();
     const { data } = await supabase.auth.getSession();
     if (data.session?.user.id) {
-      setUserContext(data.session.user.id);
+      setUserContext(data.session.user.id, data.session.user.email ?? null);
     }
     return data.session ?? null;
   } catch (err) {
@@ -77,7 +77,7 @@ export async function signIn(email: string, password: string): Promise<AuthResul
       return { user: null, session: null, error: error.message };
     }
     if (data.user?.id) {
-      setUserContext(data.user.id);
+      setUserContext(data.user.id, data.user.email ?? null);
     }
     return { user: data.user, session: data.session, error: null };
   } catch (err) {
@@ -96,7 +96,7 @@ export async function signUp(email: string, password: string): Promise<AuthResul
     }
     // Session is null when email confirmation is on; caller redirects to /signin in that case.
     if (data.user?.id && data.session) {
-      setUserContext(data.user.id);
+      setUserContext(data.user.id, data.user.email ?? null);
     }
     return { user: data.user, session: data.session, error: null };
   } catch (err) {
@@ -173,7 +173,7 @@ export function subscribeToAuthChanges(callback: (session: Session | null) => vo
     const supabase = getSupabase();
     const { data } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.user.id) {
-        setUserContext(session.user.id);
+        setUserContext(session.user.id, session.user.email ?? null);
       } else {
         clearUserContext();
       }

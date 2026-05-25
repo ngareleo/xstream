@@ -1,7 +1,7 @@
 import { mergeClasses } from "@griffel/react";
 import { NovaEventingInterceptor } from "@nova/react";
 import type { EventWrapper } from "@nova/types";
-import { type FC, useEffect, useRef, useState } from "react";
+import { type FC, useEffect, useMemo, useRef, useState } from "react";
 import { commitLocalUpdate, graphql, useMutation, useRelayEnvironment } from "react-relay";
 import { Link, NavLink, useNavigate } from "react-router-dom";
 
@@ -14,6 +14,8 @@ import { IconRefresh } from "~/lib/icons.js";
 import type { AppHeaderScanMutation } from "~/relay/__generated__/AppHeaderScanMutation.graphql.js";
 import { signOut } from "~/services/auth.js";
 import { clearSessionContext } from "~/services/playbackSession.js";
+import { getUserEmail } from "~/services/userContext.js";
+import { identityFromEmail } from "~/utils/identity.js";
 
 import { strings } from "./AppHeader.strings.js";
 import { useAppHeaderStyles } from "./AppHeader.styles.js";
@@ -38,17 +40,18 @@ const NAV: NavEntry[] = [
   { to: "/watchlist", label: "watchlist" },
 ];
 
-const USER = {
-  initials: "DG",
-  name: "Dag",
-  email: "dag@xstream.local",
-};
-
 export const AppHeader: FC = () => {
   const styles = useAppHeaderStyles();
   const navigate = useNavigate();
   const environment = useRelayEnvironment();
   const [scan, mutationPending] = useMutation<AppHeaderScanMutation>(SCAN_MUTATION);
+  // Identity is populated before AppHeader mounts (restoreSession in main.tsx)
+  // and the shell only renders for signed-in users, so a one-shot read is safe.
+  const user = useMemo(() => {
+    const email = getUserEmail();
+    if (!email) return { initials: "?", name: "Account", email: "" };
+    return { ...identityFromEmail(email), email };
+  }, []);
   const [menuOpen, setMenuOpen] = useState(false);
   const [spinHoldover, setSpinHoldover] = useState(false);
   const accountRef = useRef<HTMLDivElement>(null);
@@ -93,7 +96,9 @@ export const AppHeader: FC = () => {
       commitLocalUpdate(environment, (store) => {
         store.invalidateStore();
       });
-      navigate("/signin", { replace: true });
+      // Farewell interstitial; GoodbyePage forwards to / which the guard
+      // bounces to /signin once the session is gone.
+      navigate("/goodbye");
     }
     return wrapper;
   };
@@ -138,17 +143,17 @@ export const AppHeader: FC = () => {
         <div ref={accountRef} className={styles.accountWrap}>
           <button
             type="button"
-            aria-label={strings.formatString(strings.avatarLabel, USER.name) as string}
+            aria-label={strings.formatString(strings.avatarLabel, user.name) as string}
             aria-haspopup="menu"
             aria-expanded={menuOpen}
             className={mergeClasses(styles.avatar, menuOpen && styles.avatarOpen)}
             onClick={() => setMenuOpen((v) => !v)}
           >
-            {USER.initials}
+            {user.initials}
           </button>
           {menuOpen && (
             <NovaEventingInterceptor interceptor={interceptor}>
-              <AccountMenu initials={USER.initials} name={USER.name} email={USER.email} />
+              <AccountMenu initials={user.initials} name={user.name} email={user.email} />
             </NovaEventingInterceptor>
           )}
         </div>

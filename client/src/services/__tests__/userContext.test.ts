@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   clearUserContext,
   getUserContext,
+  getUserEmail,
   hasActiveSession,
   setUserContext,
 } from "~/services/userContext.js";
@@ -36,5 +37,17 @@ describe("userContext", () => {
     setUserContext("second");
     expect(getUserContext()).toBe("second");
     expect(hasActiveSession()).toBe(true);
+  });
+
+  it("stores the email when provided and clears it on clear", () => {
+    setUserContext("uid", "leo@gmail.com");
+    expect(getUserEmail()).toBe("leo@gmail.com");
+    clearUserContext();
+    expect(getUserEmail()).toBeNull();
+  });
+
+  it("defaults email to null when omitted", () => {
+    setUserContext("uid");
+    expect(getUserEmail()).toBeNull();
   });
 });

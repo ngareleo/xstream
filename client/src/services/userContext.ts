@@ -1,17 +1,26 @@
-/** Module-scoped `user.id` read by telemetry exporters at emit time. See `docs/architecture/Identity/03-Telemetry-Correlation.md`. */
+/** Module-scoped identity read by telemetry + the app header. See `docs/architecture/Identity/03-Telemetry-Correlation.md`. */
 
 let currentUserId: string | null = null;
+let currentUserEmail: string | null = null;
 
-export function setUserContext(userId: string): void {
+export function setUserContext(userId: string, email: string | null = null): void {
   currentUserId = userId;
+  currentUserEmail = email;
 }
 
+/** The Supabase user id (`sub`). Read by telemetry exporters at emit time. */
 export function getUserContext(): string | null {
   return currentUserId;
 }
 
+/** The signed-in user's email, when known. Source for AccountMenu's identity card. */
+export function getUserEmail(): string | null {
+  return currentUserEmail;
+}
+
 export function clearUserContext(): void {
   currentUserId = null;
+  currentUserEmail = null;
 }
 
 /**

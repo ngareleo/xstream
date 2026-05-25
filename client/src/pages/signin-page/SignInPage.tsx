@@ -2,6 +2,7 @@ import { type FC, type FormEvent, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 import { useAuthFormStyles } from "~/components/auth-form/AuthForm.styles.js";
+import { AuthSubmitButton } from "~/components/auth-form/AuthSubmitButton.js";
 import { useAuthLayoutStyles } from "~/components/auth-layout/AuthLayout.styles.js";
 import { signIn } from "~/services/auth.js";
 
@@ -79,9 +80,11 @@ const SignInPage: FC = () => {
 
         {error && <div className={form.fieldError}>{error}</div>}
 
-        <button type="submit" className={form.primaryBtn} disabled={submitting}>
-          {submitting ? strings.submitting : strings.submit}
-        </button>
+        <AuthSubmitButton
+          submitting={submitting}
+          idleLabel={strings.submit}
+          busyLabel={strings.submitting}
+        />
 
         <div className={form.helpRow}>
           <span className={styles.helperText}>
