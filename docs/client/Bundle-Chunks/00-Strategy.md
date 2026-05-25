@@ -89,6 +89,19 @@ code to leak across routes:
 3. If it is small and needs its own chunk: add `enforce: true`.
 4. Run `bun run analyze` to verify the new group appears in `dist/stats.html` and `vendor-misc` shrinks accordingly.
 
+## Size gates
+
+Two chunks are guarded by an automated size gate so the wins above can't silently regress:
+
+| Chunk | Ceiling (raw, decimal kB) | Why it's guarded |
+|---|---|---|
+| `vendor-misc` | **200 kB** | Residual `node_modules` bucket. Growth past this means a heavy dep landed here instead of getting its own cacheGroup. |
+| `shared.*` (aggregate) | **50 kB** | Total of all route-affinity shared chunks. Growth means page-specific code is leaking into shared (cross-page import or a component-level query). |
+
+The gate is a standalone Vitest test at `client/__tests__/bundleSize.test.ts`, run via `bun run test:bundle-size` against the production `dist/` (it reads the build output, so it runs **after** `bun run build` — wired as its own CI step, separate from the unit suite). Limits are named constants in that file; sizes are raw bytes in decimal kB to match Rsbuild's `printFileSize`.
+
+**Raising a limit requires good reason.** A failing gate is first a signal to investigate (did a dep land in the wrong group? did a page query get imported across a boundary?), not to bump the number. Only raise a ceiling — in the same PR, with the justification in the description — once you've confirmed the growth is legitimate and unavoidable.
+
 ## Bundle analysis
 
 ```bash
