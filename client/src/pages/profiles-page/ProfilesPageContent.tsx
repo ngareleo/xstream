@@ -16,7 +16,11 @@ import type { ProfilesPageContentQuery } from "~/relay/__generated__/ProfilesPag
 import { strings } from "./ProfilesPage.strings.js";
 import { useProfilesPageStyles } from "./ProfilesPage.styles.js";
 
-export const PROFILES_QUERY = graphql`
+// Top-level page query. Kept on the page component (not in a shared module) so
+// it stays in the ProfilesPage route chunk; EditProfilePage owns a separate
+// refetch query rather than importing this one. See
+// docs/client/Bundle-Chunks/00-Strategy.md and docs/architecture/Relay.
+const PROFILES_QUERY = graphql`
   query ProfilesPageContentQuery {
     libraries {
       id

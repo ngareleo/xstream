@@ -9,11 +9,10 @@ import {
 import { useNavigate, useParams } from "react-router-dom";
 
 import { ProfileForm, type ProfileFormValues } from "~/components/profile-form/ProfileForm.js";
-import { PROFILES_QUERY } from "~/pages/profiles-page/ProfilesPageContent.js";
 import type { EditProfilePageContentDeleteMutation } from "~/relay/__generated__/EditProfilePageContentDeleteMutation.graphql.js";
 import type { EditProfilePageContentQuery } from "~/relay/__generated__/EditProfilePageContentQuery.graphql.js";
+import type { EditProfilePageContentRefetchQuery } from "~/relay/__generated__/EditProfilePageContentRefetchQuery.graphql.js";
 import type { EditProfilePageContentUpdateMutation } from "~/relay/__generated__/EditProfilePageContentUpdateMutation.graphql.js";
-import type { ProfilesPageContentQuery } from "~/relay/__generated__/ProfilesPageContentQuery.graphql.js";
 
 const QUERY = graphql`
   query EditProfilePageContentQuery($id: ID!) {
@@ -60,6 +59,36 @@ const DELETE_LIBRARY = graphql`
   }
 `;
 
+// Page-owned duplicate of the profiles-list query. Pre-warms the Relay store
+// before navigating to /profiles so the list renders fresh without a flicker.
+// Deliberately duplicated (not imported from ProfilesPage) to keep each route
+// chunk self-contained — see docs/client/Bundle-Chunks/00-Strategy.md. Must
+// fetch the same shape ProfilesPage reads so its fragments resolve from store.
+const PROFILES_REFETCH_QUERY = graphql`
+  query EditProfilePageContentRefetchQuery {
+    libraries {
+      id
+      ...ProfileRow_library
+      videos(first: 500) {
+        edges {
+          node {
+            id
+            title
+            filename
+            mediaType
+            metadata {
+              genre
+              director
+            }
+            ...FilmRow_video
+            ...DetailPane_video
+          }
+        }
+      }
+    }
+  }
+`;
+
 export const EditProfilePageContent: FC = () => {
   const { profileId } = useParams<{ profileId: string }>();
   const navigate = useNavigate();
@@ -91,7 +120,11 @@ export const EditProfilePageContent: FC = () => {
   const refetchAndNavigate = (): void => {
     // Refetch the profiles list so /profiles renders fresh data on
     // navigation, without a manual refresh.
-    fetchQuery<ProfilesPageContentQuery>(environment, PROFILES_QUERY, {}).subscribe({
+    fetchQuery<EditProfilePageContentRefetchQuery>(
+      environment,
+      PROFILES_REFETCH_QUERY,
+      {}
+    ).subscribe({
       complete: () => navigate("/profiles"),
       error: () => navigate("/profiles"),
     });

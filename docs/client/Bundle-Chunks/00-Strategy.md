@@ -20,7 +20,7 @@ Current groups and their rationale:
 | `vendor-router` | react-router, react-router-dom, @remix-run/router, history | Router ecosystem upgrades together |
 | `vendor-supabase` | all `@supabase/*` (auth-js, postgrest-js, realtime-js, storage-js, functions-js, phoenix) | Supabase JS SDK; the whole SDK versions together (~190 KB) |
 | `vendor-misc` | residual `node_modules` | Tail bucket — ~46 KB after splitting Supabase out |
-| `shared` | app source modules used by 2+ async chunks | Prevents anonymous numeric Rspack chunks |
+| `shared.<routes>` | app source modules used by 2+ async route chunks, **split by route affinity** | One chunk per distinct set of sharing routes — each route loads only the shared code it references (see below) |
 
 ## Regex anchor invariant — do not weaken
 
@@ -47,6 +47,40 @@ test: /[/+]react@|[/+]react-dom@|\/scheduler\//
 Rspack's default `minSize` threshold is 20 KB; chunks below that are merged into their caller. `@nova/*` is well under that limit but upgrades on its own cadence. Setting `enforce: true` on the `nova` group bypasses the size threshold and guarantees it always gets its own file.
 
 Use `enforce: true` for any group whose independent cache identity is worth an extra HTTP request even when it's small.
+
+## Route-affinity `shared` chunks
+
+App-source modules referenced by 2+ async route chunks are **not** coalesced
+into a single global `shared` file. Instead the `shared` cacheGroup uses a
+`name(module, chunks)` function that keys each module by the sorted set of
+route chunks that reference it, producing chunks like
+`shared.CreateProfilePage~EditProfilePage` (ProfileForm) or
+`shared.ResetPasswordPage~SignInPage~SignUpPage` (AuthForm). A route then
+downloads only the shared code it actually uses — HomePage no longer pulls the
+profile-form or auth-form code it never renders.
+
+`minSize: 0` on this group forces every affinity cluster to extract, however
+small, rather than duplicating it back into route chunks. The extra chunk count
+is free: the bundle is served locally from `tauri://localhost`, so there is no
+per-request network cost (see `docs/architecture/Deployment/`).
+
+**Keep page-specific code out of `shared`.** A module lands in a `shared.*`
+chunk only when ≥2 route chunks reach it. Two anti-patterns cause page-specific
+code to leak across routes:
+
+1. **One page importing another page's module.** If page B imports a value from
+   page A's module, A's whole subtree becomes reachable from B's chunk and is
+   hoisted into `shared`. Fix: extract the shared value to its own module, or
+   duplicate it. Example: `EditProfilePageContent` owns a duplicate
+   `EditProfilePageContentRefetchQuery` rather than importing `ProfilesPage`'s
+   query.
+2. **A non-top-level component issuing a full query.** Query normalization nodes
+   are large; if a shared component carries one it drags that weight into
+   `shared`. Per `docs/architecture/Relay/`, **queries live on top-level route
+   components; child/leaf components expose fragments.** Duplicating a query
+   across two pages is preferred over sharing it. (Genuinely interactive,
+   user-triggered component queries — `DirectoryBrowserQuery`,
+   `DetailPaneEditSearchQuery` — are a sanctioned exception.)
 
 ## Adding a new heavy dependency
 

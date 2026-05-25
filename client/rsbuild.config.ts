@@ -181,11 +181,28 @@ export default defineConfig({
             chunks: "all" as const,
             priority: -10,
           },
-          // App source modules shared by 2+ async page/component chunks.
-          // Without this, Rspack auto-generates an anonymous numeric chunk.
+          // App source modules shared by 2+ async route chunks, split by
+          // *route affinity* rather than into one global `shared` chunk: each
+          // module joins a chunk keyed by the exact set of routes that
+          // reference it, so a route only downloads the shared code it actually
+          // uses (e.g. ProfileForm loads for Create/Edit profile, never on
+          // HomePage). Tauri serves the bundle locally, so the extra chunk
+          // count has ~zero runtime cost. The `name` fn keeps the output
+          // readable (e.g. `shared.CreateProfilePage~EditProfilePage`) instead
+          // of the anonymous numeric chunks Rspack emits by default.
+          // See docs/client/Bundle-Chunks/00-Strategy.md.
           shared: {
-            name: "shared",
+            name(_module: unknown, chunks: { name?: string }[]): string {
+              const names = chunks
+                .map((c) => c.name)
+                .filter((n): n is string => Boolean(n))
+                .sort();
+              return names.length > 0 ? `shared.${names.join("~")}` : "shared";
+            },
             minChunks: 2,
+            // Extract every shared affinity group, however small, instead of
+            // duplicating it across route chunks — cheap under local serving.
+            minSize: 0,
             chunks: "async" as const,
             priority: -20,
             reuseExistingChunk: true,
