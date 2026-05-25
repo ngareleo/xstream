@@ -17,10 +17,6 @@ export function readEnvString(value: string | undefined): string | undefined {
   return value && value.length > 0 ? value : undefined;
 }
 
-function readString(key: string): string | undefined {
-  return readEnvString(import.meta.env[key] as string | undefined);
-}
-
 export interface ClientEnv {
   /** Supabase project URL (e.g. `https://<ref>.supabase.co`). */
   supabaseUrl: string | undefined;
@@ -36,11 +32,14 @@ export interface ClientEnv {
   otelAxiomHeaders: Record<string, string>;
 }
 
+// Each field MUST reference `import.meta.env.PUBLIC_X` statically — Rsbuild
+// substitutes these at build time by literal text match. Dynamic access
+// (`import.meta.env[key]`) is NOT substituted and silently reads undefined.
 export const env: ClientEnv = {
-  supabaseUrl: readString("PUBLIC_SUPABASE_URL"),
-  supabaseAnonKey: readString("PUBLIC_SUPABASE_ANON_KEY"),
-  otelEndpoint: readString("PUBLIC_OTEL_ENDPOINT") ?? "/ingest/otlp",
-  otelHeaders: parseHeadersEnv(readString("PUBLIC_OTEL_HEADERS")),
-  otelAxiomEndpoint: readString("PUBLIC_OTEL_AXIOM_ENDPOINT") ?? "",
-  otelAxiomHeaders: parseHeadersEnv(readString("PUBLIC_OTEL_AXIOM_HEADERS")),
+  supabaseUrl: readEnvString(import.meta.env.PUBLIC_SUPABASE_URL),
+  supabaseAnonKey: readEnvString(import.meta.env.PUBLIC_SUPABASE_ANON_KEY),
+  otelEndpoint: readEnvString(import.meta.env.PUBLIC_OTEL_ENDPOINT) ?? "/ingest/otlp",
+  otelHeaders: parseHeadersEnv(readEnvString(import.meta.env.PUBLIC_OTEL_HEADERS)),
+  otelAxiomEndpoint: readEnvString(import.meta.env.PUBLIC_OTEL_AXIOM_ENDPOINT) ?? "",
+  otelAxiomHeaders: parseHeadersEnv(readEnvString(import.meta.env.PUBLIC_OTEL_AXIOM_HEADERS)),
 };
