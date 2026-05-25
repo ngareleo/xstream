@@ -7,12 +7,14 @@ import { type PlaybackStatus, type Resolution, RESOLUTION_MIME_TYPE } from "~/ty
 
 import { BufferManager } from "./bufferManager.js";
 import { ChunkPipeline, type StreamOutcome } from "./chunkPipeline.js";
+import { recordPlaytime } from "./clientMetrics.js";
 import { isPlaybackError } from "./playbackErrors.js";
 import { clearSessionContext, getSessionContext, setSessionContext } from "./playbackSession.js";
 import { PlaybackTicker } from "./playbackTicker.js";
 import { PlaybackTimeline } from "./playbackTimeline.js";
 import { RampController } from "./rampController.js";
 import { StallTracker } from "./stallTracker.js";
+import { setPlaybackActive } from "./userSession.js";
 
 export { type PlaybackStatus };
 
@@ -126,6 +128,12 @@ export class PlaybackController {
 
   private hasStartedPlayback = false;
 
+  // Active-playtime accounting for the `playback.playtime_ms` metric. Wall-clock
+  // is accumulated between the `playing` and `pause` video events (plus a final
+  // close at teardown), so paused stretches don't count as watch time.
+  private playtimeStartedAt: number | null = null;
+  private accumulatedPlaytimeMs = 0;
+
   private isHandlingSeek = false;
   // The user's most-recent seek target. Filters out the asynchronously-queued
   // `seeking` event fired by `BufferManager.seek()`'s own currentTime assign.
@@ -188,6 +196,7 @@ export class PlaybackController {
       videoEl: deps.videoEl,
       getBufferedAheadSeconds: () =>
         this.buffer?.getBufferedAheadSeconds(deps.videoEl.currentTime) ?? null,
+      getResolution: () => this.resolution,
       hasStartedPlayback: () => this.hasStartedPlayback,
       isInFirstRenderGrace: () =>
         this.firstRenderGraceUntil !== null && performance.now() < this.firstRenderGraceUntil,
@@ -331,6 +340,21 @@ export class PlaybackController {
     this.events.onError(e);
   }
 
+  /** Video began advancing — keep the user session alive and open a playtime interval. */
+  private markPlaying(): void {
+    setPlaybackActive(true);
+    if (this.playtimeStartedAt === null) this.playtimeStartedAt = performance.now();
+  }
+
+  /** Video paused/stopped — release the session's idle timer and close the playtime interval. */
+  private markPaused(): void {
+    setPlaybackActive(false);
+    if (this.playtimeStartedAt !== null) {
+      this.accumulatedPlaytimeMs += performance.now() - this.playtimeStartedAt;
+      this.playtimeStartedAt = null;
+    }
+  }
+
   /** Resets all per-session state. Called from teardown() and startPlayback(). */
   private resetForNewSession(reason: "teardown" | "new_session" = "teardown"): void {
     this.ticker.shutdown();
@@ -359,6 +383,17 @@ export class PlaybackController {
     this.seekTarget = null;
     this.mseRecreatesRemaining = 3;
     this.recreateInProgress = false;
+
+    // Close any open playtime interval and record total watch time for the session.
+    this.markPaused();
+    if (this.accumulatedPlaytimeMs > 0) {
+      this.sessionSpan?.setAttribute(
+        "playback.playtime_ms",
+        Math.round(this.accumulatedPlaytimeMs)
+      );
+      recordPlaytime(this.resolution, this.accumulatedPlaytimeMs);
+    }
+    this.accumulatedPlaytimeMs = 0;
 
     if (this.sessionSpan) {
       this.sessionSpan.addEvent("session_ended", { reason });
@@ -1098,6 +1133,8 @@ export class PlaybackController {
       return;
     }
     this.seekTarget = null;
+    // Genuine playback — keep the user session alive and accrue watch time.
+    this.markPlaying();
     // Close post-play() decoder-warmup grace.
     this.firstRenderGraceUntil = null;
     this.stallTracker.onPlaying();
@@ -1113,6 +1150,9 @@ export class PlaybackController {
   };
 
   private handleUserPause = (): void => {
+    // Close the playtime interval and release the session timer on any real pause,
+    // before the backpressure-poller guards below short-circuit.
+    this.markPaused();
     if (this.deps.videoEl.ended) return;
     if (!this.hasStartedPlayback || this.isHandlingSeek) return;
     if (this.userPauseInterval !== null) return;

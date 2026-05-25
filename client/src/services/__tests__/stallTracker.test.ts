@@ -46,6 +46,7 @@ function makeTracker(): StallTracker {
   return new StallTracker({
     videoEl: videoEl as unknown as HTMLVideoElement,
     getBufferedAheadSeconds: () => bufferedAhead,
+    getResolution: () => "1080p",
     hasStartedPlayback: () => hasStarted,
     isInFirstRenderGrace: () => inFirstRenderGrace,
     onSpinnerShow: () => {

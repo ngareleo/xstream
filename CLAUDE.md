@@ -74,9 +74,9 @@ xstream/
     ├── components/                 # one kebab-case directory per component — colocated .styles.ts, .strings.ts, .events.ts, .stories.tsx
     ├── events/                     # cross-cutting Nova event domains — playback, overlay, detail-pane, profiles, search, error
     ├── hooks/                      # useChunkedPlayback, useVideoPlayback, useVideoSync, useJobSubscription, useSplitResize
-    ├── services/                   # StreamingService, BufferManager, StreamingLogger
+    ├── services/                   # StreamingService, BufferManager, StreamingLogger, userSession, sessionTelemetry, clientMetrics
     ├── storybook/                  # withNovaEventing, withLayout, withRelay decorators
-    └── utils/                      # pure helpers — formatters, lazy
+    └── utils/                      # pure helpers — formatters, lazy, routeTemplate
 ```
 
 ## Engineering principles + code style

@@ -3,6 +3,7 @@ import { useNovaEventing } from "@nova/react";
 import React, { type FC, type MouseEvent, type RefObject, useState } from "react";
 import { graphql, useFragment } from "react-relay";
 
+import { FeedbackButton } from "~/components/feedback-dialog/FeedbackButton.js";
 import { useVideoSync } from "~/hooks/useVideoSync.js";
 import { IconArrowsIn, IconArrowsOut, IconPause, IconPlay, IconSpeaker } from "~/lib/icons.js";
 import type { ControlBar_video$key } from "~/relay/__generated__/ControlBar_video.graphql.js";
@@ -218,6 +219,8 @@ export const ControlBar: FC<Props> = ({
             </div>
           )}
         </div>
+
+        <FeedbackButton className={styles.ctrlBtn} iconSize={18} />
 
         <button
           className={styles.ctrlBtn}

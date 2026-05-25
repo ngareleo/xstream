@@ -1,9 +1,10 @@
 /** OpenTelemetry bootstrap for the xstream browser client. See docs/architecture/Observability/01-Logging-Policy.md. */
 
-import { propagation, trace, type Tracer } from "@opentelemetry/api";
+import { type Meter, metrics, propagation, trace, type Tracer } from "@opentelemetry/api";
 import { SeverityNumber } from "@opentelemetry/api-logs";
 import { W3CTraceContextPropagator } from "@opentelemetry/core";
 import { OTLPLogExporter } from "@opentelemetry/exporter-logs-otlp-proto";
+import { OTLPMetricExporter } from "@opentelemetry/exporter-metrics-otlp-proto";
 import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-proto";
 import { FetchInstrumentation } from "@opentelemetry/instrumentation-fetch";
 import { LongTaskInstrumentation } from "@opentelemetry/instrumentation-long-task";
@@ -14,13 +15,25 @@ import {
   LoggerProvider,
   SimpleLogRecordProcessor,
 } from "@opentelemetry/sdk-logs";
-import { BatchSpanProcessor, WebTracerProvider } from "@opentelemetry/sdk-trace-web";
+import {
+  ConsoleMetricExporter,
+  MeterProvider,
+  PeriodicExportingMetricReader,
+} from "@opentelemetry/sdk-metrics";
+import {
+  BatchSpanProcessor,
+  type ReadableSpan,
+  type Span,
+  type SpanProcessor,
+  WebTracerProvider,
+} from "@opentelemetry/sdk-trace-web";
 
 import { env } from "~/config/env.js";
 import { getFlag } from "~/config/featureFlags.js";
 import { FLAG_KEYS } from "~/config/flagRegistry.js";
 import { getSessionContext } from "~/services/playbackSession.js";
 import { getUserContext } from "~/services/userContext.js";
+import { getCurrentSessionId } from "~/services/userSession.js";
 
 const defaultEndpoint = env.otelEndpoint;
 const defaultHeaders = env.otelHeaders;
@@ -31,6 +44,25 @@ const axiomHeaders = env.otelAxiomHeaders;
 
 let loggerProvider: LoggerProvider | null = null;
 let initialized = false;
+
+/**
+ * Stamps `session.id` onto every span at start time. The user session id changes
+ * over the app's lifetime, so it can't live on the (frozen) resource — a span
+ * processor reads it per-span instead. See `~/services/userSession.ts`.
+ */
+class SessionAttributeSpanProcessor implements SpanProcessor {
+  onStart(span: Span): void {
+    const sessionId = getCurrentSessionId();
+    if (sessionId) span.setAttribute("session.id", sessionId);
+  }
+  onEnd(_span: ReadableSpan): void {}
+  forceFlush(): Promise<void> {
+    return Promise.resolve();
+  }
+  shutdown(): Promise<void> {
+    return Promise.resolve();
+  }
+}
 
 /**
  * Initialise the OTel SDK. Must be called once, before any fetch or Relay call.
@@ -54,6 +86,8 @@ export function initTelemetry(): void {
   const tracerProvider = new WebTracerProvider({
     resource,
     spanProcessors: [
+      // Stamps session.id before the batch processor exports the span.
+      new SessionAttributeSpanProcessor(),
       new BatchSpanProcessor(new OTLPTraceExporter({ url: `${endpoint}/v1/traces`, headers })),
     ],
   });
@@ -64,6 +98,28 @@ export function initTelemetry(): void {
   });
 
   propagation.setGlobalPropagator(new W3CTraceContextPropagator());
+
+  // Usage metrics (page visits, sessions, playtimes, stalls). Seq doesn't ingest
+  // OTLP metrics, so dev also mirrors to the console; real dashboards come from
+  // the Axiom path. See docs/architecture/Observability.
+  const meterProvider = new MeterProvider({
+    resource,
+    readers: [
+      new PeriodicExportingMetricReader({
+        exporter: new OTLPMetricExporter({ url: `${endpoint}/v1/metrics`, headers }),
+        exportIntervalMillis: 60_000,
+      }),
+      ...(import.meta.env.DEV
+        ? [
+            new PeriodicExportingMetricReader({
+              exporter: new ConsoleMetricExporter(),
+              exportIntervalMillis: 60_000,
+            }),
+          ]
+        : []),
+    ],
+  });
+  metrics.setGlobalMeterProvider(meterProvider);
 
   loggerProvider = new LoggerProvider({
     resource,
@@ -93,6 +149,14 @@ export function getClientTracer(name: string): Tracer {
   return trace.getTracer(name);
 }
 
+/**
+ * Returns an OTel Meter for the given component. Returns a no-op meter until
+ * initTelemetry() registers the MeterProvider. See `~/services/clientMetrics.ts`.
+ */
+export function getClientMeter(name: string): Meter {
+  return metrics.getMeter(name);
+}
+
 /** Structured log record with a consistent component label. */
 export interface ClientLog {
   info(message: string, attributes?: Record<string, string | number | boolean>): void;
@@ -106,36 +170,35 @@ function userAttrs(): Record<string, string> {
   return userId ? { "user.id": userId } : {};
 }
 
+/** `session.id` read at emit time. Empty before the first session is minted. */
+function sessionAttrs(): Record<string, string> {
+  const sessionId = getCurrentSessionId();
+  return sessionId ? { "session.id": sessionId } : {};
+}
+
 /** Returns a structured logger for the given component. Log records are forwarded to the OTLP backend. */
 export function getClientLogger(component: string): ClientLog {
-  const logger = loggerProvider?.getLogger(component);
+  // Resolve the logger at emit time, not here: modules imported before
+  // initTelemetry() (e.g. via the router) would otherwise capture a null
+  // provider and silently no-op for the app's lifetime. (Tracers/meters already
+  // resolve lazily via the global API; this keeps loggers consistent.)
+  const emit = (
+    severityNumber: SeverityNumber,
+    severityText: string,
+    message: string,
+    attributes?: Record<string, string | number | boolean>
+  ): void => {
+    loggerProvider?.getLogger(component).emit({
+      severityNumber,
+      severityText,
+      body: message,
+      attributes: { component, ...userAttrs(), ...sessionAttrs(), ...attributes },
+      context: getSessionContext(),
+    });
+  };
   return {
-    info(message, attributes): void {
-      logger?.emit({
-        severityNumber: SeverityNumber.INFO,
-        severityText: "INFO",
-        body: message,
-        attributes: { component, ...userAttrs(), ...attributes },
-        context: getSessionContext(),
-      });
-    },
-    warn(message, attributes): void {
-      logger?.emit({
-        severityNumber: SeverityNumber.WARN,
-        severityText: "WARN",
-        body: message,
-        attributes: { component, ...userAttrs(), ...attributes },
-        context: getSessionContext(),
-      });
-    },
-    error(message, attributes): void {
-      logger?.emit({
-        severityNumber: SeverityNumber.ERROR,
-        severityText: "ERROR",
-        body: message,
-        attributes: { component, ...userAttrs(), ...attributes },
-        context: getSessionContext(),
-      });
-    },
+    info: (message, attributes) => emit(SeverityNumber.INFO, "INFO", message, attributes),
+    warn: (message, attributes) => emit(SeverityNumber.WARN, "WARN", message, attributes),
+    error: (message, attributes) => emit(SeverityNumber.ERROR, "ERROR", message, attributes),
   };
 }

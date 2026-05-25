@@ -54,9 +54,15 @@ Every log record gets a `component` attribute automatically (set when calling `g
 
 Do not include attributes that duplicate information already in the message body unless they are needed for Seq filtering.
 
+## User sessions: activity-based tracking
+
+A **user session** is a distinct period of continuous activity. Sessions are tracked client-side via `services/userSession.ts`: a session begins on the first user activity (click, keyboard, mouse movement) or playback start, and ends after an idle gap. The idle timeout is **15 minutes in production** / **1 minute in dev** (gated on `IS_DEV_BUILD`). Playback counts as activity: `setPlaybackActive(true)` disarms the idle timer so a playing-but-quiet page never expires; pausing re-arms it. The session state machine exports `getCurrentSessionId()` — a stable UUID for the duration — used by telemetry and logging to correlate all user actions within that session. Session lifetime spans are NOT emitted to OTel; instead, "Session started" and "Session ended" **logs** carry the `session.id`, and all spans/logs stamped during the session have `session.id` as an attribute set by the `SessionAttributeSpanProcessor`.
+
+**Important: `session.id` is NEVER a metric attribute.** Metrics must have low cardinality (route, resolution, error type); unique identifiers (session.id, user.id) come from log/span correlation in the backend (e.g. Axiom). `user.sessions` counter and `user.session.duration_ms` histogram have no attributes — the metric itself records occurrence, and post-query analysis can group by `session.id` extracted from logs.
+
 ## Client-side: always attach session context
 
-All async client logs must carry the active session traceId. This is handled automatically by `getClientLogger` — it reads `getSessionContext()` at emit time. The context is set by `setSessionContext(ctx)` at playback start and cleared by `clearSessionContext()` at teardown.
+All async client logs must carry the active session traceId. This is handled automatically by `getClientLogger` — it reads `getSessionContext()` at emit time. The context is set by `setSessionContext(ctx)` at playback start and cleared by `clearSessionContext()` at teardown. Additionally, `getClientLogger` stamps every log record with `session.id` via the `SessionAttributeSpanProcessor`, so Seq queries can filter by session without any extra call-site wiring.
 
 ```ts
 // playbackSession.ts — the bridge between OTel context and async callbacks
@@ -206,7 +212,7 @@ Attribute policy — deny + allow + hash-default:
 |---|---|---|
 | **Hash** | `path`, `library.path`, `file`, `directory` | SHA-256 → first 16 hex chars, salted with a per-process random nonce so the same input is consistent within one process lifetime. Preserves correlation without leaking content. |
 | **Strip** | `title`, `movie_title`, `episode_title`, `show_name`, `omdb*`, `query` (unless numeric IMDb ID) | Replaced with empty string. Hashing titles is pointless; the goal is "Seq never sees the title at all." |
-| **Allow unchanged** | `job_id`, `video_id`, `library_name`, `kill_reason`, all `*_ms` / `*_s` numeric attributes, `service.name`, `component`, OTel-internal keys (`http.*`, `net.*`, `db.*`) | Operationally load-bearing; not user-identifying. |
+| **Allow unchanged** | `job_id`, `video_id`, `library_name`, `kill_reason`, `feedback.rating`, `feedback.text`, all `*_ms` / `*_s` numeric attributes, `service.name`, `component`, OTel-internal keys (`http.*`, `net.*`, `db.*`) | Operationally load-bearing; not user-identifying. **Special case:** `feedback.rating` and `feedback.text` are explicitly allowed — user feedback is content we **want** to read in production and is user-intentional, not leaked PII. |
 
 **Load-bearing discipline — pass PII via named attributes, not log message bodies.** The redactor recognises attribute keys; it cannot reliably parse arbitrary message text. This emits a path that the redactor catches:
 

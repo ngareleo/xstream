@@ -21,15 +21,15 @@
 
 ## Observability (Release)
 
-These items require the OTel metrics SDK (`MeterProvider`) which is not yet wired up. Complete after the dev log/trace baseline is stable.
+The OTel metrics SDK has been wired up. Client-side metrics infrastructure is now in place (`MeterProvider` + `PeriodicExportingMetricReader` → OTLP + dev ConsoleMetricExporter). Work below is partial — the instrument types exist, but coverage and per-component error breakdown are incomplete.
 
-- [ ] **OBS-001** Client buffer rate metrics: stall duration and buffer-underrun count per playback session. Instrument `useChunkedPlayback` buffering events with `Histogram` and `Counter` instruments from `@opentelemetry/api`.
+- [x] **OBS-001** Client buffer rate metrics: ~~stall duration and buffer-underrun count per playback session. Instrument `useChunkedPlayback` buffering events with `Histogram` and `Counter` instruments from `@opentelemetry/api`~~ Landed: `stallTracker.recordStall` emits `playback.stalls` counter + `playback.stall.duration_ms` histogram. Playback playtime is accumulated and emitted as `playback.playtime_ms` histogram on session end.
 
 - [ ] **OBS-002** Error rate breakdown and classification: track error counts by component (`mse`, `network`, `graphql`, `transcode`) using OTel `Counter` with a `component` attribute. Distinguish transient (retried) vs. terminal errors.
 
-- [ ] **OBS-003** Usage metrics: concurrent stream count, resolution distribution (which resolutions are most used), and session duration. Export as OTel `UpDownCounter` and `Histogram`.
+- [x] **OBS-003** Usage metrics: ~~concurrent stream count, resolution distribution (which resolutions are most used), and session duration. Export as OTel `UpDownCounter` and `Histogram`~~ Landed: `user.sessions` counter (session count), `user.session.duration_ms` histogram (session duration), `page.visits` counter + `page.load_time_ms` histogram (route usage). Resolution distribution per stall/playtime is present (`playback.stalls` + `playback.playtime_ms` with `resolution` attr). Concurrent stream count still pending (requires server-side span event).
 
-- [ ] **OBS-004** OTel metrics SDK wiring: add `MeterProvider` with a `BatchMetricExporter` + `PeriodicExportingMetricReader` to both `server-rust/src/telemetry.rs` and `client/src/telemetry.ts`. The `@opentelemetry/sdk-metrics` package is not yet installed in the client.
+- [x] **OBS-004** OTel metrics SDK wiring: ~~add `MeterProvider` with a `BatchMetricExporter` + `PeriodicExportingMetricReader` to both `server-rust/src/telemetry.rs` and `client/src/telemetry.ts`. The `@opentelemetry/sdk-metrics` package is not yet installed in the client~~ Landed: both sides wired. Client: `MeterProvider` + `PeriodicExportingMetricReader` (60s interval) + `OTLPMetricExporter` + dev `ConsoleMetricExporter`. Note: Seq does not ingest metrics; real dashboards come from Axiom or Grafana (see Observability/03-Config-And-Backends.md).
 
 ## Settings / UI
 

@@ -23,6 +23,10 @@
 
 The `flag.useAxiomExporter` feature flag in [`../../client/Feature-Flags/00-Registry.md`](../../client/Feature-Flags/00-Registry.md) chooses between the default and `*_AXIOM_*` pair at boot. Client picks up the change on the next page load; the server reads the flag from SQLite at startup and therefore requires an app restart. The flag is dead-code-eliminated in production builds — release bundles always use the values that CI bakes into `PUBLIC_OTEL_ENDPOINT` / `OTEL_EXPORTER_OTLP_ENDPOINT`.
 
+## Metrics: not ingested by Seq
+
+Seq is a logs-and-traces backend and **does not ingest OTLP metrics**. Metrics (counters, histograms) are exported to the same OTLP endpoint as logs/traces, but they require a metrics-capable backend like Axiom or Grafana Cloud to be useful. In dev, metrics surface via the `ConsoleMetricExporter`, which periodically dumps to stdout. Never try to query metrics in Seq — they arrive but are not queryable there. Real metric dashboards come from the backend system (Axiom graphs for production; dev console for local iteration).
+
 ## Production backend: Axiom
 
 

@@ -10,6 +10,7 @@ import {
   isAccountMenuSignOutRequestedEvent,
 } from "~/components/account-menu/AccountMenu.events.js";
 import { AccountMenu } from "~/components/account-menu/AccountMenu.js";
+import { FeedbackButton } from "~/components/feedback-dialog/FeedbackButton.js";
 import { IconRefresh } from "~/lib/icons.js";
 import type { AppHeaderScanMutation } from "~/relay/__generated__/AppHeaderScanMutation.graphql.js";
 import { signOut } from "~/services/auth.js";
@@ -129,6 +130,7 @@ export const AppHeader: FC = () => {
       </nav>
 
       <div className={styles.actionsCell}>
+        <FeedbackButton className={styles.scanBtn} iconSize={22} />
         <button
           type="button"
           onClick={handleScan}

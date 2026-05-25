@@ -107,6 +107,9 @@ Outstanding work that hasn't yet shipped is tracked separately in
 | [DevThrowTarget](DevThrowTarget.md) | `client/src/components/dev-throw-target/` |
 | [DevTools](DevTools.md) | `client/src/components/dev-tools/` |
 | [ErrorBoundary](ErrorBoundary.md) | `client/src/components/error-boundary/` |
+| [FeedbackDialog](FeedbackDialog.md) | `client/src/components/feedback-dialog/` |
+| [FeedbackButton](FeedbackButton.md) | `client/src/components/feedback-button/` |
+| [TelemetryTracker](TelemetryTracker.md) | `client/src/components/telemetry-tracker/` |
 
 ## Conventions
 

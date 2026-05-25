@@ -74,7 +74,7 @@ Full rationale: [`code-style/Principles/`](code-style/Principles/README.md). The
 |---|---|
 | System overview + component tables | [`architecture/00-System-Overview.md`](architecture/00-System-Overview.md) |
 | Streaming protocol + playback scenarios + chunk-pipeline invariants + playback subsystems | [`architecture/Streaming/`](architecture/Streaming/README.md) |
-| Observability (spans, logging, Seq) | [`architecture/Observability/`](architecture/Observability/README.md) |
+| Observability (spans, logging, metrics, sessions, Seq) | [`architecture/Observability/`](architecture/Observability/README.md) |
 | Relay / GraphQL contract | [`architecture/Relay/`](architecture/Relay/README.md) |
 | Test side-effects policy + encode-pipeline tests + encoder edge-case policy | [`architecture/Testing/`](architecture/Testing/README.md) |
 | Tauri bundling, code-signing, auto-updates, ffmpeg distribution | [`architecture/Deployment/`](architecture/Deployment/README.md) |

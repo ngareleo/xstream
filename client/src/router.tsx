@@ -4,6 +4,7 @@ import { createBrowserRouter, Outlet, redirect } from "react-router-dom";
 import { AppShell } from "~/components/app-shell/AppShell.js";
 import { AuthLayout } from "~/components/auth-layout/AuthLayout.js";
 import { ErrorBoundary } from "~/components/error-boundary/ErrorBoundary.js";
+import { TelemetryTracker } from "~/components/telemetry-tracker/TelemetryTracker.js";
 import { hasActiveSession } from "~/services/userContext.js";
 
 import {
@@ -32,6 +33,16 @@ const ShellLayout: FC = () => (
   </AppShell>
 );
 
+// Pathless root layout — mounts once and persists across all navigation, so the
+// telemetry tracker observes every page (incl. auth pages, which sit outside the
+// AppShell). Renders nothing of its own beyond the matched child route.
+const RootLayout: FC = () => (
+  <>
+    <TelemetryTracker />
+    <Outlet />
+  </>
+);
+
 function requireSession(): Response | null {
   return hasActiveSession() ? null : redirect("/signin");
 }
@@ -42,80 +53,85 @@ function requireSignedOut(): Response | null {
 
 export const router: ReturnType<typeof createBrowserRouter> = createBrowserRouter([
   {
-    element: <ShellLayout />,
-    loader: requireSession,
-    children: [
-      { path: "/", element: <HomePage /> },
-      { path: "/profiles", element: <ProfilesPage /> },
-      { path: "/profiles/new", element: <CreateProfilePage /> },
-      { path: "/profiles/:profileId/edit", element: <EditProfilePage /> },
-      { path: "/watchlist", element: <WatchlistPage /> },
-      { path: "/settings", element: <SettingsPage /> },
-      { path: "*", element: <NotFoundPage /> },
-    ],
-  },
-  {
-    path: "/player/:videoId",
-    loader: requireSession,
-    element: (
-      <ErrorBoundary>
-        <Suspense fallback={null}>
-          <PlayerPage />
-        </Suspense>
-      </ErrorBoundary>
-    ),
-  },
-  {
-    path: "/goodbye",
-    element: (
-      <ErrorBoundary>
-        <Suspense fallback={null}>
-          <GoodbyePage />
-        </Suspense>
-      </ErrorBoundary>
-    ),
-  },
-  {
-    path: "/error",
-    element: (
-      <Suspense fallback={null}>
-        <ErrorPage />
-      </Suspense>
-    ),
-  },
-  {
-    element: (
-      <ErrorBoundary>
-        <Suspense fallback={null}>
-          <AuthLayout />
-        </Suspense>
-      </ErrorBoundary>
-    ),
-    loader: requireSignedOut,
+    element: <RootLayout />,
     children: [
       {
-        path: "/signin",
+        element: <ShellLayout />,
+        loader: requireSession,
+        children: [
+          { path: "/", element: <HomePage /> },
+          { path: "/profiles", element: <ProfilesPage /> },
+          { path: "/profiles/new", element: <CreateProfilePage /> },
+          { path: "/profiles/:profileId/edit", element: <EditProfilePage /> },
+          { path: "/watchlist", element: <WatchlistPage /> },
+          { path: "/settings", element: <SettingsPage /> },
+          { path: "*", element: <NotFoundPage /> },
+        ],
+      },
+      {
+        path: "/player/:videoId",
+        loader: requireSession,
+        element: (
+          <ErrorBoundary>
+            <Suspense fallback={null}>
+              <PlayerPage />
+            </Suspense>
+          </ErrorBoundary>
+        ),
+      },
+      {
+        path: "/goodbye",
+        element: (
+          <ErrorBoundary>
+            <Suspense fallback={null}>
+              <GoodbyePage />
+            </Suspense>
+          </ErrorBoundary>
+        ),
+      },
+      {
+        path: "/error",
         element: (
           <Suspense fallback={null}>
-            <SignInPage />
+            <ErrorPage />
           </Suspense>
         ),
       },
       {
-        path: "/signup",
         element: (
-          <Suspense fallback={null}>
-            <SignUpPage />
-          </Suspense>
+          <ErrorBoundary>
+            <Suspense fallback={null}>
+              <AuthLayout />
+            </Suspense>
+          </ErrorBoundary>
         ),
-      },
-      {
-        path: "/reset-password",
-        element: (
-          <Suspense fallback={null}>
-            <ResetPasswordPage />
-          </Suspense>
-        ),
+        loader: requireSignedOut,
+        children: [
+          {
+            path: "/signin",
+            element: (
+              <Suspense fallback={null}>
+                <SignInPage />
+              </Suspense>
+            ),
+          },
+          {
+            path: "/signup",
+            element: (
+              <Suspense fallback={null}>
+                <SignUpPage />
+              </Suspense>
+            ),
+          },
+          {
+            path: "/reset-password",
+            element: (
+              <Suspense fallback={null}>
+                <ResetPasswordPage />
+              </Suspense>
+            ),
+          },
+        ],
       },
     ],
   },
