@@ -14,11 +14,12 @@ Current groups and their rationale:
 |---|---|---|
 | `vendor-react` | react, react-dom, scheduler | React major/minor is rare; usually ships together |
 | `vendor-relay` | relay-runtime, react-relay, graphql, graphql-ws | Data-layer upgrade unit |
-| `vendor-otel` | all `@opentelemetry/*` | OTel sdk/api/exporters typically upgrade as a set |
+| `vendor-otel` | all `@opentelemetry/*` + `protobufjs`/`@protobufjs/*` | OTel sdk/api/exporters upgrade as a set; protobufjs is an OTLP-proto transitive dep on the same cadence |
 | `vendor-griffel` | `@griffel/*` | Atomic CSS runtime; tracks Fluent UI cadence |
 | `vendor-nova` | `@nova/*` | Event bus; independent cadence — see `enforce` note below |
 | `vendor-router` | react-router, react-router-dom, @remix-run/router, history | Router ecosystem upgrades together |
-| `vendor-misc` | residual `node_modules` | Tail bucket — currently ~46 KB |
+| `vendor-supabase` | all `@supabase/*` (auth-js, postgrest-js, realtime-js, storage-js, functions-js, phoenix) | Supabase JS SDK; the whole SDK versions together (~190 KB) |
+| `vendor-misc` | residual `node_modules` | Tail bucket — ~46 KB after splitting Supabase out |
 | `shared` | app source modules used by 2+ async chunks | Prevents anonymous numeric Rspack chunks |
 
 ## Regex anchor invariant — do not weaken

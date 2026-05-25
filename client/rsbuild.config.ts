@@ -136,9 +136,12 @@ export default defineConfig({
             name: "vendor-react",
             chunks: "all" as const,
           },
-          // OpenTelemetry (api + sdk + exporters + instrumentations).
+          // OpenTelemetry (api + sdk + exporters + instrumentations) plus
+          // protobufjs — a transitive dep of @opentelemetry/otlp-transformer
+          // (the OTLP-proto exporters), so it upgrades on the OTel cadence and
+          // belongs here rather than in the residual bucket.
           otel: {
-            test: /[\\/]@opentelemetry[\\/]/,
+            test: /[\\/]@opentelemetry[\\/]|[\\/]node_modules[\\/]protobufjs[\\/]|[\\/]@protobufjs[\\/]/,
             name: "vendor-otel",
             chunks: "all" as const,
           },
@@ -161,6 +164,14 @@ export default defineConfig({
           router: {
             test: /[\\/](?:react-router|react-router-dom|@remix-run[\\/]router|history)[\\/]/,
             name: "vendor-router",
+            chunks: "all" as const,
+          },
+          // Supabase JS SDK — auth-js, postgrest-js, realtime-js, storage-js,
+          // functions-js, phoenix. The bulk of the former vendor-misc (~190 KB);
+          // the whole SDK versions together, so one chunk on its own cadence.
+          supabase: {
+            test: /[\\/]@supabase[\\/]/,
+            name: "vendor-supabase",
             chunks: "all" as const,
           },
           // Residual node_modules — small, unrelated libs (react-localization, etc.).
