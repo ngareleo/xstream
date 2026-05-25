@@ -59,11 +59,9 @@ const DELETE_LIBRARY = graphql`
   }
 `;
 
-// Page-owned duplicate of the profiles-list query. Pre-warms the Relay store
-// before navigating to /profiles so the list renders fresh without a flicker.
-// Deliberately duplicated (not imported from ProfilesPage) to keep each route
-// chunk self-contained — see docs/client/Bundle-Chunks/00-Strategy.md. Must
-// fetch the same shape ProfilesPage reads so its fragments resolve from store.
+// Pre-warms the store before navigating to /profiles (fresh render, no flicker).
+// Duplicates ProfilesPage's query shape deliberately — keep the two in sync.
+// See docs/architecture/Relay/00-Fragment-Contract.md.
 const PROFILES_REFETCH_QUERY = graphql`
   query EditProfilePageContentRefetchQuery {
     libraries {

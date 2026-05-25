@@ -10,15 +10,9 @@ const dirname =
 const clientRoot = path.resolve(dirname, "..");
 const jsDir = path.join(clientRoot, "dist", "static", "js");
 
-// Raw (uncompressed) byte ceilings for the two cache-sensitive chunks, in
-// decimal kB to match Rsbuild's `printFileSize` output. These are load-bearing
-// gates, not vanity metrics:
-//   - vendor-misc is the residual node_modules bucket; if it balloons, a heavy
-//     dep has landed there instead of getting its own cacheGroup.
-//   - shared.* are the route-affinity chunks loaded across routes; if their
-//     total grows, page-specific code is likely leaking into shared.
-// Raising either limit requires a deliberate edit here WITH justification in the
-// PR description — see docs/client/Bundle-Chunks/00-Strategy.md ("Size gates").
+// Raw byte ceilings, decimal kB to match Rsbuild's printFileSize. Raising one
+// is a deliberate, justified edit — see docs/client/Bundle-Chunks/00-Strategy.md
+// § "Size gates".
 const KB = 1000;
 const LIMITS = {
   vendorMisc: 200 * KB,

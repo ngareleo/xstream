@@ -6,10 +6,8 @@ import { defineConfig } from "vitest/config";
 const dirname =
   typeof __dirname !== "undefined" ? __dirname : path.dirname(fileURLToPath(import.meta.url));
 
-// Standalone config for the bundle-size gate. Kept separate from
-// vitest.config.ts (which globs `src/**/*.test.ts`) because this gate asserts
-// against production build output in `dist/` and must run *after* `bun run
-// build` — see the `test:bundle-size` script and the CI client job.
+// Standalone config for the bundle-size gate — it reads production dist/, so it
+// runs separately from the unit suite (after `bun run build`).
 export default defineConfig({
   resolve: {
     alias: {

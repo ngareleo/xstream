@@ -136,10 +136,8 @@ export default defineConfig({
             name: "vendor-react",
             chunks: "all" as const,
           },
-          // OpenTelemetry (api + sdk + exporters + instrumentations) plus
-          // protobufjs — a transitive dep of @opentelemetry/otlp-transformer
-          // (the OTLP-proto exporters), so it upgrades on the OTel cadence and
-          // belongs here rather than in the residual bucket.
+          // OpenTelemetry. Includes protobufjs (a transitive OTLP-proto dep) so
+          // it tracks the OTel cadence instead of landing in the residual bucket.
           otel: {
             test: /[\\/]@opentelemetry[\\/]|[\\/]node_modules[\\/]protobufjs[\\/]|[\\/]@protobufjs[\\/]/,
             name: "vendor-otel",
@@ -166,9 +164,7 @@ export default defineConfig({
             name: "vendor-router",
             chunks: "all" as const,
           },
-          // Supabase JS SDK — auth-js, postgrest-js, realtime-js, storage-js,
-          // functions-js, phoenix. The bulk of the former vendor-misc (~190 KB);
-          // the whole SDK versions together, so one chunk on its own cadence.
+          // Supabase JS SDK (@supabase/*) — the whole SDK versions together.
           supabase: {
             test: /[\\/]@supabase[\\/]/,
             name: "vendor-supabase",
@@ -181,16 +177,9 @@ export default defineConfig({
             chunks: "all" as const,
             priority: -10,
           },
-          // App source modules shared by 2+ async route chunks, split by
-          // *route affinity* rather than into one global `shared` chunk: each
-          // module joins a chunk keyed by the exact set of routes that
-          // reference it, so a route only downloads the shared code it actually
-          // uses (e.g. ProfileForm loads for Create/Edit profile, never on
-          // HomePage). Tauri serves the bundle locally, so the extra chunk
-          // count has ~zero runtime cost. The `name` fn keeps the output
-          // readable (e.g. `shared.CreateProfilePage~EditProfilePage`) instead
-          // of the anonymous numeric chunks Rspack emits by default.
-          // See docs/client/Bundle-Chunks/00-Strategy.md.
+          // App modules shared by 2+ async route chunks, split by route affinity
+          // (one chunk per set of referencing routes) so a route loads only the
+          // shared code it uses. See docs/client/Bundle-Chunks/00-Strategy.md.
           shared: {
             name(_module: unknown, chunks: { name?: string }[]): string {
               const names = chunks
