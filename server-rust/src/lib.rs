@@ -156,17 +156,16 @@ pub async fn run(config: ServerConfig) -> AppResult<()> {
         source,
     })?;
 
-    let use_axiom = db::get_setting(&db, "flag.useAxiomExporter")
-        .ok()
-        .flatten()
-        .map(|v| v == "1" || v == "true")
-        .unwrap_or(false);
+    // One pass over env vars + persisted settings, before telemetry init
+    // (it needs `use_axiom`). Logging of the outcome happens below, once
+    // the subscriber is live.
+    let runtime = config::resolve_runtime_config(&db);
 
-    telemetry::init(use_axiom)?;
+    telemetry::init(runtime.use_axiom)?;
 
     tracing::info!(
         db_path = %config.db_path.display(),
-        telemetry_axiom = use_axiom,
+        telemetry_axiom = runtime.use_axiom,
         "sqlite open, telemetry initialised"
     );
 
@@ -223,27 +222,16 @@ pub async fn run(config: ServerConfig) -> AppResult<()> {
             "could not create poster cache dir up-front — worker will retry");
     }
 
-    // OMDb auto-match key resolution. Env wins; the persisted
-    // `omdbApiKey` user setting is the fallback. `None` is fine — the
-    // scanner skips auto-match silently when no key is configured.
-    let omdb_key_from_env = std::env::var("OMDB_API_KEY").ok().filter(|s| !s.is_empty());
-    let omdb_key_from_db = match db::get_setting(&db, "omdbApiKey") {
-        Ok(opt) => opt.filter(|s| !s.is_empty()),
-        Err(err) => {
-            tracing::warn!(error = %err, "could not read omdbApiKey from user_settings; env-only");
-            None
-        }
-    };
-    app_config.omdb_api_key = omdb_key_from_env.or(omdb_key_from_db);
+    // Apply the resolved env/setting inputs and narrate the outcome now
+    // that telemetry is live.
+    app_config.omdb_api_key = runtime.omdb_api_key;
     if app_config.omdb_api_key.is_some() {
         tracing::info!("OMDb auto-match enabled");
     } else {
         tracing::info!("OMDb auto-match disabled — set OMDB_API_KEY env or omdbApiKey setting");
     }
 
-    app_config.supabase_jwks_url = std::env::var("SUPABASE_JWKS_URL")
-        .ok()
-        .filter(|s| !s.is_empty());
+    app_config.supabase_jwks_url = runtime.supabase_jwks_url;
     if app_config.supabase_jwks_url.is_some() {
         tracing::info!("Supabase identity verification enabled");
     } else {

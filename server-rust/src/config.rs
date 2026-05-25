@@ -210,6 +210,45 @@ impl AppConfig {
     }
 }
 
+/// Inputs resolved from env vars + persisted user settings at startup,
+/// collected into one result so `run()` doesn't interleave a dozen
+/// `std::env::var` / `get_setting` reads through the bootstrap sequence.
+#[derive(Debug, Clone, Default)]
+pub struct RuntimeConfig {
+    /// `flag.useAxiomExporter` user setting — selects the OTLP backend.
+    /// Consumed before telemetry init, so resolution can't log.
+    pub use_axiom: bool,
+    /// OMDb key: `OMDB_API_KEY` env wins; else the persisted `omdbApiKey`
+    /// user setting. `None` disables auto-match.
+    pub omdb_api_key: Option<String>,
+    /// `SUPABASE_JWKS_URL` env — identity JWT verification endpoint.
+    /// `None` makes the auth middleware a no-op.
+    pub supabase_jwks_url: Option<String>,
+}
+
+/// Resolve every env-var + persisted-setting input into a single result.
+/// Side effects are limited to reading env and the DB; the caller logs the
+/// outcome after telemetry is initialised (this runs before it).
+pub fn resolve_runtime_config(db: &Db) -> RuntimeConfig {
+    let env_str = |key: &str| std::env::var(key).ok().filter(|s| !s.is_empty());
+    let setting = |key: &str| {
+        crate::db::get_setting(db, key)
+            .ok()
+            .flatten()
+            .filter(|s| !s.is_empty())
+    };
+
+    let use_axiom = setting("flag.useAxiomExporter")
+        .map(|v| v == "1" || v == "true")
+        .unwrap_or(false);
+
+    RuntimeConfig {
+        use_axiom,
+        omdb_api_key: env_str("OMDB_API_KEY").or_else(|| setting("omdbApiKey")),
+        supabase_jwks_url: env_str("SUPABASE_JWKS_URL"),
+    }
+}
+
 /// Bundle of long-lived state the chunker + stream route both need. The
 /// router clones this for every request — every field is `Arc` / `Clone`.
 #[derive(Clone)]
