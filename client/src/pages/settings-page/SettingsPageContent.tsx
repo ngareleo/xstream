@@ -2,6 +2,7 @@ import { mergeClasses } from "@griffel/react";
 import { type FC } from "react";
 import { useSearchParams } from "react-router-dom";
 
+import { AccountTab } from "~/components/account-tab/AccountTab.js";
 import { DangerTab } from "~/components/danger-tab/DangerTab.js";
 import { FlagsTabAsync } from "~/components/flags-tab/FlagsTabAsync.js";
 import { LibraryTab } from "~/components/library-tab/LibraryTab.js";
@@ -11,7 +12,7 @@ import { TraceHistoryTabAsync } from "~/components/trace-history-tab/TraceHistor
 import { strings } from "./SettingsPage.strings.js";
 import { useSettingsStyles } from "./SettingsPage.styles.js";
 
-const ALL_SECTIONS = ["library", "metadata", "flags", "trace", "danger"] as const;
+const ALL_SECTIONS = ["account", "library", "metadata", "flags", "trace", "danger"] as const;
 type Section = (typeof ALL_SECTIONS)[number];
 
 // Flags + Trace History are dev-only — drop the buttons from the prod nav.
@@ -20,6 +21,7 @@ const SECTIONS: readonly Section[] = IS_DEV_BUILD
   : ALL_SECTIONS.filter((s): s is Section => s !== "flags" && s !== "trace");
 
 const SECTION_LABELS: Record<Section, string> = {
+  account: strings.sectionAccount,
   library: strings.sectionLibrary,
   metadata: strings.sectionMetadata,
   flags: strings.sectionFlags,
@@ -36,7 +38,7 @@ export const SettingsPageContent: FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
 
   const rawSection = searchParams.get("section");
-  const active: Section = isSection(rawSection) ? rawSection : "library";
+  const active: Section = isSection(rawSection) ? rawSection : "account";
 
   const setActive = (next: Section): void => {
     setSearchParams({ section: next }, { replace: true });
@@ -64,6 +66,7 @@ export const SettingsPageContent: FC = () => {
         </div>
         <div className={styles.sectionTitle}>{SECTION_LABELS[active]}</div>
         <div className={styles.sectionWrap}>
+          {active === "account" && <AccountTab />}
           {active === "library" && <LibraryTab />}
           {active === "metadata" && <MetadataTab />}
           {active === "flags" && <FlagsTabAsync />}

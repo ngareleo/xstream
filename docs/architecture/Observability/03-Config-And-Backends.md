@@ -25,6 +25,7 @@ The `flag.useAxiomExporter` feature flag in [`../../client/Feature-Flags/00-Regi
 
 ## Production backend: Axiom
 
+
 Production Tauri installs ship telemetry to a single Axiom dataset (`xstream`). Axiom accepts OTLP/HTTP natively, so the exporters above post directly with no collector in front. The operational runbook (account setup, datasets, API tokens, build-env wiring, rotation, bring-up checklist) is at [`../Deployment/04-Axiom-Production-Backend.md`](../Deployment/04-Axiom-Production-Backend.md). Threat model and embedded-token safeguards live at [`../Deployment/05-Telemetry-Ingestion-Security.md`](../Deployment/05-Telemetry-Ingestion-Security.md).
 
 Env-var contract (baked into the release Tauri bundle via the CI build env):

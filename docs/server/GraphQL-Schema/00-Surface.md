@@ -382,10 +382,31 @@ type TranscodeJob implements Node {
   errorCode: PlaybackErrorCode
 }
 
+# ── Identity ─────────────────────────────────────────────────────────────────
+
+"""
+Authenticated user identity. `id` is the Supabase UUID from the verified
+JWT `sub` claim. No email or display name in alpha — those live in
+Supabase and are looked up by `id` when investigating.
+"""
+type CurrentUser {
+  id: ID!
+}
+
 # ── Root ─────────────────────────────────────────────────────────────────────
 
 type Query {
   node(id: ID!): Node
+  """
+  Verified identity for the current request. Sourced from the JWT `sub`
+  claim after RS256 verification against the cached Supabase JWKS. `null`
+  when no `Authorization: Bearer …` header is attached, when the token
+  is invalid, or when `SUPABASE_JWKS_URL` is unset (server falls through
+  to anonymous). Alpha does not gate any other resolver on this — the
+  field exists so the client can render the signed-in state. See
+  `docs/architecture/Identity/`.
+  """
+  currentUser: CurrentUser
   libraries: [Library!]!
   video(id: ID!): Video
   """

@@ -17,7 +17,7 @@ use axum::{response::IntoResponse, routing::get, Router};
 use crate::config::{AppConfig, AppContext};
 use crate::error::{AppError, AppResult};
 use crate::graphql::{build_schema, XstreamSchema};
-use crate::request_context::extract_request_context;
+use crate::request_context::{extract_auth_identity, extract_request_context};
 use crate::services::ffmpeg_path::{resolve_ffmpeg_paths, FfmpegPaths};
 use crate::services::hw_accel::{resolve_hw_accel, HwAccelMode};
 
@@ -39,27 +39,30 @@ impl AppState {
 /// programmer typo, but propagating it through the type system means we
 /// catch it at startup with a clear `AppError::Cors`, not via panic.
 pub fn build_router(state: AppState) -> AppResult<Router> {
-    use async_graphql_axum::{GraphQL, GraphQLSubscription};
+    use async_graphql_axum::GraphQLSubscription;
     use axum::routing::MethodRouter;
 
-    // POST /graphql → query/mutation handler
-    // GET  /graphql → WebSocket upgrade for subscriptions (graphql-transport-ws)
+    // WS subscription auth gap tracked in docs/architecture/Identity/02-Session-And-Refresh.md.
     let graphql_method: MethodRouter<()> = MethodRouter::new()
-        .post_service(GraphQL::new(state.schema.clone()))
+        .post(routes::graphql_http::graphql_post)
         .get_service(GraphQLSubscription::new(state.schema.clone()))
         .options(|| async { axum::http::StatusCode::NO_CONTENT });
 
     let ctx = state.ctx.clone();
+    let schema = state.schema.clone();
     Ok(Router::new()
         .route("/healthz", get(healthz))
         .route("/graphql", graphql_method)
         .route("/stream/:job_id", get(routes::stream::stream_handler))
         .route("/poster/:basename", get(routes::poster::get_poster))
         .route("/settings", get(routes::settings::get_settings))
-        // Pass AppContext via Extension rather than State so we don't have
-        // to thread an `S` type parameter through every router builder.
+        // Inbound: cors → extract_request_context → Extension → extract_auth_identity → handler.
+        // extract_auth_identity must be inner to Extension (needs AppContext) and inner to
+        // extract_request_context (records on its span).
+        .layer(axum::middleware::from_fn(extract_auth_identity))
+        .layer(axum::Extension(schema))
         .layer(axum::Extension(ctx))
-        // Single outer middleware: extract W3C traceparent, build RequestContext,
+        // Outer middleware: extract W3C traceparent, build RequestContext,
         // create a per-request `http.request` span whose parent is the inbound
         // OTel context. Spans created downstream inherit it via Instrument.
         // We deliberately do NOT use `tower_http::TraceLayer`; its spans don't
@@ -153,17 +156,16 @@ pub async fn run(config: ServerConfig) -> AppResult<()> {
         source,
     })?;
 
-    let use_axiom = db::get_setting(&db, "flag.useAxiomExporter")
-        .ok()
-        .flatten()
-        .map(|v| v == "1" || v == "true")
-        .unwrap_or(false);
+    // One pass over env vars + persisted settings, before telemetry init
+    // (it needs `use_axiom`). Logging of the outcome happens below, once
+    // the subscriber is live.
+    let runtime = config::resolve_runtime_config(&db);
 
-    telemetry::init(use_axiom)?;
+    telemetry::init(runtime.use_axiom)?;
 
     tracing::info!(
         db_path = %config.db_path.display(),
-        telemetry_axiom = use_axiom,
+        telemetry_axiom = runtime.use_axiom,
         "sqlite open, telemetry initialised"
     );
 
@@ -220,22 +222,20 @@ pub async fn run(config: ServerConfig) -> AppResult<()> {
             "could not create poster cache dir up-front — worker will retry");
     }
 
-    // OMDb auto-match key resolution. Env wins; the persisted
-    // `omdbApiKey` user setting is the fallback. `None` is fine — the
-    // scanner skips auto-match silently when no key is configured.
-    let omdb_key_from_env = std::env::var("OMDB_API_KEY").ok().filter(|s| !s.is_empty());
-    let omdb_key_from_db = match db::get_setting(&db, "omdbApiKey") {
-        Ok(opt) => opt.filter(|s| !s.is_empty()),
-        Err(err) => {
-            tracing::warn!(error = %err, "could not read omdbApiKey from user_settings; env-only");
-            None
-        }
-    };
-    app_config.omdb_api_key = omdb_key_from_env.or(omdb_key_from_db);
+    // Apply the resolved env/setting inputs and narrate the outcome now
+    // that telemetry is live.
+    app_config.omdb_api_key = runtime.omdb_api_key;
     if app_config.omdb_api_key.is_some() {
         tracing::info!("OMDb auto-match enabled");
     } else {
         tracing::info!("OMDb auto-match disabled — set OMDB_API_KEY env or omdbApiKey setting");
+    }
+
+    app_config.supabase_jwks_url = runtime.supabase_jwks_url;
+    if app_config.supabase_jwks_url.is_some() {
+        tracing::info!("Supabase identity verification enabled");
+    } else {
+        tracing::info!("Supabase identity disabled — set SUPABASE_JWKS_URL to enable");
     }
 
     let ctx = AppContext::new(db, app_config, Arc::new(ffmpeg_paths), hw_accel);

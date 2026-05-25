@@ -16,7 +16,7 @@ mod watchlist;
 pub use episode::Episode;
 pub use film::{Film, FilmConnection, FilmEdge};
 pub use library::{Library, LibraryStats};
-pub use misc::{DirEntry, LibraryScanProgress, LibraryScanUpdate, SettingEntry};
+pub use misc::{CurrentUser, DirEntry, LibraryScanProgress, LibraryScanUpdate, SettingEntry};
 pub use node::{Node, PageInfo};
 pub use omdb::OmdbSearchResult;
 pub use playback_session::PlaybackSession;

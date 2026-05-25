@@ -7,6 +7,7 @@ use dashmap::DashMap;
 
 use crate::db::Db;
 use crate::graphql::scalars::Resolution;
+use crate::services::auth::JwksCache;
 use crate::services::ffmpeg_file::FileMetadata;
 use crate::services::ffmpeg_file::HwAccelConfig;
 use crate::services::ffmpeg_path::FfmpegPaths;
@@ -135,6 +136,8 @@ pub struct AppConfig {
     /// midnight; exhaustion logs a warn and skips further calls without
     /// failing the surrounding scan.
     pub omdb_daily_budget: u32,
+    /// Supabase JWKS endpoint (env `SUPABASE_JWKS_URL`). See `docs/architecture/Identity/`.
+    pub supabase_jwks_url: Option<String>,
 }
 
 /// Library-scanner tunables.
@@ -202,7 +205,47 @@ impl AppConfig {
             scan: ScanConfig::default(),
             omdb_api_key: None,
             omdb_daily_budget: crate::services::omdb::DEFAULT_DAILY_BUDGET,
+            supabase_jwks_url: None,
         }
+    }
+}
+
+/// Inputs resolved from env vars + persisted user settings at startup,
+/// collected into one result so `run()` doesn't interleave a dozen
+/// `std::env::var` / `get_setting` reads through the bootstrap sequence.
+#[derive(Debug, Clone, Default)]
+pub struct RuntimeConfig {
+    /// `flag.useAxiomExporter` user setting — selects the OTLP backend.
+    /// Consumed before telemetry init, so resolution can't log.
+    pub use_axiom: bool,
+    /// OMDb key: `OMDB_API_KEY` env wins; else the persisted `omdbApiKey`
+    /// user setting. `None` disables auto-match.
+    pub omdb_api_key: Option<String>,
+    /// `SUPABASE_JWKS_URL` env — identity JWT verification endpoint.
+    /// `None` makes the auth middleware a no-op.
+    pub supabase_jwks_url: Option<String>,
+}
+
+/// Resolve every env-var + persisted-setting input into a single result.
+/// Side effects are limited to reading env and the DB; the caller logs the
+/// outcome after telemetry is initialised (this runs before it).
+pub fn resolve_runtime_config(db: &Db) -> RuntimeConfig {
+    let env_str = |key: &str| std::env::var(key).ok().filter(|s| !s.is_empty());
+    let setting = |key: &str| {
+        crate::db::get_setting(db, key)
+            .ok()
+            .flatten()
+            .filter(|s| !s.is_empty())
+    };
+
+    let use_axiom = setting("flag.useAxiomExporter")
+        .map(|v| v == "1" || v == "true")
+        .unwrap_or(false);
+
+    RuntimeConfig {
+        use_axiom,
+        omdb_api_key: env_str("OMDB_API_KEY").or_else(|| setting("omdbApiKey")),
+        supabase_jwks_url: env_str("SUPABASE_JWKS_URL"),
     }
 }
 
@@ -224,6 +267,8 @@ pub struct AppContext {
     /// skips the metadata fetch step. Cheap-clone: wraps a shared
     /// `reqwest::Client` so the connection pool spans every call.
     pub omdb: Option<OmdbClient>,
+    /// `Some` when `SUPABASE_JWKS_URL` is set; `None` makes auth middleware a no-op.
+    pub jwks_cache: Option<JwksCache>,
 }
 
 impl AppContext {
@@ -235,14 +280,19 @@ impl AppContext {
     ) -> Self {
         let pool = FfmpegPool::new(config.transcode.clone());
         let daily_budget = config.omdb_daily_budget;
+        let http = reqwest::Client::new();
         let omdb = config.omdb_api_key.clone().map(|key| {
             // One Client → shared connection pool across every auto-match
             // call. reqwest::Client is internally Arc'd, so cloning it
             // for the OmdbClient wrapper is cheap. The budget counter
             // lives inside OmdbClient (Arc<Mutex<…>>) so every clone
             // shares the same daily quota.
-            OmdbClient::production(reqwest::Client::new(), key, daily_budget)
+            OmdbClient::production(http.clone(), key, daily_budget)
         });
+        let jwks_cache = config
+            .supabase_jwks_url
+            .clone()
+            .map(|url| JwksCache::new(url, http));
         Self {
             db,
             config,
@@ -254,6 +304,7 @@ impl AppContext {
             job_store: JobStore::new(),
             scan_state: ScanState::new(),
             omdb,
+            jwks_cache,
         }
     }
 
@@ -273,6 +324,7 @@ impl AppContext {
             scan: ScanConfig::default(),
             omdb_api_key: None,
             omdb_daily_budget: crate::services::omdb::DEFAULT_DAILY_BUDGET,
+            supabase_jwks_url: None,
         };
         let paths = Arc::new(FfmpegPaths {
             ffmpeg: PathBuf::from("/bin/true"),

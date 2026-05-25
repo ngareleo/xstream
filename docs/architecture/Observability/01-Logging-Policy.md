@@ -50,6 +50,7 @@ Every log record gets a `component` attribute automatically (set when calling `g
 - **On durations**: `*_ms` or `*_s` suffixed numeric attributes
 - **On counts**: `segment_count`, `segments_sent`, etc.
 - **On state changes**: the reason or trigger (`kill_reason`, `ready_state`)
+- **When a user is signed in**: `user.id` — the Supabase UUID from the verified JWT `sub` claim. Server-side, `extract_auth_identity` records it on the `http.request` span (the field is pre-declared as `tracing::field::Empty` so `record` is non-silent). Client-side, `getClientLogger` reads `getUserContext()` at emit time and attaches it per record. See [`docs/architecture/Identity/03-Telemetry-Correlation.md`](../Identity/03-Telemetry-Correlation.md).
 
 Do not include attributes that duplicate information already in the message body unless they are needed for Seq filtering.
 

@@ -4,6 +4,16 @@ type AudioStreamInfo {
 	sampleRate: Int!
 }
 
+"""
+The currently-authenticated user. Sourced from the verified JWT's
+`sub` claim — `id` is the Supabase UUID. `null` query result means no
+valid `Authorization` header was attached (or `SUPABASE_JWKS_URL` is
+not configured); resolvers do not gate on this in alpha.
+"""
+type CurrentUser {
+	id: ID!
+}
+
 type DirEntry {
 	name: String!
 	path: String!
@@ -336,6 +346,10 @@ enum ProfileStatus {
 }
 
 type Query {
+	"""
+	Verified identity. See `docs/architecture/Identity/`.
+	"""
+	currentUser: CurrentUser
 	node(id: ID!): Node
 	libraries: [Library!]!
 	videos(first: Int, libraryId: ID, search: String, mediaType: MediaType): VideoConnection!

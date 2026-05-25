@@ -10,6 +10,7 @@ export const strings = new LocalizedStrings({
     passwordLabel: "Password",
     passwordPlaceholder: "••••••••",
     submit: "Sign in",
+    submitting: "Signing in…",
     forgot: "Forgot password?",
     newHerePrefix: "New here?",
     newHereLink: "Create an account",

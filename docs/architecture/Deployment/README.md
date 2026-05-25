@@ -12,6 +12,8 @@ The Rust server runs **in-process** inside the Tauri shell on a free `127.0.0.1`
 | [`03-Build-Variants.md`](03-Build-Variants.md) | Prod/dev artifact split driven by `XSTREAM_VARIANT` — separate bundle identity for side-by-side install, client strip via `IS_DEV_BUILD` DefinePlugin + `devChunk` helper (and why the env check can't move into the helper), server strip via the `dev-features` Cargo feature on `xstream-server` and `xstream-tauri`, migration backward-compat. |
 | [`04-Axiom-Production-Backend.md`](04-Axiom-Production-Backend.md) | Axiom (hosted OTel backend) for production telemetry — account + dataset setup, ingest-only API tokens, build-env wiring, dev-time access, token rotation, free-tier headroom, and the bring-up checklist. |
 | [`05-Telemetry-Ingestion-Security.md`](05-Telemetry-Ingestion-Security.md) | Threat model for the embedded ingestion tokens in distributed Tauri bundles — defence in depth, what we are NOT doing for alpha (per-install enrollment, mTLS, POW), tripwires. |
+| [`06-Supabase-Project-Setup.md`](06-Supabase-Project-Setup.md) | Operator runbook for provisioning the Supabase project — auth provider, asymmetric JWT keys, redirect URLs, env wiring (`PUBLIC_SUPABASE_URL` / `PUBLIC_SUPABASE_ANON_KEY` / `SUPABASE_JWKS_URL`). |
+| [`07-Supabase-Identity-Security.md`](07-Supabase-Identity-Security.md) | Threat model for Supabase identity in a distributed Tauri bundle — what ships, what doesn't, worst-case leak posture, key rotation. Sibling to 05. |
 
 ## What's still open
 
