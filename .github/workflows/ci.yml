@@ -213,6 +213,11 @@ jobs:
       - name: Build
         run: bun run build
 
+      - name: Bundle size gate
+        # Asserts vendor-misc and the aggregate shared.* chunks stay under their
+        # ceilings (reads the dist/ produced by the Build step above).
+        run: bun run test:bundle-size
+
       - name: Prepare Pages artifact
         run: mkdir -p /tmp/pages && cp client/dist/stats.html /tmp/pages/index.html
         working-directory: ${{ github.workspace }}

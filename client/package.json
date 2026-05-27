@@ -12,6 +12,7 @@
     "format:check": "prettier --check src",
     "test": "vitest run --config vitest.config.ts",
     "test:watch": "vitest --config vitest.config.ts",
+    "test:bundle-size": "vitest run --config vitest.bundle.config.ts",
     "storybook": "storybook dev -p 6006",
     "build-storybook": "storybook build",
     "preview": "rsbuild preview",

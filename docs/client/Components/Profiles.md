@@ -131,12 +131,12 @@ pane URL params, and split-body resize via `useSplitResize` hook.
 
 ## Data
 
-### Relay fragments
+### Relay query and fragments
 
-- Root query: `ProfilesPageQuery` fetching profiles + films + watchlist.
-- Profile fragment: name, path, match status, file size, scanning state.
-- Film fragment: title, filename, director, genre, kind, matched, resolution,
-  etc.
+- **Root query:** `ProfilesPageContentQuery` — issued by `useLazyLoadQuery` in this page only. The query is owned by this page and must not be imported elsewhere; if another page needs the same data shape it defines its own operation (see [`architecture/Relay/00-Fragment-Contract.md`](../../architecture/Relay/00-Fragment-Contract.md) → "Queries only at the page level" for the bundler rationale).
+- **Profile fragment:** `ProfileRow_library` — name, path, match status, file size, scanning state.
+- **Film fragment:** `FilmRow_video` — title, filename, director, genre, kind, matched, resolution, etc.
+- **DetailPane fragment:** `DetailPane_video` — fields required by the right-rail inspector.
 
 ### Derived data
 

@@ -136,9 +136,10 @@ export default defineConfig({
             name: "vendor-react",
             chunks: "all" as const,
           },
-          // OpenTelemetry (api + sdk + exporters + instrumentations).
+          // OpenTelemetry. Includes protobufjs (a transitive OTLP-proto dep) so
+          // it tracks the OTel cadence instead of landing in the residual bucket.
           otel: {
-            test: /[\\/]@opentelemetry[\\/]/,
+            test: /[\\/]@opentelemetry[\\/]|[\\/]node_modules[\\/]protobufjs[\\/]|[\\/]@protobufjs[\\/]/,
             name: "vendor-otel",
             chunks: "all" as const,
           },
@@ -163,6 +164,12 @@ export default defineConfig({
             name: "vendor-router",
             chunks: "all" as const,
           },
+          // Supabase JS SDK (@supabase/*) — the whole SDK versions together.
+          supabase: {
+            test: /[\\/]@supabase[\\/]/,
+            name: "vendor-supabase",
+            chunks: "all" as const,
+          },
           // Residual node_modules — small, unrelated libs (react-localization, etc.).
           vendor: {
             test: /[\\/]node_modules[\\/]/,
@@ -170,11 +177,21 @@ export default defineConfig({
             chunks: "all" as const,
             priority: -10,
           },
-          // App source modules shared by 2+ async page/component chunks.
-          // Without this, Rspack auto-generates an anonymous numeric chunk.
+          // App modules shared by 2+ async route chunks, split by route affinity
+          // (one chunk per set of referencing routes) so a route loads only the
+          // shared code it uses. See docs/client/Bundle-Chunks/00-Strategy.md.
           shared: {
-            name: "shared",
+            name(_module: unknown, chunks: { name?: string }[]): string {
+              const names = chunks
+                .map((c) => c.name)
+                .filter((n): n is string => Boolean(n))
+                .sort();
+              return names.length > 0 ? `shared.${names.join("~")}` : "shared";
+            },
             minChunks: 2,
+            // Extract every shared affinity group, however small, instead of
+            // duplicating it across route chunks — cheap under local serving.
+            minSize: 0,
             chunks: "async" as const,
             priority: -20,
             reuseExistingChunk: true,
