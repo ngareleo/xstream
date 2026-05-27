@@ -1,4 +1,3 @@
-import { MemoryRouter } from "react-router-dom";
 import { expect, userEvent, within } from "storybook/test";
 import type { Meta, StoryObj } from "storybook-react-rsbuild";
 
@@ -7,14 +6,12 @@ import { FeedbackDialog } from "./FeedbackDialog.js";
 const meta: Meta<typeof FeedbackDialog> = {
   title: "Components/FeedbackDialog",
   component: FeedbackDialog,
-  parameters: { layout: "fullscreen" },
-  decorators: [
-    (Story) => (
-      <MemoryRouter initialEntries={["/player/abc123"]}>
-        <Story />
-      </MemoryRouter>
-    ),
-  ],
+  // The global preview decorator provides the router; set the route via its
+  // `router.initialEntries` param (a nested <Router> would crash).
+  parameters: {
+    layout: "fullscreen",
+    router: { initialEntries: ["/player/abc123"] },
+  },
   args: {
     open: true,
     onClose: () => {},
