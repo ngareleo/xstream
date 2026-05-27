@@ -53,8 +53,25 @@ impl Db {
     /// poisoning is a real but recoverable signal callers should be free
     /// to surface or retry.
     pub fn with<R>(&self, f: impl FnOnce(&Connection) -> DbResult<R>) -> DbResult<R> {
-        let guard = self.conn.lock().map_err(|_| DbError::PoisonedMutex)?;
-        f(&guard)
+        // Single choke-point for all query execution — one low-cardinality
+        // `db.query` span per call, timed including lock-wait so contention is
+        // visible. Child of the active request/service span (inherits trace_id +
+        // session.id). See docs/architecture/Observability/server/.
+        let span = tracing::info_span!(
+            "db.query",
+            db.duration_ms = tracing::field::Empty,
+            db.ok = tracing::field::Empty,
+        );
+        let _entered = span.enter();
+        let started = std::time::Instant::now();
+        let result = self
+            .conn
+            .lock()
+            .map_err(|_| DbError::PoisonedMutex)
+            .and_then(|guard| f(&guard));
+        span.record("db.duration_ms", started.elapsed().as_millis() as u64);
+        span.record("db.ok", result.is_ok());
+        result
     }
 }
 

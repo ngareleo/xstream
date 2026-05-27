@@ -17,8 +17,8 @@ Entry shape (each entry ends with the divider line described above):
 
 ## (current HEAD) — 2026-05-27
 
-**Files:** `docs/architecture/Identity/03-Telemetry-Correlation.md`, `docs/architecture/Observability/01-Logging-Policy.md`
-**Why:** Server-side `session.id` propagation via `x-session-id` header landed in feat/client-usage-telemetry-sessions-feedback; docs updated to reflect header read at request creation, span inheritance, and client↔server correlation in Seq/Axiom.
+**Files:** `docs/architecture/Identity/03-Telemetry-Correlation.md`, `docs/architecture/Observability/01-Logging-Policy.md`, `docs/architecture/Observability/server/00-Spans.md`, `docs/architecture/Startup/00-Boot-And-Shutdown.md`
+**Why:** Server telemetry curation for PR #70 (feat/client-usage-telemetry-sessions-feedback): server-side `session.id` propagation, startup/shutdown timing logs, new `db.query` span, `graphql operation` log, and `http.api_type` attribute documented; graceful shutdown notes pending `kill_all_jobs(5000)` wiring.
 
 ---
 

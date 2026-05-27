@@ -54,10 +54,17 @@ pub async fn extract_request_context(mut req: Request, next: Next) -> Result<Res
 
     let method = req.method().to_string();
     let target = req.uri().path().to_string();
+    // Split GraphQL from REST so dashboards can query each independently.
+    let api_type = if target.starts_with("/graphql") {
+        "graphql"
+    } else {
+        "rest"
+    };
     let span = tracing::info_span!(
         "http.request",
         http.method = %method,
         http.target = %target,
+        http.api_type = %api_type,
         http.status = tracing::field::Empty,
         duration_ms = tracing::field::Empty,
         trace_id = %trace_id,

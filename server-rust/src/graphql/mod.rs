@@ -2,6 +2,7 @@
 
 pub mod error_logger;
 pub mod mutation;
+pub mod operation_tracer;
 pub mod query;
 pub mod scalars;
 pub mod subscription;
@@ -12,6 +13,7 @@ use async_graphql::Schema;
 use crate::config::AppContext;
 use crate::db::Db;
 use crate::graphql::error_logger::ErrorLogger;
+use crate::graphql::operation_tracer::OperationTracer;
 
 pub use mutation::Mutation;
 pub use query::Query;
@@ -31,6 +33,8 @@ pub fn build_schema(app_ctx: AppContext) -> XstreamSchema {
         // tracing::error! it emits inherits the W3C trace context — the
         // resulting Seq event carries the same TraceId as the request.
         .extension(ErrorLogger)
+        // OperationTracer times each operation (name, duration, error count).
+        .extension(OperationTracer)
         .finish()
 }
 
