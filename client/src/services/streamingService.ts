@@ -1,6 +1,7 @@
 import { type Context, context } from "@opentelemetry/api";
 
 import { streamUrl } from "~/config/rustOrigin.js";
+import { getCurrentSessionId } from "~/services/userSession.js";
 import { getClientLogger } from "~/telemetry.js";
 
 const log = getClientLogger("streamingService");
@@ -29,8 +30,11 @@ export class StreamingService {
 
     try {
       const controller = this.abortController;
+      // Correlate the server stream span with the client user session.
+      const sessionId = getCurrentSessionId();
+      const headers = sessionId ? { "x-session-id": sessionId } : undefined;
       response = await context.with(parentContext, () =>
-        fetch(url, { signal: controller?.signal })
+        fetch(url, { headers, signal: controller?.signal })
       );
     } catch (err) {
       if ((err as Error).name !== "AbortError") {

@@ -15,6 +15,13 @@ Entry shape (each entry ends with the divider line described above):
 
 <!-- ENTRIES BELOW — newest first; each ends with a bare `---` line. The architect's next invocation will treat the no-entries state as the first-run case and prepend a bootstrap entry at HEAD. -->
 
+## (current HEAD) — 2026-05-27
+
+**Files:** `docs/architecture/Identity/03-Telemetry-Correlation.md`, `docs/architecture/Observability/01-Logging-Policy.md`
+**Why:** Server-side `session.id` propagation via `x-session-id` header landed in feat/client-usage-telemetry-sessions-feedback; docs updated to reflect header read at request creation, span inheritance, and client↔server correlation in Seq/Axiom.
+
+---
+
 ## ee8d107 — 2026-05-27
 
 **Files:** `docs/client/Config/00-ClientConfig.md`, `docs/client/Config/README.md`, `docs/code-style/Client-Conventions/00-Patterns.md`, `docs/INDEX.md`, `CLAUDE.md`
