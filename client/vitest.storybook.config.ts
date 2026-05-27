@@ -46,6 +46,7 @@ export default defineConfig({
       "react-relay",
       "relay-runtime",
       "relay-test-utils",
+      "graphql-ws",
       "react-router-dom",
       "@nova/react",
       "@nova/types",

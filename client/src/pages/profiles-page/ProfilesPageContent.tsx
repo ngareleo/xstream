@@ -16,7 +16,9 @@ import type { ProfilesPageContentQuery } from "~/relay/__generated__/ProfilesPag
 import { strings } from "./ProfilesPage.strings.js";
 import { useProfilesPageStyles } from "./ProfilesPage.styles.js";
 
-export const PROFILES_QUERY = graphql`
+// Page-owned query — not imported across pages, so it stays in this route's
+// chunk. See docs/architecture/Relay/00-Fragment-Contract.md.
+const PROFILES_QUERY = graphql`
   query ProfilesPageContentQuery {
     libraries {
       id
