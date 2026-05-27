@@ -1,9 +1,4 @@
-/**
- * Wires the (telemetry-free) user-session state machine to telemetry: a log +
- * counter on session start, a log + duration histogram on session end. Kept
- * separate from `userSession.ts` so that module stays a dependency-free leaf
- * that `~/telemetry.ts` can import without a cycle.
- */
+/** Wires the user-session state machine to telemetry (start/end log + session metrics). */
 
 import { getClientLogger } from "~/telemetry.js";
 

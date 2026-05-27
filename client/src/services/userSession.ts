@@ -1,17 +1,4 @@
-/**
- * User-session state machine. A session begins on the first activity and ends
- * after an idle gap with no activity — 15 min in prod, 1 min in dev. Playback
- * counts as activity: while a video plays the idle timer is disarmed, so a
- * playing-but-untouched page never expires. Once playback pauses, the idle
- * timer re-arms and the session ends if nothing else happens in time.
- *
- * The `session.id` produced here is stamped onto every client log and span (see
- * `~/telemetry.ts`) so usage can be reconstructed from telemetry. This module is
- * deliberately telemetry-free — it imports nothing from `~/telemetry.ts`, which
- * keeps it a leaf (telemetry imports `getCurrentSessionId` from here without a
- * cycle). Session-boundary telemetry is emitted by the `onStart`/`onEnd` hooks
- * passed to `initUserSession`; see `~/services/sessionTelemetry.ts`.
- */
+/** User-session state machine producing a `session.id`. See docs/architecture/Observability/01-Logging-Policy.md §"User sessions: activity-based tracking". */
 
 /** 1 min in dev (so sessions are testable by hand), 15 min in prod. */
 export const IDLE_TIMEOUT_MS = IS_DEV_BUILD ? 60_000 : 15 * 60_000;
@@ -60,32 +47,20 @@ function armIdleTimer(): void {
   idleTimer = setTimeout(expireSession, IDLE_TIMEOUT_MS);
 }
 
-/**
- * Start session tracking. Mints the first session immediately — opening the app
- * is itself activity — so telemetry emitted from boot carries a `session.id`.
- * Call once, after `initTelemetry()`.
- */
+/** Start session tracking, minting the first session immediately. Call once, after initTelemetry(). */
 export function initUserSession(sessionHooks: SessionHooks = {}): void {
   hooks = sessionHooks;
   startSession(nowMs());
   armIdleTimer();
 }
 
-/**
- * Record a user-activity signal (route change, click, key, mouse-move, scroll).
- * Mints a session if none is active, then re-arms the idle timer — unless
- * playback is active, in which case the timer stays disarmed.
- */
+/** Record a user-activity signal: mint a session if none is active and re-arm the idle timer (unless playback is active). */
 export function noteActivity(): void {
   if (currentSessionId === null) startSession(nowMs());
   if (!playbackActive) armIdleTimer();
 }
 
-/**
- * Mark playback as started/stopped. While active, the idle timer is disarmed so
- * the session survives a quiet page. When playback stops, the timer re-arms
- * from now, so the session ends one idle window after the user pauses.
- */
+/** Mark playback active/inactive; while active the idle timer is disarmed so the session survives a quiet page. */
 export function setPlaybackActive(active: boolean): void {
   if (active === playbackActive) return;
   playbackActive = active;

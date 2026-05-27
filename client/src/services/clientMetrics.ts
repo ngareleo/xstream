@@ -1,16 +1,4 @@
-/**
- * Client usage metrics. Thin recorders over OTel instruments so call sites stay
- * readable and the instrument set lives in one place.
- *
- * Cardinality rule: instrument attributes must be low-cardinality (route
- * template, resolution) — never `user.id` or `session.id`. "Unique users" and
- * "usage per day" are answered by querying distinct ids over logs/spans, not by
- * metric dimensions. See docs/architecture/Observability.
- *
- * Note: Seq does not ingest OTLP metrics. In dev these surface via the
- * ConsoleMetricExporter; real metric dashboards come from the Axiom path
- * (`flag.useAxiomExporter`). See `~/telemetry.ts`.
- */
+/** Client usage-metric recorders over OTel instruments. See docs/architecture/Observability/03-Config-And-Backends.md §"Metrics: not ingested by Seq". */
 
 import type { Counter, Histogram, Meter } from "@opentelemetry/api";
 

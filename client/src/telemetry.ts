@@ -99,9 +99,9 @@ export function initTelemetry(): void {
 
   propagation.setGlobalPropagator(new W3CTraceContextPropagator());
 
-  // Usage metrics (page visits, sessions, playtimes, stalls). Seq doesn't ingest
-  // OTLP metrics, so dev also mirrors to the console; real dashboards come from
-  // the Axiom path. See docs/architecture/Observability.
+  // Seq doesn't ingest OTLP metrics, so dev also mirrors to the console; real
+  // dashboards come from the Axiom path. See
+  // docs/architecture/Observability/03-Config-And-Backends.md §"Metrics: not ingested by Seq".
   const meterProvider = new MeterProvider({
     resource,
     readers: [
@@ -180,8 +180,7 @@ function sessionAttrs(): Record<string, string> {
 export function getClientLogger(component: string): ClientLog {
   // Resolve the logger at emit time, not here: modules imported before
   // initTelemetry() (e.g. via the router) would otherwise capture a null
-  // provider and silently no-op for the app's lifetime. (Tracers/meters already
-  // resolve lazily via the global API; this keeps loggers consistent.)
+  // provider and silently no-op forever.
   const emit = (
     severityNumber: SeverityNumber,
     severityText: string,

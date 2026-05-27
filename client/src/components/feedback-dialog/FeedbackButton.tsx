@@ -11,11 +11,7 @@ interface Props {
   iconSize?: number;
 }
 
-/**
- * Feedback trigger: a chat-icon button that opens the {@link FeedbackDialog}.
- * Owns the open/close state so call sites (AppHeader, player ControlBar) need
- * only drop it in with their own button styling.
- */
+/** Chat-icon button that opens the {@link FeedbackDialog}; owns its open state. */
 export const FeedbackButton: FC<Props> = ({ className, iconSize = 20 }) => {
   const [open, setOpen] = useState(false);
   return (

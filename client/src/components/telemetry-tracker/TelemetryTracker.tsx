@@ -15,12 +15,7 @@ function initialLoadMs(): number {
   return performance.now();
 }
 
-/**
- * Renders nothing. Mounted once at the router root, it bridges navigation and
- * raw DOM activity into the user-session idle timer, and emits a page-visit
- * (log + counter) plus a page-load-time histogram on every route. Mirrors the
- * null-rendering observer pattern of RouterNavigationLoader.
- */
+/** Null-rendering observer that feeds activity into the user session and emits page-visit telemetry. See docs/client/Components/TelemetryTracker.md. */
 export const TelemetryTracker: FC = () => {
   const { pathname } = useLocation();
   const prevPath = useRef<string | null>(null);

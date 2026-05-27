@@ -16,15 +16,7 @@ interface Props {
   onClose: () => void;
 }
 
-/**
- * Modal feedback form (1–5 star rating + optional message). On submit it emits a
- * `feedback.submitted` telemetry event tagged with the current route, rating,
- * and message — no GraphQL/DB; feedback is reviewed in the telemetry backend.
- * The Nova eventing sink is a no-op today, so this logs directly.
- *
- * Controlled by the caller (`open`/`onClose`); rendered both from the AppHeader
- * (global) and the player ControlBar (so the player has feedback too).
- */
+/** Modal feedback form (1–5 rating + message) that emits a `feedback.submitted` log. See docs/client/Components/FeedbackDialog.md. */
 export const FeedbackDialog: FC<Props> = ({ open, onClose }) => {
   const styles = useFeedbackDialogStyles();
   const { pathname } = useLocation();
@@ -32,7 +24,6 @@ export const FeedbackDialog: FC<Props> = ({ open, onClose }) => {
   const [message, setMessage] = useState("");
   const [submitted, setSubmitted] = useState(false);
 
-  // Reset to a clean form whenever the dialog (re)opens.
   useEffect(() => {
     if (open) {
       setRating(0);
@@ -62,7 +53,6 @@ export const FeedbackDialog: FC<Props> = ({ open, onClose }) => {
       "feedback.text": message.trim(),
     });
     setSubmitted(true);
-    // Brief acknowledgement, then close.
     window.setTimeout(onClose, 1200);
   };
 
