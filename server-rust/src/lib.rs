@@ -147,6 +147,7 @@ pub struct ServerConfig {
 /// exporter; calling `run` twice would re-init both and trip the
 /// "global default subscriber already set" guard.
 pub async fn run(config: ServerConfig) -> AppResult<()> {
+    let boot_started = std::time::Instant::now();
     // Open the DB before telemetry init so we can read `flag.useAxiomExporter`
     // from `user_settings` and pick the correct OTLP destination at boot.
     // Server-side flag flips therefore only take effect on next restart — the
@@ -279,20 +280,28 @@ pub async fn run(config: ServerConfig) -> AppResult<()> {
             source,
         })?;
 
-    tracing::info!(addr = %config.bind_addr, "xstream-server listening");
+    tracing::info!(
+        addr = %config.bind_addr,
+        startup_duration_ms = boot_started.elapsed().as_millis() as u64,
+        "xstream-server listening"
+    );
 
     let serve = axum::serve(listener, app);
-    tokio::select! {
+    let (signal_name, shutdown_started) = tokio::select! {
         result = serve => {
             if let Err(err) = result {
                 tracing::error!(error = %err, "axum serve loop exited with error");
                 telemetry::shutdown();
                 return Err(AppError::Serve(err));
             }
+            ("serve_exit", std::time::Instant::now())
         }
         signal = shutdown_signal() => {
             match signal {
-                Ok(name) => tracing::info!(signal = name, "shutdown initiated"),
+                Ok(name) => {
+                    tracing::info!(signal = name, "shutdown initiated");
+                    (name, std::time::Instant::now())
+                }
                 Err(err) => {
                     tracing::error!(error = %err, "signal handler install failed");
                     telemetry::shutdown();
@@ -300,8 +309,17 @@ pub async fn run(config: ServerConfig) -> AppResult<()> {
                 }
             }
         }
-    }
+    };
 
+    // Graceful shutdown is telemetry-only today (the documented ffmpeg
+    // kill_all_jobs sweep is a separate follow-up). Time the window from signal
+    // to here and emit it *before* `telemetry::shutdown()` flushes/closes the
+    // exporter — a log after the flush wouldn't reach Seq/Axiom.
+    tracing::info!(
+        signal = signal_name,
+        shutdown_duration_ms = shutdown_started.elapsed().as_millis() as u64,
+        "xstream-server graceful shutdown complete"
+    );
     telemetry::shutdown();
     Ok(())
 }

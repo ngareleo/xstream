@@ -22,7 +22,10 @@ Keep rows short (≤ ~120 chars). When adding a new topic file to `docs/`, add i
 | OTel architecture (both sides, dev/prod backends) | `docs/architecture/Observability/00-Architecture.md` |
 | Logging policy, trace-context threading | `docs/architecture/Observability/01-Logging-Policy.md` |
 | Server spans (`stream.request`, `job.resolve`, `transcode.job`) | `docs/architecture/Observability/server/00-Spans.md` |
-| Client spans (`playback.session`, `chunk.stream`, `buffer.backpressure`) | `docs/architecture/Observability/client/00-Spans.md` |
+| Client spans + logs + metrics (playback.session, page.visit, feedback, usage metrics) | `docs/architecture/Observability/client/00-Spans.md` |
+| User sessions: activity-based lifecycle, idle timeout, session.id stamping on spans/logs | `docs/architecture/Observability/01-Logging-Policy.md` § User sessions |
+| Feedback PII exception + redaction allow-list | `docs/architecture/Observability/01-Logging-Policy.md` § PII Redaction |
+| Metrics vs Seq: what gets ingested where, production backend differences | `docs/architecture/Observability/03-Config-And-Backends.md` § Metrics |
 | Seq search filters | `docs/architecture/Observability/02-Searching-Seq.md` |
 | Trace-first verification workflow (decide signal, add logs, query Seq; span.addEvent gotcha) | `docs/architecture/Observability/04-Verification-Workflow.md` |
 | OTel env vars, switching backends, local-dev Seq API-key setup | `docs/architecture/Observability/03-Config-And-Backends.md` |
@@ -52,6 +55,8 @@ Keep rows short (≤ ~120 chars). When adding a new topic file to `docs/`, add i
 | ShowDetailsOverlay component spec (`?show=<id>` overlay, season tree, sibling to FilmDetailsOverlay) | `docs/client/Components/ShowDetailsOverlay.md` |
 | Outstanding redesign work (working document of items not yet shipped) | `docs/release/Outstanding-Work.md` |
 | AppHeader spec (glass, custom caret, scan button, suggestions dropdown, ARIA) — exemplar component spec | `docs/client/Components/AppHeader.md` |
+| FeedbackDialog + FeedbackButton (user feedback submission, rating + text, telemetry integration) | `docs/client/Components/FeedbackDialog.md` + `FeedbackButton.md` |
+| TelemetryTracker (activity observer, route tracking, page-visit logging, session metrics) | `docs/client/Components/TelemetryTracker.md` |
 | Resolution ladder + enum mirror chain | `docs/server/Config/01-Resolution-Ladder.md` |
 | AppConfig, library configuration | `docs/server/Config/00-AppConfig.md` |
 | GraphQL schema surface | `docs/server/GraphQL-Schema/00-Surface.md` |
@@ -63,6 +68,7 @@ Keep rows short (≤ ~120 chars). When adding a new topic file to `docs/`, add i
 | ffmpeg negative-DTS caveat (B-frame reorder; HLS muxer flag-dropping; direct fmp4 + tail-reader fix) | `docs/server/FFmpeg-Caveats/01-Negative-DTS.md` |
 | ffmpeg tfdt vs first-sample DTS mismatch (empty elst offset accumulates; diagnostic walkthrough) | `docs/server/FFmpeg-Caveats/02-Tfdt-Sample-Mismatch.md` |
 | Client compile-time tunables (`clientConfig`), two-layer config model | `docs/client/Config/00-ClientConfig.md` |
+| Route-template source of truth (`ROUTE_PATHS`, `RoutePath`, `ALL_ROUTE_PATHS`; single-source pattern for router + telemetry cardinality) | `docs/client/Config/README.md` (route paths subsection) |
 | Feature-flag registry | `docs/client/Feature-Flags/00-Registry.md` |
 | Client debugging playbooks | `docs/client/Debugging-Playbooks/00-Common-Issues.md` |
 | Rsbuild chunk-split groups, regex anchor, `bun run analyze` | `docs/client/Bundle-Chunks/00-Strategy.md` |

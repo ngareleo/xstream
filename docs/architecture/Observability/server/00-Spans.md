@@ -9,8 +9,12 @@
 | `library.tv_discovery` | `tv_discovery::discover_tv_shows` per `tvShows` library | attrs: `library_name`. Events: per-show progress via `scan_state.mark_progress_with_context` (phases `discovering_tv`, `fetching_omdb`); `tv_discovery: show_processed` (carries `show`, `seasons`, `episodes`, `omdb_matched`); `tv_discovery_complete`. See [`../../Library-Scan/03-Show-Entity.md`](../../Library-Scan/03-Show-Entity.md). |
 | `library.availability_probe` | `services::profile_availability::poll_once`, every `availability_interval_ms` (default = `scan_interval_ms`, 30 s) | Events: `library went offline` (warn, `online → offline` flip), `library is online — kicking catch-up scan` (info, any → `online`). Per-cycle status writes are silent — only flips log. See [`../../Library-Scan/04-Profile-Availability.md`](../../Library-Scan/04-Profile-Availability.md). |
 | `poster_cache.poll` | `services::poster_cache::poll_once`, every `POLL_INTERVAL` (15 s) | Events: `downloading poster cache batch` (info, `count`); per-row `poster download failed` / `poster row update failed` (warn). Only fires when there's pending work — empty cycles emit no events. See [`../../Library-Scan/05-Poster-Caching.md`](../../Library-Scan/05-Poster-Caching.md). |
+| `http.request` | One per HTTP request (GET /stream, POST /graphql, etc.) | Automatically instrumented by the tower middleware. Attributes: `method`, `path`, `status`, `duration_ms`, `trace_id`, **`http.api_type`** (`"graphql"` for requests matching `/graphql*` routes, `"rest"` otherwise — added in telemetry PR #70 to distinguish API traffic by type). Child spans inherit these attributes. See "Per-request access log" section below. |
+| `db.query` | `Db::with()` call — every SQL execution, including lock-wait time | `db.duration_ms` (elapsed time incl. lock-wait); `db.ok` (true if no error). Low-cardinality span per request; child of the active `http.request` span, so it inherits `trace_id` + `session.id`. No query name/text in the span — SQL is sensitive (queries are in logs only if explicitly instrumented elsewhere). Useful for identifying database performance bottlenecks and lock contention. Added in PR #70. |
 
 Structured log events are emitted for each significant state transition (init ready, transcode complete, scan matched, etc.) with a `component` attribute for easy filtering. When a span event already covers a state transition, do not emit a duplicate log record — prefer `span.addEvent()` over a parallel `log.info()`.
+
+**GraphQL operation log:** The `OperationTracer` async-graphql extension emits a structured log per GraphQL request with attributes: `graphql.operation` (operation name, or `"anonymous"` if none — operation name is an attribute not a span name to preserve cardinality), `graphql.duration_ms` (wall-clock execute time), `graphql.error_count` (how many errors in the response). Added in PR #70.
 
 ---
 
@@ -33,6 +37,17 @@ The server emits one structured `info`-level log per HTTP request. Five fields a
 When no inbound `traceparent` is present: `trace_id` is empty string, body renders `(trace=-)`.
 
 The server pulls `trace_id` from the `OtelContext` populated by the tracing middleware. To find the access log for a specific trace: `trace_id = '<id>'` (or grep the body for `trace=<id>`).
+
+---
+
+## Server Startup and Shutdown Timing Logs
+
+Two application-level logs mark the server lifecycle and provide timing measurements:
+
+| Log | When | Fields | Notes |
+|---|---|---|---|
+| `"xstream-server listening"` | After the axum server binds and is ready for requests | `startup_duration_ms` (time from `lib.rs::run()` entry to this log), `port`, other config details | This is the boot-complete marker. The `startup_duration_ms` captures cold-start time from process entry through DB initialization, job restoration, and first scan trigger. Added in PR #70. |
+| `"xstream-server graceful shutdown complete"` | After the axum `select!` returns and all foreground services have wound down | `shutdown_duration_ms` (time from shutdown signal to this log), `signal` (`"SIGTERM"` \| `"SIGINT"` \| `"serve_exit"` — which signal / error caused the exit), emitted *before* `telemetry::shutdown()` flushes the exporter so the log reaches Seq/Axiom | This log marks orderly shutdown. Emitted inside the request span context for tracing visibility. Note: `kill_all_jobs(5000)` ffmpeg sweep is pending (not yet wired in PR #70); see [`../../Startup/00-Boot-And-Shutdown.md`](../../Startup/00-Boot-And-Shutdown.md) for current graceful-shutdown scope. Added in PR #70. |
 
 ---
 

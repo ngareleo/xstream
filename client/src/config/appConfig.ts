@@ -89,6 +89,12 @@ export interface ClientConfig {
     /** Emit a buffer-health log every N appended segments. */
     healthLogIntervalSegments: number;
   };
+  session: {
+    /** Idle gap after which a user session ends — 1 min in dev (hand-testable),
+     *  15 min in prod. See docs/architecture/Observability/01-Logging-Policy.md
+     *  §"User sessions: activity-based tracking". */
+    idleTimeoutMs: number;
+  };
 }
 
 export const clientConfig: ClientConfig = {
@@ -119,6 +125,9 @@ export const clientConfig: ClientConfig = {
     forwardResumeS: 20,
     backBufferKeepS: 10,
     healthLogIntervalSegments: 20,
+  },
+  session: {
+    idleTimeoutMs: IS_DEV_BUILD ? 60_000 : 15 * 60_000,
   },
 };
 

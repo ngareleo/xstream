@@ -15,6 +15,27 @@ Entry shape (each entry ends with the divider line described above):
 
 <!-- ENTRIES BELOW — newest first; each ends with a bare `---` line. The architect's next invocation will treat the no-entries state as the first-run case and prepend a bootstrap entry at HEAD. -->
 
+## (current HEAD) — 2026-05-27
+
+**Files:** `docs/architecture/Identity/03-Telemetry-Correlation.md`, `docs/architecture/Observability/01-Logging-Policy.md`, `docs/architecture/Observability/server/00-Spans.md`, `docs/architecture/Startup/00-Boot-And-Shutdown.md`
+**Why:** Server telemetry curation for PR #70 (feat/client-usage-telemetry-sessions-feedback): server-side `session.id` propagation, startup/shutdown timing logs, new `db.query` span, `graphql operation` log, and `http.api_type` attribute documented; graceful shutdown notes pending `kill_all_jobs(5000)` wiring.
+
+---
+
+## ee8d107 — 2026-05-27
+
+**Files:** `docs/client/Config/00-ClientConfig.md`, `docs/client/Config/README.md`, `docs/code-style/Client-Conventions/00-Patterns.md`, `docs/INDEX.md`, `CLAUDE.md`
+**Why:** Reviewer feedback sync: appConfig.ts gained `session` namespace with `idleTimeoutMs` (dev/prod tuning); new `routePaths.ts` establishes single source of truth for route templates. Docs updated: ClientConfig table adds session namespace + idle-timeout tuning guidance; Config README adds route-paths subsection; Client-Conventions docs route-template pattern for cardinality control; INDEX adds row for route-paths; CLAUDE.md client layout mentions config/ and routePaths.ts.
+
+---
+
+## 415ddb5 — 2026-05-26 — Client telemetry + feedback feature docs (same-session curation)
+
+**Files:** `docs/architecture/Observability/client/00-Spans.md`, `docs/architecture/Observability/01-Logging-Policy.md`, `docs/architecture/Observability/03-Config-And-Backends.md`, `docs/client/Components/FeedbackDialog.md` (new), `docs/client/Components/FeedbackButton.md` (new), `docs/client/Components/TelemetryTracker.md` (new), `docs/client/Components/README.md`, `docs/INDEX.md`, `docs/SUMMARY.md`, `docs/todo.md`, `CLAUDE.md`
+**Why:** Curator sync for feat/client-usage-telemetry-sessions-feedback PR: new client telemetry + feedback feature ships with user-session tracking (idle-based 15m/1m prod/dev), OTel metrics SDK integration (counters + histograms: page.visits, page.load_time_ms, user.sessions, user.session.duration_ms, playback.playtime_ms, playback.stalls, playback.stall.duration_ms), feedback dialog (rating + text logging, no backend), TelemetryTracker observer (activity + route tracking), and SessionAttributeSpanProcessor (session.id on all spans/logs). Updated observability docs with new logs, metrics, sessions section, feedback PII allow-list exception. Added three component specs (FeedbackDialog, FeedbackButton, TelemetryTracker) and updated INDEX + SUMMARY. Marked OBS-001/003/004 partially complete in todo.md. Bug fix: logger now resolves at emit time, fixing null-provider silencing for modules imported before initTelemetry().
+
+---
+
 ## 2026-05-11 — Axiom exporter flag-gating curation verification (curator check, no edits needed)
 
 **Files:** no doc updates needed

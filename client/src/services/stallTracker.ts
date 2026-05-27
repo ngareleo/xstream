@@ -2,7 +2,9 @@ import { type Span } from "@opentelemetry/api";
 
 import { clientConfig } from "~/config/appConfig.js";
 import { getClientLogger, getClientTracer } from "~/telemetry.js";
+import type { Resolution } from "~/types.js";
 
+import { recordStall } from "./clientMetrics.js";
 import { getSessionContext } from "./playbackSession.js";
 import type { PlaybackTicker } from "./playbackTicker.js";
 
@@ -13,6 +15,8 @@ export interface StallTrackerDeps {
   videoEl: HTMLVideoElement;
   /** Seconds buffered ahead of the current playhead, or null if nothing buffered. */
   getBufferedAheadSeconds: () => number | null;
+  /** Current resolution — tags the stall metric for per-resolution stall rates. */
+  getResolution: () => Resolution;
   /** Controller's startup flag — we only debounce-show the spinner for
    *  mid-playback stalls, not for the initial startup loading phase. */
   hasStartedPlayback: () => boolean;
@@ -129,6 +133,7 @@ export class StallTracker {
     if (!this.stallSpan) return;
     const durationMs = this.stallStartedAt !== null ? Date.now() - this.stallStartedAt : 0;
     this.stallSpan.setAttribute("stall.duration_ms", durationMs);
+    recordStall(this.deps.getResolution(), durationMs);
     this.stallSpan.addEvent(reason);
     this.stallSpan.end();
     this.stallSpan = null;

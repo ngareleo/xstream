@@ -6,6 +6,7 @@ import { Environment, Network, Observable, RecordSource, Store } from "relay-run
 import { graphqlHttpUrl, graphqlWsUrl } from "~/config/rustOrigin.js";
 import { getAccessToken } from "~/services/auth.js";
 import { getSessionContext } from "~/services/playbackSession.js";
+import { getCurrentSessionId } from "~/services/userSession.js";
 
 const SERVER_URL = graphqlHttpUrl();
 const WS_URL = graphqlWsUrl();
@@ -25,6 +26,11 @@ const fetchFn: FetchFunction = async (operation, variables) => {
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (accessToken) {
     headers.Authorization = `Bearer ${accessToken}`;
+  }
+  // Correlate server logs/spans with the client user session. See request_context.rs.
+  const sessionId = getCurrentSessionId();
+  if (sessionId) {
+    headers["x-session-id"] = sessionId;
   }
   // FetchInstrumentation inherits the active playback context for traceparent linking.
   const response = await context.with(getSessionContext(), () =>

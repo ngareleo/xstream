@@ -68,15 +68,16 @@ xstream/
 └── client/src/
     ├── main.tsx router.tsx         # RelayEnvironmentProvider + RouterProvider + NovaEventingProvider
     ├── relay/                      # environment.ts + __generated__/ (gitignored, regenerated)
+    ├── config/                     # appConfig.ts (playback/buffer/session tunables), routePaths.ts (single source of truth for route templates)
     ├── styles/tokens.ts            # Xstream design tokens
     ├── lib/icons.tsx               # icon exports
     ├── pages/                      # XxxPage.tsx (Suspense shell) + XxxPageContent.tsx (data + layout)
     ├── components/                 # one kebab-case directory per component — colocated .styles.ts, .strings.ts, .events.ts, .stories.tsx
     ├── events/                     # cross-cutting Nova event domains — playback, overlay, detail-pane, profiles, search, error
     ├── hooks/                      # useChunkedPlayback, useVideoPlayback, useVideoSync, useJobSubscription, useSplitResize
-    ├── services/                   # StreamingService, BufferManager, StreamingLogger
+    ├── services/                   # StreamingService, BufferManager, StreamingLogger, userSession, sessionTelemetry, clientMetrics
     ├── storybook/                  # withNovaEventing, withLayout, withRelay decorators
-    └── utils/                      # pure helpers — formatters, lazy
+    └── utils/                      # pure helpers — formatters, lazy, routeTemplate
 ```
 
 ## Engineering principles + code style

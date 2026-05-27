@@ -54,18 +54,34 @@ pub async fn extract_request_context(mut req: Request, next: Next) -> Result<Res
 
     let method = req.method().to_string();
     let target = req.uri().path().to_string();
+    // Split GraphQL from REST so dashboards can query each independently.
+    let api_type = if target.starts_with("/graphql") {
+        "graphql"
+    } else {
+        "rest"
+    };
     let span = tracing::info_span!(
         "http.request",
         http.method = %method,
         http.target = %target,
+        http.api_type = %api_type,
         http.status = tracing::field::Empty,
         duration_ms = tracing::field::Empty,
         trace_id = %trace_id,
         user.id = tracing::field::Empty,
+        session.id = tracing::field::Empty,
     );
     // Inbound `traceparent` becomes the parent of this span — so the OTel
     // export carries the same trace_id the client started.
     span.set_parent(otel_ctx);
+
+    // Client user-session id (`x-session-id`) — recorded on the request span so
+    // every server log/event in this request correlates with the client session
+    // in Seq/Axiom. Absent for anonymous/peer requests. See
+    // docs/architecture/Observability/01-Logging-Policy.md §"User sessions".
+    if let Some(session_id) = session_id_from_headers(req.headers()) {
+        span.record("session.id", session_id.as_str());
+    }
 
     let started = std::time::Instant::now();
     let response = next.run(req).instrument(span.clone()).await;
@@ -101,6 +117,17 @@ pub(crate) fn otel_context_from_headers(headers: &HeaderMap) -> OtelContext {
     opentelemetry::global::get_text_map_propagator(|propagator| {
         propagator.extract(&HeaderExtractor(headers))
     })
+}
+
+/// Reads the client user-session id from the `x-session-id` header, trimmed.
+/// `None` when absent or blank.
+pub(crate) fn session_id_from_headers(headers: &HeaderMap) -> Option<String> {
+    headers
+        .get("x-session-id")
+        .and_then(|v| v.to_str().ok())
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(str::to_string)
 }
 
 /// Verify the Bearer JWT and record `user.id` on the http.request span. See `docs/architecture/Identity/02-Session-And-Refresh.md`.
@@ -223,5 +250,29 @@ mod tests {
         // Operators noticing missing trace correlation in Seq will look at
         // the request log — no need to fail the request itself.
         assert!(!ctx.span().span_context().is_valid());
+    }
+
+    #[test]
+    fn reads_session_id_from_x_session_id_header() {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            "x-session-id",
+            "94a4e354-769f-4e1a-a1e1-ae4643c2daf2"
+                .parse()
+                .expect("ascii"),
+        );
+        assert_eq!(
+            session_id_from_headers(&headers).as_deref(),
+            Some("94a4e354-769f-4e1a-a1e1-ae4643c2daf2")
+        );
+    }
+
+    #[test]
+    fn session_id_is_none_when_header_absent_or_blank() {
+        assert_eq!(session_id_from_headers(&HeaderMap::new()), None);
+
+        let mut blank = HeaderMap::new();
+        blank.insert("x-session-id", "   ".parse().expect("ascii"));
+        assert_eq!(session_id_from_headers(&blank), None);
     }
 }
