@@ -45,6 +45,12 @@ featureFlags (featureFlags.ts)     ← runtime per-user overrides, some knobs on
 | `backBufferKeepS` | 10 | Evict media older than this behind the playhead to cap memory. |
 | `healthLogIntervalSegments` | 20 | Emit a buffer-health log every N appended segments. |
 
+### `session`
+
+| Key | Default | Purpose |
+|---|---|---|
+| `idleTimeoutMs` | 60_000 (dev) / 900_000 (prod) | User-session idle timeout in milliseconds. When the user is inactive for longer than this window, the current session expires and a new one begins on the next activity. Dev value (1 min) allows rapid hand-testing; prod (15 min) aligns with typical browsing sessions. The [userSession state machine](../../../architecture/Observability/01-Logging-Policy.md) emits "Session started" and "Session ended" logs, plus `user.sessions` counter and `user.session.duration_ms` histogram when boundaries cross. Playback activity (ongoing `PlaybackController` chunk requests) counts as user activity so sessions don't expire mid-video. See [`TelemetryTracker`](../Components/TelemetryTracker.md) for how activity is detected. |
+
 ## History
 
 Previously the playback constants lived in `client/src/services/playbackConfig.ts` (UPPER_SNAKE_CASE) and buffer constants in `client/src/services/bufferConfig.ts`. Both were deleted in PR #35 (`cbfdd56` + `680e209`); constants migrated to `clientConfig` under camelCase keys. `PlaybackStatus` moved to `client/src/types.ts`. `BufferConfig` is re-exported as `ClientConfig["buffer"]` for backward-compatible imports.

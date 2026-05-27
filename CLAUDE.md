@@ -68,6 +68,7 @@ xstream/
 └── client/src/
     ├── main.tsx router.tsx         # RelayEnvironmentProvider + RouterProvider + NovaEventingProvider
     ├── relay/                      # environment.ts + __generated__/ (gitignored, regenerated)
+    ├── config/                     # appConfig.ts (playback/buffer/session tunables), routePaths.ts (single source of truth for route templates)
     ├── styles/tokens.ts            # Xstream design tokens
     ├── lib/icons.tsx               # icon exports
     ├── pages/                      # XxxPage.tsx (Suspense shell) + XxxPageContent.tsx (data + layout)

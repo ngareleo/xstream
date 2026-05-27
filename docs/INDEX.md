@@ -68,6 +68,7 @@ Keep rows short (≤ ~120 chars). When adding a new topic file to `docs/`, add i
 | ffmpeg negative-DTS caveat (B-frame reorder; HLS muxer flag-dropping; direct fmp4 + tail-reader fix) | `docs/server/FFmpeg-Caveats/01-Negative-DTS.md` |
 | ffmpeg tfdt vs first-sample DTS mismatch (empty elst offset accumulates; diagnostic walkthrough) | `docs/server/FFmpeg-Caveats/02-Tfdt-Sample-Mismatch.md` |
 | Client compile-time tunables (`clientConfig`), two-layer config model | `docs/client/Config/00-ClientConfig.md` |
+| Route-template source of truth (`ROUTE_PATHS`, `RoutePath`, `ALL_ROUTE_PATHS`; single-source pattern for router + telemetry cardinality) | `docs/client/Config/README.md` (route paths subsection) |
 | Feature-flag registry | `docs/client/Feature-Flags/00-Registry.md` |
 | Client debugging playbooks | `docs/client/Debugging-Playbooks/00-Common-Issues.md` |
 | Rsbuild chunk-split groups, regex anchor, `bun run analyze` | `docs/client/Bundle-Chunks/00-Strategy.md` |

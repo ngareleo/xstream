@@ -15,6 +15,13 @@ Entry shape (each entry ends with the divider line described above):
 
 <!-- ENTRIES BELOW — newest first; each ends with a bare `---` line. The architect's next invocation will treat the no-entries state as the first-run case and prepend a bootstrap entry at HEAD. -->
 
+## ee8d107 — 2026-05-27
+
+**Files:** `docs/client/Config/00-ClientConfig.md`, `docs/client/Config/README.md`, `docs/code-style/Client-Conventions/00-Patterns.md`, `docs/INDEX.md`, `CLAUDE.md`
+**Why:** Reviewer feedback sync: appConfig.ts gained `session` namespace with `idleTimeoutMs` (dev/prod tuning); new `routePaths.ts` establishes single source of truth for route templates. Docs updated: ClientConfig table adds session namespace + idle-timeout tuning guidance; Config README adds route-paths subsection; Client-Conventions docs route-template pattern for cardinality control; INDEX adds row for route-paths; CLAUDE.md client layout mentions config/ and routePaths.ts.
+
+---
+
 ## 415ddb5 — 2026-05-26 — Client telemetry + feedback feature docs (same-session curation)
 
 **Files:** `docs/architecture/Observability/client/00-Spans.md`, `docs/architecture/Observability/01-Logging-Policy.md`, `docs/architecture/Observability/03-Config-And-Backends.md`, `docs/client/Components/FeedbackDialog.md` (new), `docs/client/Components/FeedbackButton.md` (new), `docs/client/Components/TelemetryTracker.md` (new), `docs/client/Components/README.md`, `docs/INDEX.md`, `docs/SUMMARY.md`, `docs/todo.md`, `CLAUDE.md`
