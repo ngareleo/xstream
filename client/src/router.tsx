@@ -5,6 +5,7 @@ import { AppShell } from "~/components/app-shell/AppShell.js";
 import { AuthLayout } from "~/components/auth-layout/AuthLayout.js";
 import { ErrorBoundary } from "~/components/error-boundary/ErrorBoundary.js";
 import { TelemetryTracker } from "~/components/telemetry-tracker/TelemetryTracker.js";
+import { ROUTE_PATHS } from "~/config/routePaths.js";
 import { hasActiveSession } from "~/services/userContext.js";
 
 import {
@@ -59,17 +60,17 @@ export const router: ReturnType<typeof createBrowserRouter> = createBrowserRoute
         element: <ShellLayout />,
         loader: requireSession,
         children: [
-          { path: "/", element: <HomePage /> },
-          { path: "/profiles", element: <ProfilesPage /> },
-          { path: "/profiles/new", element: <CreateProfilePage /> },
-          { path: "/profiles/:profileId/edit", element: <EditProfilePage /> },
-          { path: "/watchlist", element: <WatchlistPage /> },
-          { path: "/settings", element: <SettingsPage /> },
+          { path: ROUTE_PATHS.home, element: <HomePage /> },
+          { path: ROUTE_PATHS.profiles, element: <ProfilesPage /> },
+          { path: ROUTE_PATHS.profilesNew, element: <CreateProfilePage /> },
+          { path: ROUTE_PATHS.profileEdit, element: <EditProfilePage /> },
+          { path: ROUTE_PATHS.watchlist, element: <WatchlistPage /> },
+          { path: ROUTE_PATHS.settings, element: <SettingsPage /> },
           { path: "*", element: <NotFoundPage /> },
         ],
       },
       {
-        path: "/player/:videoId",
+        path: ROUTE_PATHS.player,
         loader: requireSession,
         element: (
           <ErrorBoundary>
@@ -80,7 +81,7 @@ export const router: ReturnType<typeof createBrowserRouter> = createBrowserRoute
         ),
       },
       {
-        path: "/goodbye",
+        path: ROUTE_PATHS.goodbye,
         element: (
           <ErrorBoundary>
             <Suspense fallback={null}>
@@ -90,7 +91,7 @@ export const router: ReturnType<typeof createBrowserRouter> = createBrowserRoute
         ),
       },
       {
-        path: "/error",
+        path: ROUTE_PATHS.errorPage,
         element: (
           <Suspense fallback={null}>
             <ErrorPage />
@@ -108,7 +109,7 @@ export const router: ReturnType<typeof createBrowserRouter> = createBrowserRoute
         loader: requireSignedOut,
         children: [
           {
-            path: "/signin",
+            path: ROUTE_PATHS.signin,
             element: (
               <Suspense fallback={null}>
                 <SignInPage />
@@ -116,7 +117,7 @@ export const router: ReturnType<typeof createBrowserRouter> = createBrowserRoute
             ),
           },
           {
-            path: "/signup",
+            path: ROUTE_PATHS.signup,
             element: (
               <Suspense fallback={null}>
                 <SignUpPage />
@@ -124,7 +125,7 @@ export const router: ReturnType<typeof createBrowserRouter> = createBrowserRoute
             ),
           },
           {
-            path: "/reset-password",
+            path: ROUTE_PATHS.resetPassword,
             element: (
               <Suspense fallback={null}>
                 <ResetPasswordPage />

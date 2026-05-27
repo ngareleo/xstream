@@ -1,19 +1,11 @@
-const STATIC_ROUTES = new Set([
-  "/",
-  "/profiles",
-  "/profiles/new",
-  "/watchlist",
-  "/settings",
-  "/signin",
-  "/signup",
-  "/reset-password",
-  "/goodbye",
-  "/error",
-]);
+import { matchPath } from "react-router-dom";
 
-/** Collapses a pathname to a low-cardinality route template, e.g. `/player/abc123` → `/player/:videoId` (unknown paths → `/*`). */
+import { ALL_ROUTE_PATHS } from "~/config/routePaths.js";
+
+/** Collapses a pathname to its route template, e.g. `/player/abc123` → `/player/:videoId` (unknown paths → `/*`). */
 export function routeTemplate(pathname: string): string {
-  if (/^\/player\/[^/]+$/.test(pathname)) return "/player/:videoId";
-  if (/^\/profiles\/[^/]+\/edit$/.test(pathname)) return "/profiles/:profileId/edit";
-  return STATIC_ROUTES.has(pathname) ? pathname : "/*";
+  for (const template of ALL_ROUTE_PATHS) {
+    if (matchPath(template, pathname)) return template;
+  }
+  return "/*";
 }

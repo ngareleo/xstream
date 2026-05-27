@@ -1,7 +1,6 @@
 /** User-session state machine producing a `session.id`. See docs/architecture/Observability/01-Logging-Policy.md §"User sessions: activity-based tracking". */
 
-/** 1 min in dev (so sessions are testable by hand), 15 min in prod. */
-export const IDLE_TIMEOUT_MS = IS_DEV_BUILD ? 60_000 : 15 * 60_000;
+import { clientConfig } from "~/config/appConfig.js";
 
 export interface SessionHooks {
   /** Fired when a new session is minted, with its id. */
@@ -44,7 +43,7 @@ function clearIdleTimer(): void {
 
 function armIdleTimer(): void {
   clearIdleTimer();
-  idleTimer = setTimeout(expireSession, IDLE_TIMEOUT_MS);
+  idleTimer = setTimeout(expireSession, clientConfig.session.idleTimeoutMs);
 }
 
 /** Start session tracking, minting the first session immediately. Call once, after initTelemetry(). */

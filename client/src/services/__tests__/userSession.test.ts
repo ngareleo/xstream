@@ -1,13 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { clientConfig } from "~/config/appConfig.js";
 import {
   getCurrentSessionId,
-  IDLE_TIMEOUT_MS,
   initUserSession,
   noteActivity,
   setPlaybackActive,
   teardownUserSession,
 } from "~/services/userSession.js";
+
+const IDLE_TIMEOUT_MS = clientConfig.session.idleTimeoutMs;
 
 // Coupled fake clock + timers: performance.now() and setTimeout advance through
 // the same `advance()` mechanism, so the idle timer can never drift from "now".
