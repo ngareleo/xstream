@@ -115,8 +115,10 @@ if [[ -f "$ROOT/.env" ]]; then
   info ".env found at $ROOT/.env"
   # shellcheck disable=SC1091
   set -a; source "$ROOT/.env"; set +a
+elif [[ -n "${DOPPLER_PROJECT:-}" ]]; then
+  info "secrets injected by Doppler (project: ${DOPPLER_PROJECT}, config: ${DOPPLER_CONFIG:-?})"
 else
-  warn ".env not found — copy .env.example and fill in credentials"
+  warn "no .env and not running under Doppler — run 'doppler run -- bun run check-env' or copy .env.example"
   WARNINGS=$((WARNINGS + 1))
 fi
 
