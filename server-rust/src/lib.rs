@@ -102,7 +102,14 @@ fn make_cors() -> AppResult<tower_http::cors::CorsLayer> {
     Ok(CorsLayer::new()
         .allow_origin(origins)
         .allow_credentials(true)
-        .allow_headers([CONTENT_TYPE, ACCEPT, AUTHORIZATION, traceparent, tracestate, session_id])
+        .allow_headers([
+            CONTENT_TYPE,
+            ACCEPT,
+            AUTHORIZATION,
+            traceparent,
+            tracestate,
+            session_id,
+        ])
         .allow_methods([Method::GET, Method::POST, Method::OPTIONS]))
 }
 
