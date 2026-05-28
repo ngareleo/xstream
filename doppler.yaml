@@ -1,0 +1,3 @@
+setup:
+  project: xstream
+  config: dev

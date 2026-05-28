@@ -35,6 +35,24 @@ Entry shape (the entry ends with a single line containing exactly three hyphens 
 
 <!-- ENTRIES BELOW — newest first; each ends with a bare three-hyphen divider line. -->
 
+## 2026-05-28 — PR #71 — Doppler dev secrets migration: curator reconciliation of all env tooling references
+
+The PR deleted legacy local env tooling (`.env.example`, `scripts/check-env.sh`, `scripts/check-env.ts`, npm `check-env` script, and the `.env` fallback in dev launchers) now that Doppler is the canonical source for dev secrets. Four docs and agent files were reconciled to remove stale references and route operators to Doppler: setup-local skill steps 4–5 now run `doppler login` and `doppler setup`, then `doppler run -- bun run dev` for secret injection; devops agent playbook for "adding a new env var" switched to `doppler secrets set` instead of `.env.example` + `check-env.sh`; debug-backend skill removed `.env.example` from its scan list; Axiom docs updated four key passages: the token table, the dev-flow setup checklist, the bring-up checklist, and env-var injection examples now all reference `doppler run --` and Doppler secrets, not `.env` files. This keeps agent guidance and setup flows coherent with the removed code.
+
+**Files:** `.claude/skills/setup-local/SKILL.md`, `.claude/agents/devops.md`, `.claude/skills/debug-backend/SKILL.md`, `docs/architecture/Deployment/04-Axiom-Production-Backend.md`
+**Related Commit.md entry:** (current HEAD)
+
+---
+
+## 2026-05-28 — PR #71 — Doppler dev secrets migration: docs updated for secret injection flow
+
+PR #71 migrated xstream's dev secrets from a gitignored `.env` file to Doppler's centralized secret management, replacing inline bash scripts with cross-platform Bun/TS launchers. The docs previously referenced `.env` directly for local setup and now needed to reflect that secrets are injected by `doppler run --` rather than sourced from a repo file. Four files were updated: (1) `03-Config-And-Backends.md` gained a note that dev Seq setup requires Doppler; (2) `03-Build-Variants.md` documents that `XSTREAM_VARIANT` is supplied by Doppler in dev; (3) `06-Supabase-Project-Setup.md` redirects developers to add credentials to Doppler instead of a local `.env`; (4) `04-Axiom-Production-Backend.md` updates the token-storage table to note dev tokens live in Doppler `dev` config, not `.env`. The changes are purely informational — no schema, no arch change — but necessary so operators following the setup guides find the right injection surface.
+
+**Files:** `docs/architecture/Observability/03-Config-And-Backends.md`, `docs/architecture/Deployment/03-Build-Variants.md`, `docs/architecture/Deployment/04-Axiom-Production-Backend.md`, `docs/architecture/Deployment/06-Supabase-Project-Setup.md`
+**Related Commit.md entry:** `9be57f3`
+
+---
+
 ## 2026-05-27 — PR #70 — Server-side telemetry: spans, logs, timing, and observability coverage
 
 The telemetry PR's server-side observability layer now ships complete: `db.query` span wraps all SQL execution (including lock-wait) with cardinality control via low-level instrumentation in `Db::with()`; `OperationTracer` async-graphql extension emits a `graphql operation` log per request with operation name (as attribute, not span name, to preserve cardinality), duration, and error count; `http.api_type` attribute (`"graphql"` or `"rest"`) on the `http.request` span enables filtering API traffic by route category in Seq/Axiom. Boot and shutdown now emit timing logs before the telemetry flush — `"xstream-server listening"` with `startup_duration_ms` marks the cold-start waterline, and `"xstream-server graceful shutdown complete"` with `shutdown_duration_ms` and `signal` enumerates which termination path was taken. These logs are directly queryable in Seq/Axiom for operational dashboards (cold-start latency per deployment, shutdown-latency distribution, SIGTERM vs SIGINT frequency). The shutdown doc explicitly calls out that `kill_all_jobs(5000)` is not yet wired (pending follow-up) — the docs are clear on current scope vs future work, so operators know what to expect. Docs updated across three files: `00-Spans.md` gained the `db.query` span row, `graphql operation` log row, and `http.api_type` attribute note; a new "Server Startup and Shutdown Timing Logs" section documents the two lifecycle logs with message shapes and Seq-query patterns; `00-Boot-And-Shutdown.md` added step 7 (startup log) and rewrote the graceful-shutdown section to separate "current scope" (signal handling, DB close, telemetry flush) from "pending work" (ffmpeg kill sweep) with explicit cross-reference to the ffmpeg pool docs. This unblocks operational visibility into deployment health (cold-start, shutdown latency) and clarifies the remaining work to the devops team.

@@ -14,6 +14,13 @@ High-resolution media streaming with a full resolution ladder (240p → 4K). The
 
 - [Rust](https://www.rust-lang.org/tools/install) stable (1.75+) via `rustup` — required for the server. The `server-rust` workspace's dev script prepends `~/.cargo/bin` to PATH automatically, so once rustup is installed `bun run dev` finds `cargo` even in non-interactive shells.
 - [Bun](https://bun.sh) v1.1+ — used for the client toolchain (Rsbuild, Relay compiler, lint-staged) and to invoke `scripts/setup-ffmpeg`.
+- [Doppler CLI](https://docs.doppler.com/docs/cli) — secrets manager. Dev env vars are injected by `doppler run` (see [Setup](#setup)), not a local `.env`. Install:
+  ```bash
+  brew install dopplerhq/cli/doppler                              # macOS
+  curl -Ls https://cli.doppler.com/install.sh | sudo sh          # Linux
+  scoop bucket add doppler https://github.com/DopplerHQ/scoop-doppler.git && scoop install doppler   # Windows
+  ```
+  `bun run dev` exits 127 with an install hint if it isn't on PATH.
 - [`mprocs`](https://github.com/pvolok/mprocs) — TUI dev orchestrator. One-time install (~2 min, cached after):
   ```bash
   cargo install --locked mprocs
@@ -33,20 +40,34 @@ ffmpeg is provisioned per-project via `bun run setup-ffmpeg`; no system ffmpeg i
 
 ### 1. Install dependencies
 
+One command checks your toolchain, installs what it can cross-platform (`tauri-cli`, `mprocs`, pinned ffmpeg, workspace deps), generates Relay artifacts, and prints a summary of anything still missing:
+
 ```bash
-bun install
-bun run setup-ffmpeg     # downloads + verifies pinned jellyfin-ffmpeg into vendor/ffmpeg/<platform>/
+bun run setup:dev
 ```
 
-### 2. Generate Relay artifacts
+It warns (rather than auto-installing) for tools that have no uniform cross-platform installer — Rust (rustup), Doppler, and Docker. Install those from the links it prints, then re-run. Bun itself is a prerequisite, since it runs the script.
 
-The client uses Relay; compiler artifacts must exist before the client can build. The Rust server's GraphQL schema is fetched live for compilation in dev (or pre-generated for CI):
+### 2. Configure secrets (Doppler)
+
+Dev secrets (Seq password, OTLP/Axiom endpoints + headers, Supabase keys) live in Doppler, not a local `.env`. Authenticate and link this checkout once:
+
+```bash
+doppler login                                 # one-time, opens a browser
+doppler setup --project xstream --config dev  # binds this directory (reads doppler.yaml)
+```
+
+`bun run dev` then injects them automatically via `doppler run`. Browse the full var surface with `doppler secrets`; change a value with `doppler secrets set KEY value`.
+
+### 3. Generate Relay artifacts
+
+`bun run setup:dev` already does this; run it standalone only after you change the schema. The client uses Relay; compiler artifacts must exist before the client can build. The Rust server's GraphQL schema is fetched live for compilation in dev (or pre-generated for CI):
 
 ```bash
 bun run --filter client relay
 ```
 
-### 3. Configure media libraries
+### 4. Configure media libraries
 
 Libraries live in the SQLite DB. Add one via the `createLibrary` GraphQL mutation once the server is running, e.g. from a GraphQL client pointed at `http://localhost:3002/graphql`:
 
@@ -70,7 +91,7 @@ mutation {
 
 ## Running in Development
 
-Start the Rust server and the client in parallel via the `mprocs` TUI:
+Start the Rust server and the client in parallel via the `mprocs` TUI (secrets injected by `doppler run`):
 
 ```bash
 bun run dev
@@ -118,10 +139,10 @@ Or start workspaces individually in separate terminals:
 
 ```bash
 # Terminal 1 — Rust server on :3002
-cd server-rust && bun run dev
+cd server-rust && doppler run -- bun run dev
 
 # Terminal 2 — client on :5173
-cd client && bun run dev
+cd client && doppler run -- bun run dev
 ```
 
 ---
@@ -144,7 +165,7 @@ xstream/
 ├── server-rust/           # Rust server (GraphQL + streaming + chunker + DB)
 ├── src-tauri/             # Tauri shell crate (bundle + updater)
 ├── client/                # React client (Rsbuild)
-├── scripts/               # tooling — ffmpeg-manifest.json, setup-ffmpeg.ts, dev shells
+├── scripts/               # tooling — ffmpeg-manifest.json, setup-ffmpeg.ts, cross-platform dev/build launchers (*.ts)
 ├── docs/                  # architecture documentation
 ├── Cargo.toml             # Rust workspace root
 ├── package.json           # Bun workspace root (client + server-rust + scripts)

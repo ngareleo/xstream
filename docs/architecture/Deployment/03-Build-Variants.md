@@ -10,7 +10,7 @@ The split is driven by a single build-time switch — `XSTREAM_VARIANT` — and 
 
 ## 1. The control surface — `XSTREAM_VARIANT`
 
-A single environment variable read by the build scripts in [`package.json`](../../../package.json).
+A single environment variable read by the build scripts in [`package.json`](../../../package.json). In development, this is supplied by Doppler when you run `doppler run -- bun run tauri:dev` or `doppler run -- bun run tauri:build:dev`; in CI, it is set explicitly for release builds.
 
 | `XSTREAM_VARIANT` | `productName` | `identifier` | Cargo features | `IS_DEV_BUILD` | bun script |
 |---|---|---|---|---|---|

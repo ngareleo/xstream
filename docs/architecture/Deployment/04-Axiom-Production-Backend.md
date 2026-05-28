@@ -2,7 +2,7 @@
 
 xstream's production OTel sink is [Axiom](https://axiom.co), a hosted log + trace store. Free-tier headroom is ~3,000× our current ingest rate (see § "Free-tier headroom" below), so we get production telemetry without running our own droplet, Caddy, or ACME stack.
 
-OTel SDK wiring is unchanged from local dev — only the env-var values flip when the release binary is built. Local dev continues to use the embedded Seq container via `scripts/seq-start.sh`; nothing in this document affects that flow.
+OTel SDK wiring is unchanged from local dev — only the env-var values flip when the release binary is built. Local dev continues to use the embedded Seq container via `bun run seq:start`; nothing in this document affects that flow.
 
 ## Why Axiom for production
 
@@ -36,7 +36,7 @@ The second dataset slot is reserved (e.g. for `xstream-staging` once we cut a be
 1. The 2-dataset cap is tight; spending one slot on dev work would burn the spare.
 2. The OTel `deployment.environment` resource attribute does the separation server-side at query time — every event carries `development` or `production`, so dev traffic is one APL filter away from being invisible to prod queries.
 
-Default behaviour: **a release build hits Axiom; dev hits local Seq** (via `scripts/seq-start.sh`). The `flag.useAxiomExporter` feature flag (see § "Dev flow" below) lets a developer flip a single dev session to Axiom to verify the end-to-end pipeline.
+Default behaviour: **a release build hits Axiom; dev hits local Seq** (via `bun run seq:start`). The `flag.useAxiomExporter` feature flag (see § "Dev flow" below) lets a developer flip a single dev session to Axiom to verify the end-to-end pipeline.
 
 ## API tokens
 
@@ -46,8 +46,8 @@ Four **Basic API tokens** — Axiom's ingest-only token type, scoped at the data
 |---|---|---|
 | `xstream-server-prod` | release Tauri server-side OTLP exporter | GitHub Actions secret (release workflow only) |
 | `xstream-client-prod` | release Tauri client-side OTLP exporter | GitHub Actions secret (release workflow only) |
-| `xstream-server-dev` | local dev server when `flag.useAxiomExporter` is ON | repo-root `.env` (gitignored) |
-| `xstream-client-dev` | local dev client when `flag.useAxiomExporter` is ON | repo-root `.env` (gitignored), baked into `bun run dev` build |
+| `xstream-server-dev` | local dev server when `flag.useAxiomExporter` is ON | Doppler `dev` config, injected by `doppler run --` |
+| `xstream-client-dev` | local dev client when `flag.useAxiomExporter` is ON | Doppler `dev` config, injected by `doppler run -- bun run dev` |
 
 **Two tokens per environment** (server vs client) so either can be revoked without taking down the other side — extracting from the JS bundle is a different attack surface from extracting from the native binary. **Two environment tiers** (prod vs dev) so a leaked `.env` only burns dev credentials; production tokens live exclusively in CI secrets and never touch a developer machine.
 
@@ -78,7 +78,7 @@ GitHub Actions repository secrets, read by the release workflow only:
 - `AXIOM_INGEST_TOKEN_SERVER`
 - `AXIOM_INGEST_TOKEN_CLIENT`
 
-The release workflow exports them as `OTEL_EXPORTER_OTLP_HEADERS` / `PUBLIC_OTEL_HEADERS` before invoking `bun run build` and `cargo tauri build`. They never appear in repo files, never in commits, never in `.env.example`.
+The release workflow exports them as `OTEL_EXPORTER_OTLP_HEADERS` / `PUBLIC_OTEL_HEADERS` before invoking `bun run build` and `cargo tauri build`. They never appear in repo files, never in commits, never in Doppler's `dev` config.
 
 PR and main-branch CI runs do **not** receive these secrets — Rsbuild's `PUBLIC_*` substitution falls back to the dev defaults (relative `/ingest/otlp` path), which the dev Vite proxy points at local Seq. CI does not produce telemetry as a result; that's intentional.
 
@@ -102,10 +102,10 @@ The default dev backend stays local Seq (faster to query, no quota, no SaaS depe
 
 What you need locally:
 1. Both `xstream-server-dev` and `xstream-client-dev` tokens minted in the Axiom UI (see § "API tokens" above).
-2. The four `*_AXIOM_*` env vars set in `.env` at the repo root (NOT `~/.zshrc` — see "Why `.env`, not `~/.zshrc`" below). Use `.env.example` as the template; the env-var contract is in [`../Observability/03-Config-And-Backends.md`](../Observability/03-Config-And-Backends.md).
+2. The four `*_AXIOM_*` env vars stored in Doppler's `dev` config via `doppler secrets set` (see [`../Observability/03-Config-And-Backends.md`](../Observability/03-Config-And-Backends.md) for the env-var contract). They are injected automatically when you run `doppler run -- bun run dev`.
 3. Toggle the flag in Settings → Flags. Close + reopen the app.
 
-**Why `.env`, not `~/.zshrc`.** Both `bun run dev` scripts (client and server-rust) source `.env` at startup via `set -a; . ../.env; set +a`, so vars defined there reach Rsbuild (which bakes `PUBLIC_*` into the bundle) and the Rust server process. Putting them in `~/.zshrc` instead means they only flow through if the tmux pane / shell that launched mprocs was created *after* the export. Tmux sessions preserve the env of the shell that started them — a `.zshrc` edit + `source ~/.zshrc` in one pane does not propagate to new panes, so the dev procs end up with stale env and telemetry silently goes to the wrong backend.
+**Doppler injection.** All dev secrets now come from `doppler run --`, which supplies them atomically to both Rsbuild (which bakes `PUBLIC_*` into the bundle) and the Rust server process. This replaces the prior `.env` model and avoids race conditions across shell sessions.
 
 **Why the browser POST is rewritten through `/relay/axiom` in dev.** Axiom's edge endpoint (`us-east-1.aws.edge.axiom.co`) rejects CORS preflight from `http://localhost:5173`. So in dev builds the browser-side exporter posts to **same-origin** `/relay/axiom/v1/{traces,logs}`; Rsbuild's dev server forwards server-to-server to `PUBLIC_OTEL_AXIOM_ENDPOINT` (loaded from `.env`), preserving the `Authorization` + `X-Axiom-Dataset` headers. No browser CORS, no client-side token leak risk via preflight. In prod builds Tauri's `tauri://localhost` webview origin posts directly to Axiom — no proxy in the path.
 
@@ -137,12 +137,17 @@ Executable top-to-bottom for someone with no prior Axiom setup.
   - `xstream-server-dev` — dev server-side OTLP (used when `flag.useAxiomExporter` is ON).
   - `xstream-client-dev` — dev client-side OTLP (used when `flag.useAxiomExporter` is ON).
 - [ ] Store the two `*-prod` tokens in the team password manager. **Never put them on a developer machine.**
-- [ ] Drop the two `*-dev` tokens into the repo-root `.env` against the four `*_AXIOM_*` keys documented in `.env.example`.
+- [ ] Add the two `*-dev` tokens to Doppler's `dev` config:
+  ```sh
+  doppler secrets set XSTREAM_SERVER_AXIOM_TOKEN <xstream-server-dev-token> --config dev
+  doppler secrets set XSTREAM_CLIENT_AXIOM_TOKEN <xstream-client-dev-token> --config dev
+  ```
+  (And the corresponding `OTEL_EXPORTER_OTLP_HEADERS` + `PUBLIC_OTEL_HEADERS` as per [`../Observability/03-Config-And-Backends.md`](../Observability/03-Config-And-Backends.md).)
 - [ ] **GitHub repo → Settings → Secrets and variables → Actions → New repository secret** (prod only):
   - `AXIOM_INGEST_TOKEN_SERVER` = the `xstream-server-prod` token
   - `AXIOM_INGEST_TOKEN_CLIENT` = the `xstream-client-prod` token
 - [ ] In the release workflow YAML (separate PR, not in this docs PR), wire the secrets into the build env. See the env-var contract above for the exact mapping.
-- [ ] **Dev smoke test:** in the running app, flip **Settings → Flags → telemetry → `flag.useAxiomExporter`** to ON, close + reopen the app. Open the **Stream** view in Axiom for the `xstream` dataset filtered to `deployment.environment == 'development'` — events should appear within ~30 s of triggering a playback session.
+- [ ] **Dev smoke test:** run `doppler run -- bun run dev`, then in the running app, flip **Settings → Flags → telemetry → `flag.useAxiomExporter`** to ON, close + reopen the app. Open the **Stream** view in Axiom for the `xstream` dataset filtered to `deployment.environment == 'development'` — events should appear within ~30 s of triggering a playback session.
 - [ ] Cut a release tag. Watch the **Stream** view filtered to `deployment.environment == 'production'` — events from real installs should appear within ~30 s of someone opening the app.
 - [ ] **Settings → Notifications** → set a low-volume monitor for ingest spikes (>10× baseline) so we notice if a token is being abused (see [`05-Telemetry-Ingestion-Security.md` § Tripwires](05-Telemetry-Ingestion-Security.md)).
 
