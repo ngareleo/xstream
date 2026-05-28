@@ -95,11 +95,14 @@ fn make_cors() -> AppResult<tower_http::cors::CorsLayer> {
     let tracestate: HeaderName = "tracestate"
         .parse()
         .map_err(|_| AppError::Cors("header name `tracestate`".into()))?;
+    let session_id: HeaderName = "x-session-id"
+        .parse()
+        .map_err(|_| AppError::Cors("header name `x-session-id`".into()))?;
 
     Ok(CorsLayer::new()
         .allow_origin(origins)
         .allow_credentials(true)
-        .allow_headers([CONTENT_TYPE, ACCEPT, AUTHORIZATION, traceparent, tracestate])
+        .allow_headers([CONTENT_TYPE, ACCEPT, AUTHORIZATION, traceparent, tracestate, session_id])
         .allow_methods([Method::GET, Method::POST, Method::OPTIONS]))
 }
 
