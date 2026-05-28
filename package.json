@@ -16,6 +16,7 @@
     "format": "prettier --write \"**/*.{ts,tsx,json}\" --ignore-path .prettierignore",
     "format:check": "prettier --check \"**/*.{ts,tsx,json}\" --ignore-path .prettierignore",
     "stop": "bash scripts/stop.sh",
+    "setup:dev": "bun scripts/setup-dev.ts",
     "setup-ffmpeg": "bun scripts/setup-ffmpeg.ts",
     "schema:emit": "cargo run --quiet --bin print_schema -p xstream-server --features dev-features > server-rust/schema.graphql",
     "tauri:dev": "bun scripts/tauri-dev.ts",

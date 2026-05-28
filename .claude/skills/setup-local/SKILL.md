@@ -14,13 +14,13 @@ Use descriptive filenames, e.g. `.claude/screenshots/setup-01-app-running.png`.
 
 ## 1. Install dependencies
 
-Run the install script from the project root:
+Run the dev setup verb from the project root:
 
 ```sh
-bash install.sh
+bun run setup:dev
 ```
 
-This installs Bun if missing, runs `bun install`, creates `tmp/segments-rust/`, and generates Relay artifacts.
+This runs `bun install`, installs `tauri-cli` (when cargo is present), creates `tmp/segments/`, generates Relay artifacts, and checks for Docker / mprocs / Doppler — warning (not auto-installing) when Rust, mprocs, or Doppler are missing. Bun itself is a prerequisite; you're already running it.
 
 If it fails, report the error output and stop.
 

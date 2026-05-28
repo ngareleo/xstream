@@ -40,10 +40,13 @@ ffmpeg is provisioned per-project via `bun run setup-ffmpeg`; no system ffmpeg i
 
 ### 1. Install dependencies
 
+One command checks your toolchain, installs what it can cross-platform (`tauri-cli`, `mprocs`, pinned ffmpeg, workspace deps), generates Relay artifacts, and prints a summary of anything still missing:
+
 ```bash
-bun install
-bun run setup-ffmpeg     # downloads + verifies pinned jellyfin-ffmpeg into vendor/ffmpeg/<platform>/
+bun run setup:dev
 ```
+
+It warns (rather than auto-installing) for tools that have no uniform cross-platform installer — Rust (rustup), Doppler, and Docker. Install those from the links it prints, then re-run. Bun itself is a prerequisite, since it runs the script.
 
 ### 2. Configure secrets (Doppler)
 
@@ -58,7 +61,7 @@ doppler setup --project xstream --config dev  # binds this directory (reads dopp
 
 ### 3. Generate Relay artifacts
 
-The client uses Relay; compiler artifacts must exist before the client can build. The Rust server's GraphQL schema is fetched live for compilation in dev (or pre-generated for CI):
+`bun run setup:dev` already does this; run it standalone only after you change the schema. The client uses Relay; compiler artifacts must exist before the client can build. The Rust server's GraphQL schema is fetched live for compilation in dev (or pre-generated for CI):
 
 ```bash
 bun run --filter client relay
