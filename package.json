@@ -24,8 +24,8 @@
     "tauri:build:dev": "bun scripts/tauri-build-dev.ts",
     "clean": "bash scripts/clean.sh",
     "clean:db": "bash scripts/clean.sh --db",
-    "seq:start": "bash scripts/seq-start.sh",
-    "seq:stop": "bash scripts/seq-stop.sh",
+    "seq:start": "bun scripts/seq-start.ts",
+    "seq:stop": "bun scripts/seq-stop.ts",
     "prepare": "husky"
   },
   "devDependencies": {

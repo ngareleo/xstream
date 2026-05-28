@@ -147,7 +147,7 @@ if (!run("bun", ["run", "relay"], join(repoRoot, "client"))) {
 }
 
 if (process.platform !== "win32") {
-  for (const s of ["stop.sh", "clean.sh", "seq-start.sh", "seq-stop.sh"]) {
+  for (const s of ["stop.sh", "clean.sh"]) {
     try {
       chmodSync(join(repoRoot, "scripts", s), 0o755);
     } catch {

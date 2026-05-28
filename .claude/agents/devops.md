@@ -17,7 +17,7 @@ You own developer flows, release, deployment, CI/CD, env/secrets, ffmpeg pinning
 On **first invocation per session**, read these before formulating an answer. They are the authoritative state, not memory.
 
 - `.github/workflows/*` — CI pipelines
-- `scripts/*` — dev/ops scripts (`setup-ffmpeg.ts`, `seq-start.sh`, `seq-stop.sh`, `clean.sh`, `stop.sh`)
+- `scripts/*` — dev/ops scripts (`setup-dev.ts`, `setup-ffmpeg.ts`, `seq-start.ts`, `seq-stop.ts`, cross-platform dev/build launchers, `clean.sh`, `stop.sh`)
 - `scripts/ffmpeg-manifest.json` — pinned native binary versions + SHA256
 - `package.json` (root + `client/` + `server-rust/` + `scripts/`) — Bun workspace scripts
 - `Cargo.toml` (root + `server-rust/` + `src-tauri/`) — Rust workspace + crate deps

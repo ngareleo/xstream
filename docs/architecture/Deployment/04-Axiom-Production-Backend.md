@@ -2,7 +2,7 @@
 
 xstream's production OTel sink is [Axiom](https://axiom.co), a hosted log + trace store. Free-tier headroom is ~3,000× our current ingest rate (see § "Free-tier headroom" below), so we get production telemetry without running our own droplet, Caddy, or ACME stack.
 
-OTel SDK wiring is unchanged from local dev — only the env-var values flip when the release binary is built. Local dev continues to use the embedded Seq container via `scripts/seq-start.sh`; nothing in this document affects that flow.
+OTel SDK wiring is unchanged from local dev — only the env-var values flip when the release binary is built. Local dev continues to use the embedded Seq container via `bun run seq:start`; nothing in this document affects that flow.
 
 ## Why Axiom for production
 
@@ -36,7 +36,7 @@ The second dataset slot is reserved (e.g. for `xstream-staging` once we cut a be
 1. The 2-dataset cap is tight; spending one slot on dev work would burn the spare.
 2. The OTel `deployment.environment` resource attribute does the separation server-side at query time — every event carries `development` or `production`, so dev traffic is one APL filter away from being invisible to prod queries.
 
-Default behaviour: **a release build hits Axiom; dev hits local Seq** (via `scripts/seq-start.sh`). The `flag.useAxiomExporter` feature flag (see § "Dev flow" below) lets a developer flip a single dev session to Axiom to verify the end-to-end pipeline.
+Default behaviour: **a release build hits Axiom; dev hits local Seq** (via `bun run seq:start`). The `flag.useAxiomExporter` feature flag (see § "Dev flow" below) lets a developer flip a single dev session to Axiom to verify the end-to-end pipeline.
 
 ## API tokens
 
