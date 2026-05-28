@@ -71,21 +71,23 @@ Report the username and that a password was generated (do NOT print the password
 printf 'SEQ_ADMIN_USERNAME=admin\nSEQ_ADMIN_PASSWORD=<new-password>\n' > .seq-credentials
 ```
 
-## 4. Set up environment variables
+## 4. Set up secrets via Doppler
 
-Check if `.env` exists:
-
-```sh
-cat .env 2>/dev/null || echo "MISSING"
-```
-
-If missing, copy from the example:
+xstream uses **Doppler** as the canonical source for dev secrets. Log in and configure your local environment:
 
 ```sh
-cp .env.example .env
+doppler login
 ```
 
-Report that `.env` was created from `.env.example` and that OMDB_API_KEY and OTEL_EXPORTER_OTLP_HEADERS may need to be filled in.
+Follow the browser flow to authenticate your Doppler account (same account as the team password manager).
+
+Once authenticated, configure the project and config:
+
+```sh
+doppler setup --project xstream --config dev
+```
+
+This writes a `.doppler.yaml` at the project root so all subsequent `doppler run --` invocations use the correct project and config.
 
 ## 4b. Configure the encode-test fixtures directory
 
@@ -107,28 +109,29 @@ If they provide a path:
 1. Resolve it to absolute (`realpath`).
 2. Confirm the directory exists. If not, report and skip the write.
 3. List which expected basenames are present and which are missing.
-4. If at least one is present, write `XSTREAM_TEST_MEDIA_DIR=<absolute>` to `.env`. Use this idempotent pattern (replaces an existing line, otherwise appends):
+4. If at least one is present, set it in Doppler's `dev_personal` config:
    ```sh
    ABS=$(realpath "<user-input>")
-   if grep -q '^XSTREAM_TEST_MEDIA_DIR=' .env 2>/dev/null; then
-     sed -i.bak "s|^XSTREAM_TEST_MEDIA_DIR=.*|XSTREAM_TEST_MEDIA_DIR=$ABS|" .env && rm -f .env.bak
-   else
-     printf 'XSTREAM_TEST_MEDIA_DIR=%s\n' "$ABS" >> .env
-   fi
+   doppler secrets set XSTREAM_TEST_MEDIA_DIR "$ABS" --config dev_personal
    ```
+   (Or set it ad-hoc at test time: `XSTREAM_TEST_MEDIA_DIR=<dir> doppler run -- bun test`, if the user prefers one-off use.)
 5. If zero expected basenames are present, do NOT write — report the mismatch and recommend symlinking.
 
 If they skip (empty input):
 
-- Print: "Skipped — to enable later, set `XSTREAM_TEST_MEDIA_DIR` in `.env` and re-run `/setup-local`, or run with `XSTREAM_TEST_MEDIA_DIR=<dir> bun test` ad-hoc."
+- Print: "Skipped — to enable later, set `XSTREAM_TEST_MEDIA_DIR` in Doppler's `dev_personal` config and re-run `/setup-local`, or run with `XSTREAM_TEST_MEDIA_DIR=<dir> doppler run -- bun test` ad-hoc."
 
-## 5. Check environment configuration
+## 5. Dev servers are ready
+
+All secrets are now injected by `doppler run --` from the shared `dev` config. No env-var checking step is needed.
+
+To start dev servers:
 
 ```sh
-bun run check-env
+doppler run -- bun run dev
 ```
 
-Report any variables shown as missing or misconfigured. Do not block on warnings — only stop if a required variable is missing. The "Test fixtures (dev)" section will list each expected fixture as ✔ or missing, based on whatever you wrote in step 4b.
+The shared `dev` config provides `OMDB_API_KEY`, telemetry tokens (`*_AXIOM_*`), and all other dev secrets. The `dev_personal` config is optional and only needed if `XSTREAM_TEST_MEDIA_DIR` was set in step 4b.
 
 ## 6. Start dev servers
 
@@ -141,7 +144,7 @@ lsof -i :3002 -i :5173 | grep LISTEN
 If neither is running, start them:
 
 ```sh
-bun run dev
+doppler run -- bun run dev
 ```
 
 Run in background and wait up to 15 seconds for both ports to become LISTEN. Re-check with `lsof -i :3002 -i :5173 | grep LISTEN`.
@@ -160,14 +163,16 @@ Report:
 - ✓ Dependencies installed
 - ✓ ffmpeg + ffprobe present at `vendor/ffmpeg/<platform>/`
 - ✓ Seq running at http://localhost:5341 (credentials in `.seq-credentials`)
-- ✓ `.env` present
-- ✓ Dev servers running (server :3002, client :5173)
+- ✓ Doppler authenticated and configured (`doppler setup --project xstream --config dev`)
+- ✓ Dev servers running (server :3002, client :5173) via `doppler run -- bun run dev`
 - ✓ App accessible at http://localhost:5173
-- Encode-test fixtures: ✓ wired (`XSTREAM_TEST_MEDIA_DIR=...`) **or** ⚠ skipped — re-run setup or set the var manually to enable
-- Any items that need manual attention (e.g. OMDB_API_KEY, Seq API key for OTLP)
+- Encode-test fixtures: ✓ wired (`XSTREAM_TEST_MEDIA_DIR` in Doppler `dev_personal` config) **or** ⚠ skipped — set manually to enable
+- Secrets injected from Doppler `dev` config (OMDB_API_KEY, telemetry tokens, etc.)
 
 ## Notes
 
 - `.seq-credentials` is gitignored — it is local to this machine. Run `cat .seq-credentials` to see the Seq admin password.
+- Doppler `.doppler.yaml` is gitignored and local to your machine.
+- All dev env vars now come from Doppler via `doppler run --`; there is no `.env` file.
 - To verify OTel logs are reaching Seq after a playback session, run the `/otel-logs` skill.
-- To reset everything: `bun run stop && bun run seq:stop && bun run clean:db`
+- To reset everything: `bun run stop && bun run seq:stop && bun run clean:db` (no `.env` to clean up)

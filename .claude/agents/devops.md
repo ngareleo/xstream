@@ -17,11 +17,10 @@ You own developer flows, release, deployment, CI/CD, env/secrets, ffmpeg pinning
 On **first invocation per session**, read these before formulating an answer. They are the authoritative state, not memory.
 
 - `.github/workflows/*` — CI pipelines
-- `scripts/*` — dev/ops scripts (`setup-ffmpeg.ts`, `check-env.sh`, `seq-start.sh`, `seq-stop.sh`, `clean.sh`, `stop.sh`)
+- `scripts/*` — dev/ops scripts (`setup-ffmpeg.ts`, `seq-start.sh`, `seq-stop.sh`, `clean.sh`, `stop.sh`)
 - `scripts/ffmpeg-manifest.json` — pinned native binary versions + SHA256
 - `package.json` (root + `client/` + `server-rust/` + `scripts/`) — Bun workspace scripts
 - `Cargo.toml` (root + `server-rust/` + `src-tauri/`) — Rust workspace + crate deps
-- `.env.example` — full env var surface
 - `server-rust/src/db/migrate.rs` — DB schema state
 - `docs/server/Config/00-AppConfig.md` — runtime config and library configuration
 - `docs/architecture/Observability/` — Seq/OTel pipeline
@@ -37,7 +36,7 @@ Component commands:
 - `bun run seq:start` — first run generates `.seq-credentials` (gitignored) with random admin password
 - `bun run dev` — starts the Rust server (port 3002) + Rsbuild client (port 5173) under mprocs
 - `bun run tauri:dev` — full Tauri desktop shell (Rust server runs in-process inside the Tauri app)
-- `bun run check-env` — validates every required env var; red/green output
+- `doppler secrets` — list the dev secrets injected into `bun run dev` (project `xstream`, config `dev`)
 
 ### Seq credentials
 
@@ -52,17 +51,14 @@ First login after a fresh container forces a password change; update `.seq-crede
 
 Verify OTel is flowing: run `/otel-logs` after a playback session — it queries Seq's HTTP API and confirms spans arrived. For ad-hoc trace queries (filter by trace id, span name, attribute), use the `seq` skill — never drive the Seq UI in a browser unless the user explicitly asks to see it.
 
-## Env vars — lifecycle
+## Env vars — lifecycle (Doppler model)
 
-Adding a new env var:
-1. Append to `.env.example` with placeholder + one-line comment.
-2. Add a matching entry to `scripts/check-env.sh` — choose the right checker:
-   - `check_secret` — API keys, passwords, auth headers (value never printed)
-   - `check_default` — vars with a safe built-in fallback
-   - `check_not_localhost` — URLs that must not point to localhost in prod
-3. Place in the right section (Server / Metadata / Telemetry) — add a new `section` heading if the concern is new.
-4. If read from `server-rust/src/config.rs`, surface it via `AppConfig::from_env` (or the equivalent constructor) so dev / Tauri / CI all see it.
-5. Run `bun check-env` — new var should show up correctly.
+Adding a new dev secret or env var:
+1. Add the secret to Doppler's `dev` config (`doppler secrets set KEY value --config dev`).
+2. If the secret is per-developer (e.g., test-media path), add it to the `dev_personal` branch config instead.
+3. If the var is read from `server-rust/src/config.rs`, surface it via `AppConfig::from_env` (or the equivalent constructor) so dev / Tauri / CI all see it. The Doppler-injected env will be available to both Rsbuild and Rust.
+4. Developers launch dev tools via `doppler run -- bun run dev` or `doppler run -- cargo test`, which injects all `dev` (+ `dev_personal` if configured) secrets as env vars.
+5. CI/CD workflows inject secrets differently — production tokens come from GitHub Actions secrets, dev tokens (if needed by a workflow) come from Doppler API calls (see the release workflow pattern in `.github/workflows/`).
 
 ## ffmpeg manifest pinning
 

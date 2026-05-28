@@ -107,12 +107,12 @@ info "  bun seq:stop      — stop the Seq container"
 
 # ── 6. Environment ────────────────────────────────────────────────────────────
 
-if [ ! -f ".env" ]; then
-  warning "No .env file found."
-  warning "  Copy .env.example to .env and fill in SEQ_ADMIN_PASSWORD and"
-  warning "  OTEL_EXPORTER_OTLP_HEADERS before starting Seq."
+if command -v doppler >/dev/null 2>&1 && doppler configure get project >/dev/null 2>&1; then
+  info "Doppler configured — secrets injected by 'doppler run' (bun run dev)."
 else
-  info ".env found."
+  warning "Doppler not set up. Install the CLI (https://docs.doppler.com/docs/cli), then run:"
+  warning "  doppler login"
+  warning "  doppler setup --project xstream --config dev"
 fi
 
 # ── 7. Done ───────────────────────────────────────────────────────────────────

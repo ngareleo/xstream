@@ -15,6 +15,20 @@ Entry shape (each entry ends with the divider line described above):
 
 <!-- ENTRIES BELOW — newest first; each ends with a bare `---` line. The architect's next invocation will treat the no-entries state as the first-run case and prepend a bootstrap entry at HEAD. -->
 
+## (current HEAD) — 2026-05-28
+
+**Files:** `.claude/skills/setup-local/SKILL.md`, `.claude/agents/devops.md`, `.claude/skills/debug-backend/SKILL.md`, `docs/architecture/Deployment/04-Axiom-Production-Backend.md`
+**Why:** Curator reconciliation for PR #71 (chore/doppler-secrets-migration): removed references to deleted `.env` tooling (`.env.example`, `check-env.sh`, `check-env` npm script, `loadEnvFallback`). Updated setup and dev docs to use Doppler injection via `doppler run --`.
+
+---
+
+## 9be57f3 — 2026-05-28
+
+**Files:** `docs/architecture/Observability/03-Config-And-Backends.md`, `docs/architecture/Deployment/03-Build-Variants.md`, `docs/architecture/Deployment/04-Axiom-Production-Backend.md`, `docs/architecture/Deployment/06-Supabase-Project-Setup.md`
+**Why:** Curator sync for PR #71 (chore/doppler-secrets-migration): dev secrets moved from `.env` to Doppler. Updated four docs to reference Doppler injection instead of `.env` files: Seq setup, Build Variants, Supabase setup, and Axiom dev-token storage.
+
+---
+
 ## (current HEAD) — 2026-05-27
 
 **Files:** `docs/architecture/Identity/03-Telemetry-Correlation.md`, `docs/architecture/Observability/01-Logging-Policy.md`, `docs/architecture/Observability/server/00-Spans.md`, `docs/architecture/Startup/00-Boot-And-Shutdown.md`

@@ -54,7 +54,7 @@ doppler login                                 # one-time, opens a browser
 doppler setup --project xstream --config dev  # binds this directory (reads doppler.yaml)
 ```
 
-`bun run dev` then injects them automatically via `doppler run`. `.env.example` documents the full var surface for reference; change a value with `doppler secrets set KEY value`.
+`bun run dev` then injects them automatically via `doppler run`. Browse the full var surface with `doppler secrets`; change a value with `doppler secrets set KEY value`.
 
 ### 3. Generate Relay artifacts
 

@@ -47,7 +47,7 @@ The `service_role` key is **never** copied into xstream — it bypasses RLS and 
 
 ## 6. Local dev wiring
 
-Add to your local `.env` (gitignored):
+Dev secrets are managed by Doppler in the xstream project. Add these three values to the Doppler `dev` config:
 
 ```
 PUBLIC_SUPABASE_URL=https://<ref>.supabase.co
@@ -55,7 +55,7 @@ PUBLIC_SUPABASE_ANON_KEY=<paste from dashboard>
 SUPABASE_JWKS_URL=https://<ref>.supabase.co/.well-known/jwks.json
 ```
 
-Rsbuild reads the `PUBLIC_*` vars at build time and bakes them into the client bundle (`client/rsbuild.config.ts`). The server reads `SUPABASE_JWKS_URL` at startup (`server-rust/src/lib.rs::run`).
+Doppler injects them when you run `doppler run -- bun run dev` or `doppler run -- bun run dev:server`. Rsbuild reads the `PUBLIC_*` vars at build time and bakes them into the client bundle (`client/rsbuild.config.ts`). The server reads `SUPABASE_JWKS_URL` at startup (`server-rust/src/lib.rs::run`).
 
 ## 7. CI / release wiring
 

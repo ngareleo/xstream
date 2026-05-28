@@ -64,9 +64,9 @@ Self-hosted Seq behind Caddy + Let's Encrypt is also an option (we ran the spike
 
 ## Local dev: Seq API key setup
 
-Production points at Axiom; local dev still runs an embedded Seq container so engineers see full unredacted attribute content while debugging. This section is for the local dev flow only — production tokens follow the runbook at [`../Deployment/04-Axiom-Production-Backend.md`](../Deployment/04-Axiom-Production-Backend.md).
+Production points at Axiom; local dev still runs an embedded Seq container so engineers see full unredacted attribute content while debugging. This section is for the local dev flow only — production tokens follow the runbook at [`../Deployment/04-Axiom-Production-Backend.md`](../Deployment/04-Axiom-Production-Backend.md). Dev secrets (Seq credentials, OTEL env vars) are managed by Doppler; see the main README for setup instructions.
 
-1. Run `bun run seq:start` — this auto-generates `.seq-credentials` on first run (gitignored, project root) and boots the container. Open [http://localhost:5341](http://localhost:5341).
+1. Run `doppler run -- bun run seq:start` — this auto-generates `.seq-credentials` on first run (gitignored, project root) and boots the container. Open [http://localhost:5341](http://localhost:5341).
 2. Sign in with the username + password from `.seq-credentials`:
    ```sh
    grep '^SEQ_ADMIN_USERNAME=' .seq-credentials | cut -d= -f2
