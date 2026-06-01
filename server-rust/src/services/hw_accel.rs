@@ -71,17 +71,8 @@ pub enum HwAccelError {
 
 pub type HwAccelResult<T> = Result<T, HwAccelError>;
 
-/// Resolve the HW accel config for this host. Called once at startup.
-///
-/// `mode = Off` always returns `Software` immediately (no probe, no I/O).
-/// `mode = Auto`:
-///   • Linux — runs a 0.1 s synthetic encode through `h264_vaapi`; success →
-///     `Vaapi { device }`, failure → typed **fatal** error (a probe failure is
-///     a misconfiguration signal we must not swallow).
-///   • macOS / Windows — HW paths (videotoolbox / qsv/nvenc/amf) are not yet
-///     implemented, so we `warn!` and return `Software`. This is a platform gap,
-///     not an error: the warning keeps it distinguishable from `HW_ACCEL=off`.
-///   • Any other target — fatal `PlatformNotImplemented` (genuinely unexpected).
+/// Resolves the HW accel config for this host (called once at startup).
+/// See docs/server/Hardware-Acceleration/00-Overview.md §"Fallback behavior by platform".
 pub async fn resolve_hw_accel(ffmpeg: &Path, mode: HwAccelMode) -> HwAccelResult<HwAccelConfig> {
     if mode == HwAccelMode::Off {
         return Ok(HwAccelConfig::Software);
@@ -175,12 +166,8 @@ async fn probe_vaapi(ffmpeg: &Path, device: &str) -> HwAccelResult<()> {
     })
 }
 
-//
-// The full VAAPI probe needs a real ffmpeg binary AND a real `/dev/dri`
-// device, so it can't run in CI. We cover the deterministic surface:
-// mode parsing, the early-Software path, and the not-implemented branches
-// for non-Linux hosts. Real-binary VAAPI parity is asserted in the
-// integration tests for chunker/encode (gated on XSTREAM_TEST_MEDIA_DIR).
+// VAAPI's real probe needs a GPU, so it can't run in CI — real-binary parity
+// lives in the chunker/encode integration tests (XSTREAM_TEST_MEDIA_DIR-gated).
 
 #[cfg(test)]
 mod tests {
