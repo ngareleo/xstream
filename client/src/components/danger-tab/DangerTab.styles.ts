@@ -66,13 +66,4 @@ export const useDangerTabStyles = makeStyles({
       backgroundColor: tokens.colorRed,
     },
   },
-  status: {
-    fontSize: "11px",
-    color: tokens.colorTextMuted,
-    marginTop: "6px",
-    fontFamily: tokens.fontMono,
-  },
-  statusErr: {
-    color: tokens.colorRed,
-  },
 });

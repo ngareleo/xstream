@@ -65,14 +65,19 @@ Both fade with chrome (`controlsHidden`):
 
 - `position: absolute`, `inset: 0`, `zIndex: 1`. Contains VideoPlayer (Suspense-wrapped).
 
+## Document title
+
+The component wires `useDocumentTitle(metadata?.title)` to set the browser tab title to the playing video's OMDb title (or fallback to the Relay video fragment's `title` if metadata is unavailable). The title updates immediately on render, so navigating to a new film/episode updates the tab instantly. The hook ignores nullish values, so if metadata fails to load, the component defers to a parent or falls back to "Xstream".
+
 ## Behaviour
 
-### Backdrop unmount on play
+### Backdrop latch on first play
 
-- VideoPlayer calls `onStatusChange("playing")` when video element receives first frames.
-- VideoArea sets `playStatus = "playing"`.
-- Backdrop `<Poster>` component is conditionally unmounted: `{playStatus !== "playing" && <Poster ... />}`.
-- Once video frames are rendering, the backdrop is removed from the DOM entirely.
+- VideoArea maintains a `hasPlayed` boolean state, initialized `false`.
+- VideoPlayer's `onStatusChange` callback watches for the first transition to `"playing"` (when the first video frame arrives). On that transition, `hasPlayed` is set to `true`.
+- Backdrop `<Poster>` component is conditionally rendered: `{!hasPlayed && <Poster ... />}`. The poster appears only while `hasPlayed === false`.
+- **Critical invariant:** once `hasPlayed` flips to true on the first "playing" transition, the poster stays hidden for the rest of the session **even if the video status later drops back to "loading"** (e.g. on a mid-playback stall or user seek). The latch is one-directional — it never resets downward during a session.
+- The latch only resets to `false` when VideoArea remounts (route change to a new film/episode) or when the component is destroyed. This ensures poster stays hidden across multi-episode TV series playback (episode switch keeps the same VideoArea instance, latch remains latched) but appears again on a new movie or explicit route navigation to the Library.
 
 ### Episode code formatting
 

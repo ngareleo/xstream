@@ -5,7 +5,7 @@ use async_graphql::{Context, Object, ID};
 use crate::db::{
     self, add_watchlist_item, create_library, delete_library, delete_video_metadata,
     get_video_by_id, remove_watchlist_item, set_setting, update_library, update_watchlist_progress,
-    upsert_video_metadata, Db, LibraryUpdate, VideoMetadataRow,
+    Db, LibraryUpdate,
 };
 #[cfg(feature = "dev-features")]
 use crate::db::{insert_playback_session, PlaybackHistoryRow};
@@ -158,39 +158,20 @@ impl Mutation {
         Ok(Library::from_row(&updated))
     }
 
-    /// Step 1 stub — writes an empty metadata row keyed by IMDb ID. The full
-    /// OMDb fetch ships in Step 2 alongside the scanner.
+    /// Manual re-link: fetch the OMDb record for `imdb_id` and persist it for
+    /// the video. See `services::library_scanner::relink_video_to_imdb`.
     async fn match_video(
         &self,
         ctx: &Context<'_>,
         video_id: ID,
         imdb_id: String,
     ) -> async_graphql::Result<Video> {
-        let db = ctx.data_unchecked::<Db>();
+        let app_ctx = ctx.data_unchecked::<crate::config::AppContext>();
         let (_, local_id) = from_global_id(&video_id)?;
-        let video = get_video_by_id(db, &local_id)?
-            .ok_or_else(|| async_graphql::Error::new(format!("Video not found: {video_id:?}")))?;
-        let now = chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
-        upsert_video_metadata(
-            db,
-            &VideoMetadataRow {
-                video_id: local_id.clone(),
-                imdb_id: imdb_id.clone(),
-                title: video
-                    .title
-                    .clone()
-                    .unwrap_or_else(|| video.filename.clone()),
-                year: None,
-                genre: None,
-                director: None,
-                cast_list: None,
-                rating: None,
-                plot: None,
-                poster_url: None,
-                poster_local_path: None,
-                matched_at: now,
-            },
-        )?;
+        let video =
+            crate::services::library_scanner::relink_video_to_imdb(app_ctx, &local_id, &imdb_id)
+                .await
+                .map_err(|e| async_graphql::Error::new(e.to_string()))?;
         Ok(Video::from_row(&video))
     }
 

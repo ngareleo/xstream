@@ -111,8 +111,12 @@ Scenario: User has two libraries, both indexing the movie "Oppenheimer" (2023):
 - `MovieUnit` struct — groups a main file + optional extras.
 - `enumerate_movie_units(library_path, media_type)` — yields MovieUnits.
 - `resolve_films_for_library(library_id, media_type)` — walks MovieUnits and links videos to films.
-- `link_video_film_to_imdb(film_id, title, year)` — performs OMDb lookup and collision merge.
+- `link_video_film_to_imdb(film_id, title, year)` — performs OMDb lookup and collision merge. Used by the auto-match scanner pass.
+- `persist_match(ctx, &VideoRow, OmdbResult)` — **shared helper** (extracted from `match_one_video`): writes `video_metadata`, links/merges the Film by `imdb_id`, guarded so episode files skip the Film link. Used by both `match_one_video` (scanner auto-match) and `relink_video_to_imdb` (manual re-link mutation).
+- `relink_video_to_imdb(ctx, video_id, imdb_id)` — called by the `matchVideo` GraphQL mutation. Fetches metadata from OMDb via `?i=` lookup, then calls `persist_match`. Returns a `RelinkError` enum (`VideoNotFound | OmdbDisabled | OmdbLookupFailed | Db`) for typed error surfacing at the resolver.
 - `merge_films(survivor_film_id, duplicate_film_id)` — repoints videos + watchlist and deletes the duplicate.
+
+**OMDb client:** `server-rust/src/services/omdb.rs` exposes `OmdbClient::fetch_by_imdb_id` (the new `?i=` path) alongside the existing `?t=&y=` title+year lookup.
 
 **GraphQL types:** `server-rust/src/graphql/types/film.rs`
 

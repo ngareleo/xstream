@@ -17,6 +17,7 @@ import {
   isFiltersClearedEvent,
   isSearchClearedEvent,
 } from "~/events/search.events";
+import { useDocumentTitle } from "~/hooks/useDocumentTitle";
 import { IconClose, IconSearch } from "~/lib/icons";
 import type { HomeFilmsSection_films$key } from "~/relay/__generated__/HomeFilmsSection_films.graphql";
 import { EMPTY_FILTERS } from "~/utils/filters";
@@ -46,6 +47,9 @@ const _VIDEO_FRAGMENT = graphql`
     }
     videoStream {
       codec
+    }
+    library {
+      status
     }
     ...FilmTile_video
     ...FilmDetailsOverlay_video
@@ -108,6 +112,7 @@ export const HomeFilmsSection: FC<HomeFilmsSectionProps> = ({ films, tvShowsRow 
 
   const filmId = params.get("film");
   const selectedRow = filmId ? rows.find((r) => r.id === filmId) : undefined;
+  useDocumentTitle(selectedRow ? selectedRow.displayTitle : "Xstream");
 
   const heroFilms = useMemo(() => {
     return rows
@@ -206,6 +211,7 @@ export const HomeFilmsSection: FC<HomeFilmsSectionProps> = ({ films, tvShowsRow 
     const suggestions = pickSuggestions(selectedRow, rows);
     return (
       <FilmDetailsOverlay
+        key={filmId}
         video={selectedRow.node}
         copies={selectedRow.copies}
         suggestions={suggestions}

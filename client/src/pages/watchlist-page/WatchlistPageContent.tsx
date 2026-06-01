@@ -3,6 +3,7 @@ import { graphql, useLazyLoadQuery } from "react-relay";
 import { Link } from "react-router-dom";
 
 import { Poster } from "~/components/poster/Poster";
+import { useDocumentTitle } from "~/hooks/useDocumentTitle";
 import { ImdbBadge } from "~/lib/icons";
 import type { WatchlistPageContentQuery } from "~/relay/__generated__/WatchlistPageContentQuery.graphql";
 import { formatDurationHuman } from "~/utils/formatters";
@@ -38,6 +39,7 @@ const WATCHLIST_QUERY = graphql`
 
 export const WatchlistPageContent: FC = () => {
   const styles = useWatchlistPageStyles();
+  useDocumentTitle("Watchlist");
   const data = useLazyLoadQuery<WatchlistPageContentQuery>(WATCHLIST_QUERY, {});
   const items = data.watchlist ?? [];
   const titleText =

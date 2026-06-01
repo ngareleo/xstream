@@ -92,10 +92,10 @@ type ShowMetadata {
 }
 ```
 
-The resolver (`graphql::types::poster_url_for_metadata`) appends the size suffix before returning:
+The resolver (`graphql::types::poster_url_for_metadata`) applies the size suffix before returning:
 
 - If `poster_local_path` is set → return `/poster/<basename>.w{width}.webp` (e.g. `/poster/abc123.w400.webp` for W400).
-- Else fall back to `poster_url` (the OMDb URL, unchanged).
+- Else fall back to `poster_url` and upgrade it to the requested size via the same Amazon-CDN rewrite the worker uses (`upgrade_amazon_cdn_url(url, size.width_px())`). For Amazon CDN URLs, this replaces the `._V1_S*` size modifier with `._V1_SX{width}` (e.g., `SX300` → `SX3200` for W3200 at hero size). For non-Amazon poster URLs, the fallback returns the URL unchanged. This optimization eliminates the pixelated-thumbnail window: before the worker caches a freshly-matched poster, the pre-cache fallback now fetches at the requested display resolution (the browser downscales), rather than OMDb's default ~300px thumbnail.
 
 ## Client fragment alias convention
 

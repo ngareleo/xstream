@@ -252,8 +252,10 @@ fn variant_basename(root: &str, size: PosterSize) -> String {
 ///   * `_V1_SX300.jpg`                           (width-only)
 ///   * `_V1_QL75_UY562_CR35,0,380,562_.jpg`      (quality + height + crop)
 ///
-/// Both forms collapse to `_V1_SX{width}.<ext>`.
-fn upgrade_amazon_cdn_url(url: &str, width: u32) -> std::borrow::Cow<'_, str> {
+/// Both forms collapse to `_V1_SX{width}.<ext>`. A no-op for any URL without
+/// the `._V1_` anchor (non-Amazon posters pass through unchanged). Also used
+/// by the `posterUrl` resolver to upgrade the pre-cache OMDb fallback.
+pub(crate) fn upgrade_amazon_cdn_url(url: &str, width: u32) -> std::borrow::Cow<'_, str> {
     if !url.contains("._V1_") {
         return std::borrow::Cow::Borrowed(url);
     }

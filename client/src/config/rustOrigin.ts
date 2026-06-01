@@ -41,6 +41,11 @@ export function settingsUrl(keys: readonly string[]): string {
   return `${HTTP_ORIGIN}/settings?keys=${encodeURIComponent(keys.join(","))}`;
 }
 
+/** Absolute URL for a server auth endpoint (e.g. `/auth/session`). */
+export function authUrl(path: string): string {
+  return `${HTTP_ORIGIN}${path}`;
+}
+
 /**
  * Rewrite a `posterUrl` from GraphQL into a fetchable URL. The server
  * returns `/poster/<basename>` for locally cached posters; we prepend

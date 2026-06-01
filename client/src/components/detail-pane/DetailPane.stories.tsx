@@ -3,6 +3,7 @@ import type { Meta, StoryObj } from "storybook-react-rsbuild";
 
 import type { DetailPane_video$key } from "~/relay/__generated__/DetailPane_video.graphql";
 import type { DetailPaneStoryQuery } from "~/relay/__generated__/DetailPaneStoryQuery.graphql";
+import { withNovaEventing } from "~/storybook/withNovaEventing";
 import { withRelay } from "~/storybook/withRelay";
 
 import { DetailPane } from "./DetailPane.js";
@@ -52,7 +53,8 @@ const movieMockResolvers = {
 const meta: Meta<WrapperProps> = {
   title: "Components/DetailPane",
   component: DetailPaneWrapper,
-  decorators: [withRelay],
+  // DetailPaneEdit calls useToast → useNovaEventing, which needs the provider.
+  decorators: [withNovaEventing, withRelay],
   parameters: {
     layout: "fullscreen",
     relay: {

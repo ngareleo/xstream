@@ -8,7 +8,9 @@ import { type FilmVariantOption, FilmVariants } from "~/components/film-variants
 import { Poster } from "~/components/poster/Poster";
 import { PosterRow } from "~/components/poster-row/PosterRow";
 import { SeasonsPanel } from "~/components/seasons-panel/SeasonsPanel";
-import { IconClose, IconPlay, ImdbBadge } from "~/lib/icons";
+import { ROUTE_PATHS } from "~/config/routePaths";
+import { useToast } from "~/hooks/useToast";
+import { IconClose, IconFolder, IconPlay, ImdbBadge } from "~/lib/icons";
 import type { FilmDetailsOverlay_video$key } from "~/relay/__generated__/FilmDetailsOverlay_video.graphql";
 import type { FilmTile_video$key } from "~/relay/__generated__/FilmTile_video.graphql";
 import { formatDurationHuman } from "~/utils/formatters";
@@ -25,6 +27,7 @@ export interface OverlayCopy {
   readonly fileSizeBytes: number;
   readonly bitrate: number;
   readonly videoStream: { readonly codec: string } | null | undefined;
+  readonly library: { readonly status: string } | null | undefined;
 }
 
 const OVERLAY_FRAGMENT = graphql`
@@ -48,6 +51,9 @@ const OVERLAY_FRAGMENT = graphql`
     videoStream {
       codec
     }
+    library {
+      status
+    }
     show {
       seasons {
         episodes {
@@ -59,13 +65,21 @@ const OVERLAY_FRAGMENT = graphql`
   }
 `;
 
+/** A suggestion tile: the Film `id` to open, plus the Video backing the
+ *  FilmTile fragment. */
+export interface OverlaySuggestion {
+  filmId: string;
+  video: FilmTile_video$key;
+}
+
 interface FilmDetailsOverlayProps {
   video: FilmDetailsOverlay_video$key;
   /** All main copies of the Film (movies only); drives FilmVariants picker. */
   copies?: ReadonlyArray<OverlayCopy>;
-  suggestions?: ReadonlyArray<FilmTile_video$key>;
+  suggestions?: ReadonlyArray<OverlaySuggestion>;
   onClose: () => void;
-  onSelectSuggestion?: (id: string) => void;
+  /** Open another film in this same detail view. Receives the Film id. */
+  onSelectSuggestion?: (filmId: string) => void;
 }
 
 const RESOLUTION_DISPLAY: Record<string, string> = {
@@ -96,6 +110,7 @@ export const FilmDetailsOverlay: FC<FilmDetailsOverlayProps> = ({
   const data = useFragment(OVERLAY_FRAGMENT, video);
   const styles = useFilmDetailsOverlayStyles();
   const navigate = useNavigate();
+  const toast = useToast();
   const overlayRef = useRef<HTMLDivElement>(null);
   const isSeries = data.mediaType === "TV_SHOWS";
   const sanitisedTitle = data.metadata?.title ?? data.title;
@@ -124,26 +139,48 @@ export const FilmDetailsOverlay: FC<FilmDetailsOverlayProps> = ({
     0
   );
   const seasonCount = seasons.length;
+  const hasVariants = !isSeries && variantOptions.length > 1;
+  const hasRail = (isSeries && seasonCount > 0) || hasVariants;
   const resolution = data.nativeResolution
     ? (RESOLUTION_LABEL[data.nativeResolution] ?? null)
     : null;
   const codec = data.videoStream?.codec ?? null;
   const duration = data.durationSeconds > 0 ? formatDurationHuman(data.durationSeconds) : null;
 
+  // Unplayable when the owning library is offline; the picked variant falls
+  // back to the source video's library when its own is absent.
+  const selectedCopy = copies?.find((c) => c.id === selectedCopyId);
+  const playStatus = selectedCopy?.library?.status ?? data.library?.status ?? null;
+  const unavailable = playStatus === "OFFLINE";
+
   const playWithTransition = (): void => {
+    if (unavailable) {
+      toast({ variant: "error", message: strings.unavailableToast });
+      return;
+    }
     // Use picker's selected copy or overlay's source video (bestCopy/show).
     const target = selectedCopyId || data.id;
     withViewTransition(() => navigate(`/player/${target}`));
   };
 
   const playEpisode = (seasonNumber: number, episodeNumber: number): void => {
+    if (data.library?.status === "OFFLINE") {
+      toast({ variant: "error", message: strings.unavailableToast });
+      return;
+    }
     navigate(`/player/${data.id}?s=${seasonNumber}&e=${episodeNumber}`);
   };
 
-  const handleSuggestionClick = (id: string): void => {
+  // Open this film's row in Profiles (keyed by video id) to edit / re-link it.
+  const openInProfile = (): void => {
+    navigate(`${ROUTE_PATHS.profiles}?film=${encodeURIComponent(data.id)}`);
+  };
+
+  const handleSuggestionClick = (filmId: string): void => {
     overlayRef.current?.scrollTo({ top: 0, behavior: "smooth" });
-    if (onSelectSuggestion) onSelectSuggestion(id);
-    else navigate(`/player/${id}`);
+    // The host swaps the detail view to the chosen film via ?film=. With no
+    // handler there's nowhere to route, so it's a no-op (not a player jump).
+    onSelectSuggestion?.(filmId);
   };
 
   return (
@@ -151,58 +188,86 @@ export const FilmDetailsOverlay: FC<FilmDetailsOverlayProps> = ({
       <div className={styles.hero}>
         <Poster url={data.metadata?.heroPoster ?? null} alt={altText} className={styles.poster} />
         <div className={styles.gradient} />
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label={strings.closeAriaLabel}
-          className={styles.close}
-        >
-          <IconClose />
-        </button>
-        <div className={mergeClasses(styles.content, isSeries && styles.contentWithRail)}>
-          <div className={styles.chips}>
-            {resolution && (
-              <span className={mergeClasses(styles.chip, styles.chipGreen)}>{resolution}</span>
-            )}
-            {codec && <span className={styles.chip}>{codec}</span>}
-            {data.metadata?.rating !== null && data.metadata?.rating !== undefined && (
-              <span className={styles.rating}>
-                <ImdbBadge />
-                {data.metadata.rating}
-              </span>
-            )}
-          </div>
-          <div className={styles.title}>{titleText}</div>
-          <div className={styles.metaRow}>
-            {[data.metadata?.year, data.metadata?.genre, duration]
-              .filter((v): v is string | number => v !== null && v !== undefined)
-              .join(" · ")}
-          </div>
-          {data.metadata?.director && (
-            <div className={styles.director}>
-              {strings.directedBy}
-              <span className={styles.directorName}>{data.metadata.director}</span>
+        <div className={styles.topScrim} aria-hidden="true" />
+        <div className={styles.topActions}>
+          <button
+            type="button"
+            onClick={openInProfile}
+            aria-label={strings.openInProfile}
+            className={styles.secondaryCta}
+          >
+            <IconFolder />
+            <span>{strings.openInProfile}</span>
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label={strings.closeAriaLabel}
+            className={styles.close}
+          >
+            <IconClose />
+          </button>
+        </div>
+        <div className={styles.heroBottom}>
+          <div className={mergeClasses(styles.content, hasRail && styles.contentWithRail)}>
+            <div className={styles.chips}>
+              {resolution && (
+                <span className={mergeClasses(styles.chip, styles.chipGreen)}>{resolution}</span>
+              )}
+              {codec && <span className={styles.chip}>{codec}</span>}
+              {unavailable && (
+                <span className={mergeClasses(styles.chip, styles.chipOffline)}>
+                  {strings.offlineChip}
+                </span>
+              )}
+              {data.metadata?.rating !== null && data.metadata?.rating !== undefined && (
+                <span className={styles.rating}>
+                  <ImdbBadge />
+                  {data.metadata.rating}
+                </span>
+              )}
             </div>
-          )}
-          {data.metadata?.plot && <div className={styles.plot}>{data.metadata.plot}</div>}
-          <div className={styles.actions}>
-            <button type="button" onClick={playWithTransition} className={styles.playCta}>
-              <IconPlay />
-              <span>{strings.play}</span>
-            </button>
-            <span className={styles.filename}>{data.filename}</span>
-          </div>
-          {variantOptions.length > 1 && (
-            <FilmVariants
-              copies={variantOptions}
-              selectedId={selectedCopyId}
-              onSelect={setSelectedCopyId}
-            />
-          )}
-          {suggestions.length > 0 && (
-            <div className={styles.scrollHint} aria-hidden="true">
-              {strings.scrollHint}
+            <div className={styles.title}>{titleText}</div>
+            <div className={styles.metaRow}>
+              {[data.metadata?.year, data.metadata?.genre, duration]
+                .filter((v): v is string | number => v !== null && v !== undefined)
+                .join(" · ")}
             </div>
+            {data.metadata?.director && (
+              <div className={styles.director}>
+                {strings.directedBy}
+                <span className={styles.directorName}>{data.metadata.director}</span>
+              </div>
+            )}
+            {data.metadata?.plot && <div className={styles.plot}>{data.metadata.plot}</div>}
+            <div className={styles.actions}>
+              <button
+                type="button"
+                onClick={playWithTransition}
+                aria-disabled={unavailable}
+                className={mergeClasses(styles.playCta, unavailable && styles.playCtaDisabled)}
+              >
+                <IconPlay />
+                <span>{strings.play}</span>
+              </button>
+              <span className={styles.filename}>{data.filename}</span>
+            </div>
+            {suggestions.length > 0 && (
+              <div className={styles.scrollHint} aria-hidden="true">
+                {strings.scrollHint}
+              </div>
+            )}
+          </div>
+          {hasVariants && (
+            <aside className={styles.copiesRail} aria-label={strings.copiesAriaLabel}>
+              <div className={styles.railBody}>
+                <FilmVariants
+                  copies={variantOptions}
+                  selectedId={selectedCopyId}
+                  onSelect={setSelectedCopyId}
+                />
+              </div>
+            </aside>
           )}
         </div>
         {isSeries && seasonCount > 0 && (
@@ -228,8 +293,13 @@ export const FilmDetailsOverlay: FC<FilmDetailsOverlayProps> = ({
       {suggestions.length > 0 && (
         <div className={styles.suggestions}>
           <PosterRow title={strings.youMightAlsoLike}>
-            {suggestions.map((suggestionRef, idx) => (
-              <SuggestionTile key={idx} video={suggestionRef} onClick={handleSuggestionClick} />
+            {suggestions.map((s) => (
+              <SuggestionTile
+                key={s.filmId}
+                filmId={s.filmId}
+                video={s.video}
+                onClick={handleSuggestionClick}
+              />
             ))}
           </PosterRow>
         </div>
@@ -239,6 +309,11 @@ export const FilmDetailsOverlay: FC<FilmDetailsOverlayProps> = ({
 };
 
 const SuggestionTile: FC<{
+  filmId: string;
   video: FilmTile_video$key;
-  onClick: (id: string) => void;
-}> = ({ video, onClick }) => <FilmTile video={video} onClick={onClick} />;
+  onClick: (filmId: string) => void;
+}> = ({ filmId, video, onClick }) => (
+  // FilmTile emits the Video id; ignore it and click with the Film id so the
+  // host's ?film= selection resolves.
+  <FilmTile video={video} onClick={() => onClick(filmId)} />
+);

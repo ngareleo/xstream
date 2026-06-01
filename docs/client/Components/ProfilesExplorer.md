@@ -21,6 +21,7 @@ the page. Delegates selection callbacks to parent.
 | `selectedFilmId` | `string \| null` | Currently highlighted film for detail panel. |
 | `selectedLibraryId` | `string \| undefined` | Currently highlighted profile. |
 | `scanByLibrary` | `Map<string, LibraryScanSnapshot>` | Real-time scan progress per profile. |
+| `statusByLibrary` | `Map<string, ProfileAvailability>` | Real-time availability from the `profileAvailabilityUpdated` subscription, keyed by global Library ID. Passed through to each `ProfileRow` as `statusOverride`/`lastSeenOverride`. |
 | `onOpenFilm` | `(id: string) => void` | Film selection callback. |
 | `onEditFilm` | `(id: string) => void` | Film detail edit trigger. |
 
@@ -71,7 +72,8 @@ the page. Delegates selection callbacks to parent.
 
 ### Profile expansion
 
-- `expandedIds: Set<string>` local state; pre-initializes with `libraries[0]` and the profile containing `selectedFilmId` (for deep-link support).
+- `expandedIds: Set<string>` local state; pre-initializes from `selectedLibraryId` only (empty when none).
+- `useEffect` keyed on `selectedLibraryId` adds it to the expanded set whenever it changes. This ensures the profile holding the selected/restored film is auto-expanded, even when that profile arrives *after* mount (e.g., when the Profiles page restores a film from the `?film=` URL param in an effect). Manual toggles (`toggleProfile`) are preserved.
 - `toggleProfile(id)`: adds/removes from set (disabled while searching).
 - When expanded, `ProfileRow` renders its child `FilmRow` elements inline.
 
@@ -80,6 +82,11 @@ the page. Delegates selection callbacks to parent.
 - Receives `scanByLibrary: Map<string, LibraryScanSnapshot>` from parent.
 - Passes scan state to each `ProfileRow` via `scanning` and `scanProgress` props.
 - Does not render breadcrumb or scanning badge; the page owns those.
+
+### Live availability
+
+- Receives `statusByLibrary: Map<string, ProfileAvailability>` from parent (`ProfilesPageContent`), which drives it from `useProfileAvailabilitySubscription`.
+- For each `ProfileRow`, looks up the library's global ID in `statusByLibrary` and passes `statusOverride`/`lastSeenOverride` if found. When the subscription fires a flip, only the affected `ProfileRow` pill re-renders.
 
 ### Rendering
 

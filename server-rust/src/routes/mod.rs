@@ -1,5 +1,6 @@
 //! HTTP routes. GraphQL is in `graphql/`.
 
+pub mod auth;
 pub mod graphql_http;
 pub mod poster;
 pub mod settings;

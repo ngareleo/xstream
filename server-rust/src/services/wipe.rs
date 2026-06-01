@@ -28,7 +28,10 @@ pub type WipeResult<T> = Result<T, WipeError>;
 /// `wipe_all` calls `pool.kill_all_jobs()` first, so it only checks the
 /// scan gate.
 fn check_idle(ctx: &AppContext) -> WipeResult<()> {
-    if !ctx.job_store.is_empty() {
+    // Gate on *running* ffmpeg jobs, not the job_store — the store also caches
+    // completed transcodes for reuse, so a finished playback would otherwise
+    // block every wipe until a server restart.
+    if ctx.pool.has_active_jobs() {
         return Err(WipeError::JobActive);
     }
     if ctx.scan_state.is_scanning() {
@@ -43,6 +46,10 @@ pub async fn wipe_db(ctx: &AppContext) -> WipeResult<()> {
     check_idle(ctx)?;
     info!("wipe_db: deleting all content rows");
     wipe_content(&ctx.db)?;
+    // The job_store caches completed jobs that mirror the now-deleted
+    // transcode_jobs / segments rows; drop it so a replay re-evaluates
+    // instead of reusing a cache entry with no backing DB row.
+    ctx.job_store.clear();
     Ok(())
 }
 

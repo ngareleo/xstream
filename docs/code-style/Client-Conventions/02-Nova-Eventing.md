@@ -50,8 +50,10 @@ The default first instinct is to colocate every events file with its component (
 
 | Originator style | When to use | Lives at |
 |---|---|---|
-| **Domain noun** (`"playback"`, `"overlay"`, `"profiles"`, `"search"`, `"detailPane"`, `"error"`) | Event has multiple emitters, or describes cross-cutting infrastructure (hooks bubbling job state, telemetry signals). | `client/src/events/<domain>.events.ts` |
+| **Domain noun** (`"playback"`, `"overlay"`, `"profiles"`, `"search"`, `"detailPane"`, `"error"`, `"toast"`) | Event has multiple emitters, or describes cross-cutting infrastructure (hooks bubbling job state, telemetry signals). | `client/src/events/<domain>.events.ts` |
 | **Component name** (`"AppHeader"`, `"AccountMenu"`, `"DirectoryBrowser"`) | Single emitter, single consumer, narrow scope. The component "owns" the event. | colocated `client/src/components/<kebab>/<Component>.events.ts` |
+
+**`"toast"` domain example.** `client/src/events/toast.events.ts` defines originator `"toast"`, event type `"Requested"`, payload `{ variant, message }`. Any component or hook that needs to surface a toast calls `useToast()` → `showToast({ variant, message })`, which emits a `ToastRequestedPayload` event. `ToastProvider` (mounted in `AppShell`) intercepts it, appends to the stack, and auto-dismisses. Because multiple callers emit the same logical signal (re-link success, scan error, any future caller), the domain originator pattern is correct here — a component-scoped events file would require `ToastProvider` to listen to N different originators.
 
 **Heuristic.** Before defining an event, ask: *"If a second emitter ever bubbled this same logical signal, would I want consumers to handle two originators or one?"* One → use a domain originator. The taxonomy collapses to component-only when the event truly cannot have a second emitter.
 

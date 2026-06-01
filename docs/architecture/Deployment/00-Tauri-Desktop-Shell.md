@@ -43,6 +43,13 @@ xstream/
     "active": true,
     "targets": ["app", "dmg", "deb", "appimage", "msi", "nsis"],
     "resources": ["resources/ffmpeg/**/*"],                 // bundled ffmpeg per platform
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],                                                      // app icon per OS
     "macOS": {
       "signingIdentity": "Developer ID Application: <ORG> (<TEAMID>)",
       "entitlements": "src-tauri/entitlements.plist",
@@ -77,6 +84,20 @@ xstream/
 ```
 
 The `pubkey` is the **update signing public key**, NOT the node's identity pubkey from sharing — they are unrelated keypairs.
+
+### App icon and favicon
+
+The Xstream mark is an X glyph rendered in Bytesized (the display typeface), black on a brand-green (`oklch(0.78 0.20 150)`) rounded square. The **source of truth** is `client/public/favicon.svg` (256px SVG viewport, used directly as the favicon). For Tauri desktop builds:
+
+1. Render a high-resolution version: `icons/xstream-icon.svg` or equivalent (1024×1024px).
+2. Run `tauri icon icons/xstream-icon.svg` to auto-generate platform-specific sets:
+   - Linux AppImage: `32x32.png`, `128x128.png`, `128x128@2x.png`
+   - macOS DMG: `icon.icns`
+   - Windows MSI/NSIS: `icon.ico`
+   - Outputs to `src-tauri/icons/`
+3. Reference the generated set in `tauri.conf.json` under `bundle.icon` (the array above).
+
+**Important:** The logo appears only in **system chrome** (taskbar, system menu, browser tab). The application header renders a text-only wordmark (`<span>Xstream</span>`) with no logo glyph — see [`docs/client/Components/AppHeader.md`](../../client/Components/AppHeader.md) and [`docs/client/Components/Logo.md`](../../client/Components/Logo.md). The `client/public/favicon.svg` is served directly by the webview and requires no Tauri involvement; it's baked into `client/index.html` via a `<link rel="icon" href="/favicon.svg">` tag.
 
 ## 2. Embedding the React client
 

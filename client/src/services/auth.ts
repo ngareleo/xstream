@@ -3,8 +3,10 @@
 import { createClient, type Session, type SupabaseClient, type User } from "@supabase/supabase-js";
 
 import { env } from "~/config/env.js";
+import { authUrl } from "~/config/rustOrigin.js";
 import { getClientLogger } from "~/telemetry.js";
 
+import { LocalStorageKey, readLocal, writeLocal } from "./localStore.js";
 import { clearUserContext, setUserContext } from "./userContext.js";
 
 function log() {
@@ -37,35 +39,106 @@ export interface AuthResult {
   error: string | null;
 }
 
-/** Hydrate the Supabase session from localStorage and mirror into `userContext`. */
-export async function restoreSession(): Promise<Session | null> {
+interface LocalClaims {
+  sub: string;
+  email: string | null;
+  /** Absolute expiry, seconds since epoch. */
+  exp: number;
+}
+
+/** The signed local session token, or `null` when none is stored. */
+export function getLocalSessionToken(): string | null {
+  return readLocal(LocalStorageKey.Session);
+}
+
+/** Decode (without verifying) the local session token's claims. */
+function decodeLocalClaims(token: string): LocalClaims | null {
   try {
-    const supabase = getSupabase();
-    const { data } = await supabase.auth.getSession();
-    if (data.session?.user.id) {
-      setUserContext(data.session.user.id, data.session.user.email ?? null);
+    const payload = token.split(".")[1];
+    if (!payload) return null;
+    // base64url → base64, re-padding to a multiple of 4 (JWT segments are
+    // emitted unpadded; `atob` rejects `length % 4 === 1` otherwise).
+    let b64 = payload.replace(/-/g, "+").replace(/_/g, "/");
+    b64 += "=".repeat((4 - (b64.length % 4)) % 4);
+    const parsed = JSON.parse(atob(b64)) as { sub?: string; email?: string | null; exp?: number };
+    if (!parsed.sub || typeof parsed.exp !== "number") return null;
+    return { sub: parsed.sub, email: parsed.email ?? null, exp: parsed.exp };
+  } catch {
+    return null;
+  }
+}
+
+/** Claims of the stored token when present and not past its absolute expiry. */
+function validLocalClaims(): LocalClaims | null {
+  const token = getLocalSessionToken();
+  if (!token) return null;
+  const claims = decodeLocalClaims(token);
+  if (!claims) return null;
+  if (claims.exp * 1000 <= Date.now()) return null;
+  return claims;
+}
+
+/** Exchange a Supabase access token for a local session token; stores it and
+ *  sets userContext. Requires connectivity. */
+async function exchangeForLocalSession(supabaseAccessToken: string): Promise<boolean> {
+  try {
+    const resp = await fetch(authUrl("/auth/session"), {
+      method: "POST",
+      headers: { Authorization: `Bearer ${supabaseAccessToken}` },
+    });
+    if (!resp.ok) {
+      log().warn("local session exchange rejected", { status: resp.status });
+      return false;
     }
-    return data.session ?? null;
+    const body = (await resp.json()) as { token: string; userId: string; email: string | null };
+    writeLocal(LocalStorageKey.Session, body.token);
+    setUserContext(body.userId, body.email ?? null);
+    return true;
   } catch (err) {
-    log().warn("restoreSession failed; treating as signed-out", { error: errorMessage(err) });
-    return null;
+    log().warn("local session exchange failed", { error: errorMessage(err) });
+    return false;
   }
 }
 
-export async function getSession(): Promise<Session | null> {
+/** Restore identity on boot from the local session token, falling back to
+ *  minting one from a live Supabase session (migration). Resolves `true` when
+ *  signed in. See docs/architecture/Identity/02-Session-And-Refresh.md. */
+export async function restoreSession(): Promise<boolean> {
+  const claims = validLocalClaims();
+  if (claims) {
+    setUserContext(claims.sub, claims.email);
+    log().info("restoreSession: restored from local session token");
+    return true;
+  }
+  // No local token — migrate from a live Supabase session if there is one.
   try {
-    const supabase = getSupabase();
-    const { data } = await supabase.auth.getSession();
-    return data.session ?? null;
+    const { data } = await getSupabase().auth.getSession();
+    const accessToken = data.session?.access_token;
+    if (accessToken) {
+      const ok = await exchangeForLocalSession(accessToken);
+      log().info("restoreSession: migrated from Supabase session", { ok });
+      return ok;
+    }
+    log().info("restoreSession: no local token and no Supabase session — signed out");
   } catch (err) {
-    log().warn("getSession failed", { error: errorMessage(err) });
-    return null;
+    log().warn("restoreSession: Supabase fallback failed", { error: errorMessage(err) });
   }
+  return false;
 }
 
+let restorePromise: Promise<boolean> | null = null;
+
+/** Restore the session at most once per page load. The router's auth-gate
+ *  loaders await this so the gate never decides "signed out" before restore
+ *  finishes (the refresh→signin race). */
+export function ensureSessionRestored(): Promise<boolean> {
+  restorePromise ??= restoreSession();
+  return restorePromise;
+}
+
+/** The Bearer token attached to every server request — the local session. */
 export async function getAccessToken(): Promise<string | null> {
-  const session = await getSession();
-  return session?.access_token ?? null;
+  return getLocalSessionToken();
 }
 
 export async function signIn(email: string, password: string): Promise<AuthResult> {
@@ -76,8 +149,13 @@ export async function signIn(email: string, password: string): Promise<AuthResul
       log().warn("signIn rejected by Supabase", { error: error.message });
       return { user: null, session: null, error: error.message };
     }
-    if (data.user?.id) {
-      setUserContext(data.user.id, data.user.email ?? null);
+    const accessToken = data.session?.access_token;
+    if (!accessToken || !(await exchangeForLocalSession(accessToken))) {
+      return {
+        user: null,
+        session: null,
+        error: "Signed in, but couldn't establish a local session. Check your connection.",
+      };
     }
     return { user: data.user, session: data.session, error: null };
   } catch (err) {
@@ -94,9 +172,9 @@ export async function signUp(email: string, password: string): Promise<AuthResul
       log().warn("signUp rejected by Supabase", { error: error.message });
       return { user: null, session: null, error: error.message };
     }
-    // Session is null when email confirmation is on; caller redirects to /signin in that case.
-    if (data.user?.id && data.session) {
-      setUserContext(data.user.id, data.user.email ?? null);
+    // No session when email confirmation is on; otherwise mint the local session.
+    if (data.session?.access_token) {
+      await exchangeForLocalSession(data.session.access_token);
     }
     return { user: data.user, session: data.session, error: null };
   } catch (err) {
@@ -106,14 +184,29 @@ export async function signUp(email: string, password: string): Promise<AuthResul
 }
 
 export async function signOut(): Promise<void> {
-  try {
-    const supabase = getSupabase();
-    await supabase.auth.signOut();
-  } catch (err) {
-    log().warn("signOut threw; clearing local state anyway", { error: errorMessage(err) });
-  } finally {
-    clearUserContext();
+  // Revoke the local session server-side, then clear local state.
+  const token = getLocalSessionToken();
+  if (token) {
+    try {
+      await fetch(authUrl("/auth/logout"), {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+    } catch (err) {
+      log().warn("local session revoke failed; clearing locally anyway", {
+        error: errorMessage(err),
+      });
+    }
   }
+  writeLocal(LocalStorageKey.Session, null);
+  try {
+    await getSupabase().auth.signOut();
+  } catch (err) {
+    log().warn("supabase signOut threw; clearing local state anyway", {
+      error: errorMessage(err),
+    });
+  }
+  clearUserContext();
 }
 
 export interface ResetPasswordResult {
@@ -167,18 +260,12 @@ export async function changePassword(
   }
 }
 
-/** Subscribe to Supabase auth-state changes. Keeps `userContext` in lockstep. */
+/** Subscribe to Supabase auth-state changes. Does not touch `userContext` —
+ *  the local session drives identity, not Supabase's background refreshes. */
 export function subscribeToAuthChanges(callback: (session: Session | null) => void): () => void {
   try {
     const supabase = getSupabase();
-    const { data } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session?.user.id) {
-        setUserContext(session.user.id, session.user.email ?? null);
-      } else {
-        clearUserContext();
-      }
-      callback(session);
-    });
+    const { data } = supabase.auth.onAuthStateChange((_event, session) => callback(session));
     return () => data.subscription.unsubscribe();
   } catch (err) {
     log().warn("subscribeToAuthChanges failed; auth state will not propagate", {

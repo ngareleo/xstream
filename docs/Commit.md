@@ -15,6 +15,83 @@ Entry shape (each entry ends with the divider line described above):
 
 <!-- ENTRIES BELOW — newest first; each ends with a bare `---` line. The architect's next invocation will treat the no-entries state as the first-run case and prepend a bootstrap entry at HEAD. -->
 
+## 972b597 — 2026-06-01 (App logo + favicon + per-route document titles)
+
+**Files:** `docs/design/UI-Design-Spec/00-Tokens-And-Layout.md`, `docs/client/Components/Logo.md`, `docs/client/Components/AppHeader.md`, `docs/architecture/Deployment/00-Tauri-Desktop-Shell.md`, `docs/client/Components/HomeFilmsSection.md`, `docs/client/Components/VideoArea.md`, `docs/code-style/Client-Conventions/00-Patterns.md`
+**Why:** Documentation updates for PR #73 (fix/seven-bugs-auth-profiles-detail): (A) NEW APP LOGO + FAVICON + DESKTOP ICON: X glyph in Bytesized render, black on brand-green rounded square, from `client/public/favicon.svg` (256px SVG) and `src-tauri/icons/` (Tauri `icon` CLI generated PNG + icon sets); logo appears only in system chrome (favicon, taskbar), not in the AppHeader wordmark which remains text-only. (B) PER-ROUTE DOCUMENT TITLES: new `useDocumentTitle` hook wired across all route-level pages and data-displaying components (HomeFilmsSection, VideoArea, Profiles, Settings, Watchlist, Player); FilterRow gained `displayTitle` field (original-case title for display vs search-optimized lowercase `title`). Docs updated: design spec finalizes logo selection; Logo.md clarifies system-chrome-only rendering; AppHeader.md notes wordmark is unchanged; Tauri deployment section explains icon generation and favicon sourcing; HomeFilmsSection and VideoArea document per-route title wiring via the hook; Client Conventions added useDocumentTitle pattern section.
+
+---
+
+## 972b597 — 2026-06-01 (VideoArea backdrop latch invariant)
+
+**Files:** `docs/client/Components/VideoArea.md`
+**Why:** Spec update for PR `fix/seven-bugs-auth-profiles-detail`: documented the `hasPlayed` state latch that prevents the backdrop poster from reappearing during mid-playback stalls/seeks. The latch is one-directional (set on first "playing" transition, never resets downward) and only clears on VideoArea remount or route change. Critical invariant for maintaining stable UX across episode chains and playback interruptions.
+
+---
+
+## 972b597 — 2026-06-01 (FilmDetailsOverlay key + remount invariant)
+
+**Files:** `docs/client/Components/FilmDetailsOverlay.md`, `docs/client/Components/HomeFilmsSection.md`
+**Why:** Spec update for PR `fix/seven-bugs-auth-profiles-detail`: documented the `key={filmId}` on `<FilmDetailsOverlay>` render in HomeFilmsSection as a load-bearing invariant. The key forces remount on film swap, resetting per-film local state (`selectedCopyId`, SeasonsPanel selections). Without it, suggestion clicks would navigate to the previous film. Added section to both specs clarifying the pattern and its purpose.
+
+---
+
+## 972b597 — 2026-06-01 (wipe feedback: toast-based results instead of inline status)
+
+**Files:** `docs/client/Components/DangerTab.md`
+**Why:** Spec update for PR `fix/seven-bugs-auth-profiles-detail`: wipe operations now report results via app-wide toast system (`useToast()`) instead of per-row inline status lines. Success/error toasts name the operation (e.g. "Wipe Database — done."), giving consistent feedback across the app. Inline `status` React state, `WipeStatus` interface, `status`/`statusErr` styles, and `statusOk`/`statusErr` strings removed as redundant. New strings: `toastOkFormat`, `toastFailFormat`.
+
+---
+
+## 972b597 — 2026-06-01 (wipe guard + Reservation leak recording)
+
+**Files:** `docs/client/Components/DangerTab.md`, `docs/architecture/Streaming/06-FfmpegPool.md`, `docs/todo.md`
+**Why:** Bug fix + tech-debt recording from PR `fix/seven-bugs-auth-profiles-detail`. (1) Wipe-database guard was gated on `job_store.is_empty()`, which is a cache that retains completed transcodes for reuse — so finished playbacks left permanent entries until server restart, blocking wipes. Fix: guard now checks `!ctx.pool.has_active_jobs()` (actual running/dying ffmpeg processes) and wipe calls `ctx.job_store.clear()` to delete cached entries alongside DB rows. DangerTab spec updated with this detail. FfmpegPool docs added `has_active_jobs()` method signature and clarified the distinction. (2) Latent Reservation leak: `try_reserve_slot` inserts job id into `inflight`, but `release()` does NOT remove it (no Drop impl); only `run_to_completion` and `kill_job` clear it. Cache-restore path leaks entries, causing `inflight_count` to drift upward and `has_inflight_or_live(id)` false-positives over time. No user-visible breakage yet (wipe guard avoids it, cache-hits return early), but it's a real accounting leak. Recorded as POOL-001 tech-debt in todo.md with suggested RAII fix.
+
+---
+
+## 972b597 — 2026-06-01 (poster fallback size upgrade)
+
+**Files:** `docs/architecture/Library-Scan/05-Poster-Caching.md`, `docs/server/GraphQL-Schema/00-Surface.md`
+**Why:** Behavior change in PR `fix/seven-bugs-auth-profiles-detail`: the `posterUrl` fallback now upgrades Amazon CDN URLs to the requested size (via `upgrade_amazon_cdn_url`), eliminating the pixelated-thumbnail window before local cache catch-up.
+
+---
+
+## 972b597 — 2026-06-01 (local-session auth model)
+
+**Files:** `docs/architecture/Identity/00-System-Overview.md`, `docs/architecture/Identity/01-Sign-In-Flow.md`, `docs/architecture/Identity/02-Session-And-Refresh.md`, `docs/architecture/Identity/03-Telemetry-Correlation.md`, `docs/architecture/Deployment/06-Supabase-Project-Setup.md`, `docs/server/DB-Schema/00-Tables.md`
+**Why:** Auth model pivot from Supabase-JWT-per-request to per-install HS256 local session tokens (PR `fix/seven-bugs-auth-profiles-detail`): mint via POST /auth/session, offline validation, revocable via sessions table, `user.id` now sourced from local token `sub`; Supabase JWT TTL note in Deployment/06 replaced (short TTL is now fine).
+
+---
+
+## 972b597 — 2026-06-01 (FilmDetailsOverlay availability spec)
+
+**Files:** `docs/client/Components/FilmDetailsOverlay.md`
+**Why:** Spec update for unavailable-video blocking (PR `fix/seven-bugs-auth-profiles-detail`): library offline detection, disabled Play CTA, Offline chip, Toast integration, Relay `library { status }` fragment selection, new strings (offlineChip, unavailableToast), Storybook withNovaEventing decorator.
+
+---
+
+## 972b597 — 2026-06-01 (localStorage pattern documentation)
+
+**Files:** `docs/code-style/Client-Conventions/00-Patterns.md`
+**Why:** Documented client localStorage convention post-code-review: new module `services/localStore.ts` owns all app-owned storage keys + safe read/write interface.
+
+---
+
+## 972b597 — 2026-06-01 (refined docs)
+
+**Files:** `docs/architecture/Library-Scan/04-Profile-Availability.md`, `docs/architecture/Observability/server/00-Spans.md`
+**Why:** Curator refinement for PR `fix/seven-bugs-auth-profiles-detail`: reconcile docs with three code changes — probe cadence now 2.5s (not 30s), probe-on-subscribe behavior added, per-cycle `library.availability_probe` span removed (logging downgraded to debug).
+
+---
+
+## 972b597 — 2026-06-01
+
+**Files:** `docs/architecture/Identity/02-Session-And-Refresh.md`, `docs/architecture/Deployment/06-Supabase-Project-Setup.md`, `docs/architecture/Library-Scan/04-Profile-Availability.md`, `docs/architecture/Library-Scan/02-Film-Entity.md`, `docs/server/GraphQL-Schema/00-Surface.md`, `docs/client/Components/ProfileRow.md`, `docs/client/Components/ProfilesExplorer.md`, `docs/client/Components/Profiles.md`, `docs/client/Components/DetailPane.md`, `docs/client/Components/FilmDetailsOverlay.md`, `docs/client/Components/HomeFilmsSection.md`, `docs/client/Components/AppShell.md`, `docs/client/Components/Toast.md` (new), `docs/client/Components/README.md`, `docs/code-style/Client-Conventions/02-Nova-Eventing.md`, `docs/INDEX.md`
+**Why:** Curator sync for PR `fix/seven-bugs-auth-profiles-detail` (7 bugs: auth offline-restore resilience + JWT TTL trade-off, profileAvailabilityUpdated subscription + AvailabilityState service, matchVideo real OMDb fetch via relink_video_to_imdb, scan-status library_id global-encoding fix, Profiles last-opened localStorage restore, Toast system + Nova "toast" domain, FilmDetailsOverlay suggestion filmId fix + Open-in-Profile button).
+
+---
+
 ## (current HEAD) — 2026-05-28
 
 **Files:** `.claude/skills/setup-local/SKILL.md`, `.claude/agents/devops.md`, `.claude/skills/debug-backend/SKILL.md`, `docs/architecture/Deployment/04-Axiom-Production-Backend.md`

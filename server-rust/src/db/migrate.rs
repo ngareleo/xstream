@@ -159,6 +159,15 @@ pub fn run(conn: &Connection) -> rusqlite::Result<()> {
             REFERENCES seasons(show_id, season_number) ON DELETE CASCADE
         );
         CREATE INDEX IF NOT EXISTS idx_episodes_show ON episodes(show_id);
+        CREATE TABLE IF NOT EXISTS sessions (
+          jti        TEXT PRIMARY KEY,
+          user_id    TEXT NOT NULL,
+          email      TEXT,
+          issued_at  TEXT NOT NULL,
+          expires_at TEXT NOT NULL,
+          revoked_at TEXT
+        );
+        CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
         COMMIT;
         "#,
     )

@@ -6,12 +6,18 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { DetailPane } from "~/components/detail-pane/DetailPane.js";
 import { EmptyLibrariesHero } from "~/components/empty-libraries-hero/EmptyLibrariesHero.js";
 import { ProfilesExplorer } from "~/components/profiles-explorer/ProfilesExplorer.js";
+import { useDocumentTitle } from "~/hooks/useDocumentTitle.js";
 import {
   type LibraryScanSnapshot,
   useLibraryScanSubscription,
 } from "~/hooks/useLibraryScanSubscription.js";
+import {
+  type ProfileAvailabilitySnapshot,
+  useProfileAvailabilitySubscription,
+} from "~/hooks/useProfileAvailabilitySubscription.js";
 import { useSplitResize } from "~/hooks/useSplitResize.js";
 import type { ProfilesPageContentQuery } from "~/relay/__generated__/ProfilesPageContentQuery.graphql.js";
+import { LocalStorageKey, readLocal, writeLocal } from "~/services/localStore.js";
 
 import { strings } from "./ProfilesPage.strings.js";
 import { useProfilesPageStyles } from "./ProfilesPage.styles.js";
@@ -53,6 +59,7 @@ export const ProfilesPageContent: FC = () => {
   const navigate = useNavigate();
   const environment = useRelayEnvironment();
   const [params, setParams] = useSearchParams();
+  useDocumentTitle("Xstream profile");
 
   const filmId = params.get("film");
   const editingFilm = params.get("edit") === "1";
@@ -83,6 +90,19 @@ export const ProfilesPageContent: FC = () => {
   );
   useLibraryScanSubscription(handleScanUpdate);
 
+  // Live reachability overrides, keyed by GraphQL library id.
+  const [statusByLibrary, setStatusByLibrary] = useState<Map<string, ProfileAvailabilitySnapshot>>(
+    new Map()
+  );
+  const handleAvailabilityUpdate = useCallback((snap: ProfileAvailabilitySnapshot): void => {
+    setStatusByLibrary((prev) => {
+      const next = new Map(prev);
+      next.set(snap.libraryId, snap);
+      return next;
+    });
+  }, []);
+  useProfileAvailabilitySubscription(handleAvailabilityUpdate);
+
   // Flatten { library, video } edges for O(1) film lookup.
   type Edge = (typeof data.libraries)[number]["videos"]["edges"][number]["node"];
   const flatVideos = useMemo(() => {
@@ -108,9 +128,15 @@ export const ProfilesPageContent: FC = () => {
   }, []);
   const { paneWidth, containerRef, onResizeMouseDown } = useSplitResize(defaultPaneWidth);
 
-  // Auto-select first movie on mount to open DetailPane; skip if URL has ?film= or ?empty=1.
+  // On mount with no ?film=, restore the last-opened film (if it still
+  // exists), else the first movie.
   useEffect(() => {
     if (params.get("film") || params.get("empty") === "1") return;
+    const stored = readLocal(LocalStorageKey.ProfilesLastFilm);
+    if (stored && flatVideos.some((v) => v.node.id === stored)) {
+      setParams({ film: stored }, { replace: true });
+      return;
+    }
     const firstMovie = flatVideos.find(
       (v) => v.node.mediaType === "MOVIES" && Boolean(v.node.title)
     );
@@ -119,16 +145,27 @@ export const ProfilesPageContent: FC = () => {
   }, []);
 
   const openFilm = (id: string): void => {
-    if (filmId === id) setParams({});
-    else setParams({ film: id });
+    if (filmId === id) {
+      writeLocal(LocalStorageKey.ProfilesLastFilm, null);
+      setParams({});
+    } else {
+      writeLocal(LocalStorageKey.ProfilesLastFilm, id);
+      setParams({ film: id });
+    }
   };
-  const editFilm = (id: string): void => setParams({ film: id, edit: "1" });
+  const editFilm = (id: string): void => {
+    writeLocal(LocalStorageKey.ProfilesLastFilm, id);
+    setParams({ film: id, edit: "1" });
+  };
   const handleEditChange = (editing: boolean): void => {
     if (!filmId) return;
     if (editing) setParams({ film: filmId, edit: "1" });
     else setParams({ film: filmId });
   };
-  const closePane = (): void => setParams({});
+  const closePane = (): void => {
+    writeLocal(LocalStorageKey.ProfilesLastFilm, null);
+    setParams({});
+  };
   const navigateToCreateProfile = (): void => {
     const returnTo = encodeURIComponent(window.location.pathname + window.location.search);
     navigate(`/profiles/new?return_to=${returnTo}`);
@@ -181,6 +218,7 @@ export const ProfilesPageContent: FC = () => {
           selectedFilmId={filmId}
           selectedLibraryId={selectedLibraryId}
           scanByLibrary={scanByLibrary}
+          statusByLibrary={statusByLibrary}
           onOpenFilm={openFilm}
           onEditFilm={editFilm}
         />

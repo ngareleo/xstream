@@ -7,10 +7,11 @@ use std::time::Duration;
 
 use chrono::Utc;
 use tokio::sync::Mutex;
-use tracing::{info, info_span, warn, Instrument};
+use tracing::{info, warn};
 
 use crate::config::AppContext;
 use crate::db::{get_all_libraries, update_library_status, LibraryRow};
+use crate::services::availability_state::AvailabilityEvent;
 use crate::services::library_scanner::scan_one_library;
 
 pub const STATUS_ONLINE: &str = "online";
@@ -24,49 +25,52 @@ pub async fn probe_once(
     ctx: &AppContext,
     last_status: &Mutex<HashMap<String, String>>,
 ) -> HashMap<String, String> {
-    let span = info_span!("library.availability_probe");
-    async {
-        let mut current: HashMap<String, String> = HashMap::new();
-        let libraries = match get_all_libraries(&ctx.db) {
-            Ok(v) => v,
-            Err(err) => {
-                warn!(error = %err, "profile_availability: failed to list libraries");
-                return current;
-            }
+    let mut current: HashMap<String, String> = HashMap::new();
+    let libraries = match get_all_libraries(&ctx.db) {
+        Ok(v) => v,
+        Err(err) => {
+            warn!(error = %err, "profile_availability: failed to list libraries");
+            return current;
+        }
+    };
+    let now = Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
+    for lib in &libraries {
+        let new_status = probe_library(&lib.path);
+        current.insert(lib.id.clone(), new_status.to_string());
+
+        if let Err(err) = update_library_status(&ctx.db, &lib.id, new_status, &now) {
+            warn!(
+                library_id = %lib.id,
+                error = %err,
+                "profile_availability: failed to write status",
+            );
+            continue;
+        }
+
+        let prev = {
+            let map = last_status.lock().await;
+            map.get(&lib.id)
+                .cloned()
+                .unwrap_or_else(|| lib.status.clone())
         };
-        let now = Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
-        for lib in &libraries {
-            let new_status = probe_library(&lib.path);
-            current.insert(lib.id.clone(), new_status.to_string());
-
-            if let Err(err) = update_library_status(&ctx.db, &lib.id, new_status, &now) {
-                warn!(
-                    library_id = %lib.id,
-                    error = %err,
-                    "profile_availability: failed to write status",
-                );
-                continue;
-            }
-
-            let prev = {
-                let map = last_status.lock().await;
-                map.get(&lib.id)
-                    .cloned()
-                    .unwrap_or_else(|| lib.status.clone())
-            };
-            if prev != new_status {
-                handle_transition(ctx, lib, &prev, new_status).await;
-            }
+        if prev != new_status {
+            // Push the flip to any live Profiles page before kicking the
+            // (potentially slow) catch-up scan, so the status pill updates
+            // immediately rather than after the scan returns.
+            ctx.availability_state.broadcast(AvailabilityEvent {
+                library_id: lib.id.clone(),
+                status: new_status.to_string(),
+                last_seen_at: Some(now.clone()),
+            });
+            handle_transition(ctx, lib, &prev, new_status).await;
         }
-        // Persist this cycle's view for next-tick flip detection.
-        {
-            let mut map = last_status.lock().await;
-            *map = current.clone();
-        }
-        current
     }
-    .instrument(span)
-    .await
+    // Persist this cycle's view for next-tick flip detection.
+    {
+        let mut map = last_status.lock().await;
+        *map = current.clone();
+    }
+    current
 }
 
 /// Cheap reachability check: the path exists and is a directory.

@@ -4,6 +4,8 @@ import { createMockEnvironment } from "relay-test-utils";
 import { expect, within } from "storybook/test";
 import type { Decorator, Meta, StoryObj } from "storybook-react-rsbuild";
 
+import { withNovaEventing } from "~/storybook/withNovaEventing.js";
+
 import { AppShell } from "./AppShell.js";
 
 // AppHeader calls useMutation; requires RelayEnvironmentProvider. Mock environment suffices for stories.
@@ -39,7 +41,9 @@ const Placeholder = (): JSX.Element => (
 const meta: Meta<typeof AppShell> = {
   title: "Components/AppShell",
   component: AppShell,
-  decorators: [withMockRelay],
+  // withNovaEventing must wrap: AppShell mounts ToastProvider, whose
+  // NovaEventingInterceptor requires a NovaEventingProvider ancestor.
+  decorators: [withNovaEventing, withMockRelay],
   parameters: {
     layout: "fullscreen",
     router: { initialEntries: ["/"] },

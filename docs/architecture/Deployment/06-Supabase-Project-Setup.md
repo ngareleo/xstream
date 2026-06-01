@@ -57,6 +57,21 @@ SUPABASE_JWKS_URL=https://<ref>.supabase.co/.well-known/jwks.json
 
 Doppler injects them when you run `doppler run -- bun run dev` or `doppler run -- bun run dev:server`. Rsbuild reads the `PUBLIC_*` vars at build time and bakes them into the client bundle (`client/rsbuild.config.ts`). The server reads `SUPABASE_JWKS_URL` at startup (`server-rust/src/lib.rs::run`).
 
-## 7. CI / release wiring
+## 7. JWT expiry — leave at the Supabase default
+
+The Supabase access token TTL **does not need to be raised**. xstream's in-process Rust service
+now mints its own local session token (HS256, ~30-day absolute TTL) immediately after a
+successful Supabase login. The Supabase JWT is consumed once at `POST /auth/session` and then
+discarded — it is not carried per-request. The local session owns the 30-day offline-valid
+lifetime, so the Supabase JWT's 1-hour default is irrelevant to the user's offline experience.
+
+**Local revocation:** the local session can be revoked server-side (logout sets
+`sessions.revoked_at`). The old recommendation to raise the TTL included an acknowledged
+trade-off that long-lived JWTs can't be revoked — that trade-off no longer applies here.
+
+See [`docs/architecture/Identity/02-Session-And-Refresh.md`](../Identity/02-Session-And-Refresh.md)
+for the full local-session lifecycle.
+
+## 8. CI / release wiring
 
 Set the same three env vars as GitHub Actions repository secrets. The Tauri release workflow embeds the `PUBLIC_*` pair into the client bundle and exposes `SUPABASE_JWKS_URL` to the Rust server at runtime. Token rotation = revoke + new release; the embedded anon key has no rotation concern because it's public by design.

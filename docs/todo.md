@@ -13,6 +13,10 @@
 - [ ] **STREAM-001** Stream from partial segments: today the chunker waits for fsync before flagging a segment ready. With buffered file reads we could start sending a partially-written `.m4s` as soon as its header is available — reducing per-segment latency. Significant complexity; defer until chunk model is stable.
 
 
+## ffmpeg Pool
+
+- [ ] **POOL-001** Reservation permit leak (latent, no user-visible impact yet): `FfmpegPool::try_reserve_slot` inserts the job id into the `inflight` DashSet, but `Reservation::release()` does NOT remove the id from `inflight` (no `Drop` impl). `inflight` is only cleared by `run_to_completion` (when the job spawns) or `kill_job`. So the chunker's cache-restore path (`reservation.release()` at chunker.rs ~200, used when a completed job is restored from cache without spawning ffmpeg) LEAKS an `inflight` entry. Effect: `snapshot_cap().inflight_count` drifts upward and `has_inflight_or_live(id)` false-positives for those ids over time. Does not currently cause user-visible breakage (the wipe guard now uses `has_active_jobs()` only, and dedup cache-hits return before re-reserving), but it's a real accounting leak. Suggested fix: give `Reservation` a `Drop` impl that removes its id from `inflight`, or have `release()` take a pool handle and remove it (RAII pattern preferred).
+
 ## Cache / Storage
 
 - [ ] **CACHE-001** Disk LRU eviction: the Rust server has LRU eviction logic in `server-rust/src/services/`. What remains: wire the startup eviction and the per-job cleanup into the chunker's job-complete handler.

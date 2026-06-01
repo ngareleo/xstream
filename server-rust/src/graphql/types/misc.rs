@@ -2,6 +2,10 @@
 
 use async_graphql::{SimpleObject, ID};
 
+use crate::graphql::scalars::ProfileStatus;
+use crate::relay::to_global_id;
+use crate::services::availability_state::AvailabilityEvent;
+
 /// The currently-authenticated user. Sourced from the verified JWT's
 /// `sub` claim — `id` is the Supabase UUID. `null` query result means no
 /// valid `Authorization` header was attached (or `SUPABASE_JWKS_URL` is
@@ -26,6 +30,25 @@ pub struct SettingEntry {
 #[derive(SimpleObject, Clone)]
 pub struct LibraryScanUpdate {
     pub scanning: bool,
+}
+
+/// A single library's reachability, pushed over `profileAvailabilityUpdated`.
+/// `libraryId` is the global `Library.id`.
+#[derive(SimpleObject, Clone)]
+pub struct ProfileAvailability {
+    pub library_id: ID,
+    pub status: ProfileStatus,
+    pub last_seen_at: Option<String>,
+}
+
+impl From<&AvailabilityEvent> for ProfileAvailability {
+    fn from(e: &AvailabilityEvent) -> Self {
+        Self {
+            library_id: ID(to_global_id("Library", &e.library_id)),
+            status: ProfileStatus::from_internal(&e.status).unwrap_or(ProfileStatus::Unknown),
+            last_seen_at: e.last_seen_at.clone(),
+        }
+    }
 }
 
 #[derive(SimpleObject, Clone)]

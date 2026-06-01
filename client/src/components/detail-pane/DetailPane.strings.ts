@@ -23,5 +23,6 @@ export const strings = new LocalizedStrings({
     editCancel: "[ESC] Cancel",
     editLink: "[↩] Link",
     saveError: "Failed to link. Try again.",
+    relinkedToastFormat: 'Re-linked to "{title}".',
   },
 });

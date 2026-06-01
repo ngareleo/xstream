@@ -92,6 +92,7 @@ pane URL params, and split-body resize via `useSplitResize` hook.
 - **Manages `?film=<id>` and `?edit=1` URL params** for detail-pane state.
 - **Computes aggregate footer stats**: total profiles, films, shows, episodes, unmatched.
 - **Tracks live scan progress** via `useLibraryScanSubscription`; passes to `ProfilesExplorer` for display.
+- **Tracks live library availability** via `useProfileAvailabilitySubscription`; maintains `statusByLibrary: Map<string, ProfileAvailability>` and passes it to `ProfilesExplorer` for per-row status-pill updates.
 - **Renders full-bleed breadcrumb and footer** so they span the viewport even when the detail pane is open.
 - **Drag-resize state** via `useSplitResize` hook; inline style overrides grid columns when pane is open.
 
@@ -113,7 +114,7 @@ pane URL params, and split-body resize via `useSplitResize` hook.
 ### Profile expansion state
 
 - Delegated to `ProfilesExplorer`. The page does not manage expansion; the explorer owns the `expandedIds` set.
-- Pre-expands `profiles[0]` and the profile containing the selected film (for deep-link support).
+- The explorer auto-expands the profile holding the selected/restored film via `useEffect` on `selectedLibraryId` arrival. When no film is selected (edge case), no profiles are pre-expanded.
 - See `ProfilesExplorer.md` for expansion behaviour details.
 
 ### Drag-resize
@@ -123,11 +124,15 @@ pane URL params, and split-body resize via `useSplitResize` hook.
 - `defaultPaneWidth = Math.floor(window.innerWidth * 0.5)` (50% default). SSR fallback: 720.
 - `MIN_PANE_WIDTH = 240`, `MAX_PANE_WIDTH = 1200`.
 
-### First-mount default selection
+### First-mount default selection with last-opened restore
 
-- `useEffect` on mount: if `params.get("film")` is unset and `?empty !== "1"`, auto-select first matched movie via `?film=<id>`.
-- "First matched movie" = `node.mediaType === "MOVIES" && node.title` (has both kind and matched OMDb title).
-- Effect runs **once** (deps `[]`); `replace: true` keeps unselected URL out of browser history.
+On mount, when `?film` is unset and `?empty !== "1"`:
+
+1. **Check localStorage** for `xstream:profiles:last-film`. If the stored film ID still resolves (exists in the loaded library data), restore it as `?film=<id>`.
+2. **Fall back** to the first matched movie (`node.mediaType === "MOVIES" && node.title`) when no persisted film resolves.
+3. The `?film` param is also written to localStorage whenever a film is explicitly opened (`openFilm(id)`), and cleared when the pane is explicitly closed (`closePane()` — triggered by the close button, not by navigation away).
+
+Effect runs **once** (deps `[]`); `replace: true` keeps unselected URL out of browser history.
 
 ## Data
 

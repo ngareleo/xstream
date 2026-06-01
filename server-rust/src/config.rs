@@ -8,6 +8,7 @@ use dashmap::DashMap;
 use crate::db::Db;
 use crate::graphql::scalars::Resolution;
 use crate::services::auth::JwksCache;
+use crate::services::availability_state::AvailabilityState;
 use crate::services::ffmpeg_file::FileMetadata;
 use crate::services::ffmpeg_file::HwAccelConfig;
 use crate::services::ffmpeg_path::FfmpegPaths;
@@ -151,10 +152,9 @@ pub struct ScanConfig {
     /// library. Bounded so `ffprobe` fan-out and FD pressure stay sane on
     /// large libraries — default is 4.
     pub concurrency: usize,
-    /// Period of the profile-availability probe loop. Defaults to
-    /// `interval_ms` when zero (one cycle per scan cadence). The probe
-    /// is cheap (a `stat` per library) so a sub-30s cadence is fine if
-    /// the user wants flips reflected in the UI faster.
+    /// Period of the profile-availability probe loop. Default 2.5 s so a
+    /// disconnect reflects in the UI within a couple seconds; the probe is
+    /// cheap (a `stat` per library). Falls back to `interval_ms` when zero.
     pub availability_interval_ms: u64,
 }
 
@@ -173,7 +173,7 @@ impl Default for ScanConfig {
         Self {
             interval_ms: 30_000,
             concurrency: 4,
-            availability_interval_ms: 0,
+            availability_interval_ms: 2_500,
         }
     }
 }
@@ -262,6 +262,10 @@ pub struct AppContext {
     pub probe_cache: ProbeMetadataCache,
     pub job_store: JobStore,
     pub scan_state: ScanState,
+    /// Broadcaster for library reachability changes. Fed by the periodic
+    /// `profile_availability` probe, drained by the `profileAvailabilityUpdated`
+    /// subscription. See `services::availability_state`.
+    pub availability_state: AvailabilityState,
     /// `Some` when an `OMDB_API_KEY` is configured (env or DB setting).
     /// `None` means auto-match is silently disabled — the scanner just
     /// skips the metadata fetch step. Cheap-clone: wraps a shared
@@ -269,6 +273,9 @@ pub struct AppContext {
     pub omdb: Option<OmdbClient>,
     /// `Some` when `SUPABASE_JWKS_URL` is set; `None` makes auth middleware a no-op.
     pub jwks_cache: Option<JwksCache>,
+    /// Per-install HMAC secret for signing/verifying local session tokens.
+    /// Generated + persisted on first boot. See `services::local_session`.
+    pub local_session_secret: String,
 }
 
 impl AppContext {
@@ -293,6 +300,17 @@ impl AppContext {
             .supabase_jwks_url
             .clone()
             .map(|url| JwksCache::new(url, http));
+        // Load-or-generate the local-session signing secret. A DB error here
+        // falls back to an ephemeral secret (sessions won't survive restart)
+        // rather than failing boot.
+        let local_session_secret = crate::services::local_session::get_or_create_secret(&db)
+            .unwrap_or_else(|_| {
+                format!(
+                    "{}{}",
+                    uuid::Uuid::new_v4().simple(),
+                    uuid::Uuid::new_v4().simple()
+                )
+            });
         Self {
             db,
             config,
@@ -303,8 +321,10 @@ impl AppContext {
             probe_cache: Arc::new(DashMap::<String, FileMetadata>::new()),
             job_store: JobStore::new(),
             scan_state: ScanState::new(),
+            availability_state: AvailabilityState::new(),
             omdb,
             jwks_cache,
+            local_session_secret,
         }
     }
 

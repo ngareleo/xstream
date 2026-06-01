@@ -5,7 +5,10 @@ use futures_util::stream::{self, BoxStream, StreamExt};
 use tokio_stream::wrappers::BroadcastStream;
 
 use crate::config::AppContext;
-use crate::graphql::types::{LibraryScanProgress, LibraryScanUpdate, TranscodeJob};
+use crate::graphql::types::{
+    LibraryScanProgress, LibraryScanUpdate, ProfileAvailability, TranscodeJob,
+};
+use crate::services::availability_state::AvailabilityEvent;
 use crate::services::scan_state::ScanSnapshot;
 
 pub struct Subscription;
@@ -51,5 +54,41 @@ impl Subscription {
                 .map(|snap: ScanSnapshot| LibraryScanProgress::from(&snap))
         });
         stream::iter(vec![initial]).chain(live).boxed()
+    }
+
+    /// Live library reachability: one frame per library from current DB status
+    /// on connect, then each flip the probe loop detects.
+    async fn profile_availability_updated(
+        &self,
+        ctx: &Context<'_>,
+    ) -> BoxStream<'static, ProfileAvailability> {
+        let app = ctx.data_unchecked::<AppContext>();
+        let state = app.availability_state.clone();
+        // Subscribe before kicking the probe so its broadcast reaches us.
+        let live = BroadcastStream::new(state.subscribe()).filter_map(|res| async move {
+            res.ok()
+                .map(|e: AvailabilityEvent| ProfileAvailability::from(&e))
+        });
+        // Fire a one-shot probe so a just-opened page reflects current truth
+        // without waiting for the next periodic cycle. Fresh status arrives on
+        // `live` (the probe broadcasts any flip); the DB seed below covers the
+        // common no-change case.
+        let probe_ctx = app.clone();
+        tokio::spawn(async move {
+            let seen = tokio::sync::Mutex::new(std::collections::HashMap::new());
+            crate::services::profile_availability::probe_once(&probe_ctx, &seen).await;
+        });
+        let initial: Vec<ProfileAvailability> = crate::db::get_all_libraries(&app.db)
+            .unwrap_or_default()
+            .iter()
+            .map(|row| {
+                ProfileAvailability::from(&AvailabilityEvent {
+                    library_id: row.id.clone(),
+                    status: row.status.clone(),
+                    last_seen_at: row.last_seen_at.clone(),
+                })
+            })
+            .collect();
+        stream::iter(initial).chain(live).boxed()
     }
 }

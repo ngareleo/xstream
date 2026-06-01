@@ -16,7 +16,10 @@ mod watchlist;
 pub use episode::Episode;
 pub use film::{Film, FilmConnection, FilmEdge};
 pub use library::{Library, LibraryStats};
-pub use misc::{CurrentUser, DirEntry, LibraryScanProgress, LibraryScanUpdate, SettingEntry};
+pub use misc::{
+    CurrentUser, DirEntry, LibraryScanProgress, LibraryScanUpdate, ProfileAvailability,
+    SettingEntry,
+};
 pub use node::{Node, PageInfo};
 pub use omdb::OmdbSearchResult;
 pub use playback_session::PlaybackSession;
@@ -34,10 +37,12 @@ pub use watchlist::WatchlistItem;
 /// user's disk at the requested resolution, works offline, and is
 /// pre-encoded so the response is byte-for-byte cacheable.
 ///
-/// Otherwise fall back to the OMDb canonical URL so freshly-matched
-/// rows still render in the 15-second window before the worker has
-/// caught up. The fallback ignores `size` — OMDb's CDN is out of our
-/// control and any per-size rewrite is best-effort at most.
+/// Otherwise fall back to the OMDb URL so freshly-matched rows still render in
+/// the 15-second window before the worker has caught up. The fallback URL is
+/// upgraded to the requested size via the same Amazon-CDN rewrite the worker
+/// uses (`._V1_SX{width}`), so a pre-cache poster fetches at display
+/// resolution instead of OMDb's default ~300px thumbnail (which looked
+/// pixelated at hero size). A no-op for non-Amazon poster URLs.
 pub fn poster_url_for_metadata(
     poster_local_path: Option<&str>,
     poster_url: Option<&str>,
@@ -52,7 +57,9 @@ pub fn poster_url_for_metadata(
             return Some(format!("/poster/{root}.{}.webp", size.suffix()));
         }
     }
-    poster_url.map(|s| s.to_string())
+    poster_url.map(|url| {
+        crate::services::poster_cache::upgrade_amazon_cdn_url(url, size.width_px()).into_owned()
+    })
 }
 
 #[cfg(test)]
@@ -86,6 +93,21 @@ mod tests {
         assert_eq!(
             got,
             Some("https://m.media-amazon.com/images/M/foo.jpg".to_string())
+        );
+    }
+
+    #[test]
+    fn fallback_upgrades_amazon_thumbnail_to_the_requested_width() {
+        // Pre-cache fallback: an OMDb SX300 thumbnail is upgraded to the
+        // requested display width so it isn't shown pixelated at hero size.
+        let got = poster_url_for_metadata(
+            None,
+            Some("https://m.media-amazon.com/images/M/foo._V1_SX300.jpg"),
+            PosterSize::W3200,
+        );
+        assert_eq!(
+            got,
+            Some("https://m.media-amazon.com/images/M/foo._V1_SX3200.jpg".to_string())
         );
     }
 

@@ -17,6 +17,8 @@ Leaf row component for the Profiles tree. Uses a 5-column grid layout shared wit
 | `expanded` | `boolean` | Whether the profile's children are currently visible. |
 | `onToggleExpand` | `(profileId: string) => void` | Callback on row click (toggle expansion). |
 | `children` | `React.ReactNode` | Nested FilmRow elements. Rendered only when `expanded && children.length > 0`. |
+| `statusOverride` | `ProfileStatus \| undefined` | Live status from `profileAvailabilityUpdated` subscription. Overrides `profile.status` from the GraphQL fragment when present, so the pill reflects real-time flips without a refetch. |
+| `lastSeenOverride` | `string \| null \| undefined` | Live `lastSeenAt` from the subscription. Overrides `profile.lastSeenAt` when present. |
 
 ## Layout & styles
 
@@ -37,12 +39,14 @@ Leaf row component for the Profiles tree. Uses a 5-column grid layout shared wit
 - Two-line stack:
   - **Line 1:** name (13px, `color: colorText`).
   - **Line 2:** path (Mono 10px, `color: colorTextMuted`, `letterSpacing: 0.04em`) followed by a status pill.
-- **Status pill (`.statusPill`):** Mono 9px, `letterSpacing: 0.18em`, uppercase. Three states driven by `Library.status` from the GraphQL fragment:
+- **Status pill (`.statusPill`):** Mono 9px, `letterSpacing: 0.18em`, uppercase. Three states:
   - `ONLINE` → `● online` in `colorGreen`.
   - `OFFLINE` → `○ offline` in `colorRed`.
   - `UNKNOWN` → `○ unknown` in `colorTextFaint`.
-- Pill `title` attribute carries `last seen <timestamp>` from `Library.lastSeenAt` (or `not yet probed` when null).
+- Status is resolved as `statusOverride ?? profile.status`; `lastSeenAt` is `lastSeenOverride ?? profile.lastSeenAt`.
+- Pill `title` attribute carries `last seen <timestamp>` (or `not yet probed` when null).
 - Driven by `services::profile_availability` — see [`docs/architecture/Library-Scan/04-Profile-Availability.md`](../../architecture/Library-Scan/04-Profile-Availability.md).
+- Live updates arrive via the `profileAvailabilityUpdated` subscription; parent threads them through as `statusOverride`/`lastSeenOverride` so only the affected pill re-renders.
 
 ### Column 3: Match progress bar
 

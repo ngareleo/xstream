@@ -6,6 +6,7 @@ import { AuthLayout } from "~/components/auth-layout/AuthLayout.js";
 import { ErrorBoundary } from "~/components/error-boundary/ErrorBoundary.js";
 import { TelemetryTracker } from "~/components/telemetry-tracker/TelemetryTracker.js";
 import { ROUTE_PATHS } from "~/config/routePaths.js";
+import { ensureSessionRestored } from "~/services/auth.js";
 import { hasActiveSession } from "~/services/userContext.js";
 
 import {
@@ -44,11 +45,16 @@ const RootLayout: FC = () => (
   </>
 );
 
-function requireSession(): Response | null {
+// Await session restoration before deciding — otherwise the loader can run
+// (router init at import time) before `restoreSession` has rehydrated identity,
+// bouncing a valid session to /signin on a window refresh.
+async function requireSession(): Promise<Response | null> {
+  await ensureSessionRestored();
   return hasActiveSession() ? null : redirect("/signin");
 }
 
-function requireSignedOut(): Response | null {
+async function requireSignedOut(): Promise<Response | null> {
+  await ensureSessionRestored();
   return hasActiveSession() ? redirect("/") : null;
 }
 

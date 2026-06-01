@@ -9,6 +9,8 @@ export type VideoData = FilmData["bestCopy"];
 export interface FilterRow extends FilterableFilm {
   id: string;
   title: string;
+  /** Original-case title for display (the lowercased `title` drives search). */
+  displayTitle: string;
   filename: string;
   director: string;
   genre: string;
@@ -62,6 +64,7 @@ export function toFilterRowFromFilm(film: FilmData): FilterRow {
   return {
     id: film.id,
     title: (film.title || "").toLowerCase(),
+    displayTitle: film.title || best.filename,
     filename: best.filename.toLowerCase(),
     ...filters,
     node: best,
@@ -76,7 +79,14 @@ export function timeOfDayGreeting(now: Date): string {
   return strings.greetingEvening;
 }
 
-export function pickSuggestions(film: FilterRow, all: FilterRow[]): VideoData[] {
+/** A suggested film: its Film `id` (the `?film=` key) plus the bestCopy Video
+ *  backing the FilmTile fragment. */
+export interface Suggestion {
+  filmId: string;
+  video: VideoData;
+}
+
+export function pickSuggestions(film: FilterRow, all: FilterRow[]): Suggestion[] {
   const tokens = film.genre.split(/[·\s/]+/).filter(Boolean);
   const scored: { row: FilterRow; score: number }[] = [];
   for (const f of all) {
@@ -90,5 +100,5 @@ export function pickSuggestions(film: FilterRow, all: FilterRow[]): VideoData[] 
     scored.push({ row: f, score });
   }
   scored.sort((a, b) => b.score - a.score);
-  return scored.slice(0, 8).map((s) => s.row.node);
+  return scored.slice(0, 8).map((s) => ({ filmId: s.row.id, video: s.row.node }));
 }

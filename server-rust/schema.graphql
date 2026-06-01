@@ -206,8 +206,8 @@ type Mutation {
 	deleteLibrary(id: ID!): Boolean!
 	updateLibrary(id: ID!, name: String, path: String, mediaType: MediaType, extensions: [String!]): Library!
 	"""
-	Step 1 stub — writes an empty metadata row keyed by IMDb ID. The full
-	OMDb fetch ships in Step 2 alongside the scanner.
+	Manual re-link: fetch the OMDb record for `imdb_id` and persist it for
+	the video. See `services::library_scanner::relink_video_to_imdb`.
 	"""
 	matchVideo(videoId: ID!, imdbId: String!): Video!
 	unmatchVideo(videoId: ID!): Video!
@@ -322,6 +322,16 @@ enum PosterSize {
 	W400
 	W800
 	W3200
+}
+
+"""
+A single library's reachability, pushed over `profileAvailabilityUpdated`.
+`libraryId` is the global `Library.id`.
+"""
+type ProfileAvailability {
+	libraryId: ID!
+	status: ProfileStatus!
+	lastSeenAt: String
 }
 
 enum ProfileStatus {
@@ -458,6 +468,11 @@ type Subscription {
 	transcodeJobUpdated(jobId: ID!): TranscodeJob!
 	libraryScanUpdated: LibraryScanUpdate!
 	libraryScanProgress: LibraryScanProgress!
+	"""
+	Live library reachability: one frame per library from current DB status
+	on connect, then each flip the probe loop detects.
+	"""
+	profileAvailabilityUpdated: ProfileAvailability!
 }
 
 type TranscodeJob implements Node {

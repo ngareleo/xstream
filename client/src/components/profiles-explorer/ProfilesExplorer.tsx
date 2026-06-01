@@ -1,8 +1,9 @@
-import { type FC, useMemo, useState } from "react";
+import { type FC, useEffect, useMemo, useState } from "react";
 
 import { FilmRow } from "~/components/film-row/FilmRow";
 import { ProfileRow } from "~/components/profile-row/ProfileRow";
 import { type LibraryScanSnapshot } from "~/hooks/useLibraryScanSubscription";
+import { type ProfileAvailabilitySnapshot } from "~/hooks/useProfileAvailabilitySubscription";
 import { IconClose, IconSearch } from "~/lib/icons";
 import { filmMatches } from "~/pages/profiles-page/filmMatches";
 import type { ProfilesPageContentQuery$data } from "~/relay/__generated__/ProfilesPageContentQuery.graphql";
@@ -17,6 +18,7 @@ interface ProfilesExplorerProps {
   selectedFilmId: string | null;
   selectedLibraryId: string | undefined;
   scanByLibrary: Map<string, LibraryScanSnapshot>;
+  statusByLibrary: Map<string, ProfileAvailabilitySnapshot>;
   onOpenFilm: (id: string) => void;
   onEditFilm: (id: string) => void;
 }
@@ -26,18 +28,27 @@ export const ProfilesExplorer: FC<ProfilesExplorerProps> = ({
   selectedFilmId,
   selectedLibraryId,
   scanByLibrary,
+  statusByLibrary,
   onOpenFilm,
   onEditFilm,
 }) => {
   const styles = useProfilesExplorerStyles();
 
-  const initialExpanded = useMemo(() => {
-    const set = new Set<string>();
-    if (libraries.length > 0) set.add(libraries[0].id);
-    if (selectedLibraryId) set.add(selectedLibraryId);
-    return set;
-  }, [libraries, selectedLibraryId]);
-  const [expandedIds, setExpandedIds] = useState<Set<string>>(initialExpanded);
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(() =>
+    selectedLibraryId ? new Set([selectedLibraryId]) : new Set()
+  );
+
+  // Expand the profile holding the selected film. selectedLibraryId can arrive
+  // after mount (a restored film), so react to it rather than only seeding init.
+  useEffect(() => {
+    if (!selectedLibraryId) return;
+    setExpandedIds((prev) => {
+      if (prev.has(selectedLibraryId)) return prev;
+      const next = new Set(prev);
+      next.add(selectedLibraryId);
+      return next;
+    });
+  }, [selectedLibraryId]);
 
   const toggleProfile = (id: string): void => {
     setExpandedIds((prev) => {
@@ -126,6 +137,7 @@ export const ProfilesExplorer: FC<ProfilesExplorerProps> = ({
               scan && scan.done !== null && scan.total !== null
                 ? { done: scan.done, total: scan.total }
                 : null;
+            const liveStatus = statusByLibrary.get(library.id);
             return (
               <ProfileRow
                 key={library.id}
@@ -136,6 +148,8 @@ export const ProfilesExplorer: FC<ProfilesExplorerProps> = ({
                 }}
                 scanning={Boolean(scan)}
                 scanProgress={scanProgress}
+                statusOverride={liveStatus?.status ?? null}
+                lastSeenOverride={liveStatus?.lastSeenAt ?? null}
               >
                 {videos.map((node) => (
                   <FilmRow

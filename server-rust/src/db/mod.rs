@@ -122,6 +122,7 @@ pub use queries::playback_history::{
 pub use queries::seasons::{
     get_episodes_by_show, get_seasons_by_show, upsert_episode, upsert_season, EpisodeRow, SeasonRow,
 };
+pub use queries::sessions::{insert_session, is_session_active, revoke_session, SessionRow};
 pub use queries::show_metadata::{
     get_show_metadata, list_shows_needing_poster_download, set_show_poster_local_path,
     upsert_show_metadata, ShowMetadataRow,

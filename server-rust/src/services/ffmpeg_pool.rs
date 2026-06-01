@@ -59,6 +59,10 @@ pub enum ExitOutcome {
 pub struct Reservation {
     job_id: String,
     permit: Option<OwnedSemaphorePermit>,
+    /// Back-reference so `release` can clear the `inflight` marker on the
+    /// non-spawn paths. (No `Drop` impl — `run_to_completion` destructures
+    /// the reservation and removes `inflight` itself.)
+    inner: Arc<PoolInner>,
 }
 
 impl Reservation {
@@ -66,11 +70,11 @@ impl Reservation {
         &self.job_id
     }
 
-    /// Drop the permit explicitly. The chunker calls this on the
-    /// non-spawn paths (DB-restored cached job, probe failure) where the
-    /// reservation is never handed to `run_to_completion`.
+    /// Give back the slot and the `inflight` marker — the non-spawn paths,
+    /// where the reservation never reaches `run_to_completion` (else it leaks).
     pub fn release(mut self) {
         let _ = self.permit.take();
+        self.inner.inflight.remove(&self.job_id);
     }
 }
 
@@ -146,6 +150,12 @@ impl FfmpegPool {
         self.inner.config.max_concurrent_jobs
     }
 
+    /// True when an ffmpeg process is running/dying. Unlike the job_store
+    /// (which also caches *completed* jobs), this is the real "active" signal.
+    pub fn has_active_jobs(&self) -> bool {
+        !self.inner.live.is_empty()
+    }
+
     pub fn capacity_retry_hint_ms(&self) -> u64 {
         self.inner.config.capacity_retry_hint_ms
     }
@@ -160,6 +170,7 @@ impl FfmpegPool {
         Some(Reservation {
             job_id,
             permit: Some(permit),
+            inner: self.inner.clone(),
         })
     }
 
@@ -197,7 +208,7 @@ impl FfmpegPool {
         ffmpeg: &Path,
         args: &[OsString],
     ) -> Result<ExitOutcome, PoolError> {
-        let Reservation { job_id, permit } = reservation;
+        let Reservation { job_id, permit, .. } = reservation;
         let permit = permit.ok_or(PoolError::LostReservation)?;
         self.inner.inflight.remove(&job_id);
 
@@ -461,6 +472,31 @@ mod tests {
         let _r = pool.try_reserve_slot("a".into()).expect("slot");
         assert!(pool.has_inflight_or_live("a"));
         assert!(!pool.has_inflight_or_live("b"));
+    }
+
+    #[test]
+    fn has_active_jobs_is_false_when_no_process_is_live() {
+        // The wipe guard relies on this: an idle pool reports no active jobs
+        // even though the job_store may still cache completed transcodes, and
+        // a bare reservation (no spawned process) does not count as active.
+        let pool = FfmpegPool::new(cfg(2));
+        assert!(!pool.has_active_jobs());
+        let _r = pool.try_reserve_slot("a".into()).expect("slot");
+        assert!(!pool.has_active_jobs());
+    }
+
+    #[test]
+    fn release_clears_the_inflight_reservation() {
+        // POOL-001 regression guard: the cache-restore path calls
+        // `release()` without ever spawning, so it must drop the inflight
+        // marker — otherwise it leaks and inflight_count drifts upward.
+        let pool = FfmpegPool::new(cfg(2));
+        let r = pool.try_reserve_slot("a".into()).expect("slot");
+        assert!(pool.has_inflight_or_live("a"));
+        assert_eq!(pool.snapshot_cap().inflight_count, 1);
+        r.release();
+        assert!(!pool.has_inflight_or_live("a"));
+        assert_eq!(pool.snapshot_cap().inflight_count, 0);
     }
 
     #[test]

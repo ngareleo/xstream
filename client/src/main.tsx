@@ -17,7 +17,7 @@ import { bootstrapFlagsFromServer } from "./config/featureFlags.js";
 import { FeatureFlagsProvider } from "./contexts/FeatureFlagsContext.js";
 import { environment } from "./relay/environment.js";
 import { router } from "./router.js";
-import { restoreSession, subscribeToAuthChanges } from "./services/auth.js";
+import { ensureSessionRestored, subscribeToAuthChanges } from "./services/auth.js";
 import { startSessionTelemetry } from "./services/sessionTelemetry.js";
 import { initTelemetry } from "./telemetry.js";
 
@@ -45,8 +45,9 @@ void bootstrapFlagsFromServer().finally(() => {
   // Mint the first user session now so all telemetry from boot carries session.id.
   startSessionTelemetry();
 
-  // Hydrate Supabase session before mount so the first Relay fetch carries the JWT.
-  void restoreSession().then(() => {
+  // Restore the local session before mount so the first Relay fetch carries it.
+  // The router's auth-gate loaders await the same memoized promise.
+  void ensureSessionRestored().then(() => {
     subscribeToAuthChanges(() => {});
 
     const rootEl = document.getElementById("root");

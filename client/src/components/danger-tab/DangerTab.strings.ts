@@ -15,11 +15,12 @@ export const strings = new LocalizedStrings({
     wipeSegmentsDesc:
       "Delete every cached fMP4 segment from disk and clear the in-memory job store.",
     wipeAllTitle: "Wipe Everything",
-    wipeAllDesc: "Kill any active transcode jobs, then run the three wipes above. Hard reset.",
+    wipeAllDesc:
+      "Kill any active transcode jobs, run the three wipes above, and clear local UI state (pane width, last-opened film). Hard reset.",
     btnIdle: "Wipe",
     btnConfirm: "Click again to confirm",
     btnPending: "Wiping…",
-    statusOk: "Done at {time}",
-    statusErr: "Failed: {error}",
+    toastOkFormat: "{title} — done.",
+    toastFailFormat: "{title} failed: {error}",
   },
 });
