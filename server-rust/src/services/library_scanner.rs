@@ -10,7 +10,7 @@ use chrono::Utc;
 use futures_util::stream::{self, StreamExt};
 use sha1::{Digest, Sha1};
 use tokio::io::AsyncReadExt;
-use tracing::{info, info_span, warn, Instrument};
+use tracing::{info_span, warn, Instrument};
 use walkdir::WalkDir;
 
 use crate::config::AppContext;
@@ -31,7 +31,7 @@ const FINGERPRINT_BYTES: usize = 65_536;
 /// Scan all libraries in the DB, re-indexing with idempotent upserts.
 pub async fn scan_libraries(ctx: &AppContext) {
     if !ctx.scan_state.mark_started() {
-        info!("library.scan skipped — already in progress");
+        tracing::debug!("library.scan skipped — already in progress");
         return;
     }
 
@@ -45,7 +45,7 @@ pub async fn scan_libraries(ctx: &AppContext) {
             }
         };
 
-        info!(library_count = libraries.len(), "library.scan started");
+        tracing::debug!(library_count = libraries.len(), "library.scan started");
 
         for library in &libraries {
             // Profile availability is the first-class signal: when the
@@ -56,7 +56,7 @@ pub async fn scan_libraries(ctx: &AppContext) {
             // when the library comes back online (see
             // `services::profile_availability`).
             if library.status == "offline" {
-                info!(
+                tracing::debug!(
                     library_name = %library.name,
                     path = %library.path,
                     "library_skipped — offline (probe says path unreachable)",
@@ -87,7 +87,7 @@ pub async fn scan_libraries(ctx: &AppContext) {
             }
 
             scan_one_library(ctx, library).await;
-            info!(library_name = %library.name, "library_scanned");
+            tracing::debug!(library_name = %library.name, "library_scanned");
             // TV-show discovery: cross-checks the local file tree against
             // the OMDb canonical episode list and populates the seasons +
             // episodes tables. Runs before auto_match_library so the
@@ -106,7 +106,7 @@ pub async fn scan_libraries(ctx: &AppContext) {
             auto_match_library(ctx, library).await;
         }
 
-        info!(library_count = libraries.len(), "scan_complete");
+        tracing::debug!(library_count = libraries.len(), "scan_complete");
     }
     .instrument(span)
     .await;
@@ -138,7 +138,7 @@ pub async fn scan_one_library(ctx: &AppContext, library: &LibraryRow) {
 
     let total = paths.len() as u32;
     ctx.scan_state.mark_progress(&library.id, 0, total);
-    info!(
+    tracing::debug!(
         library_name = %library.name,
         files_found = total,
         "Library scan started",
@@ -373,7 +373,7 @@ async fn auto_match_library(ctx: &AppContext, library: &LibraryRow) {
         return;
     }
 
-    info!(
+    tracing::debug!(
         library_name = %library.name,
         unmatched_count = unmatched.len(),
         "Auto-matching unmatched videos",
@@ -507,7 +507,7 @@ async fn persist_match(
         }
     }
 
-    info!(
+    tracing::debug!(
         filename = %video.filename,
         matched_title = %result.title,
         imdb_id = %result.imdb_id,
@@ -1511,8 +1511,11 @@ mod tests {
         let ctx = ctx_with_mock_omdb(&server.uri(), dir.path().to_path_buf()).await;
         let lib =
             crate::db::create_library(&ctx.db, "L", "/no/where", "movies", &[]).expect("create");
-        upsert_video(&ctx.db, &fixture_video(&lib.id, "vid-R", "Some.Wrong.Name.mkv"))
-            .expect("upsert");
+        upsert_video(
+            &ctx.db,
+            &fixture_video(&lib.id, "vid-R", "Some.Wrong.Name.mkv"),
+        )
+        .expect("upsert");
 
         let video = relink_video_to_imdb(&ctx, "vid-R", "tt1856101")
             .await
@@ -1533,7 +1536,10 @@ mod tests {
         let v = crate::db::get_video_by_id(&ctx.db, "vid-R")
             .expect("query")
             .expect("video");
-        assert!(v.film_id.is_some(), "video should be linked to a Film after relink");
+        assert!(
+            v.film_id.is_some(),
+            "video should be linked to a Film after relink"
+        );
     }
 
     #[tokio::test]

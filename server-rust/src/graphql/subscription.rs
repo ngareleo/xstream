@@ -64,6 +64,20 @@ impl Subscription {
     ) -> BoxStream<'static, ProfileAvailability> {
         let app = ctx.data_unchecked::<AppContext>();
         let state = app.availability_state.clone();
+        // Subscribe before kicking the probe so its broadcast reaches us.
+        let live = BroadcastStream::new(state.subscribe()).filter_map(|res| async move {
+            res.ok()
+                .map(|e: AvailabilityEvent| ProfileAvailability::from(&e))
+        });
+        // Fire a one-shot probe so a just-opened page reflects current truth
+        // without waiting for the next periodic cycle. Fresh status arrives on
+        // `live` (the probe broadcasts any flip); the DB seed below covers the
+        // common no-change case.
+        let probe_ctx = app.clone();
+        tokio::spawn(async move {
+            let seen = tokio::sync::Mutex::new(std::collections::HashMap::new());
+            crate::services::profile_availability::probe_once(&probe_ctx, &seen).await;
+        });
         let initial: Vec<ProfileAvailability> = crate::db::get_all_libraries(&app.db)
             .unwrap_or_default()
             .iter()
@@ -75,10 +89,6 @@ impl Subscription {
                 })
             })
             .collect();
-        let live = BroadcastStream::new(state.subscribe()).filter_map(|res| async move {
-            res.ok()
-                .map(|e: AvailabilityEvent| ProfileAvailability::from(&e))
-        });
         stream::iter(initial).chain(live).boxed()
     }
 }

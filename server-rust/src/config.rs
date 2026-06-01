@@ -8,12 +8,12 @@ use dashmap::DashMap;
 use crate::db::Db;
 use crate::graphql::scalars::Resolution;
 use crate::services::auth::JwksCache;
+use crate::services::availability_state::AvailabilityState;
 use crate::services::ffmpeg_file::FileMetadata;
 use crate::services::ffmpeg_file::HwAccelConfig;
 use crate::services::ffmpeg_path::FfmpegPaths;
 use crate::services::ffmpeg_pool::FfmpegPool;
 use crate::services::job_store::JobStore;
-use crate::services::availability_state::AvailabilityState;
 use crate::services::omdb::OmdbClient;
 use crate::services::scan_state::ScanState;
 
@@ -152,10 +152,9 @@ pub struct ScanConfig {
     /// library. Bounded so `ffprobe` fan-out and FD pressure stay sane on
     /// large libraries — default is 4.
     pub concurrency: usize,
-    /// Period of the profile-availability probe loop. Defaults to
-    /// `interval_ms` when zero (one cycle per scan cadence). The probe
-    /// is cheap (a `stat` per library) so a sub-30s cadence is fine if
-    /// the user wants flips reflected in the UI faster.
+    /// Period of the profile-availability probe loop. Default 2.5 s so a
+    /// disconnect reflects in the UI within a couple seconds; the probe is
+    /// cheap (a `stat` per library). Falls back to `interval_ms` when zero.
     pub availability_interval_ms: u64,
 }
 
@@ -174,7 +173,7 @@ impl Default for ScanConfig {
         Self {
             interval_ms: 30_000,
             concurrency: 4,
-            availability_interval_ms: 0,
+            availability_interval_ms: 2_500,
         }
     }
 }
