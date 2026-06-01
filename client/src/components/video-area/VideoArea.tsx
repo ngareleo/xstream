@@ -1,5 +1,5 @@
 import { mergeClasses } from "@griffel/react";
-import { type FC, Suspense, useState } from "react";
+import { type FC, Suspense, useCallback, useState } from "react";
 import { graphql, useFragment } from "react-relay";
 
 import { Poster } from "~/components/poster/Poster.js";
@@ -49,7 +49,14 @@ function formatEpisodeCode(seasonNumber: number, episodeNumber: number): string 
 export const VideoArea: FC<Props> = ({ video, seriesPick, controlsHidden, onBack }) => {
   const styles = useVideoAreaStyles();
   const data = useFragment(VIDEO_FRAGMENT, video);
-  const [playStatus, setPlayStatus] = useState<PlayStatus>("idle");
+  // The backdrop poster covers the idle/loading state before the first frame.
+  // Once playback has begun it stays hidden for the rest of the session — a
+  // stall or seek drops status back to "loading", and we don't want the poster
+  // flashing back behind the letterboxed video each time.
+  const [hasPlayed, setHasPlayed] = useState(false);
+  const handleStatusChange = useCallback((status: PlayStatus): void => {
+    if (status === "playing") setHasPlayed(true);
+  }, []);
 
   const fadeClass = mergeClasses(styles.fade, controlsHidden && styles.fadeHidden);
   const meta = data.metadata;
@@ -75,13 +82,11 @@ export const VideoArea: FC<Props> = ({ video, seriesPick, controlsHidden, onBack
 
   return (
     <div className={styles.root}>
-      {playStatus !== "playing" && (
-        <Poster url={posterUrl} alt={displayTitle} className={styles.backdrop} />
-      )}
+      {!hasPlayed && <Poster url={posterUrl} alt={displayTitle} className={styles.backdrop} />}
 
       <div className={styles.videoWrapper}>
         <Suspense fallback={null}>
-          <VideoPlayerAsync video={data} onStatusChange={setPlayStatus} />
+          <VideoPlayerAsync video={data} onStatusChange={handleStatusChange} />
         </Suspense>
       </div>
 
