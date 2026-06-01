@@ -56,8 +56,11 @@ function decodeLocalClaims(token: string): LocalClaims | null {
   try {
     const payload = token.split(".")[1];
     if (!payload) return null;
-    const json = atob(payload.replace(/-/g, "+").replace(/_/g, "/"));
-    const parsed = JSON.parse(json) as { sub?: string; email?: string | null; exp?: number };
+    // base64url → base64, re-padding to a multiple of 4 (JWT segments are
+    // emitted unpadded; `atob` rejects `length % 4 === 1` otherwise).
+    let b64 = payload.replace(/-/g, "+").replace(/_/g, "/");
+    b64 += "=".repeat((4 - (b64.length % 4)) % 4);
+    const parsed = JSON.parse(atob(b64)) as { sub?: string; email?: string | null; exp?: number };
     if (!parsed.sub || typeof parsed.exp !== "number") return null;
     return { sub: parsed.sub, email: parsed.email ?? null, exp: parsed.exp };
   } catch {
@@ -110,6 +113,7 @@ export async function restoreSession(): Promise<boolean> {
   const claims = validLocalClaims();
   if (claims) {
     setUserContext(claims.sub, claims.email);
+    log().info("restoreSession: restored from local session token");
     return true;
   }
   // No (valid) local token. If Supabase still holds a session, exchange it for
@@ -117,11 +121,27 @@ export async function restoreSession(): Promise<boolean> {
   try {
     const { data } = await getSupabase().auth.getSession();
     const accessToken = data.session?.access_token;
-    if (accessToken) return await exchangeForLocalSession(accessToken);
+    if (accessToken) {
+      const ok = await exchangeForLocalSession(accessToken);
+      log().info("restoreSession: migrated from Supabase session", { ok });
+      return ok;
+    }
+    log().info("restoreSession: no local token and no Supabase session — signed out");
   } catch (err) {
     log().warn("restoreSession: Supabase fallback failed", { error: errorMessage(err) });
   }
   return false;
+}
+
+let restorePromise: Promise<boolean> | null = null;
+
+/** Restore the session at most once per page load. The router's auth-gate
+ *  loaders and the bootstrap share this promise, so the gate never decides
+ *  "signed out" before restoration has finished — the boot race that bounced
+ *  a valid session to /signin on refresh. */
+export function ensureSessionRestored(): Promise<boolean> {
+  restorePromise ??= restoreSession();
+  return restorePromise;
 }
 
 /** The Bearer token attached to every server request — the local session. */
