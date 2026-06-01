@@ -3,8 +3,7 @@ import { makeStyles } from "@griffel/react";
 import { tokens } from "~/styles/tokens.js";
 
 export const useToastStyles = makeStyles({
-  // Fixed bottom-right stack, above all page content but click-through
-  // except on the toasts themselves.
+  // Click-through (pointer-events:none) except on the toasts themselves.
   viewport: {
     position: "fixed",
     right: "24px",

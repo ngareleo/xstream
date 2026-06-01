@@ -78,8 +78,7 @@ export const DangerTab: FC = () => {
         if (errors && errors.length > 0) {
           setStatus({ key, ok: false, error: errors[0].message, at: new Date() });
         } else {
-          // "Wipe Everything" is a hard reset — also clear the app's
-          // client-side persisted UI state (pane width, last-opened film).
+          // Hard reset — also clear client-side UI state (pane width, last-opened film).
           if (key === "all") clearAppLocal();
           setStatus({ key, ok: true, at: new Date() });
         }

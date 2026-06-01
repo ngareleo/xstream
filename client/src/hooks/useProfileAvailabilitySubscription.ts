@@ -21,14 +21,8 @@ export interface ProfileAvailabilitySnapshot {
   lastSeenAt: string | null;
 }
 
-/**
- * Subscribe to profileAvailabilityUpdated and call `onUpdate` per library.
- * The server emits one frame per library from current DB status on connect,
- * then one per reachability flip — so the status pill stays live without
- * re-querying the library list.
- *
- * Pass a stable callback (e.g. via useCallback) to avoid re-subscribing.
- */
+/** Subscribe to profileAvailabilityUpdated; calls `onUpdate` per library
+ *  (initial DB seed on connect, then one frame per flip). Pass a stable callback. */
 export function useProfileAvailabilitySubscription(
   onUpdate: (snap: ProfileAvailabilitySnapshot) => void
 ): void {

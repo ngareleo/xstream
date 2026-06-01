@@ -70,10 +70,8 @@ impl Reservation {
         &self.job_id
     }
 
-    /// Give back the slot AND the `inflight` marker. The chunker calls this on
-    /// the non-spawn paths (DB-restored cached job, mkdir/insert failure) where
-    /// the reservation is never handed to `run_to_completion` — so the id must
-    /// be removed from `inflight` here, or it leaks.
+    /// Give back the slot and the `inflight` marker — the non-spawn paths,
+    /// where the reservation never reaches `run_to_completion` (else it leaks).
     pub fn release(mut self) {
         let _ = self.permit.take();
         self.inner.inflight.remove(&self.job_id);
@@ -152,10 +150,8 @@ impl FfmpegPool {
         self.inner.config.max_concurrent_jobs
     }
 
-    /// True when an ffmpeg process is running (or being killed). The real
-    /// "is a transcode active" signal — unlike the job_store, which also caches
-    /// *completed* jobs for reuse. Tracks `live` only; the brief inflight
-    /// reservation window has no process running yet.
+    /// True when an ffmpeg process is running/dying. Unlike the job_store
+    /// (which also caches *completed* jobs), this is the real "active" signal.
     pub fn has_active_jobs(&self) -> bool {
         !self.inner.live.is_empty()
     }

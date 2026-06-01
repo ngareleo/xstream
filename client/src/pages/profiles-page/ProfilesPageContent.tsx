@@ -88,8 +88,7 @@ export const ProfilesPageContent: FC = () => {
   );
   useLibraryScanSubscription(handleScanUpdate);
 
-  // Live library reachability, keyed by GraphQL library id; the subscription
-  // seeds current status then pushes each flip.
+  // Live reachability overrides, keyed by GraphQL library id.
   const [statusByLibrary, setStatusByLibrary] = useState<Map<string, ProfileAvailabilitySnapshot>>(
     new Map()
   );
@@ -127,9 +126,8 @@ export const ProfilesPageContent: FC = () => {
   }, []);
   const { paneWidth, containerRef, onResizeMouseDown } = useSplitResize(defaultPaneWidth);
 
-  // On mount with no explicit ?film=, restore the last-opened film (if it
-  // still exists in the library), else auto-select the first movie so the
-  // DetailPane opens. Skip when the URL already targets a film or ?empty=1.
+  // On mount with no ?film=, restore the last-opened film (if it still
+  // exists), else the first movie.
   useEffect(() => {
     if (params.get("film") || params.get("empty") === "1") return;
     const stored = readLocal(LocalStorageKey.ProfilesLastFilm);

@@ -109,9 +109,7 @@ export const DetailPaneEdit: FC<DetailPaneEditProps> = ({
           setError(strings.saveError);
           return;
         }
-        // The mutation returns the enriched Video; Relay normalizes it into
-        // the store by id, so the pane updates without a refetch. Confirm
-        // the re-link with a toast styled to the app.
+        // Relay merges the returned Video by id, so the pane updates without a refetch.
         const title = data.matchVideo?.title ?? "";
         toast({
           variant: "success",

@@ -47,9 +47,7 @@ export const useFilmDetailsOverlayStyles = makeStyles({
     pointerEvents: "none",
     backgroundImage: `linear-gradient(180deg, rgba(5,7,6,0.45) 0%, transparent 25%, transparent 38%, rgba(5,7,6,0.85) 72%, ${tokens.colorBg0} 100%), linear-gradient(90deg, rgba(5,7,6,0.5) 0%, transparent 35%)`,
   },
-  // Subtle top scrim so the top-right controls (Open-in-Profile + close) stay
-  // legible over bright hero art. Sits above the poster/gradient, below the
-  // controls (which carry z-index 4).
+  // Keeps the top-right controls legible over bright hero art.
   topScrim: {
     position: "absolute",
     top: 0,
@@ -60,8 +58,6 @@ export const useFilmDetailsOverlayStyles = makeStyles({
     backgroundImage:
       "linear-gradient(180deg, rgba(5,7,6,0.6) 0%, rgba(5,7,6,0.25) 40%, transparent 100%)",
   },
-  // Top-right cluster: the secondary "Open in Profile" action sits to the
-  // left of the circular close button.
   topActions: {
     position: "absolute",
     top: "64px",
@@ -71,7 +67,6 @@ export const useFilmDetailsOverlayStyles = makeStyles({
     alignItems: "center",
     columnGap: "18px",
   },
-  // Simple borderless icon button — no chrome, just the glyph; tints on hover.
   close: {
     width: "40px",
     height: "40px",
@@ -92,9 +87,7 @@ export const useFilmDetailsOverlayStyles = makeStyles({
       color: tokens.colorGreen,
     },
   },
-  // Bottom row: the title/content block (left) and the copies rail (right)
-  // share one flex container so they bottom-align. Right edge matches the
-  // close button (right:28px); pointer-events pass through the empty gap.
+  // pointer-events pass through the empty gap; the children re-enable them.
   heroBottom: {
     position: "absolute",
     top: "120px",
@@ -272,8 +265,7 @@ export const useFilmDetailsOverlayStyles = makeStyles({
       transform: "translateY(0) scale(0.98)",
     },
   },
-  // Offline copy: rendered visually disabled but still clickable so the click
-  // can surface an explanatory toast. Neutralises the playCta hover lift.
+  // Looks disabled but stays clickable, so the click can surface a toast.
   playCtaDisabled: {
     opacity: 0.45,
     cursor: "not-allowed",
@@ -291,8 +283,6 @@ export const useFilmDetailsOverlayStyles = makeStyles({
       transform: "none",
     },
   },
-  // Secondary action — restrained mono text-link with an icon, per the design
-  // lab's `secondaryCta`. Distinct from the glass-pill primary Play CTA.
   secondaryCta: {
     display: "inline-flex",
     alignItems: "center",
@@ -372,8 +362,7 @@ export const useFilmDetailsOverlayStyles = makeStyles({
   },
   seasonsRail: {
     position: "absolute",
-    // Clears the top-right action cluster (Open-in-Profile + close, 64–104px);
-    // right edge aligned with the close button (right:28px).
+    // Below the top-right action cluster; right edge aligned with the close button.
     top: "120px",
     right: "28px",
     bottom: "72px",
@@ -432,13 +421,8 @@ export const useFilmDetailsOverlayStyles = makeStyles({
     overflowY: "auto",
     overflowX: "hidden",
   },
-  // Copies rail — same right-side position as the seasons rail, but sized to
-  // its content (a handful of copies) instead of stretching full-height, and
-  // dropped below the top-right action cluster. Scrolls if a film somehow has
-  // many copies.
-  // Copies rail — flex child of heroBottom, bottom-aligned with the content
-  // block. Content-sized (caps at the row height, then scrolls). Rounded,
-  // frosted-glass panel.
+  // Content-sized (caps at the row height, then scrolls), unlike the
+  // full-height seasons rail.
   copiesRail: {
     width: "380px",
     flexShrink: 0,
@@ -466,11 +450,8 @@ export const useFilmDetailsOverlayStyles = makeStyles({
     overflowY: "auto",
     overflowX: "hidden",
   },
-  // Padding for non-SeasonsPanel rail content (the copy picker), which has no
-  // header bar of its own — keeps it off the panel edges.
   railBody: {
-    // FilmVariants' root carries a 12px top margin; keep this small so the
-    // heading lands ~14px from the panel top, matching the seasons header.
+    // FilmVariants' root already has a 12px top margin; keep this small.
     paddingTop: "2px",
     paddingBottom: "16px",
     paddingLeft: "16px",

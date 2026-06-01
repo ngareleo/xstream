@@ -139,8 +139,6 @@ export const FilmDetailsOverlay: FC<FilmDetailsOverlayProps> = ({
     0
   );
   const seasonCount = seasons.length;
-  // Movies with >1 copy show the copy picker in the same right-side rail the
-  // seasons explorer occupies for shows; both narrow the main content column.
   const hasVariants = !isSeries && variantOptions.length > 1;
   const hasRail = (isSeries && seasonCount > 0) || hasVariants;
   const resolution = data.nativeResolution
@@ -149,9 +147,8 @@ export const FilmDetailsOverlay: FC<FilmDetailsOverlayProps> = ({
   const codec = data.videoStream?.codec ?? null;
   const duration = data.durationSeconds > 0 ? formatDurationHuman(data.durationSeconds) : null;
 
-  // A copy is unplayable when its owning library is offline (the file is
-  // unreachable). For the picked variant, fall back to the source video's
-  // library when the copy carries none.
+  // Unplayable when the owning library is offline; the picked variant falls
+  // back to the source video's library when its own is absent.
   const selectedCopy = copies?.find((c) => c.id === selectedCopyId);
   const playStatus = selectedCopy?.library?.status ?? data.library?.status ?? null;
   const unavailable = playStatus === "OFFLINE";
@@ -174,9 +171,7 @@ export const FilmDetailsOverlay: FC<FilmDetailsOverlayProps> = ({
     navigate(`/player/${data.id}?s=${seasonNumber}&e=${episodeNumber}`);
   };
 
-  // Jump to this film's row in the Profiles page (keyed by the video id) so
-  // the user can edit / re-link it there. Profiles restores the pane to this
-  // film on arrival.
+  // Open this film's row in Profiles (keyed by video id) to edit / re-link it.
   const openInProfile = (): void => {
     navigate(`${ROUTE_PATHS.profiles}?film=${encodeURIComponent(data.id)}`);
   };

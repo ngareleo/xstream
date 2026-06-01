@@ -1,9 +1,4 @@
-//! Service-issued local session tokens. See docs/architecture/Identity/.
-//!
-//! After an online Supabase login the server mints one of these HS256 tokens,
-//! signed with a per-install secret, with an absolute ~30-day lifetime. They
-//! validate entirely offline (signature + `exp`); revocation is a DB lookup
-//! against the `sessions` table.
+//! Service-issued local session tokens (HS256, ~30-day, offline-valid). See docs/architecture/Identity/.
 
 use jsonwebtoken::{decode, encode, Algorithm, DecodingKey, EncodingKey, Header, Validation};
 use serde::{Deserialize, Serialize};

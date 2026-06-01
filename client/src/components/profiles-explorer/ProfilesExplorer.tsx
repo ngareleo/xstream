@@ -38,10 +38,8 @@ export const ProfilesExplorer: FC<ProfilesExplorerProps> = ({
     selectedLibraryId ? new Set([selectedLibraryId]) : new Set()
   );
 
-  // Auto-expand the profile that holds the selected film. selectedLibraryId
-  // can arrive *after* mount — a film restored from the last visit is set via
-  // the URL param in an effect — so reacting to it here (not just at init) is
-  // what expands the right profile instead of defaulting to the first.
+  // Expand the profile holding the selected film. selectedLibraryId can arrive
+  // after mount (a restored film), so react to it rather than only seeding init.
   useEffect(() => {
     if (!selectedLibraryId) return;
     setExpandedIds((prev) => {

@@ -78,12 +78,8 @@ function validLocalClaims(): LocalClaims | null {
   return claims;
 }
 
-/**
- * Exchange a verified Supabase access token for a service-signed local session
- * token (the service verifies the Supabase JWT online, then mints a ~30-day
- * offline-valid session). Stores the token and mirrors identity into
- * `userContext`. Requires connectivity — this is the once-per-month online step.
- */
+/** Exchange a Supabase access token for a local session token; stores it and
+ *  sets userContext. Requires connectivity. */
 async function exchangeForLocalSession(supabaseAccessToken: string): Promise<boolean> {
   try {
     const resp = await fetch(authUrl("/auth/session"), {
@@ -104,11 +100,9 @@ async function exchangeForLocalSession(supabaseAccessToken: string): Promise<boo
   }
 }
 
-/** Restore identity on boot. Prefers the local session token (validated
- *  offline). Falls back to minting one from a still-live Supabase session —
- *  this seamlessly migrates a user who was signed in before the local-session
- *  model existed, and requires connectivity. Resolves `true` when signed in.
- *  See docs/architecture/Identity/02-Session-And-Refresh.md. */
+/** Restore identity on boot from the local session token, falling back to
+ *  minting one from a live Supabase session (migration). Resolves `true` when
+ *  signed in. See docs/architecture/Identity/02-Session-And-Refresh.md. */
 export async function restoreSession(): Promise<boolean> {
   const claims = validLocalClaims();
   if (claims) {
@@ -116,8 +110,7 @@ export async function restoreSession(): Promise<boolean> {
     log().info("restoreSession: restored from local session token");
     return true;
   }
-  // No (valid) local token. If Supabase still holds a session, exchange it for
-  // one now — covers first boot after upgrading and the just-signed-up case.
+  // No local token — migrate from a live Supabase session if there is one.
   try {
     const { data } = await getSupabase().auth.getSession();
     const accessToken = data.session?.access_token;
@@ -136,9 +129,8 @@ export async function restoreSession(): Promise<boolean> {
 let restorePromise: Promise<boolean> | null = null;
 
 /** Restore the session at most once per page load. The router's auth-gate
- *  loaders and the bootstrap share this promise, so the gate never decides
- *  "signed out" before restoration has finished — the boot race that bounced
- *  a valid session to /signin on refresh. */
+ *  loaders await this so the gate never decides "signed out" before restore
+ *  finishes (the refresh→signin race). */
 export function ensureSessionRestored(): Promise<boolean> {
   restorePromise ??= restoreSession();
   return restorePromise;
@@ -180,8 +172,7 @@ export async function signUp(email: string, password: string): Promise<AuthResul
       log().warn("signUp rejected by Supabase", { error: error.message });
       return { user: null, session: null, error: error.message };
     }
-    // Session is null when email confirmation is on; caller redirects to /signin
-    // in that case. When a session is returned, mint the local session now.
+    // No session when email confirmation is on; otherwise mint the local session.
     if (data.session?.access_token) {
       await exchangeForLocalSession(data.session.access_token);
     }
@@ -193,7 +184,7 @@ export async function signUp(email: string, password: string): Promise<AuthResul
 }
 
 export async function signOut(): Promise<void> {
-  // Revoke the local session server-side (destroys the cookie/session row).
+  // Revoke the local session server-side, then clear local state.
   const token = getLocalSessionToken();
   if (token) {
     try {
@@ -269,10 +260,8 @@ export async function changePassword(
   }
 }
 
-/** Subscribe to Supabase auth-state changes. Identity is driven by the local
- *  session (not Supabase), so this no longer mutates `userContext` — Supabase's
- *  background token refreshes must never disturb the local-session gate. It
- *  only forwards the event to callers that observe Supabase state. */
+/** Subscribe to Supabase auth-state changes. Does not touch `userContext` —
+ *  the local session drives identity, not Supabase's background refreshes. */
 export function subscribeToAuthChanges(callback: (session: Session | null) => void): () => void {
   try {
     const supabase = getSupabase();

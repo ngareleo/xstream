@@ -6,11 +6,7 @@ import { withNovaEventing } from "~/storybook/withNovaEventing.js";
 
 import { ToastProvider } from "./Toast.js";
 
-/**
- * Demo harness: buttons inside the ToastProvider emit toast events via
- * useToast (generateEvent flows through the provider's interceptor even with
- * the no-op root eventing decorator).
- */
+/** Demo harness — buttons emit toasts via useToast inside the ToastProvider. */
 const ToastDemo: FC = () => {
   const toast = useToast();
   return (
