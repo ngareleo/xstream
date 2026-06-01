@@ -59,6 +59,10 @@ pub enum ExitOutcome {
 pub struct Reservation {
     job_id: String,
     permit: Option<OwnedSemaphorePermit>,
+    /// Back-reference so `release` can clear the `inflight` marker on the
+    /// non-spawn paths. (No `Drop` impl — `run_to_completion` destructures
+    /// the reservation and removes `inflight` itself.)
+    inner: Arc<PoolInner>,
 }
 
 impl Reservation {
@@ -66,11 +70,13 @@ impl Reservation {
         &self.job_id
     }
 
-    /// Drop the permit explicitly. The chunker calls this on the
-    /// non-spawn paths (DB-restored cached job, probe failure) where the
-    /// reservation is never handed to `run_to_completion`.
+    /// Give back the slot AND the `inflight` marker. The chunker calls this on
+    /// the non-spawn paths (DB-restored cached job, mkdir/insert failure) where
+    /// the reservation is never handed to `run_to_completion` — so the id must
+    /// be removed from `inflight` here, or it leaks.
     pub fn release(mut self) {
         let _ = self.permit.take();
+        self.inner.inflight.remove(&self.job_id);
     }
 }
 
@@ -146,11 +152,10 @@ impl FfmpegPool {
         self.inner.config.max_concurrent_jobs
     }
 
-    /// True when an ffmpeg process is running (or being killed). This is the
-    /// real "is a transcode active" signal — unlike the job_store, which also
-    /// caches *completed* jobs for reuse. Tracks `live` only: the brief
-    /// inflight reservation window has no process yet, and isn't reliably
-    /// cleared on the cache-restore `Reservation::release` path.
+    /// True when an ffmpeg process is running (or being killed). The real
+    /// "is a transcode active" signal — unlike the job_store, which also caches
+    /// *completed* jobs for reuse. Tracks `live` only; the brief inflight
+    /// reservation window has no process running yet.
     pub fn has_active_jobs(&self) -> bool {
         !self.inner.live.is_empty()
     }
@@ -169,6 +174,7 @@ impl FfmpegPool {
         Some(Reservation {
             job_id,
             permit: Some(permit),
+            inner: self.inner.clone(),
         })
     }
 
@@ -206,7 +212,7 @@ impl FfmpegPool {
         ffmpeg: &Path,
         args: &[OsString],
     ) -> Result<ExitOutcome, PoolError> {
-        let Reservation { job_id, permit } = reservation;
+        let Reservation { job_id, permit, .. } = reservation;
         let permit = permit.ok_or(PoolError::LostReservation)?;
         self.inner.inflight.remove(&job_id);
 
@@ -481,6 +487,20 @@ mod tests {
         assert!(!pool.has_active_jobs());
         let _r = pool.try_reserve_slot("a".into()).expect("slot");
         assert!(!pool.has_active_jobs());
+    }
+
+    #[test]
+    fn release_clears_the_inflight_reservation() {
+        // POOL-001 regression guard: the cache-restore path calls
+        // `release()` without ever spawning, so it must drop the inflight
+        // marker — otherwise it leaks and inflight_count drifts upward.
+        let pool = FfmpegPool::new(cfg(2));
+        let r = pool.try_reserve_slot("a".into()).expect("slot");
+        assert!(pool.has_inflight_or_live("a"));
+        assert_eq!(pool.snapshot_cap().inflight_count, 1);
+        r.release();
+        assert!(!pool.has_inflight_or_live("a"));
+        assert_eq!(pool.snapshot_cap().inflight_count, 0);
     }
 
     #[test]
