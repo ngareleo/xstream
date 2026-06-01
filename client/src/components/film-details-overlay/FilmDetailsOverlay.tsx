@@ -262,15 +262,13 @@ export const FilmDetailsOverlay: FC<FilmDetailsOverlayProps> = ({
           )}
         </div>
         {hasVariants && (
-          <aside className={styles.seasonsRail} aria-label={strings.copiesAriaLabel}>
-            <div className={styles.seasonsRailScroll}>
-              <div className={styles.railBody}>
-                <FilmVariants
-                  copies={variantOptions}
-                  selectedId={selectedCopyId}
-                  onSelect={setSelectedCopyId}
-                />
-              </div>
+          <aside className={styles.copiesRail} aria-label={strings.copiesAriaLabel}>
+            <div className={styles.railBody}>
+              <FilmVariants
+                copies={variantOptions}
+                selectedId={selectedCopyId}
+                onSelect={setSelectedCopyId}
+              />
             </div>
           </aside>
         )}

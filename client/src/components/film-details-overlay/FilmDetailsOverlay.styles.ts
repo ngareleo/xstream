@@ -358,7 +358,8 @@ export const useFilmDetailsOverlayStyles = makeStyles({
   },
   seasonsRail: {
     position: "absolute",
-    top: "84px",
+    // Clears the top-right action cluster (Open-in-Profile + close, 64–104px).
+    top: "120px",
     right: "60px",
     bottom: "72px",
     width: "380px",
@@ -416,10 +417,45 @@ export const useFilmDetailsOverlayStyles = makeStyles({
     overflowY: "auto",
     overflowX: "hidden",
   },
+  // Copies rail — same right-side position as the seasons rail, but sized to
+  // its content (a handful of copies) instead of stretching full-height, and
+  // dropped below the top-right action cluster. Scrolls if a film somehow has
+  // many copies.
+  copiesRail: {
+    position: "absolute",
+    top: "120px",
+    right: "60px",
+    width: "380px",
+    maxHeight: "calc(100% - 192px)",
+    zIndex: 3,
+    display: "flex",
+    flexDirection: "column",
+    backgroundColor: "rgba(5, 7, 6, 0.72)",
+    backdropFilter: "blur(14px) saturate(160%)",
+    WebkitBackdropFilter: "blur(14px) saturate(160%)",
+    borderTopWidth: "1px",
+    borderRightWidth: "1px",
+    borderBottomWidth: "1px",
+    borderLeftWidth: "1px",
+    borderTopStyle: "solid",
+    borderRightStyle: "solid",
+    borderBottomStyle: "solid",
+    borderLeftStyle: "solid",
+    borderTopColor: tokens.colorBorder,
+    borderRightColor: tokens.colorBorder,
+    borderBottomColor: tokens.colorBorder,
+    borderLeftColor: tokens.colorBorder,
+    borderRadius: tokens.radiusSm,
+    boxShadow: "0 16px 40px rgba(0,0,0,0.45)",
+    overflowY: "auto",
+    overflowX: "hidden",
+  },
   // Padding for non-SeasonsPanel rail content (the copy picker), which has no
   // header bar of its own — keeps it off the panel edges.
   railBody: {
-    paddingTop: "4px",
+    // FilmVariants' root carries a 12px top margin; keep this small so the
+    // heading lands ~14px from the panel top, matching the seasons header.
+    paddingTop: "2px",
     paddingBottom: "16px",
     paddingLeft: "16px",
     paddingRight: "16px",
