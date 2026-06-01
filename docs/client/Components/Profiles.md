@@ -114,7 +114,7 @@ pane URL params, and split-body resize via `useSplitResize` hook.
 ### Profile expansion state
 
 - Delegated to `ProfilesExplorer`. The page does not manage expansion; the explorer owns the `expandedIds` set.
-- Pre-expands `profiles[0]` and the profile containing the selected film (for deep-link support).
+- The explorer auto-expands the profile holding the selected/restored film via `useEffect` on `selectedLibraryId` arrival. When no film is selected (edge case), no profiles are pre-expanded.
 - See `ProfilesExplorer.md` for expansion behaviour details.
 
 ### Drag-resize

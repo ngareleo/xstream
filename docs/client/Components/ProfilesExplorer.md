@@ -72,7 +72,8 @@ the page. Delegates selection callbacks to parent.
 
 ### Profile expansion
 
-- `expandedIds: Set<string>` local state; pre-initializes with `libraries[0]` and the profile containing `selectedFilmId` (for deep-link support).
+- `expandedIds: Set<string>` local state; pre-initializes from `selectedLibraryId` only (empty when none).
+- `useEffect` keyed on `selectedLibraryId` adds it to the expanded set whenever it changes. This ensures the profile holding the selected/restored film is auto-expanded, even when that profile arrives *after* mount (e.g., when the Profiles page restores a film from the `?film=` URL param in an effect). Manual toggles (`toggleProfile`) are preserved.
 - `toggleProfile(id)`: adds/removes from set (disabled while searching).
 - When expanded, `ProfileRow` renders its child `FilmRow` elements inline.
 
