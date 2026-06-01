@@ -72,7 +72,8 @@ Full-viewport film detail view with animated hero poster, metadata, and play/clo
 
 #### Chips row
 
-- Resolution chip (green) + HDR + codec + IMDb rating (yellow, if present).
+- Resolution chip (green) + HDR + codec + IMDb rating (yellow, if present) + availability chip (if unavailable).
+- **Availability chip** (`.chipOffline`): renders only when the selected copy's owning library has `status === "OFFLINE"`. Mono 11px, `backgroundColor: rgba(220,53,69,0.15)`, text `colorRed`, border `1px solid colorRed`. Content: `"Offline"`.
 
 #### Title
 
@@ -117,6 +118,8 @@ The seasons-rail branch in this overlay is **deprecated**. TV-show overlays now 
 
 ##### Play CTA (glass pill)
 
+**Enabled state:**
+
 - At rest: `backgroundColor: rgba(255,255,255,0.12)`, `borderRadius: 999px`, `backdropFilter: blur(20px) saturate(180%)`, beveled-light inset borders.
 - Mono 12px, `letterSpacing: 0.18em`, uppercase, `color: #fff`.
 - **Hover** (dimmed "lighted sign"):
@@ -131,6 +134,13 @@ The seasons-rail branch in this overlay is **deprecated**. TV-show overlays now 
 - Active: `transform: translateY(0) scale(0.98)`.
 - Contents: `<IconPlay>` + `"Play"`.
 - Click: `document.startViewTransition(() => navigate("/player/{film.id}"))` with plain navigate fallback.
+
+**Unavailable state** (`.playCtaDisabled` — when selected copy's library is `OFFLINE`):
+
+- Visually disabled (dimmed, cursor `not-allowed`) but remains **clickable** (not the native `disabled` attribute).
+- At rest: `backgroundColor: rgba(255,255,255,0.06)`, `color: colorTextMuted`, no hover effects.
+- Click: shows a toast error (see Behaviour § Unavailable playback).
+- Icon: dimmed, no drop-shadow effects.
 
 ##### Filename
 
@@ -156,6 +166,26 @@ The seasons-rail branch in this overlay is **deprecated**. TV-show overlays now 
 
 ## Behaviour
 
+### Availability check
+
+The overlay reads `library.status` from the selected copy's owning library (resolved via the `Video.library` field; no schema change). A film/episode whose library is `OFFLINE` is unavailable:
+
+- **Chips row:** appends an `"Offline"` chip (`.chipOffline`) in red.
+- **Play CTA:** renders visually disabled (`.playCtaDisabled`) with muted styling and no hover effects; remains clickable.
+- **Click handling:** clicking an unavailable Play CTA fires a toast error (see § Toast integration).
+
+**Known limitation:** Availability is read at Home query time, so the overlay reflects library status as-of Home page load, not as-of overlay open. Live availability updates (via the `profileAvailabilityUpdated` subscription) do not refresh the overlay's cached fragment data. This is intended for v1 (the Profiles page has live updates; Home is stateless browse). A future iteration may subscribe to live changes on the detail overlay itself.
+
+For picked variant fallback: if the selected copy is unavailable, availability is determined by the selected copy's library; if no explicit copy is selected, availability falls back to the source video's library.
+
+**Episode availability:** TV episodes have the same contract — `playEpisode` mutation is guarded by the show's library status (or the selected copy's library status if multiple copies exist).
+
+### Toast integration
+
+Uses the `useToast()` hook to emit error notifications. The overlay's Storybook stories decorator includes `withNovaEventing` so story renders can trigger and assert toast events.
+
+**Unavailable toast:** clicking a disabled Play CTA on an unavailable video calls `showToast({ variant: "error", message: "Unavailable — this title's library is offline." })`. The toast system (see [`Toast.md`](Toast.md)) renders a red-bordered card in the bottom-right viewport that auto-dismisses after 3 seconds.
+
 ### View Transitions contract
 
 `.overlayPoster` has **`viewTransitionName: "film-backdrop"`**. This name must exactly match Player's backdrop element for smooth morphing during navigation.
@@ -164,6 +194,23 @@ The seasons-rail branch in this overlay is **deprecated**. TV-show overlays now 
 
 When a suggestion tile is clicked and `onSelectSuggestion` is provided, the overlay smoothly scrolls to `top: 0` after the view transition.
 
+## Data
+
+**Relay fragments:**
+
+- `FilmDetailsOverlay_video` — the Video node (via the clicked film's `bestCopy`). Selects: `id`, `title`, `filename`, `metadata { title, year, genre, duration, director, plot, imdbRating }`, `resolution`, `videoCodec`, `hdrFormat`, `library { status }`.
+- `HomeFilmsSection_video` — used by the suggestions carousel to render `FilmTile` cards. Now includes `library { status }` for availability gating.
+
+The `library { status }` field uses the existing `Video.library: Library!` resolver (no schema change) and enables availability checks at render time without requiring a dedicated subscription.
+
+## Strings
+
+FilmDetailsOverlay.strings.ts exports:
+
+- `offlineChip` — "Offline", displayed in the chips row when a library is offline.
+- `unavailableToast` — "Unavailable — this title's library is offline.", shown as a toast when clicking Play on an offline video.
+
 ## Notes
 
 Outstanding work tracked in [`Outstanding-Work.md`](../../release/Outstanding-Work.md#film-details-overlay).
+- **Storybook decorator update:** `FilmDetailsOverlay.stories.tsx` now includes `withNovaEventing` so test stories can assert `useToast` calls and render-time toast events.

@@ -35,6 +35,15 @@ Entry shape (the entry ends with a single line containing exactly three hyphens 
 
 <!-- ENTRIES BELOW — newest first; each ends with a bare three-hyphen divider line. -->
 
+## 2026-06-01 — FilmDetailsOverlay availability blocking — preventing playback of offline videos
+
+The availability feature shipped in PR `fix/seven-bugs-auth-profiles-detail` gates playback of videos whose owning library is currently offline. The FilmDetailsOverlay spec was updated to reflect the UI and behaviour changes: the chips row now includes an `"Offline"` chip (in red) when the selected copy's library has `status === "OFFLINE"`; the Play CTA is visually disabled (styled as `.playCtaDisabled`) but remains clickable so that clicking it triggers a toast error ("Unavailable — this title's library is offline.") rather than navigating. The spec now documents the known limitation that availability is read at Home query time and does not live-update if the user flips a library offline/online while the overlay is open — this is intentional for v1 (the Profiles page has live subscriptions; the Home browse page is stateless). The Relay fragments were updated to select `library { status }` from both the detail overlay and the suggestion carousel (no schema change — it uses the existing `Video.library` resolver). The spec includes new strings (`offlineChip`, `unavailableToast`), documents the Toast integration via `useToast()`, and notes that the Storybook stories decorator was updated to include `withNovaEventing` so stories can assert toast events.
+
+**Files:** `docs/client/Components/FilmDetailsOverlay.md`
+**Related Commit.md entry:** `972b597 (FilmDetailsOverlay availability spec)`
+
+---
+
 ## 2026-06-01 — localStorage convention documentation — centralizing storage key ownership and access
 
 Code-review feedback on the `fix/seven-bugs-auth-profiles-detail` PR identified a new client-side local persistence pattern established by the reviewed code: `client/src/services/localStore.ts` is now the single owner of app-owned `localStorage` keys and the safe read/write interface. The module exports `LocalStorageKey` (a const map of static keys like `PaneWidth` and `ProfilesLastFilm`) and two helpers (`readLocal`, `writeLocal`) that are try/catch-guarded against quota and private-browsing errors. This centralizes what used to be scattered direct `localStorage` access and file-local helper pairs (e.g. `featureFlags.ts` had its own `lsGet/lsSet/lsRemove` wrappers). The constraint captured: any new local persistence adds its key to `LocalStorageKey` and routes through the helpers; foreign/SDK-owned stores (Supabase's `sb-*-auth-token` keys) stay outside the pattern since they're not app-keyed values. Convention documented in Client-Conventions § "Local persistence (localStorage)" with a cross-reference to the service module and a non-example (Supabase auth). This unblocks future agents to know the single home for all storage keys and the only way to touch `localStorage` in new code.
