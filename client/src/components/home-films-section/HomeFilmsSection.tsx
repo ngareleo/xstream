@@ -209,6 +209,7 @@ export const HomeFilmsSection: FC<HomeFilmsSectionProps> = ({ films, tvShowsRow 
     const suggestions = pickSuggestions(selectedRow, rows);
     return (
       <FilmDetailsOverlay
+        key={filmId}
         video={selectedRow.node}
         copies={selectedRow.copies}
         suggestions={suggestions}

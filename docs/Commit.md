@@ -15,6 +15,13 @@ Entry shape (each entry ends with the divider line described above):
 
 <!-- ENTRIES BELOW — newest first; each ends with a bare `---` line. The architect's next invocation will treat the no-entries state as the first-run case and prepend a bootstrap entry at HEAD. -->
 
+## 972b597 — 2026-06-01 (wipe feedback: toast-based results instead of inline status)
+
+**Files:** `docs/client/Components/DangerTab.md`
+**Why:** Spec update for PR `fix/seven-bugs-auth-profiles-detail`: wipe operations now report results via app-wide toast system (`useToast()`) instead of per-row inline status lines. Success/error toasts name the operation (e.g. "Wipe Database — done."), giving consistent feedback across the app. Inline `status` React state, `WipeStatus` interface, `status`/`statusErr` styles, and `statusOk`/`statusErr` strings removed as redundant. New strings: `toastOkFormat`, `toastFailFormat`.
+
+---
+
 ## 972b597 — 2026-06-01 (wipe guard + Reservation leak recording)
 
 **Files:** `docs/client/Components/DangerTab.md`, `docs/architecture/Streaming/06-FfmpegPool.md`, `docs/todo.md`
