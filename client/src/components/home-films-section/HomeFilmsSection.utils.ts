@@ -76,7 +76,16 @@ export function timeOfDayGreeting(now: Date): string {
   return strings.greetingEvening;
 }
 
-export function pickSuggestions(film: FilterRow, all: FilterRow[]): VideoData[] {
+/** A suggested film: its Film `id` (what the `?film=` param keys on) paired
+ *  with the bestCopy Video that backs the FilmTile fragment. Carrying the
+ *  Film id is what lets a suggestion click reopen the detail overlay — the
+ *  Video id alone doesn't resolve against the film-keyed rows. */
+export interface Suggestion {
+  filmId: string;
+  video: VideoData;
+}
+
+export function pickSuggestions(film: FilterRow, all: FilterRow[]): Suggestion[] {
   const tokens = film.genre.split(/[·\s/]+/).filter(Boolean);
   const scored: { row: FilterRow; score: number }[] = [];
   for (const f of all) {
@@ -90,5 +99,5 @@ export function pickSuggestions(film: FilterRow, all: FilterRow[]): VideoData[] 
     scored.push({ row: f, score });
   }
   scored.sort((a, b) => b.score - a.score);
-  return scored.slice(0, 8).map((s) => s.row.node);
+  return scored.slice(0, 8).map((s) => ({ filmId: s.row.id, video: s.row.node }));
 }

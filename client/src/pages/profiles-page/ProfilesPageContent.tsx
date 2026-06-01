@@ -10,6 +10,10 @@ import {
   type LibraryScanSnapshot,
   useLibraryScanSubscription,
 } from "~/hooks/useLibraryScanSubscription.js";
+import {
+  type ProfileAvailabilitySnapshot,
+  useProfileAvailabilitySubscription,
+} from "~/hooks/useProfileAvailabilitySubscription.js";
 import { useSplitResize } from "~/hooks/useSplitResize.js";
 import type { ProfilesPageContentQuery } from "~/relay/__generated__/ProfilesPageContentQuery.graphql.js";
 
@@ -42,6 +46,26 @@ const PROFILES_QUERY = graphql`
     }
   }
 `;
+
+// Remembers the last film the user opened in the detail pane so navigating
+// away and back re-opens it (falling back to the first movie). Mirrors the
+// localStorage convention in useSplitResize.
+const LAST_FILM_KEY = "xstream:profiles:last-film";
+function readLastFilm(): string | null {
+  try {
+    return window.localStorage.getItem(LAST_FILM_KEY);
+  } catch {
+    return null;
+  }
+}
+function writeLastFilm(id: string | null): void {
+  try {
+    if (id) window.localStorage.setItem(LAST_FILM_KEY, id);
+    else window.localStorage.removeItem(LAST_FILM_KEY);
+  } catch {
+    /* private-mode / disabled storage — selection just won't persist */
+  }
+}
 
 export const ProfilesPageContent: FC = () => {
   const data = useLazyLoadQuery<ProfilesPageContentQuery>(
@@ -83,6 +107,22 @@ export const ProfilesPageContent: FC = () => {
   );
   useLibraryScanSubscription(handleScanUpdate);
 
+  // Live library reachability, keyed by GraphQL library id. The server seeds
+  // current status per library on connect, then pushes each flip — so the
+  // status pill stays accurate without re-running the (potentially blocking)
+  // library query.
+  const [statusByLibrary, setStatusByLibrary] = useState<Map<string, ProfileAvailabilitySnapshot>>(
+    new Map()
+  );
+  const handleAvailabilityUpdate = useCallback((snap: ProfileAvailabilitySnapshot): void => {
+    setStatusByLibrary((prev) => {
+      const next = new Map(prev);
+      next.set(snap.libraryId, snap);
+      return next;
+    });
+  }, []);
+  useProfileAvailabilitySubscription(handleAvailabilityUpdate);
+
   // Flatten { library, video } edges for O(1) film lookup.
   type Edge = (typeof data.libraries)[number]["videos"]["edges"][number]["node"];
   const flatVideos = useMemo(() => {
@@ -108,9 +148,16 @@ export const ProfilesPageContent: FC = () => {
   }, []);
   const { paneWidth, containerRef, onResizeMouseDown } = useSplitResize(defaultPaneWidth);
 
-  // Auto-select first movie on mount to open DetailPane; skip if URL has ?film= or ?empty=1.
+  // On mount with no explicit ?film=, restore the last-opened film (if it
+  // still exists in the library), else auto-select the first movie so the
+  // DetailPane opens. Skip when the URL already targets a film or ?empty=1.
   useEffect(() => {
     if (params.get("film") || params.get("empty") === "1") return;
+    const stored = readLastFilm();
+    if (stored && flatVideos.some((v) => v.node.id === stored)) {
+      setParams({ film: stored }, { replace: true });
+      return;
+    }
     const firstMovie = flatVideos.find(
       (v) => v.node.mediaType === "MOVIES" && Boolean(v.node.title)
     );
@@ -119,16 +166,27 @@ export const ProfilesPageContent: FC = () => {
   }, []);
 
   const openFilm = (id: string): void => {
-    if (filmId === id) setParams({});
-    else setParams({ film: id });
+    if (filmId === id) {
+      writeLastFilm(null);
+      setParams({});
+    } else {
+      writeLastFilm(id);
+      setParams({ film: id });
+    }
   };
-  const editFilm = (id: string): void => setParams({ film: id, edit: "1" });
+  const editFilm = (id: string): void => {
+    writeLastFilm(id);
+    setParams({ film: id, edit: "1" });
+  };
   const handleEditChange = (editing: boolean): void => {
     if (!filmId) return;
     if (editing) setParams({ film: filmId, edit: "1" });
     else setParams({ film: filmId });
   };
-  const closePane = (): void => setParams({});
+  const closePane = (): void => {
+    writeLastFilm(null);
+    setParams({});
+  };
   const navigateToCreateProfile = (): void => {
     const returnTo = encodeURIComponent(window.location.pathname + window.location.search);
     navigate(`/profiles/new?return_to=${returnTo}`);
@@ -181,6 +239,7 @@ export const ProfilesPageContent: FC = () => {
           selectedFilmId={filmId}
           selectedLibraryId={selectedLibraryId}
           scanByLibrary={scanByLibrary}
+          statusByLibrary={statusByLibrary}
           onOpenFilm={openFilm}
           onEditFilm={editFilm}
         />

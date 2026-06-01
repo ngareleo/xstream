@@ -24,6 +24,7 @@ last_seen_at  TEXT;   -- ISO-8601 of the most recent probe
 4. Compare against the previous tick's status. On a flip:
    - `online → offline` — log warn; **no rows touched**. The user can still browse what's catalogued; only playback is blocked.
    - `* → online` — log info; one-shot `scan_one_library` to catch up on changes that happened while offline.
+5. **Broadcast an `AvailabilityEvent`** on every status flip via `AppContext.availability_state` (a cheaply-cloneable `tokio::sync::broadcast` handle, the same pattern as `scan_state`). The broadcast carries `{ library_id, status, last_seen_at }`.
 
 The probe is cheap (one stat per library); cadence can drop without concern.
 
@@ -41,9 +42,23 @@ type Library implements Node {
   status: ProfileStatus!
   lastSeenAt: String     # null until first probe
 }
+
+type ProfileAvailability {
+  libraryId: ID!           # global-encoded Library id
+  status: ProfileStatus!
+  lastSeenAt: String       # null until the first probe completes
+}
+
+extend type Subscription {
+  profileAvailabilityUpdated: ProfileAvailability!
+}
 ```
 
-`Library.status` is part of the read surface — every consumer that lists libraries (`profiles`, `Show.profiles`, `Library` node lookup) sees current reachability without a separate query.
+`Library.status` is part of the read (query) surface — every consumer that lists libraries (`profiles`, `Show.profiles`, `Library` node lookup) sees current reachability without a separate query.
+
+`profileAvailabilityUpdated` is the **push** surface: the subscription seeds one frame per library from the current DB status on connect, then streams further frames on every status flip. Clients can hold a `statusByLibrary: Map<string, ProfileAvailability>` and update only the affected row. The `libraryId` field is **globally encoded** (`to_global_id("Library", …)`) so it matches the `id` on `Library` objects returned from queries; matching against a raw integer would silently always miss.
+
+**Implementation:** `server-rust/src/services/availability_state.rs` (`AvailabilityState`) + `server-rust/src/graphql/subscription.rs` (`profileAvailabilityUpdated`). The `ProfileAvailability` GraphQL type lives in `server-rust/src/graphql/types/misc.rs`.
 
 ## Picker / playback implications
 
@@ -53,6 +68,10 @@ type Library implements Node {
 ## UI
 
 `ProfileRow` carries a small status pill: `● online` (green), `○ offline` (red), `○ unknown` (faint). Hover shows `last seen <timestamp>`.
+
+Live status flips reach the pill without a refetch: `ProfilesPageContent` subscribes via `useProfileAvailabilitySubscription` (`client/src/hooks/useProfileAvailabilitySubscription.ts`), maintains a `statusByLibrary: Map<string, ProfileAvailability>` in local state, and passes it through `ProfilesExplorer` to each `ProfileRow` as `statusOverride`/`lastSeenOverride` props. When the subscription fires, only the affected row's pill re-renders.
+
+**Design decision recorded:** GraphQL `@defer` was evaluated as an alternative to the subscription. Rejected because the Relay network transport does a single `response.json()` call and would require a multipart-incremental rewrite affecting every query in the app — disproportionate cost. The subscription gives continuous updates and fits the existing `libraryScanUpdated` pattern.
 
 ## Cross-references
 

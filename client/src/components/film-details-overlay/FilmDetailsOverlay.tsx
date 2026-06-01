@@ -8,6 +8,7 @@ import { type FilmVariantOption, FilmVariants } from "~/components/film-variants
 import { Poster } from "~/components/poster/Poster";
 import { PosterRow } from "~/components/poster-row/PosterRow";
 import { SeasonsPanel } from "~/components/seasons-panel/SeasonsPanel";
+import { ROUTE_PATHS } from "~/config/routePaths";
 import { IconClose, IconPlay, ImdbBadge } from "~/lib/icons";
 import type { FilmDetailsOverlay_video$key } from "~/relay/__generated__/FilmDetailsOverlay_video.graphql";
 import type { FilmTile_video$key } from "~/relay/__generated__/FilmTile_video.graphql";
@@ -59,13 +60,22 @@ const OVERLAY_FRAGMENT = graphql`
   }
 `;
 
+/** A suggestion tile: the Film `id` to open paired with the Video that
+ *  backs the FilmTile fragment. The Film id (not the Video id) is what the
+ *  host's `?film=` selection resolves against. */
+export interface OverlaySuggestion {
+  filmId: string;
+  video: FilmTile_video$key;
+}
+
 interface FilmDetailsOverlayProps {
   video: FilmDetailsOverlay_video$key;
   /** All main copies of the Film (movies only); drives FilmVariants picker. */
   copies?: ReadonlyArray<OverlayCopy>;
-  suggestions?: ReadonlyArray<FilmTile_video$key>;
+  suggestions?: ReadonlyArray<OverlaySuggestion>;
   onClose: () => void;
-  onSelectSuggestion?: (id: string) => void;
+  /** Open another film in this same detail view. Receives the Film id. */
+  onSelectSuggestion?: (filmId: string) => void;
 }
 
 const RESOLUTION_DISPLAY: Record<string, string> = {
@@ -140,10 +150,19 @@ export const FilmDetailsOverlay: FC<FilmDetailsOverlayProps> = ({
     navigate(`/player/${data.id}?s=${seasonNumber}&e=${episodeNumber}`);
   };
 
-  const handleSuggestionClick = (id: string): void => {
+  // Jump to this film's row in the Profiles page (keyed by the video id) so
+  // the user can edit / re-link it there. Profiles restores the pane to this
+  // film on arrival.
+  const openInProfile = (): void => {
+    navigate(`${ROUTE_PATHS.profiles}?film=${encodeURIComponent(data.id)}`);
+  };
+
+  const handleSuggestionClick = (filmId: string): void => {
     overlayRef.current?.scrollTo({ top: 0, behavior: "smooth" });
-    if (onSelectSuggestion) onSelectSuggestion(id);
-    else navigate(`/player/${id}`);
+    // The host swaps the detail view to the chosen film via ?film=. Without
+    // a handler there's nowhere to route a suggestion, so it's a no-op —
+    // never a jump to the player (which is what the old fallback did).
+    onSelectSuggestion?.(filmId);
   };
 
   return (
@@ -190,6 +209,9 @@ export const FilmDetailsOverlay: FC<FilmDetailsOverlayProps> = ({
               <IconPlay />
               <span>{strings.play}</span>
             </button>
+            <button type="button" onClick={openInProfile} className={styles.openProfileCta}>
+              {strings.openInProfile}
+            </button>
             <span className={styles.filename}>{data.filename}</span>
           </div>
           {variantOptions.length > 1 && (
@@ -228,8 +250,13 @@ export const FilmDetailsOverlay: FC<FilmDetailsOverlayProps> = ({
       {suggestions.length > 0 && (
         <div className={styles.suggestions}>
           <PosterRow title={strings.youMightAlsoLike}>
-            {suggestions.map((suggestionRef, idx) => (
-              <SuggestionTile key={idx} video={suggestionRef} onClick={handleSuggestionClick} />
+            {suggestions.map((s) => (
+              <SuggestionTile
+                key={s.filmId}
+                filmId={s.filmId}
+                video={s.video}
+                onClick={handleSuggestionClick}
+              />
             ))}
           </PosterRow>
         </div>
@@ -239,6 +266,11 @@ export const FilmDetailsOverlay: FC<FilmDetailsOverlayProps> = ({
 };
 
 const SuggestionTile: FC<{
+  filmId: string;
   video: FilmTile_video$key;
-  onClick: (id: string) => void;
-}> = ({ video, onClick }) => <FilmTile video={video} onClick={onClick} />;
+  onClick: (filmId: string) => void;
+}> = ({ filmId, video, onClick }) => (
+  // FilmTile emits the Video id; ignore it and click with the Film id so the
+  // host's ?film= selection resolves.
+  <FilmTile video={video} onClick={() => onClick(filmId)} />
+);

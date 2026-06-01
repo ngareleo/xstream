@@ -50,6 +50,7 @@ Keep rows short (≤ ~120 chars). When adding a new topic file to `docs/`, add i
 | Identity session lifecycle (token refresh, offline, JWKS unreachable, known gaps including WS subscription auth) | `docs/architecture/Identity/02-Session-And-Refresh.md` |
 | Identity telemetry correlation (how `user.id` lands on server spans + client log records) | `docs/architecture/Identity/03-Telemetry-Correlation.md` |
 | Per-component design specs (style, layout, behaviour, data) — agent-facing reference for every UI component | `docs/client/Components/README.md` |
+| Toast system spec (ToastProvider, useToast hook, Nova "toast" domain, auto-dismiss viewport) | `docs/client/Components/Toast.md` |
 | FilmVariants component spec (multi-copy variant picker) | `docs/client/Components/FilmVariants.md` |
 | ShowTile component spec (homepage TV row tile, Show fragment, sibling to FilmTile) | `docs/client/Components/ShowTile.md` |
 | ShowDetailsOverlay component spec (`?show=<id>` overlay, season tree, sibling to FilmDetailsOverlay) | `docs/client/Components/ShowDetailsOverlay.md` |

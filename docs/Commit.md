@@ -15,6 +15,13 @@ Entry shape (each entry ends with the divider line described above):
 
 <!-- ENTRIES BELOW — newest first; each ends with a bare `---` line. The architect's next invocation will treat the no-entries state as the first-run case and prepend a bootstrap entry at HEAD. -->
 
+## 972b597 — 2026-06-01
+
+**Files:** `docs/architecture/Identity/02-Session-And-Refresh.md`, `docs/architecture/Deployment/06-Supabase-Project-Setup.md`, `docs/architecture/Library-Scan/04-Profile-Availability.md`, `docs/architecture/Library-Scan/02-Film-Entity.md`, `docs/server/GraphQL-Schema/00-Surface.md`, `docs/client/Components/ProfileRow.md`, `docs/client/Components/ProfilesExplorer.md`, `docs/client/Components/Profiles.md`, `docs/client/Components/DetailPane.md`, `docs/client/Components/FilmDetailsOverlay.md`, `docs/client/Components/HomeFilmsSection.md`, `docs/client/Components/AppShell.md`, `docs/client/Components/Toast.md` (new), `docs/client/Components/README.md`, `docs/code-style/Client-Conventions/02-Nova-Eventing.md`, `docs/INDEX.md`
+**Why:** Curator sync for PR `fix/seven-bugs-auth-profiles-detail` (7 bugs: auth offline-restore resilience + JWT TTL trade-off, profileAvailabilityUpdated subscription + AvailabilityState service, matchVideo real OMDb fetch via relink_video_to_imdb, scan-status library_id global-encoding fix, Profiles last-opened localStorage restore, Toast system + Nova "toast" domain, FilmDetailsOverlay suggestion filmId fix + Open-in-Profile button).
+
+---
+
 ## (current HEAD) — 2026-05-28
 
 **Files:** `.claude/skills/setup-local/SKILL.md`, `.claude/agents/devops.md`, `.claude/skills/debug-backend/SKILL.md`, `docs/architecture/Deployment/04-Axiom-Production-Backend.md`

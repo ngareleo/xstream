@@ -13,6 +13,7 @@ use crate::services::ffmpeg_file::HwAccelConfig;
 use crate::services::ffmpeg_path::FfmpegPaths;
 use crate::services::ffmpeg_pool::FfmpegPool;
 use crate::services::job_store::JobStore;
+use crate::services::availability_state::AvailabilityState;
 use crate::services::omdb::OmdbClient;
 use crate::services::scan_state::ScanState;
 
@@ -262,6 +263,10 @@ pub struct AppContext {
     pub probe_cache: ProbeMetadataCache,
     pub job_store: JobStore,
     pub scan_state: ScanState,
+    /// Broadcaster for library reachability changes. Fed by the periodic
+    /// `profile_availability` probe, drained by the `profileAvailabilityUpdated`
+    /// subscription. See `services::availability_state`.
+    pub availability_state: AvailabilityState,
     /// `Some` when an `OMDB_API_KEY` is configured (env or DB setting).
     /// `None` means auto-match is silently disabled — the scanner just
     /// skips the metadata fetch step. Cheap-clone: wraps a shared
@@ -303,6 +308,7 @@ impl AppContext {
             probe_cache: Arc::new(DashMap::<String, FileMetadata>::new()),
             job_store: JobStore::new(),
             scan_state: ScanState::new(),
+            availability_state: AvailabilityState::new(),
             omdb,
             jwks_cache,
         }

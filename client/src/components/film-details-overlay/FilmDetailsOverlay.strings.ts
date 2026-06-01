@@ -12,5 +12,6 @@ export const strings = new LocalizedStrings({
     scrollHint: "▾ scroll for suggestions",
     directedBy: "Directed by ",
     unmatched: "Unmatched file",
+    openInProfile: "Open in Profile",
   },
 });

@@ -3,6 +3,7 @@ import { type FC, useEffect, useMemo, useState } from "react";
 import { fetchQuery, graphql, useMutation, useRelayEnvironment } from "react-relay";
 
 import { Poster } from "~/components/poster/Poster.js";
+import { useToast } from "~/hooks/useToast.js";
 import { IconSearch } from "~/lib/icons.js";
 import type {
   DetailPaneEditMatchMutation,
@@ -50,6 +51,7 @@ export const DetailPaneEdit: FC<DetailPaneEditProps> = ({
 }) => {
   const styles = useDetailPaneStyles();
   const environment = useRelayEnvironment();
+  const toast = useToast();
   const [commit, isInFlight] = useMutation<DetailPaneEditMatchMutation>(MATCH_MUTATION);
 
   const [query, setQuery] = useState(initialQuery);
@@ -102,11 +104,19 @@ export const DetailPaneEdit: FC<DetailPaneEditProps> = ({
     setError(null);
     commit({
       variables: { videoId, imdbId: selected },
-      onCompleted: (_data: DetailPaneEditMatchMutation$data, errors) => {
+      onCompleted: (data: DetailPaneEditMatchMutation$data, errors) => {
         if (errors && errors.length > 0) {
           setError(strings.saveError);
           return;
         }
+        // The mutation returns the enriched Video; Relay normalizes it into
+        // the store by id, so the pane updates without a refetch. Confirm
+        // the re-link with a toast styled to the app.
+        const title = data.matchVideo?.title ?? "";
+        toast({
+          variant: "success",
+          message: strings.formatString(strings.relinkedToastFormat, { title }) as string,
+        });
         onDone();
       },
       onError: () => {

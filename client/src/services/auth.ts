@@ -37,17 +37,67 @@ export interface AuthResult {
   error: string | null;
 }
 
-/** Hydrate the Supabase session from localStorage and mirror into `userContext`. */
+interface PersistedIdentity {
+  userId: string;
+  email: string | null;
+}
+
+/**
+ * Read the user identity from the Supabase session the SDK persisted to
+ * localStorage, without asking the SDK to validate or refresh it. The key is
+ * `sb-<project-ref>-auth-token`; its JSON holds the session (v2 stores it at
+ * the top level, older builds under `currentSession`). Returns `null` when no
+ * session is stored — which is the case after an explicit `signOut()`, since
+ * the SDK clears the key.
+ */
+function readPersistedIdentity(): PersistedIdentity | null {
+  try {
+    for (let i = 0; i < window.localStorage.length; i += 1) {
+      const key = window.localStorage.key(i);
+      if (!key || !key.startsWith("sb-") || !key.endsWith("-auth-token")) continue;
+      const raw = window.localStorage.getItem(key);
+      if (!raw) continue;
+      const parsed = JSON.parse(raw) as {
+        user?: { id?: string; email?: string };
+        currentSession?: { user?: { id?: string; email?: string } };
+      };
+      const user = parsed.user ?? parsed.currentSession?.user;
+      if (user?.id) return { userId: user.id, email: user.email ?? null };
+    }
+  } catch {
+    /* malformed JSON or unavailable storage — treat as no persisted identity */
+  }
+  return null;
+}
+
+/**
+ * Hydrate the Supabase session from localStorage and mirror into `userContext`.
+ *
+ * Offline-first: if the SDK can't produce a live session (access token expired
+ * AND the refresh failed — e.g. the app booted with no network), we still
+ * rehydrate the identity from the *persisted* session rather than treating the
+ * user as signed-out. The server soft-fails on token expiry (signature-only
+ * verification), and `autoRefreshToken` upgrades the token once connectivity
+ * returns, so a stale cached session is enough to keep an offline user in the
+ * app instead of bouncing them to `/signin` on every restart.
+ */
 export async function restoreSession(): Promise<Session | null> {
   try {
     const supabase = getSupabase();
     const { data } = await supabase.auth.getSession();
     if (data.session?.user.id) {
       setUserContext(data.session.user.id, data.session.user.email ?? null);
+      return data.session;
     }
+    const persisted = readPersistedIdentity();
+    if (persisted) setUserContext(persisted.userId, persisted.email);
     return data.session ?? null;
   } catch (err) {
-    log().warn("restoreSession failed; treating as signed-out", { error: errorMessage(err) });
+    log().warn("restoreSession failed; falling back to persisted identity", {
+      error: errorMessage(err),
+    });
+    const persisted = readPersistedIdentity();
+    if (persisted) setUserContext(persisted.userId, persisted.email);
     return null;
   }
 }
@@ -171,10 +221,13 @@ export async function changePassword(
 export function subscribeToAuthChanges(callback: (session: Session | null) => void): () => void {
   try {
     const supabase = getSupabase();
-    const { data } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data } = supabase.auth.onAuthStateChange((event, session) => {
       if (session?.user.id) {
         setUserContext(session.user.id, session.user.email ?? null);
-      } else {
+      } else if (event === "SIGNED_OUT") {
+        // Only an explicit sign-out clears the identity. A null session from a
+        // failed token refresh (offline) must NOT bounce the user mid-session —
+        // the persisted identity stays put until they actually sign out.
         clearUserContext();
       }
       callback(session);

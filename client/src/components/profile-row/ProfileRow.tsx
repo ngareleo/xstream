@@ -34,6 +34,11 @@ interface ProfileRowProps {
   children?: ReactNode;
   scanning?: boolean;
   scanProgress?: { done: number; total: number } | null;
+  /** Live reachability from the availability subscription; overrides the
+   *  status baked into the query fragment so the pill reflects flips
+   *  without re-querying the library list. */
+  statusOverride?: "ONLINE" | "OFFLINE" | "UNKNOWN" | null;
+  lastSeenOverride?: string | null;
 }
 
 export const ProfileRow: FC<ProfileRowProps> = ({
@@ -43,9 +48,13 @@ export const ProfileRow: FC<ProfileRowProps> = ({
   children,
   scanning = false,
   scanProgress = null,
+  statusOverride = null,
+  lastSeenOverride = null,
 }) => {
   const data = useFragment(LIBRARY_FRAGMENT, library);
   const styles = useProfileRowStyles();
+  const status = statusOverride ?? data.status;
+  const lastSeenAt = lastSeenOverride ?? data.lastSeenAt;
   const total = data.stats.totalCount;
   const matched = data.stats.matchedCount;
   const unmatched = data.stats.unmatchedCount;
@@ -69,19 +78,15 @@ export const ProfileRow: FC<ProfileRowProps> = ({
             <span
               className={mergeClasses(
                 styles.statusPill,
-                data.status === "ONLINE"
+                status === "ONLINE"
                   ? styles.statusOnline
-                  : data.status === "OFFLINE"
+                  : status === "OFFLINE"
                     ? styles.statusOffline
                     : styles.statusUnknown
               )}
-              title={data.lastSeenAt ? `last seen ${data.lastSeenAt}` : "not yet probed"}
+              title={lastSeenAt ? `last seen ${lastSeenAt}` : "not yet probed"}
             >
-              {data.status === "ONLINE"
-                ? "● online"
-                : data.status === "OFFLINE"
-                  ? "○ offline"
-                  : "○ unknown"}
+              {status === "ONLINE" ? "● online" : status === "OFFLINE" ? "○ offline" : "○ unknown"}
             </span>
           </div>
         </div>

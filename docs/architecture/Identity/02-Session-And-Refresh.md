@@ -27,6 +27,21 @@ The Supabase SDK reads the session from localStorage at boot, so an offline user
 
 When connectivity returns, the SDK refreshes and subsequent fetches carry a fresh token. No explicit user action required.
 
+### Offline-restore resilience (`restoreSession` + `readPersistedIdentity`)
+
+`client/src/services/auth.ts` implements a two-level restore:
+
+1. `restoreSession()` calls Supabase `getSession()` first. If that returns a live session the user is in.
+2. **On failure** (expired token + failed network refresh, e.g. offline boot), a helper `readPersistedIdentity()` reads the Supabase session directly from localStorage under the `sb-*-auth-token` key, extracts the `access_token` JWT, and synthesises an identity from the JWT `sub` claim without contacting Supabase. The server's soft-fail on a stale signature means the user is signed in for browsing purposes until connectivity returns.
+
+`subscribeToAuthChanges` clears the stored identity **only on an explicit `SIGNED_OUT` event** — not on any null-session event. A failed offline token refresh therefore does not sign the user out mid-session. This matches the server's posture: xstream never gates local browse/playback on a live Supabase session; the JWT is used only to attribute telemetry.
+
+### Token TTL recommendation
+
+**Operators should raise the Supabase access-token TTL to ~30 days** (dashboard → Authentication → JWT expiry) for this offline-first desktop app. The code-side offline-restore path above provides resilience within the TTL window; a 30-day TTL ensures the stored token remains valid across typical offline durations.
+
+**Trade-off (accepted for alpha):** Long-lived JWTs cannot be revoked server-side — the server verifies only the RS256 signature, not a revocation list. Acceptable while xstream is telemetry-only and the JWT carries no authorisation. If server-side gating ships, the TTL should be shortened and the revocation risk revisited. See [`docs/architecture/Deployment/06-Supabase-Project-Setup.md`](../Deployment/06-Supabase-Project-Setup.md) for the dashboard step.
+
 ## JWKS unreachable at boot
 
 If `SUPABASE_JWKS_URL` is unreachable the first time the server tries to fetch (DNS failure, firewall, project decommissioned), the cache stays empty. Every request soft-fails to `user_id = None`. The server starts and serves; telemetry just lands unattributed until JWKS comes back.

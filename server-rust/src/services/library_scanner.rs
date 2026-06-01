@@ -439,6 +439,26 @@ async fn match_one_video(ctx: &AppContext, omdb: &OmdbClient, video_id: &str) {
         }
     };
 
+    if let Err(err) = persist_match(ctx, &video, result).await {
+        tracing::error!(
+            video_id = %video_id,
+            error = %err,
+            "auto_match: failed to upsert metadata row",
+        );
+    }
+}
+
+/// Persist an OMDb result for `video`: write the `video_metadata` row and
+/// (for movies) promote/merge the owning Film by imdb_id. Shared by the
+/// scanner's auto-match and the manual re-link mutation so both paths land
+/// identical state. The Film promote is what collapses two encodes of the
+/// same movie into one Film once both match OMDb. Film-link failures are
+/// non-fatal (logged); only the metadata upsert error propagates.
+async fn persist_match(
+    ctx: &AppContext,
+    video: &VideoRow,
+    result: OmdbResult,
+) -> Result<(), crate::error::DbError> {
     let cast_list = if result.actors.is_empty() {
         None
     } else {
@@ -446,9 +466,9 @@ async fn match_one_video(ctx: &AppContext, omdb: &OmdbClient, video_id: &str) {
             Ok(s) => Some(s),
             Err(err) => {
                 tracing::warn!(
-                    video_id = %video_id,
+                    video_id = %video.id,
                     error = %err,
-                    "auto_match: failed to serialise actors",
+                    "match: failed to serialise actors",
                 );
                 None
             }
@@ -456,46 +476,38 @@ async fn match_one_video(ctx: &AppContext, omdb: &OmdbClient, video_id: &str) {
     };
 
     let metadata = VideoMetadataRow {
-        video_id: video_id.to_string(),
+        video_id: video.id.clone(),
         imdb_id: result.imdb_id.clone(),
         title: result.title.clone(),
         year: result.year,
-        genre: result.genre,
-        director: result.director,
+        genre: result.genre.clone(),
+        director: result.director.clone(),
         cast_list,
         rating: result.imdb_rating,
-        plot: result.plot,
-        poster_url: result.poster_url,
+        plot: result.plot.clone(),
+        poster_url: result.poster_url.clone(),
         poster_local_path: None,
         matched_at: Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
     };
+    upsert_video_metadata(&ctx.db, &metadata)?;
 
-    if let Err(err) = upsert_video_metadata(&ctx.db, &metadata) {
-        tracing::error!(
-            video_id = %video_id,
-            error = %err,
-            "auto_match: failed to upsert metadata row",
-        );
-        return;
-    }
-
-    // Promote the Film: now that we have an imdb_id, either annotate the
-    // existing parsed-key-keyed Film with it, or merge into an
-    // already-existing imdb_id-keyed Film if one exists. This is what
-    // collapses two-encodes-of-the-same-movie into a single Film once
-    // both rows match OMDb.
-    if let Err(err) = link_video_film_to_imdb(
-        ctx,
-        video_id,
-        &result.imdb_id,
-        &result.title,
-        result.year.and_then(|y| i32::try_from(y).ok()),
-    ) {
-        tracing::warn!(
-            video_id = %video_id,
-            error = %err,
-            "auto_match: failed to link Film to imdb_id",
-        );
+    // Episode files carry metadata via `show_metadata`; only movies get a
+    // Film promote/merge. The scanner skips show videos upstream, so this
+    // guard is what keeps the manual re-link path correct for episodes.
+    if video.show_id.is_none() {
+        if let Err(err) = link_video_film_to_imdb(
+            ctx,
+            &video.id,
+            &result.imdb_id,
+            &result.title,
+            result.year.and_then(|y| i32::try_from(y).ok()),
+        ) {
+            tracing::warn!(
+                video_id = %video.id,
+                error = %err,
+                "match: failed to link Film to imdb_id",
+            );
+        }
     }
 
     info!(
@@ -504,6 +516,56 @@ async fn match_one_video(ctx: &AppContext, omdb: &OmdbClient, video_id: &str) {
         imdb_id = %result.imdb_id,
         "Video matched",
     );
+    Ok(())
+}
+
+/// Manual re-link entry point (GraphQL `matchVideo`): fetch the exact OMDb
+/// record for `imdb_id` and persist it for `video_id`. Returns the video
+/// row so the resolver can hand a fresh `Video` back to Relay; the enriched
+/// metadata and re-grouped Film are read back through the normal resolvers.
+pub(crate) async fn relink_video_to_imdb(
+    ctx: &AppContext,
+    video_id: &str,
+    imdb_id: &str,
+) -> Result<VideoRow, RelinkError> {
+    let video = get_video_by_id(&ctx.db, video_id)?.ok_or(RelinkError::VideoNotFound)?;
+    let omdb = ctx.omdb.clone().ok_or(RelinkError::OmdbDisabled)?;
+    let result = omdb
+        .fetch_by_imdb_id(imdb_id)
+        .await
+        .ok_or(RelinkError::OmdbLookupFailed)?;
+    persist_match(ctx, &video, result).await?;
+    Ok(video)
+}
+
+/// Failure modes of `relink_video_to_imdb`, surfaced to the GraphQL caller.
+#[derive(Debug)]
+pub(crate) enum RelinkError {
+    VideoNotFound,
+    OmdbDisabled,
+    OmdbLookupFailed,
+    Db(crate::error::DbError),
+}
+
+impl From<crate::error::DbError> for RelinkError {
+    fn from(e: crate::error::DbError) -> Self {
+        RelinkError::Db(e)
+    }
+}
+
+impl std::fmt::Display for RelinkError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            RelinkError::VideoNotFound => write!(f, "Video not found"),
+            RelinkError::OmdbDisabled => {
+                write!(f, "OMDb is not configured; cannot fetch metadata")
+            }
+            RelinkError::OmdbLookupFailed => {
+                write!(f, "OMDb returned no record for that IMDb id")
+            }
+            RelinkError::Db(e) => write!(f, "{e}"),
+        }
+    }
 }
 
 /// After OMDb match, ensure the video's Film carries the canonical imdb_id.
@@ -1428,6 +1490,100 @@ mod tests {
         let actors: Vec<String> =
             serde_json::from_str(&m.cast_list.unwrap_or_default()).expect("json");
         assert_eq!(actors, vec!["A".to_string(), "B".to_string()]);
+    }
+
+    #[tokio::test]
+    async fn relink_video_to_imdb_fetches_and_persists_metadata() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(wm_path("/"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "Response": "True",
+                "imdbID": "tt1856101",
+                "Title": "Blade Runner 2049",
+                "Year": "2017",
+                "Genre": "Sci-Fi",
+                "Director": "Denis Villeneuve",
+                "Actors": "Ryan Gosling, Harrison Ford",
+                "Plot": "A plot.",
+                "imdbRating": "8.0",
+                "Poster": "https://x/p.jpg"
+            })))
+            .mount(&server)
+            .await;
+
+        let dir = TempDir::new().expect("tempdir");
+        let ctx = ctx_with_mock_omdb(&server.uri(), dir.path().to_path_buf()).await;
+        let lib =
+            crate::db::create_library(&ctx.db, "L", "/no/where", "movies", &[]).expect("create");
+        upsert_video(&ctx.db, &fixture_video(&lib.id, "vid-R", "Some.Wrong.Name.mkv"))
+            .expect("upsert");
+
+        let video = relink_video_to_imdb(&ctx, "vid-R", "tt1856101")
+            .await
+            .expect("relink ok");
+        assert_eq!(video.id, "vid-R");
+
+        // Metadata row is populated from the exact-id OMDb record (not an
+        // empty stub) — the regression this fix targets.
+        let m = crate::db::get_metadata_by_video_id(&ctx.db, "vid-R")
+            .expect("query")
+            .expect("row");
+        assert_eq!(m.imdb_id, "tt1856101");
+        assert_eq!(m.title, "Blade Runner 2049");
+        assert_eq!(m.year, Some(2017));
+        assert_eq!(m.rating, Some(8.0));
+
+        // The owning Film is promoted/linked so the change is visible at the
+        // Film level too (collapses duplicate encodes by imdb_id).
+        let v = crate::db::get_video_by_id(&ctx.db, "vid-R")
+            .expect("query")
+            .expect("video");
+        assert!(v.film_id.is_some(), "video should be linked to a Film after relink");
+    }
+
+    #[tokio::test]
+    async fn relink_video_to_imdb_errors_when_omdb_disabled() {
+        let dir = TempDir::new().expect("tempdir");
+        let ctx = fresh_test_ctx(dir.path().to_path_buf()); // ctx.omdb is None
+        let lib =
+            crate::db::create_library(&ctx.db, "L", "/no/where", "movies", &[]).expect("create");
+        upsert_video(&ctx.db, &fixture_video(&lib.id, "vid-D", "X.mkv")).expect("upsert");
+        let err = relink_video_to_imdb(&ctx, "vid-D", "tt0000001")
+            .await
+            .expect_err("should error without OMDb");
+        assert!(matches!(err, RelinkError::OmdbDisabled));
+    }
+
+    #[tokio::test]
+    async fn relink_video_to_imdb_errors_on_omdb_miss() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "Response": "False",
+                "Error": "Incorrect IMDb ID."
+            })))
+            .mount(&server)
+            .await;
+        let dir = TempDir::new().expect("tempdir");
+        let ctx = ctx_with_mock_omdb(&server.uri(), dir.path().to_path_buf()).await;
+        let lib =
+            crate::db::create_library(&ctx.db, "L", "/no/where", "movies", &[]).expect("create");
+        upsert_video(&ctx.db, &fixture_video(&lib.id, "vid-M", "X.mkv")).expect("upsert");
+        let err = relink_video_to_imdb(&ctx, "vid-M", "tt0000001")
+            .await
+            .expect_err("should error on OMDb miss");
+        assert!(matches!(err, RelinkError::OmdbLookupFailed));
+    }
+
+    #[tokio::test]
+    async fn relink_video_to_imdb_errors_when_video_missing() {
+        let dir = TempDir::new().expect("tempdir");
+        let ctx = fresh_test_ctx(dir.path().to_path_buf());
+        let err = relink_video_to_imdb(&ctx, "does-not-exist", "tt0000001")
+            .await
+            .expect_err("should error on missing video");
+        assert!(matches!(err, RelinkError::VideoNotFound));
     }
 
     #[tokio::test]

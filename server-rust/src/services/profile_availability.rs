@@ -11,6 +11,7 @@ use tracing::{info, info_span, warn, Instrument};
 
 use crate::config::AppContext;
 use crate::db::{get_all_libraries, update_library_status, LibraryRow};
+use crate::services::availability_state::AvailabilityEvent;
 use crate::services::library_scanner::scan_one_library;
 
 pub const STATUS_ONLINE: &str = "online";
@@ -55,6 +56,14 @@ pub async fn probe_once(
                     .unwrap_or_else(|| lib.status.clone())
             };
             if prev != new_status {
+                // Push the flip to any live Profiles page before kicking the
+                // (potentially slow) catch-up scan, so the status pill updates
+                // immediately rather than after the scan returns.
+                ctx.availability_state.broadcast(AvailabilityEvent {
+                    library_id: lib.id.clone(),
+                    status: new_status.to_string(),
+                    last_seen_at: Some(now.clone()),
+                });
                 handle_transition(ctx, lib, &prev, new_status).await;
             }
         }

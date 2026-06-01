@@ -206,8 +206,10 @@ type Mutation {
 	deleteLibrary(id: ID!): Boolean!
 	updateLibrary(id: ID!, name: String, path: String, mediaType: MediaType, extensions: [String!]): Library!
 	"""
-	Step 1 stub — writes an empty metadata row keyed by IMDb ID. The full
-	OMDb fetch ships in Step 2 alongside the scanner.
+	Manual re-link: fetch the exact OMDb record for `imdb_id` and persist
+	it for the video — populating `video_metadata` and re-grouping the
+	owning Film so the change is visible at both the video and Film level.
+	See `services::library_scanner::relink_video_to_imdb`.
 	"""
 	matchVideo(videoId: ID!, imdbId: String!): Video!
 	unmatchVideo(videoId: ID!): Video!
@@ -322,6 +324,19 @@ enum PosterSize {
 	W400
 	W800
 	W3200
+}
+
+"""
+A single library's reachability, pushed over the
+`profileAvailabilityUpdated` subscription whenever the periodic probe
+sees a status flip — plus one frame per library as the initial seed on
+connect, so a freshly-mounted Profiles page reconciles immediately.
+`libraryId` is the same global `Library.id` the page already holds.
+"""
+type ProfileAvailability {
+	libraryId: ID!
+	status: ProfileStatus!
+	lastSeenAt: String
 }
 
 enum ProfileStatus {
@@ -458,6 +473,14 @@ type Subscription {
 	transcodeJobUpdated(jobId: ID!): TranscodeJob!
 	libraryScanUpdated: LibraryScanUpdate!
 	libraryScanProgress: LibraryScanProgress!
+	"""
+	Live library reachability. Seeds one frame per library from the
+	current DB status on connect (so the Profiles page reconciles its
+	pills immediately), then forwards each flip the periodic probe loop
+	detects. The Profiles query keeps returning cached status with no
+	blocking probe; this channel is the out-of-band freshening path.
+	"""
+	profileAvailabilityUpdated: ProfileAvailability!
 }
 
 type TranscodeJob implements Node {

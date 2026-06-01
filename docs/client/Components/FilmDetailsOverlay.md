@@ -17,9 +17,9 @@ Full-viewport film detail view with animated hero poster, metadata, and play/clo
 |---|---|---|
 | `film` | `FilmShape` | The selected film object. |
 | `copies` | `FilmCopyNode[] \| undefined` | Video copies for this film (from `film.copies`). Optional; not all films have multiple copies. |
-| `suggestions` | `Film[]` | Films for the "You might also like" carousel. |
+| `suggestions` | `OverlaySuggestion[]` | Films for the "You might also like" carousel. Each entry carries `{ filmId: string, video: VideoNode }` — the Film global ID **and** the Video node (poster, resolution, etc.). |
 | `onClose` | `() => void` | Back pill / Close button callback. |
-| `onSelectSuggestion` | `(id: string) => void` | Suggestion tile click (optional; defaults to `/player/:id`). |
+| `onSelectSuggestion` | `(filmId: string) => void` | Suggestion tile click — receives the **Film** id (not the Video id). |
 | `selectedCopyId` | `string \| undefined` | The user's selected copy ID (if multiple copies are available). Defaults to `film.bestCopy.id`. |
 | `onSelectCopy` | `(videoId: string) => void` | Callback when the user picks a different copy from the variant selector. |
 
@@ -109,6 +109,12 @@ The seasons-rail branch in this overlay is **deprecated**. TV-show overlays now 
 - Lets the user pick which encoding to play if multiple main-role videos exist.
 - See [`FilmVariants.md`](FilmVariants.md) for full spec.
 
+##### "Open in Profile" button
+
+- Rendered after the variant selector (and before Play CTA).
+- Mono 12px, `letterSpacing: 0.12em`, uppercase.
+- Click: `navigate("/profiles?film=${film.bestCopy.id}")` — opens the Profiles page with the detail pane pre-selected on this film. The Profiles page restores last-opened state from localStorage, so it lands on the correct film.
+
 ##### Play CTA (glass pill)
 
 - At rest: `backgroundColor: rgba(255,255,255,0.12)`, `borderRadius: 999px`, `backdropFilter: blur(20px) saturate(180%)`, beveled-light inset borders.
@@ -144,7 +150,9 @@ The seasons-rail branch in this overlay is **deprecated**. TV-show overlays now 
 - Rendered only when `suggestions.length > 0`.
 - `paddingTop: 40px`, `paddingBottom: 60px`, `backgroundColor: tokens.colorBg0`.
 - `<PosterRow title="You might also like">` wraps `<FilmTile>` cards.
-- Click handler on tile: calls `onSelectSuggestion(id)` if provided (and scrolls overlay to top), else navigates to `/player/{id}`.
+- Each `OverlaySuggestion` carries `{ filmId, video }`. Click handler: calls `onSelectSuggestion(filmId)` (passing the **Film** id) and scrolls overlay to top. The Film id routes to `?film=<filmId>` in `HomePageContent`, opening the correct overlay entry.
+
+**Bug fix (shipped in `fix/seven-bugs-auth-profiles-detail`):** Suggestions previously carried only the `bestCopy` Video id, and `handleSuggestionClick` used that Video id as the Film id in the `rows.find` lookup. Because Film ids and Video ids are different global IDs, the lookup always missed — the overlay replaced itself with the home grid instead of showing the selected suggestion's details. `pickSuggestions` now returns `{ filmId, video }` pairs and `handleSuggestionClick` receives the Film id directly.
 
 ## Behaviour
 

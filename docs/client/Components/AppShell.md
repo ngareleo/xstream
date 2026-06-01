@@ -29,10 +29,11 @@ See [`AppHeader.md`](AppHeader.md). Positioned `absolute inset: 0`, `zIndex: 10`
 
 ## Behaviour
 
-- Composition only — renders `<AppHeader>` then `<main className={s.main}>{children}</main>`.
+- Renders `<ToastProvider>` wrapping `<AppHeader>` and `<main className={s.main}>{children}</main>`.
 - `<AppHeader>` and `<main>` both sit at `inset: 0`; the header is on top via `zIndex: 10`.
 - Each page inside `<main>` is responsible for clearing the header by adding `paddingTop: tokens.headerHeight` (or `calc(${tokens.headerHeight} + N)`) to its outermost container.
 - The header's `backdropFilter: blur(20px) saturate(1.6)` blurs the actual page content at y=0 (e.g. the Library hero poster).
+- `<ToastProvider>` is a Nova interceptor listening for `"toast" / "Requested"` events from anywhere in the subtree. It maintains a stacked viewport of auto-dismissing toast notifications, rendered `position: fixed`, bottom-right. See [`Toast.md`](Toast.md) for the full spec.
 
 ## Notes
 

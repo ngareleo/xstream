@@ -177,7 +177,14 @@ impl From<&ScanSnapshot> for LibraryScanProgress {
     fn from(snap: &ScanSnapshot) -> Self {
         Self {
             scanning: snap.scanning,
-            library_id: snap.library_id.clone().map(async_graphql::ID),
+            // The scanner reports the raw DB id, but the client matches this
+            // against the global `Library.id` from the query. Encode it the
+            // same way every other id crosses the GraphQL boundary, else the
+            // per-row scan spinner never finds its library.
+            library_id: snap
+                .library_id
+                .as_deref()
+                .map(|id| async_graphql::ID(crate::relay::to_global_id("Library", id))),
             done: snap.done.map(|n| n as i32),
             total: snap.total.map(|n| n as i32),
             phase: snap.phase.clone(),
@@ -355,7 +362,11 @@ mod tests {
         };
         let p: LibraryScanProgress = (&snap).into();
         assert!(p.scanning);
-        assert_eq!(p.library_id.as_ref().map(|id| id.as_str()), Some("lib-x"));
+        // Emitted as the global Library id so it matches the client's query.
+        assert_eq!(
+            p.library_id.as_ref().map(|id| id.as_str()),
+            Some(crate::relay::to_global_id("Library", "lib-x").as_str())
+        );
         assert_eq!(p.done, Some(3));
         assert_eq!(p.total, Some(7));
         assert_eq!(p.phase.as_deref(), Some("fetching_omdb"));

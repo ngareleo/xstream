@@ -91,6 +91,12 @@ Outstanding work that hasn't yet shipped is tracked separately in
 | [SettingsToggle](SettingsToggle.md) | `client/src/components/settings-toggle/` |
 | [TraceHistoryTab](TraceHistoryTab.md) | `client/src/components/trace-history-tab/` |
 
+### Notifications
+
+| Spec | Source |
+|---|---|
+| [Toast](Toast.md) | `client/src/components/toast/` |
+
 ### Loading / progress / navigation
 
 | Spec | Source |

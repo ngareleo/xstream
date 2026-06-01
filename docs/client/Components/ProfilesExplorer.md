@@ -21,6 +21,7 @@ the page. Delegates selection callbacks to parent.
 | `selectedFilmId` | `string \| null` | Currently highlighted film for detail panel. |
 | `selectedLibraryId` | `string \| undefined` | Currently highlighted profile. |
 | `scanByLibrary` | `Map<string, LibraryScanSnapshot>` | Real-time scan progress per profile. |
+| `statusByLibrary` | `Map<string, ProfileAvailability>` | Real-time availability from the `profileAvailabilityUpdated` subscription, keyed by global Library ID. Passed through to each `ProfileRow` as `statusOverride`/`lastSeenOverride`. |
 | `onOpenFilm` | `(id: string) => void` | Film selection callback. |
 | `onEditFilm` | `(id: string) => void` | Film detail edit trigger. |
 
@@ -80,6 +81,11 @@ the page. Delegates selection callbacks to parent.
 - Receives `scanByLibrary: Map<string, LibraryScanSnapshot>` from parent.
 - Passes scan state to each `ProfileRow` via `scanning` and `scanProgress` props.
 - Does not render breadcrumb or scanning badge; the page owns those.
+
+### Live availability
+
+- Receives `statusByLibrary: Map<string, ProfileAvailability>` from parent (`ProfilesPageContent`), which drives it from `useProfileAvailabilitySubscription`.
+- For each `ProfileRow`, looks up the library's global ID in `statusByLibrary` and passes `statusOverride`/`lastSeenOverride` if found. When the subscription fires a flip, only the affected `ProfileRow` pill re-renders.
 
 ### Rendering
 

@@ -2,6 +2,7 @@
 
 pub mod active_job;
 pub mod auth;
+pub mod availability_state;
 pub mod cache_index;
 pub mod chunker;
 pub mod ffmpeg_file;

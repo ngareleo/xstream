@@ -111,7 +111,7 @@ When `film.id` changes while in edit mode, search input resets and selection cle
 
 - `onClose` triggered by close button. Parent clears `?film` URL param.
 - `onEditChange(editing: boolean)` called when entering or exiting edit mode.
-- `onSave(payload)` called when Save button clicked (wired to GraphQL mutation in production).
+- `onSave(payload)` called when Link button clicked — fires the `matchVideo` GraphQL mutation via `DetailPaneEdit`. On success, shows a **success toast** via `useToast` (e.g. "Linked to <title>"). Relay automatically merges the enriched Video into the cache so the pane updates without a refetch.
 - Body scrolls when content overflows (view mode only).
 - ESC key calls `onCancel()` in edit mode (exits without saving).
 

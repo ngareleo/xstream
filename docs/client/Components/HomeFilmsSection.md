@@ -81,8 +81,7 @@ clears all state.
 
 - `?film=<id>` URL param drives the `FilmDetailsOverlay`. Set by clicking
   any tile, cleared by the overlay's close action.
-- `pickSuggestions(selectedRow, rows)` produces up to 8 related films
-  ranked by director/genre/resolution match.
+- `pickSuggestions(selectedRow, rows)` produces up to 8 related films ranked by director/genre/resolution match and returns `OverlaySuggestion[]` — each entry is `{ filmId: string, video: VideoNode }`. The `filmId` is the Film's global ID (used to key the `?film=` param); `video` carries the poster and metadata for the carousel tile. Previously `pickSuggestions` returned bare video refs, causing suggestion clicks to open the home grid instead of the detail overlay (the Video id failed the Film-id-keyed `rows.find` lookup — fixed in `fix/seven-bugs-auth-profiles-detail`).
 
 ### Filter derivation
 

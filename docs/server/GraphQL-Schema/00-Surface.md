@@ -485,6 +485,17 @@ type LibraryScanUpdate {
   scanning: Boolean!
 }
 
+"""
+Real-time library reachability frame. Emitted by the profileAvailabilityUpdated
+subscription. libraryId is a globally-encoded Library ID (matches Library.id in
+query results). status/lastSeenAt mirror the corresponding Library fields.
+"""
+type ProfileAvailability {
+  libraryId: ID!
+  status: ProfileStatus!
+  lastSeenAt: String
+}
+
 type Subscription {
   transcodeJobUpdated(jobId: ID!): TranscodeJob!
   """
@@ -493,6 +504,13 @@ type Subscription {
   scanning=false → scan completed; re-query libraries for updated data
   """
   libraryScanUpdated: LibraryScanUpdate!
+  """
+  Seeds one frame per library from current DB status on connect, then streams
+  frames on every availability flip (online↔offline↔unknown). libraryId is
+  globally-encoded — safe to compare against Library.id from a query.
+  Implemented via AvailabilityState broadcast in services/availability_state.rs.
+  """
+  profileAvailabilityUpdated: ProfileAvailability!
 }
 ```
 
@@ -546,6 +564,8 @@ The `transcodeJobUpdated` subscription fires every time a new segment is written
 
 The `libraryScanUpdated` subscription emits the current scan state immediately on connect (so clients joining mid-scan are informed), then on every subsequent state change. When `scanning` transitions to `false`, clients should re-query the `libraries` field to pick up newly indexed videos. The server scans continuously on a timer (`scanIntervalMs`, default 30 s) — clients do not need to trigger scans manually.
 
+**Bug fix (shipped in `fix/seven-bugs-auth-profiles-detail`):** `LibraryScanProgress.library_id` was previously emitted as a raw DB integer. It is now **globally encoded** via `to_global_id("Library", …)` in `services/scan_state.rs` so the client's subscription can match it against the global `Library.id` from a query. Prior to this fix the per-row scan spinner never matched its library and never animated.
+
 ---
 
 ## Adding a New Type
@@ -568,5 +588,17 @@ See `StartTranscodeResult` in `server-rust/src/graphql/types/transcode_job.rs` a
 - `chunker::start_transcode_job` (in `server-rust/src/services/chunker.rs`) returns `StartJobResult` — a Rust enum with `Ok(ActiveJob)` and `Error { code: PlaybackErrorCode, message: String, retryable: bool, retry_after_ms: Option<u64> }` variants.
 - The resolver maps `Ok` to `TranscodeJob` and `Error` to `PlaybackError` per the `StartTranscodeResult` async-graphql `#[derive(Union)]`. The async-graphql `ErrorLogger` extension catches any genuinely unexpected error and surfaces it as `INTERNAL` with the request `TraceId` attached — see `server-rust/src/graphql/error_logger.rs`.
 - This is the **target pattern for all playback-path mutations** — `update_library`, `match_video`, `unmatch_video`, `update_watch_progress`, and disk-full paths inside the chunker should adopt the same `*Result` union shape rather than throwing.
+
+### `matchVideo` — now performs a real OMDb fetch + Film promote
+
+Prior to `fix/seven-bugs-auth-profiles-detail`, `matchVideo` was a stub that wrote an empty `video_metadata` row (all fields `NULL`) and never re-grouped the Film, so re-linking did nothing visible even across refresh.
+
+The mutation now delegates to `services::library_scanner::relink_video_to_imdb(ctx, video_id, imdb_id)`, which:
+
+1. Calls `OmdbClient::fetch_by_imdb_id` (`?i=` lookup) to retrieve full metadata.
+2. Calls the shared `persist_match(ctx, &VideoRow, OmdbResult)` helper (extracted from `match_one_video`) — writes metadata + links/merges the Film by `imdb_id` (the standard dedup contract, guarded so episodes skip the Film link).
+3. Returns a `RelinkError` enum: `VideoNotFound | OmdbDisabled | OmdbLookupFailed | Db` for typed error surfacing.
+
+After a successful re-link, Relay automatically merges the enriched `Video` into the cache so `FilmDetailsOverlay` / `DetailPane` reflect the new metadata without a refetch. The client shows a success toast via `useToast`. Four server tests cover `relink_video_to_imdb_*`.
 
 See invariant #11 in [`docs/code-style/Invariants/00-Never-Violate.md`](../../code-style/Invariants/00-Never-Violate.md) for the `error_code`-before-notify-waiters requirement.
