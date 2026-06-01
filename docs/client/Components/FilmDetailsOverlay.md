@@ -48,18 +48,23 @@ Full-viewport film detail view with animated hero poster, metadata, and play/clo
   - Vertical: `linear-gradient(180deg, rgba(5,7,6,0.45) 0%, transparent 25%, transparent 38%, rgba(5,7,6,0.85) 72%, ${tokens.colorBg0} 100%)`.
   - Horizontal: `linear-gradient(90deg, rgba(5,7,6,0.5) 0%, transparent 35%)`.
 
-### Back pill (top-left)
-
-- `position: absolute`, `top: 24px`, `left: 28px`, `zIndex: 4`.
-- `<IconBack>` + `<span>Back</span>`, inline-flex, `columnGap: 8px`.
-- `paddingTop/Bottom: 8px`, `paddingLeft: 12px`, `paddingRight: 16px`, `borderRadius: 999px`.
-- `backgroundColor: rgba(0,0,0,0.45)`, 1px solid `colorBorder`, Mono 11px uppercase.
-- Hover: `backgroundColor: rgba(0,0,0,0.7)`, border + text → `colorGreen`.
-- Calls `onClose()`.
-
-### Close button (top-right)
+### Top actions container (`.topActions`)
 
 - `position: absolute`, `top: 24px`, `right: 28px`, `zIndex: 4`.
+- Flex row, `gap: 12px`, `alignItems: center`.
+- Contains the "Open in Profile" secondary CTA and the Close button (both are flex children, no individual positioning).
+
+#### "Open in Profile" button
+
+- **Secondary CTA** (`.secondaryCta`) — restrained mono text-link with a folder icon.
+  - `<IconFolder>` (12×12) + `<span>"Open in Profile"</span>` (Mono 11px, uppercase, underlined).
+  - At rest: text `rgba(255,255,255,0.75)`, icon `rgba(255,255,255,0.55)`, underline `rgba(255,255,255,0.25)`.
+  - Hover: text `#fff`, icon `colorGreen`, underline `colorGreen`.
+  - No background or border; transparent background, inline-flex layout with 8px gap.
+- Click: `navigate("/profiles?film=${film.bestCopy.id}")` — opens the Profiles page with the detail pane pre-selected on this film. The Profiles page restores last-opened state from localStorage, so it lands on the correct film.
+
+#### Close button
+
 - 40×40, inline-flex centred, `border-radius: 50%`.
 - `backgroundColor: rgba(0,0,0,0.45)`, 1px solid `colorBorder`.
 - Contains `<IconClose>`. Hover: `backgroundColor: rgba(0,0,0,0.7)`, border → `colorGreen`.
@@ -94,31 +99,30 @@ Full-viewport film detail view with animated hero poster, metadata, and play/clo
 - 15px, `lineHeight: 1.55`, `color: colorTextDim`, `maxWidth: 640px`.
 - Rendered only when `film.plot` is truthy.
 
-#### Seasons rail (legacy — TV branch deprecated)
+#### Copies rail (FilmVariants, conditional)
 
-The seasons-rail branch in this overlay is **deprecated**. TV-show overlays now live in [`ShowDetailsOverlay`](ShowDetailsOverlay.md). This component still reads a `Video.show.seasons` chain to support the rare case where a movie's video has a show coordinate (it renders empty on null), but the routing-level decision between film vs show happens in `HomePageContent`.
+- **Rendered only when `!isSeries && variantOptions.length > 1`.**
+- Mounted as `<aside className={seasonsRail} aria-label={copiesAriaLabel}>` with a `railBody` wrapper.
+- Displays the copy picker (FilmVariants component) allowing the user to select which encoding to play if multiple main-role videos exist.
+- Uses the same `seasonsRail` styling as the seasons explorer to maintain visual consistency.
+- See [`FilmVariants.md`](FilmVariants.md) for full spec.
+
+#### Seasons rail (TV series, conditional)
+
+- **Rendered only when `isSeries && seasonCount > 0`.**
+- Mounted as `<aside className={seasonsRail} aria-label={seasonsAriaLabel}>` with header and scroll container.
+- Contains the seasons explorer (SeasonsPanel) and episode availability stats.
+- Uses the same `seasonsRail` styling as the copies picker to maintain visual consistency.
+
+#### Content narrowing via `hasRail`
+
+- When **either** rail is present (`(isSeries && seasonCount > 0) || (!isSeries && variantOptions.length > 1)`), the main content column applies the `contentWithRail` class to reduce max-width and allow space for the rail.
+- This ensures the content adapts the same way whether showing seasons (TV) or variant copies (movies with multiple encodings).
 
 #### Actions row
 
 - Flex row, `columnGap: 12px`, `alignItems: center`, `marginTop: 8px`.
-
-##### Variant selector (FilmVariants component, conditional)
-
-- **Rendered only when `copies && copies.length > 1`.**
-- Mounted as `<FilmVariants copies={copies} selectedCopyId={selectedCopyId} onSelectCopy={onSelectCopy} />`.
-- Displays a dropdown button showing the current copy's resolution (e.g., "4K", "1080p").
-- Lets the user pick which encoding to play if multiple main-role videos exist.
-- See [`FilmVariants.md`](FilmVariants.md) for full spec.
-
-##### "Open in Profile" button
-
-- Rendered after the variant selector (and before Play CTA).
-- **Secondary CTA** (`.secondaryCta`) — restrained mono text-link with a folder icon.
-  - `<IconFolder>` (12×12) + `<span>"Open in Profile"</span>` (Mono 11px, uppercase, underlined).
-  - At rest: text `rgba(255,255,255,0.75)`, icon `rgba(255,255,255,0.55)`, underline `rgba(255,255,255,0.25)`.
-  - Hover: text `#fff`, icon `colorGreen`, underline `colorGreen`.
-  - No background or border; transparent background, inline-flex layout with 8px gap.
-- Click: `navigate("/profiles?film=${film.bestCopy.id}")` — opens the Profiles page with the detail pane pre-selected on this film. The Profiles page restores last-opened state from localStorage, so it lands on the correct film.
+- Now holds only the Play CTA and the filename (variant selector moved to right-side rail).
 
 ##### Play CTA (glass pill)
 
@@ -211,6 +215,10 @@ The `library { status }` field uses the existing `Video.library: Library!` resol
 
 FilmDetailsOverlay.strings.ts exports:
 
+- `openInProfile` — "Open in Profile", aria-label for the "Open in Profile" button in the top actions cluster.
+- `closeAriaLabel` — "Close", aria-label for the close button.
+- `copiesAriaLabel` — aria-label for the copies rail (when multiple encodings are available).
+- `seasonsAriaLabel` — aria-label for the seasons rail (TV series only).
 - `offlineChip` — "Offline", displayed in the chips row when a library is offline.
 - `unavailableToast` — "Unavailable — this title's library is offline.", shown as a toast when clicking Play on an offline video.
 
