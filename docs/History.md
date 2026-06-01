@@ -49,7 +49,16 @@ The PR deleted legacy local env tooling (`.env.example`, `scripts/check-env.sh`,
 PR #71 migrated xstream's dev secrets from a gitignored `.env` file to Doppler's centralized secret management, replacing inline bash scripts with cross-platform Bun/TS launchers. The docs previously referenced `.env` directly for local setup and now needed to reflect that secrets are injected by `doppler run --` rather than sourced from a repo file. Four files were updated: (1) `03-Config-And-Backends.md` gained a note that dev Seq setup requires Doppler; (2) `03-Build-Variants.md` documents that `XSTREAM_VARIANT` is supplied by Doppler in dev; (3) `06-Supabase-Project-Setup.md` redirects developers to add credentials to Doppler instead of a local `.env`; (4) `04-Axiom-Production-Backend.md` updates the token-storage table to note dev tokens live in Doppler `dev` config, not `.env`. The changes are purely informational — no schema, no arch change — but necessary so operators following the setup guides find the right injection surface.
 
 **Files:** `docs/architecture/Observability/03-Config-And-Backends.md`, `docs/architecture/Deployment/03-Build-Variants.md`, `docs/architecture/Deployment/04-Axiom-Production-Backend.md`, `docs/architecture/Deployment/06-Supabase-Project-Setup.md`
-**Related Commit.md entry:** `9be57f3`
+**Related Commit.md entry:** `972b597`
+
+---
+
+## 2026-05-28 — Hardware acceleration: graceful degradation on unimplemented platforms
+
+The `hw_accel.rs` module's `resolve_hw_accel()` function was updated to handle the macOS and Windows stub paths gracefully. Previously, both platforms returned a fatal `PlatformNotImplemented` error on startup, preventing the app from running at all. Now, when `mode = Auto` on macOS (darwin) or Windows (win32), the function emits a `tracing::warn!()` with context fields (`os` and `hint`) and returns `Ok(HwAccelConfig::Software)` — the app starts normally and encodes in software. This unblocks user testing on macOS for the first time (eliminating the fatal startup crash), while preserving the distinction between two failure modes: (1) **platform not implemented** — a graceful degradation signaling "this OS isn't supported yet, but we'll fall back"; (2) **VAAPI probe failure on Linux** — a fatal misconfiguration that requires user action (`HW_ACCEL=off` or fixing driver/permissions). The distinction is critical: Linux's VAAPI probe is a signal of environment misconfiguration, not platform immaturity. Docs updated: `00-Overview.md` gained a "Fallback behavior by platform" section explaining the per-OS behavior and the distinction between fatal vs graceful; `SUMMARY.md` video-layer row was tightened to "macOS/Windows stubs gracefully degrade" instead of naming specific codecs that don't yet exist.
+
+**Files:** `docs/server/Hardware-Acceleration/00-Overview.md`, `docs/SUMMARY.md`
+**Related Commit.md entry:** (current HEAD)
 
 ---
 

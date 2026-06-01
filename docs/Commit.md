@@ -22,10 +22,17 @@ Entry shape (each entry ends with the divider line described above):
 
 ---
 
-## 9be57f3 — 2026-05-28
+## 972b597 — 2026-05-28
 
 **Files:** `docs/architecture/Observability/03-Config-And-Backends.md`, `docs/architecture/Deployment/03-Build-Variants.md`, `docs/architecture/Deployment/04-Axiom-Production-Backend.md`, `docs/architecture/Deployment/06-Supabase-Project-Setup.md`
 **Why:** Curator sync for PR #71 (chore/doppler-secrets-migration): dev secrets moved from `.env` to Doppler. Updated four docs to reference Doppler injection instead of `.env` files: Seq setup, Build Variants, Supabase setup, and Axiom dev-token storage.
+
+---
+
+## (current HEAD) — 2026-05-28
+
+**Files:** `server-rust/src/services/hw_accel.rs`, `docs/server/Hardware-Acceleration/00-Overview.md`, `docs/SUMMARY.md`
+**Why:** Code + curation for `hw_accel.rs`: `resolve_hw_accel()` no longer treats stubbed platforms (macOS/Windows) as fatal. `mode = Auto` now emits a warn and returns `Ok(Software)` instead of `Err(PlatformNotImplemented)`. Updated HW-accel docs to distinguish graceful degradation (darwin/win32 stubs) from fatal probe failure (Linux VAAPI probe). SUMMARY.md stack table updated.
 
 ---
 

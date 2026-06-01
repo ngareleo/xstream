@@ -71,13 +71,8 @@ pub enum HwAccelError {
 
 pub type HwAccelResult<T> = Result<T, HwAccelError>;
 
-/// Resolve the HW accel config for this host. Called once at startup.
-///
-/// `mode = Off` always returns `Software` immediately (no probe, no I/O).
-/// `mode = Auto` runs a 0.1 s synthetic encode through `h264_vaapi` on
-/// Linux; success → `Vaapi { device }`, failure → typed error so `main()`
-/// can decide policy (today: fatal exit; future Tauri build per
-/// `Plan/Open-Questions.md §4` may degrade to `Software` with a toast).
+/// Resolves the HW accel config for this host (called once at startup).
+/// See docs/server/Hardware-Acceleration/00-Overview.md §"Fallback behavior by platform".
 pub async fn resolve_hw_accel(ffmpeg: &Path, mode: HwAccelMode) -> HwAccelResult<HwAccelConfig> {
     if mode == HwAccelMode::Off {
         return Ok(HwAccelConfig::Software);
@@ -91,17 +86,23 @@ pub async fn resolve_hw_accel(ffmpeg: &Path, mode: HwAccelMode) -> HwAccelResult
     }
 
     if cfg!(target_os = "macos") {
-        return Err(HwAccelError::PlatformNotImplemented {
-            os: "darwin",
-            hint: "videotoolbox",
-        });
+        tracing::warn!(
+            os = "darwin",
+            hint = "videotoolbox",
+            "hardware acceleration not yet implemented on this platform; \
+             falling back to software encode"
+        );
+        return Ok(HwAccelConfig::Software);
     }
 
     if cfg!(target_os = "windows") {
-        return Err(HwAccelError::PlatformNotImplemented {
-            os: "win32",
-            hint: "qsv/nvenc/amf",
-        });
+        tracing::warn!(
+            os = "win32",
+            hint = "qsv/nvenc/amf",
+            "hardware acceleration not yet implemented on this platform; \
+             falling back to software encode"
+        );
+        return Ok(HwAccelConfig::Software);
     }
 
     Err(HwAccelError::PlatformNotImplemented {
@@ -165,12 +166,8 @@ async fn probe_vaapi(ffmpeg: &Path, device: &str) -> HwAccelResult<()> {
     })
 }
 
-//
-// The full VAAPI probe needs a real ffmpeg binary AND a real `/dev/dri`
-// device, so it can't run in CI. We cover the deterministic surface:
-// mode parsing, the early-Software path, and the not-implemented branches
-// for non-Linux hosts. Real-binary VAAPI parity is asserted in the
-// integration tests for chunker/encode (gated on XSTREAM_TEST_MEDIA_DIR).
+// VAAPI's real probe needs a GPU, so it can't run in CI — real-binary parity
+// lives in the chunker/encode integration tests (XSTREAM_TEST_MEDIA_DIR-gated).
 
 #[cfg(test)]
 mod tests {
@@ -208,6 +205,42 @@ mod tests {
             matches!(err, HwAccelError::ProbeSpawn { .. }),
             "expected ProbeSpawn, got {err:?}"
         );
+    }
+
+    #[test]
+    fn auto_on_macos_falls_back_to_software() {
+        if !cfg!(target_os = "macos") {
+            return;
+        }
+        // darwin has no HW path yet — Auto must degrade to Software without
+        // spawning ffmpeg, so a bogus binary path is never dereferenced.
+        let dummy = Path::new("/does/not/exist/ffmpeg");
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("runtime");
+        let cfg = rt
+            .block_on(resolve_hw_accel(dummy, HwAccelMode::Auto))
+            .expect("macOS Auto must fall back to Software, not error");
+        assert_eq!(cfg, HwAccelConfig::Software);
+    }
+
+    #[test]
+    fn auto_on_windows_falls_back_to_software() {
+        if !cfg!(target_os = "windows") {
+            return;
+        }
+        // win32 HW paths (qsv/nvenc/amf) are stubbed — Auto degrades to Software
+        // without spawning ffmpeg.
+        let dummy = Path::new("/does/not/exist/ffmpeg");
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("runtime");
+        let cfg = rt
+            .block_on(resolve_hw_accel(dummy, HwAccelMode::Auto))
+            .expect("Windows Auto must fall back to Software, not error");
+        assert_eq!(cfg, HwAccelConfig::Software);
     }
 
     #[test]
