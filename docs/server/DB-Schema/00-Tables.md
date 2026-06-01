@@ -270,6 +270,37 @@ One row per film the user has started watching. Tracks playback progress (curren
 
 ---
 
+### `sessions`
+
+Local session rows — the revocation ledger for tokens minted by
+`services::local_session::mint`. One row per issued session. The row is never deleted;
+`revoked_at` is set on logout.
+
+See [`docs/architecture/Identity/02-Session-And-Refresh.md`](../../architecture/Identity/02-Session-And-Refresh.md) for the full local-session lifecycle.
+
+| Column | Type | Constraints | Description |
+|---|---|---|---|
+| `jti` | TEXT | PRIMARY KEY | UUIDv4 — the JWT ID claim; used as the revocation key. |
+| `user_id` | TEXT | NOT NULL | Supabase user UUID (`sub` claim from the original Supabase token). |
+| `email` | TEXT | nullable | User email at issuance time, sourced from the Supabase JWT `email` claim. |
+| `issued_at` | TEXT | NOT NULL | ISO-8601 timestamp (milliseconds) when the token was minted. |
+| `expires_at` | TEXT | NOT NULL | ISO-8601 timestamp (milliseconds) of the absolute expiry (~30 days after `issued_at`). |
+| `revoked_at` | TEXT | nullable | ISO-8601 timestamp set by `POST /auth/logout`. Null = still active. |
+
+**Index:** `idx_sessions_user` on `user_id`.
+
+**Revocation semantics:** `db::is_session_active(jti)` returns true only when a row exists
+and `revoked_at IS NULL`. Token `exp` is enforced separately by the HS256 signature
+verification in `services::local_session::verify` — an expired token never reaches the DB
+lookup. Neither check alone is sufficient; both must pass.
+
+**`wipe_db` safety:** `user_settings` (which holds `localSessionSecret`) is preserved across
+DB wipes. `sessions` is recreated empty on wipe — any outstanding local tokens become
+unauthenticated after a wipe (the secret is still valid, but the matching `jti` rows are gone
+so `is_session_active` returns false). Users must re-sign-in after wiping the DB.
+
+---
+
 ## Design Decisions
 
 **Why SHA-1 for IDs?** Deterministic, collision-resistant for our purposes, and allows deduplication without a sequence generator. Library and video IDs are stable across restarts as long as the path doesn't change.

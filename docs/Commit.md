@@ -15,6 +15,13 @@ Entry shape (each entry ends with the divider line described above):
 
 <!-- ENTRIES BELOW — newest first; each ends with a bare `---` line. The architect's next invocation will treat the no-entries state as the first-run case and prepend a bootstrap entry at HEAD. -->
 
+## 972b597 — 2026-06-01 (local-session auth model)
+
+**Files:** `docs/architecture/Identity/00-System-Overview.md`, `docs/architecture/Identity/01-Sign-In-Flow.md`, `docs/architecture/Identity/02-Session-And-Refresh.md`, `docs/architecture/Identity/03-Telemetry-Correlation.md`, `docs/architecture/Deployment/06-Supabase-Project-Setup.md`, `docs/server/DB-Schema/00-Tables.md`
+**Why:** Auth model pivot from Supabase-JWT-per-request to per-install HS256 local session tokens (PR `fix/seven-bugs-auth-profiles-detail`): mint via POST /auth/session, offline validation, revocable via sessions table, `user.id` now sourced from local token `sub`; Supabase JWT TTL note in Deployment/06 replaced (short TTL is now fine).
+
+---
+
 ## 972b597 — 2026-06-01 (FilmDetailsOverlay availability spec)
 
 **Files:** `docs/client/Components/FilmDetailsOverlay.md`
