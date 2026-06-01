@@ -174,6 +174,10 @@ Full-viewport film detail view with animated hero poster, metadata, and play/clo
 
 ## Behaviour
 
+### Remount on film swap
+
+The overlay is **keyed by `filmId`** in HomeFilmsSection's render: `<FilmDetailsOverlay key={filmId} ... />`. This forces React to remount a fresh overlay instance when the user selects a different film (e.g., clicks a suggestion, triggering a `?film=<newId>` URL change). The key ensures all per-film UI state — notably `selectedCopyId` (seeded by `useState(data.id)` on mount) and SeasonsPanel internal selections for TV shows — resets to the initial values for the new film. Without the key, React would reuse the overlay DOM, the new film data would flow in via props, but the stale local state would remain, causing Play to navigate to the previously-selected copy of the *old* film instead of the newly-viewed one. The key is therefore a load-bearing structural invariant.
+
 ### Availability check
 
 The overlay reads `library.status` from the selected copy's owning library (resolved via the `Video.library` field; no schema change). A film/episode whose library is `OFFLINE` is unavailable:

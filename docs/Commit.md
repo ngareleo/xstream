@@ -15,6 +15,13 @@ Entry shape (each entry ends with the divider line described above):
 
 <!-- ENTRIES BELOW — newest first; each ends with a bare `---` line. The architect's next invocation will treat the no-entries state as the first-run case and prepend a bootstrap entry at HEAD. -->
 
+## 972b597 — 2026-06-01 (FilmDetailsOverlay key + remount invariant)
+
+**Files:** `docs/client/Components/FilmDetailsOverlay.md`, `docs/client/Components/HomeFilmsSection.md`
+**Why:** Spec update for PR `fix/seven-bugs-auth-profiles-detail`: documented the `key={filmId}` on `<FilmDetailsOverlay>` render in HomeFilmsSection as a load-bearing invariant. The key forces remount on film swap, resetting per-film local state (`selectedCopyId`, SeasonsPanel selections). Without it, suggestion clicks would navigate to the previous film. Added section to both specs clarifying the pattern and its purpose.
+
+---
+
 ## 972b597 — 2026-06-01 (wipe feedback: toast-based results instead of inline status)
 
 **Files:** `docs/client/Components/DangerTab.md`

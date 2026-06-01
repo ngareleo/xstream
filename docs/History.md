@@ -35,6 +35,15 @@ Entry shape (the entry ends with a single line containing exactly three hyphens 
 
 <!-- ENTRIES BELOW — newest first; each ends with a bare three-hyphen divider line. -->
 
+## 2026-06-01 — FilmDetailsOverlay key invariant documentation — remount pattern prevents stale state on suggestion click
+
+PR `fix/seven-bugs-auth-profiles-detail` added `key={filmId}` to the `<FilmDetailsOverlay>` render in HomeFilmsSection to fix a subtle state-reuse bug. When a user clicked a "You might also like" suggestion, the URL param changed (`?film=<newId>`), but React reused the same overlay DOM instance instead of remounting it. The local state (`selectedCopyId`, seeded on mount by `useState(data.id)`) remained pointing at the *previous* film's ID, so the Play button navigated to the wrong movie. The key forces a fresh remount when `filmId` changes, resetting all per-film UI state to initial values tied to the new film. The pattern is a load-bearing invariant — removing it (or forgetting it during refactors) silently reintroduces the bug with no console warning. Specs updated in both HomeFilmsSection and FilmDetailsOverlay to articulate the pattern, its purpose, and why it matters. This is one of the "React key prevents stale state" class of bugs that's easy to miss during code review if not explicitly documented.
+
+**Files:** `docs/client/Components/FilmDetailsOverlay.md`, `docs/client/Components/HomeFilmsSection.md`
+**Related Commit.md entry:** `972b597 (FilmDetailsOverlay key + remount invariant)`
+
+---
+
 ## 2026-06-01 — Wipe feedback consolidation — toast-based results for DangerTab operations
 
 PR `fix/seven-bugs-auth-profiles-detail` refactored the DangerTab wipe-operation feedback from a per-row inline status line to the app-wide toast system. The constraint was: after a destructive operation (wipe database, wipe poster cache, etc.), the user needs immediate feedback that the action succeeded or failed — but the old inline status row duplicated and competed with toasts from other parts of the app (e.g. general errors, profile loads). The solution consolidates all user-facing feedback onto the single toast surface: `useToast()` is called in the mutation `onCompleted` and `onError` callbacks with two new format strings (`toastOkFormat` and `toastFailFormat`) that name the operation (e.g. "Wipe Database — done." or "Wipe Database failed: jobs are running."). This removes the need for per-button state (the old `status` React state and `WipeStatus` interface) and the corresponding status/statusErr styles. The toast timing (auto-dismiss after 5–6 seconds) is controlled by the Toast system, so the user doesn't see a stale status row accumulate if they click multiple buttons in quick succession. The DangerTab spec was updated to reflect the new feedback model and describe the toast format. This unblocks cleaner feedback semantics: feedback is now *routed* rather than *duplicated* — all success/error signals flow through a single endpoint in the UI, making the observability of "what happened" more coherent and the spec simpler to read.
