@@ -114,20 +114,9 @@ eyebrows establish breaks under softer edges.
 - **Navigation rules** — `<Link>` for Play, `navigate(-1)` for Back.
 - **Settings deep-link** — `?section=<id>` selects the tab.
 
-## Logo selection (open)
+## Logo selection (finalized)
 
-The Figma board ships **seven** candidate marks (`L-01..L-07`). The
-current working default is **Logo02** (the stacked-X monogram in
-`design/Release/src/components/Logo/Logo02.tsx`) because it appears in
-the Figma's C-01 app-icon frame. All seven are rendered for live review
-at `/design-system`.
-
-When a final is picked:
-1. Update `LOGOS[].highlighted` selection in
-   `design/Release/src/components/Logo/index.tsx`.
-2. Replace the wordmark-only AppHeader brand with a Logo01-style lockup
-   if the chosen mark is glyph + wordmark.
-3. Remove the rejected `LogoNN.tsx` files.
+**Finalized:** The X-glyph logo (a stylized X in `tokens.fontDisplay` / Bytesized render, black ink on brand-green `oklch(0.78 0.20 150)` rounded square, 1024×1024px source) is locked as the app icon, favicon, and desktop-shell mark. This logo appears only in system chrome (favicon, taskbar, system menu); it does NOT appear in the application header (the AppHeader wordmark remains text-only and unchanged). The logo source (`icons/xstream-icon.svg`) is rendered to `src-tauri/icons/` via `tauri icon` command (producing 32×32, 64×64, 128×128, 128×128@2x PNG formats, icon.icns for macOS, icon.ico for Windows, and legacy placeholder mobile assets); the bundle config references these via `"bundle": { "icon": ["icons/icon.png"] }` (simplified to standard desktop set post-selection). `client/public/favicon.svg` mirrors the same glyph + rounded-square mark at 256 viewport size.
 
 ---
 

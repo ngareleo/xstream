@@ -15,6 +15,13 @@ Entry shape (each entry ends with the divider line described above):
 
 <!-- ENTRIES BELOW — newest first; each ends with a bare `---` line. The architect's next invocation will treat the no-entries state as the first-run case and prepend a bootstrap entry at HEAD. -->
 
+## 972b597 — 2026-06-01 (App logo + favicon + per-route document titles)
+
+**Files:** `docs/design/UI-Design-Spec/00-Tokens-And-Layout.md`, `docs/client/Components/Logo.md`, `docs/client/Components/AppHeader.md`, `docs/architecture/Deployment/00-Tauri-Desktop-Shell.md`, `docs/client/Components/HomeFilmsSection.md`, `docs/client/Components/VideoArea.md`, `docs/code-style/Client-Conventions/00-Patterns.md`
+**Why:** Documentation updates for PR #73 (fix/seven-bugs-auth-profiles-detail): (A) NEW APP LOGO + FAVICON + DESKTOP ICON: X glyph in Bytesized render, black on brand-green rounded square, from `client/public/favicon.svg` (256px SVG) and `src-tauri/icons/` (Tauri `icon` CLI generated PNG + icon sets); logo appears only in system chrome (favicon, taskbar), not in the AppHeader wordmark which remains text-only. (B) PER-ROUTE DOCUMENT TITLES: new `useDocumentTitle` hook wired across all route-level pages and data-displaying components (HomeFilmsSection, VideoArea, Profiles, Settings, Watchlist, Player); FilterRow gained `displayTitle` field (original-case title for display vs search-optimized lowercase `title`). Docs updated: design spec finalizes logo selection; Logo.md clarifies system-chrome-only rendering; AppHeader.md notes wordmark is unchanged; Tauri deployment section explains icon generation and favicon sourcing; HomeFilmsSection and VideoArea document per-route title wiring via the hook; Client Conventions added useDocumentTitle pattern section.
+
+---
+
 ## 972b597 — 2026-06-01 (VideoArea backdrop latch invariant)
 
 **Files:** `docs/client/Components/VideoArea.md`

@@ -1,13 +1,14 @@
 # Logo
 
-Logo mark component currently rendering `Logo02` — a stacked X monogram used as the app icon, favicon, and splash-screen mark. The design lab in `design/Release/` maintains seven candidate marks for future selection.
+Logo mark component currently rendering `Logo02` — a stylized X monogram rendered in Bytesized (the display font) and used in the system-chrome mark (favicon, desktop icon). **The logo does NOT appear inside the application UI** — the AppHeader wordmark is text-only and unchanged. This component is kept for historical reference and `GoodbyePage` fallback rendering.
 
 **Source:** `client/src/components/logo/`
-**Used by:** `GoodbyePage` (sign-out screen), app icon and favicon (system).
+**Used by:** `GoodbyePage` (sign-out screen, deprecated; use icon system instead).
+**System assets:** `client/public/favicon.svg` (256px SVG), `src-tauri/icons/` (generated PNG + icon sets for macOS/Windows via `tauri icon`).
 
 ## Role
 
-Presentational SVG mark for app branding. `Logo02` is the working default — a compact circle outline with 6px square-cap diagonals and a 6px central node. The component is purely visual; no state or interaction.
+Presentational SVG mark for fallback branding. `Logo02` is maintained as a React component for backward compatibility; the production logo is sourced from `icons/xstream-icon.svg` (a Bytesized X on a brand-green rounded square) and bundled as `favicon.svg` and platform-specific icon sets by the Tauri build process.
 
 ## Props
 
@@ -42,6 +43,6 @@ Presentational SVG mark for app branding. `Logo02` is the working default — a 
 
 No data dependencies.
 
-## Notes
+## System logo source
 
-The design lab (`design/Release/src/components/Logo/`) maintains seven candidate marks (`Logo01`–`Logo07`) in a `LogoCard` selection sandbox. `Logo02` is the current working default shipped in production. When a final mark is chosen, the other candidates may be deleted and `Logo02` remains the canonical component, or production switches to the selected alternative.
+The production favicon and desktop-icon source is `client/public/favicon.svg`, which renders the finalized X-glyph logo (Bytesized display font, black ink on brand-green `oklch(0.78 0.20 150)` rounded square at 256px viewport size). For Tauri desktop builds, a 1024×1024px render is passed to `tauri icon` to generate all platform-specific icon sets (PNG 32/64/128/@2x, icon.icns, icon.ico); these are referenced in `src-tauri/tauri.conf.json` under `bundle.icon`. No direct React component renders the production logo inside the app — it appears only in system chrome (browser tabs, task manager, application menus).

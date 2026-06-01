@@ -65,6 +65,10 @@ Both fade with chrome (`controlsHidden`):
 
 - `position: absolute`, `inset: 0`, `zIndex: 1`. Contains VideoPlayer (Suspense-wrapped).
 
+## Document title
+
+The component wires `useDocumentTitle(metadata?.title)` to set the browser tab title to the playing video's OMDb title (or fallback to the Relay video fragment's `title` if metadata is unavailable). The title updates immediately on render, so navigating to a new film/episode updates the tab instantly. The hook ignores nullish values, so if metadata fails to load, the component defers to a parent or falls back to "Xstream".
+
 ## Behaviour
 
 ### Backdrop latch on first play

@@ -45,6 +45,7 @@ Sticky header floating above viewport content. Renders brand identity, navigatio
 - Two spans:
   - `<span className={s.brandX}>X</span>` — `color: tokens.colorGreen`, `textShadow: 0 0 12px ${tokens.colorGreenGlow}`.
   - `<span className={s.brandWord}>stream</span>` — `color: tokens.colorText`.
+- **Note:** The Xstream wordmark here is text-only. The system logo mark (X glyph on green rounded square) appears only in favicon and desktop-app icons, not in the UI chrome. See [`Logo.md`](Logo.md) for the icon source.
 
 ### Nav links (centre column, `justifySelf: center`, `columnGap: 32px`)
 

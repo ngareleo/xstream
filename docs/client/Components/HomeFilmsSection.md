@@ -95,7 +95,7 @@ clears all state.
 `HomeFilmsSection.utils.ts`) from each Film, exposing `title`,
 `filename`, `director`, `genre`, `resolution`, `codec`, `year` for the
 search/filter logic. The `node` field is the `bestCopy` Video — what
-`FilmTile` and `FilmDetailsOverlay` render.
+`FilmTile` and `FilmDetailsOverlay` render. Each `FilterRow` also carries `displayTitle` (the original-case title, matching OMDb capitalization for display) — used for per-route document-title wiring.
 
 ## Data
 
@@ -131,6 +131,10 @@ fragments must agree on the size, and W3200 is the right ceiling for
 any full-area rendering at 2× DPR. See
 [`docs/architecture/Library-Scan/05-Poster-Caching.md`](../../architecture/Library-Scan/05-Poster-Caching.md)
 for the full alias / size table.
+
+## Document title
+
+The component wires `useDocumentTitle(selectedRow?.displayTitle || "Xstream")` to update the browser tab title as the user navigates the hero carousel. When a film is selected in the carousel, `document.title` becomes the film's OMDb title (original case, from `displayTitle`); on blur or carousel reset, it reverts to "Xstream". This gives the user visual feedback in the browser tab as they explore the hero content. The hook respects nullish values — a parent can defer the title to a child (e.g., the FilmDetailsOverlay can set its own title when open).
 
 ## Notes
 
