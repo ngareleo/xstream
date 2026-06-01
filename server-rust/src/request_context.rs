@@ -130,16 +130,17 @@ pub(crate) fn session_id_from_headers(headers: &HeaderMap) -> Option<String> {
         .map(str::to_string)
 }
 
-/// Verify the Bearer JWT and record `user.id` on the http.request span. See `docs/architecture/Identity/02-Session-And-Refresh.md`.
+/// Verify the Bearer local-session token and record `user.id` on the
+/// http.request span. The token is service-signed (HS256) and validated
+/// offline; a DB lookup confirms it hasn't been revoked. Supabase JWTs are
+/// only verified once, at `/auth/session` issue time. Soft-fail: an
+/// absent/invalid/revoked token continues anonymously (correlation-only).
+/// See `docs/architecture/Identity/02-Session-And-Refresh.md`.
 pub async fn extract_auth_identity(
     Extension(app_ctx): Extension<AppContext>,
     mut req: Request,
     next: Next,
 ) -> Response {
-    let Some(jwks) = app_ctx.jwks_cache.clone() else {
-        return next.run(req).await;
-    };
-
     let bearer = req
         .headers()
         .get(header::AUTHORIZATION)
@@ -147,15 +148,20 @@ pub async fn extract_auth_identity(
         .and_then(strip_bearer_prefix);
 
     if let Some(token) = bearer {
-        match jwks.verify_token(token).await {
-            Ok(claims) => {
+        match crate::services::local_session::verify(&app_ctx.local_session_secret, token) {
+            Ok(claims)
+                if crate::db::is_session_active(&app_ctx.db, &claims.jti).unwrap_or(false) =>
+            {
                 if let Some(req_ctx) = req.extensions_mut().get_mut::<RequestContext>() {
                     req_ctx.user_id = Some(claims.sub.clone());
                 }
                 tracing::Span::current().record("user.id", claims.sub.as_str());
             }
+            Ok(_) => {
+                tracing::debug!("local session revoked or unknown; continuing as anonymous");
+            }
             Err(err) => {
-                tracing::debug!(error = %err, "JWT verification failed; continuing as anonymous");
+                tracing::debug!(error = %err, "local session verification failed; continuing as anonymous");
             }
         }
     }

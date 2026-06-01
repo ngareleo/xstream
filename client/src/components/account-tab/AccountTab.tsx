@@ -3,8 +3,9 @@ import { commitLocalUpdate, useRelayEnvironment } from "react-relay";
 import { useNavigate } from "react-router-dom";
 
 import { useSettingsTabStyles } from "~/components/settings-tabs/SettingsTabs.styles.js";
-import { changePassword, getSession, signOut } from "~/services/auth.js";
+import { changePassword, signOut } from "~/services/auth.js";
 import { clearSessionContext } from "~/services/playbackSession.js";
+import { getUserEmail } from "~/services/userContext.js";
 
 import { strings } from "./AccountTab.strings.js";
 import { useAccountTabStyles } from "./AccountTab.styles.js";
@@ -26,9 +27,7 @@ export const AccountTab: FC = () => {
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    void getSession().then((session) => {
-      setEmail(session?.user.email ?? null);
-    });
+    setEmail(getUserEmail());
   }, []);
 
   const onChangePassword = async (e: FormEvent<HTMLFormElement>): Promise<void> => {

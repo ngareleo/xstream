@@ -5,6 +5,7 @@
 export const LocalStorageKey = {
   PaneWidth: "xstream:pane-width",
   ProfilesLastFilm: "xstream:profiles:last-film",
+  Session: "xstream:session",
 } as const;
 
 /** Read a value; `null` on miss or when storage is unavailable. */
@@ -26,9 +27,13 @@ export function writeLocal(key: string, value: string | null): void {
   }
 }
 
-/** Remove every app-owned key (the values in {@link LocalStorageKey}). */
+/** Remove app-owned UI-state keys (the values in {@link LocalStorageKey}),
+ *  except the session token — a cache wipe must not sign the user out. */
 export function clearAppLocal(): void {
-  for (const key of Object.values(LocalStorageKey)) writeLocal(key, null);
+  for (const key of Object.values(LocalStorageKey)) {
+    if (key === LocalStorageKey.Session) continue;
+    writeLocal(key, null);
+  }
 }
 
 /** Every key currently in localStorage; empty when storage is unavailable. */

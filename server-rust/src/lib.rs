@@ -12,7 +12,11 @@ use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use axum::{response::IntoResponse, routing::get, Router};
+use axum::{
+    response::IntoResponse,
+    routing::{get, post},
+    Router,
+};
 
 use crate::config::{AppConfig, AppContext};
 use crate::error::{AppError, AppResult};
@@ -56,6 +60,9 @@ pub fn build_router(state: AppState) -> AppResult<Router> {
         .route("/stream/:job_id", get(routes::stream::stream_handler))
         .route("/poster/:basename", get(routes::poster::get_poster))
         .route("/settings", get(routes::settings::get_settings))
+        .route("/auth/session", post(routes::auth::issue_session))
+        .route("/auth/logout", post(routes::auth::logout))
+        .route("/auth/me", get(routes::auth::me))
         // Inbound: cors → extract_request_context → Extension → extract_auth_identity → handler.
         // extract_auth_identity must be inner to Extension (needs AppContext) and inner to
         // extract_request_context (records on its span).

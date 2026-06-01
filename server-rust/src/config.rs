@@ -273,6 +273,9 @@ pub struct AppContext {
     pub omdb: Option<OmdbClient>,
     /// `Some` when `SUPABASE_JWKS_URL` is set; `None` makes auth middleware a no-op.
     pub jwks_cache: Option<JwksCache>,
+    /// Per-install HMAC secret for signing/verifying local session tokens.
+    /// Generated + persisted on first boot. See `services::local_session`.
+    pub local_session_secret: String,
 }
 
 impl AppContext {
@@ -297,6 +300,17 @@ impl AppContext {
             .supabase_jwks_url
             .clone()
             .map(|url| JwksCache::new(url, http));
+        // Load-or-generate the local-session signing secret. A DB error here
+        // falls back to an ephemeral secret (sessions won't survive restart)
+        // rather than failing boot.
+        let local_session_secret = crate::services::local_session::get_or_create_secret(&db)
+            .unwrap_or_else(|_| {
+                format!(
+                    "{}{}",
+                    uuid::Uuid::new_v4().simple(),
+                    uuid::Uuid::new_v4().simple()
+                )
+            });
         Self {
             db,
             config,
@@ -310,6 +324,7 @@ impl AppContext {
             availability_state: AvailabilityState::new(),
             omdb,
             jwks_cache,
+            local_session_secret,
         }
     }
 
