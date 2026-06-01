@@ -5,6 +5,7 @@ import { createClient, type Session, type SupabaseClient, type User } from "@sup
 import { env } from "~/config/env.js";
 import { getClientLogger } from "~/telemetry.js";
 
+import { localKeys, readLocal } from "./localStore.js";
 import { clearUserContext, setUserContext } from "./userContext.js";
 
 function log() {
@@ -47,10 +48,9 @@ interface PersistedIdentity {
  *  explicit signOut, which clears the key. */
 function readPersistedIdentity(): PersistedIdentity | null {
   try {
-    for (let i = 0; i < window.localStorage.length; i += 1) {
-      const key = window.localStorage.key(i);
-      if (!key || !key.startsWith("sb-") || !key.endsWith("-auth-token")) continue;
-      const raw = window.localStorage.getItem(key);
+    for (const key of localKeys()) {
+      if (!key.startsWith("sb-") || !key.endsWith("-auth-token")) continue;
+      const raw = readLocal(key);
       if (!raw) continue;
       const parsed = JSON.parse(raw) as {
         user?: { id?: string; email?: string };

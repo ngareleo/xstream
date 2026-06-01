@@ -26,12 +26,8 @@ interface ActiveToast {
   message: string;
 }
 
-/**
- * Mounts a Nova interceptor that turns `toast.Requested` events into a
- * stacked, auto-dismissing notification viewport. Wrap the app once (in
- * AppShell). Any descendant emits via {@link useToast}; this is the sole
- * consumer. See `docs/code-style/Client-Conventions/02-Nova-Eventing.md`.
- */
+/** Mounts the toast interceptor + auto-dismissing viewport (the sole consumer
+ *  of toast events). See docs/code-style/Client-Conventions/02-Nova-Eventing.md. */
 export const ToastProvider: FC<{ children: ReactNode }> = ({ children }) => {
   const [toasts, setToasts] = useState<ActiveToast[]>([]);
   const nextId = useRef(0);

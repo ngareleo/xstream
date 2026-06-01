@@ -1,7 +1,6 @@
 import type { EventWrapper, NovaEvent } from "@nova/types";
 
-/** Cross-cutting "show a transient notification" domain — multiple emitters
- *  (any component), one consumer (ToastProvider in AppShell). */
+/** Nova domain for transient notifications. */
 export const TOAST_ORIGINATOR = "toast";
 
 export const ToastEventTypes = {

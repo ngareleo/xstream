@@ -1,16 +1,13 @@
 /** Single owner of the client's localStorage keys + the safe read/write
  *  interface every module uses for local persistence. */
 
-/** App-owned localStorage keys. Dynamic keys (e.g. per-feature-flag keys,
- *  owned by the flag registry) aren't listed here but still go through the
- *  helpers below. */
+/** App-owned localStorage keys. */
 export const LocalStorageKey = {
   PaneWidth: "xstream:pane-width",
   ProfilesLastFilm: "xstream:profiles:last-film",
 } as const;
 
-/** Read a value; `null` on miss or when storage is unavailable (private
- *  mode, SSR). */
+/** Read a value; `null` on miss or when storage is unavailable. */
 export function readLocal(key: string): string | null {
   try {
     return globalThis.localStorage?.getItem(key) ?? null;
@@ -19,14 +16,28 @@ export function readLocal(key: string): string | null {
   }
 }
 
-/** Write a value, or remove it when `value` is `null`. No-ops when storage
- *  is unavailable (quota / private browsing) — callers keep in-memory state
- *  as the authority. */
+/** Write a value, or remove it when `value` is `null`; no-op when storage is unavailable. */
 export function writeLocal(key: string, value: string | null): void {
   try {
     if (value === null) globalThis.localStorage?.removeItem(key);
     else globalThis.localStorage?.setItem(key, value);
   } catch {
-    /* quota / private browsing — ignore */
+    /* quota / private browsing — in-memory state stays authoritative */
+  }
+}
+
+/** Every key currently in localStorage; empty when storage is unavailable. */
+export function localKeys(): string[] {
+  try {
+    const ls = globalThis.localStorage;
+    if (!ls) return [];
+    const out: string[] = [];
+    for (let i = 0; i < ls.length; i += 1) {
+      const key = ls.key(i);
+      if (key !== null) out.push(key);
+    }
+    return out;
+  } catch {
+    return [];
   }
 }
