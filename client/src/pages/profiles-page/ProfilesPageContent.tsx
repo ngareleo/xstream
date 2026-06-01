@@ -16,6 +16,7 @@ import {
 } from "~/hooks/useProfileAvailabilitySubscription.js";
 import { useSplitResize } from "~/hooks/useSplitResize.js";
 import type { ProfilesPageContentQuery } from "~/relay/__generated__/ProfilesPageContentQuery.graphql.js";
+import { LocalStorageKey, readLocal, writeLocal } from "~/services/localStore.js";
 
 import { strings } from "./ProfilesPage.strings.js";
 import { useProfilesPageStyles } from "./ProfilesPage.styles.js";
@@ -46,26 +47,6 @@ const PROFILES_QUERY = graphql`
     }
   }
 `;
-
-// Remembers the last film the user opened in the detail pane so navigating
-// away and back re-opens it (falling back to the first movie). Mirrors the
-// localStorage convention in useSplitResize.
-const LAST_FILM_KEY = "xstream:profiles:last-film";
-function readLastFilm(): string | null {
-  try {
-    return window.localStorage.getItem(LAST_FILM_KEY);
-  } catch {
-    return null;
-  }
-}
-function writeLastFilm(id: string | null): void {
-  try {
-    if (id) window.localStorage.setItem(LAST_FILM_KEY, id);
-    else window.localStorage.removeItem(LAST_FILM_KEY);
-  } catch {
-    /* private-mode / disabled storage — selection just won't persist */
-  }
-}
 
 export const ProfilesPageContent: FC = () => {
   const data = useLazyLoadQuery<ProfilesPageContentQuery>(
@@ -151,7 +132,7 @@ export const ProfilesPageContent: FC = () => {
   // DetailPane opens. Skip when the URL already targets a film or ?empty=1.
   useEffect(() => {
     if (params.get("film") || params.get("empty") === "1") return;
-    const stored = readLastFilm();
+    const stored = readLocal(LocalStorageKey.ProfilesLastFilm);
     if (stored && flatVideos.some((v) => v.node.id === stored)) {
       setParams({ film: stored }, { replace: true });
       return;
@@ -165,15 +146,15 @@ export const ProfilesPageContent: FC = () => {
 
   const openFilm = (id: string): void => {
     if (filmId === id) {
-      writeLastFilm(null);
+      writeLocal(LocalStorageKey.ProfilesLastFilm, null);
       setParams({});
     } else {
-      writeLastFilm(id);
+      writeLocal(LocalStorageKey.ProfilesLastFilm, id);
       setParams({ film: id });
     }
   };
   const editFilm = (id: string): void => {
-    writeLastFilm(id);
+    writeLocal(LocalStorageKey.ProfilesLastFilm, id);
     setParams({ film: id, edit: "1" });
   };
   const handleEditChange = (editing: boolean): void => {
@@ -182,7 +163,7 @@ export const ProfilesPageContent: FC = () => {
     else setParams({ film: filmId });
   };
   const closePane = (): void => {
-    writeLastFilm(null);
+    writeLocal(LocalStorageKey.ProfilesLastFilm, null);
     setParams({});
   };
   const navigateToCreateProfile = (): void => {

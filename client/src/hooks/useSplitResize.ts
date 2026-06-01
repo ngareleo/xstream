@@ -3,10 +3,11 @@
 import type React from "react";
 import { useCallback, useRef, useState } from "react";
 
+import { LocalStorageKey, readLocal, writeLocal } from "~/services/localStore.js";
+
 const MIN_PANE_WIDTH = 240;
 const MAX_PANE_WIDTH = 1200;
 const MIN_LEFT_WIDTH = 280;
-const STORAGE_KEY = "xstream:pane-width";
 
 export interface SplitResizeResult {
   paneWidth: number;
@@ -16,7 +17,7 @@ export interface SplitResizeResult {
 
 export function useSplitResize(defaultWidth = 360): SplitResizeResult {
   const [paneWidth, setPaneWidth] = useState(() => {
-    const stored = localStorage.getItem(STORAGE_KEY);
+    const stored = readLocal(LocalStorageKey.PaneWidth);
     if (stored) {
       const parsed = Number(stored);
       if (!Number.isNaN(parsed)) {
@@ -57,7 +58,7 @@ export function useSplitResize(defaultWidth = 360): SplitResizeResult {
       if (containerRef.current) containerRef.current.style.transition = "";
       document.documentElement.style.cursor = "";
       document.body.style.userSelect = "";
-      localStorage.setItem(STORAGE_KEY, String(paneWidthRef.current));
+      writeLocal(LocalStorageKey.PaneWidth, String(paneWidthRef.current));
       document.removeEventListener("mousemove", onMouseMove);
       document.removeEventListener("mouseup", onMouseUp);
     };

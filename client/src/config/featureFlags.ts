@@ -1,5 +1,7 @@
 /** Feature-flag runtime: module cache + pub/sub. localStorage has higher trust than server. See docs/client/Feature-Flags/. */
 
+import { readLocal, writeLocal } from "~/services/localStore.js";
+
 import { type BufferConfig, clientConfig } from "./appConfig.js";
 import { FLAG_KEYS, FLAG_REGISTRY, type FlagValue, type FlagValueType } from "./flagRegistry.js";
 
@@ -26,35 +28,11 @@ function notify(): void {
   subscribers.forEach((cb) => cb());
 }
 
-function lsGet(key: string): string | null {
-  try {
-    return globalThis.localStorage?.getItem(key) ?? null;
-  } catch {
-    return null;
-  }
-}
-
-function lsSet(key: string, value: string): void {
-  try {
-    globalThis.localStorage?.setItem(key, value);
-  } catch {
-    // Quota / private browsing; in-memory cache still authoritative.
-  }
-}
-
-function lsRemove(key: string): void {
-  try {
-    globalThis.localStorage?.removeItem(key);
-  } catch {
-    // ignore
-  }
-}
-
 // Module-init: populate cache from localStorage so getFlag() works synchronously.
 // Prod builds skip this — flags always resolve to caller-provided fallbacks.
 if (IS_DEV_BUILD) {
   for (const desc of FLAG_REGISTRY) {
-    const raw = lsGet(desc.key);
+    const raw = readLocal(desc.key);
     if (raw === null) continue;
     const parsed = parseValue(raw, desc.valueType);
     if (parsed !== null) cache.set(desc.key, parsed);
@@ -90,7 +68,7 @@ export function hydrateFlags(
   for (const entry of entries) {
     const desc = FLAG_REGISTRY.find((f) => f.key === entry.key);
     if (!desc || entry.value == null) continue;
-    if (lsGet(entry.key) !== null) continue; // local override wins
+    if (readLocal(entry.key) !== null) continue; // local override wins
     const parsed = parseValue(entry.value, desc.valueType);
     if (parsed !== null) cache.set(entry.key, parsed);
   }
@@ -107,7 +85,7 @@ export function getFlag<T extends FlagValue>(key: string, fallback: T): T {
 export function setFlagLocal(key: string, value: FlagValue): void {
   if (!IS_DEV_BUILD) return;
   cache.set(key, value);
-  lsSet(key, serializeValue(value));
+  writeLocal(key, serializeValue(value));
   notify();
 }
 
@@ -115,7 +93,7 @@ export function setFlagLocal(key: string, value: FlagValue): void {
 export function clearLocalFlagOverrides(): void {
   if (!IS_DEV_BUILD) return;
   for (const desc of FLAG_REGISTRY) {
-    lsRemove(desc.key);
+    writeLocal(desc.key, null);
     cache.delete(desc.key);
   }
   notify();
