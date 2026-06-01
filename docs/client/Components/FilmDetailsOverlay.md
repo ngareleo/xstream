@@ -102,9 +102,9 @@ Full-viewport film detail view with animated hero poster, metadata, and play/clo
 #### Copies rail (FilmVariants, conditional)
 
 - **Rendered only when `!isSeries && variantOptions.length > 1`.**
-- Mounted as `<aside className={seasonsRail} aria-label={copiesAriaLabel}>` with a `railBody` wrapper.
+- Mounted as `<aside className={copiesRail} aria-label={copiesAriaLabel}>` with a `railBody` wrapper.
 - Displays the copy picker (FilmVariants component) allowing the user to select which encoding to play if multiple main-role videos exist.
-- Uses the same `seasonsRail` styling as the seasons explorer to maintain visual consistency.
+- Uses the `copiesRail` styling (NEW, distinct from `seasonsRail`): positioned at `top: 120px`, `right: 28px`, content-sized with `maxHeight: calc(100% - 192px)` and `overflowY: auto` — so a couple of copies don't leave a large empty panel.
 - See [`FilmVariants.md`](FilmVariants.md) for full spec.
 
 #### Seasons rail (TV series, conditional)
@@ -112,7 +112,7 @@ Full-viewport film detail view with animated hero poster, metadata, and play/clo
 - **Rendered only when `isSeries && seasonCount > 0`.**
 - Mounted as `<aside className={seasonsRail} aria-label={seasonsAriaLabel}>` with header and scroll container.
 - Contains the seasons explorer (SeasonsPanel) and episode availability stats.
-- Uses the same `seasonsRail` styling as the copies picker to maintain visual consistency.
+- Uses the `seasonsRail` styling positioned at `top: 120px`, `right: 28px` (same top as copies rail to clear the top-right action cluster) — stretched full-height below that point.
 
 #### Content narrowing via `hasRail`
 
