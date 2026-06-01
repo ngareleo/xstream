@@ -6,8 +6,8 @@ import {
 } from "~/components/home-films-section/HomeFilmsSection.utils.js";
 
 // pickSuggestions only reads id / director / genre / resolution / node, so a
-// thin fixture is enough to pin the behaviour that regressed (#7): each
-// suggestion must carry the Film id, not the bestCopy Video id.
+// thin fixture suffices. Each suggestion must carry the Film id, not the
+// bestCopy Video id.
 function row(
   id: string,
   over: { director?: string; genre?: string; resolution?: string } = {}

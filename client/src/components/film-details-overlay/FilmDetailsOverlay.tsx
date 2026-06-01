@@ -60,9 +60,8 @@ const OVERLAY_FRAGMENT = graphql`
   }
 `;
 
-/** A suggestion tile: the Film `id` to open paired with the Video that
- *  backs the FilmTile fragment. The Film id (not the Video id) is what the
- *  host's `?film=` selection resolves against. */
+/** A suggestion tile: the Film `id` to open, plus the Video backing the
+ *  FilmTile fragment. */
 export interface OverlaySuggestion {
   filmId: string;
   video: FilmTile_video$key;
@@ -159,9 +158,8 @@ export const FilmDetailsOverlay: FC<FilmDetailsOverlayProps> = ({
 
   const handleSuggestionClick = (filmId: string): void => {
     overlayRef.current?.scrollTo({ top: 0, behavior: "smooth" });
-    // The host swaps the detail view to the chosen film via ?film=. Without
-    // a handler there's nowhere to route a suggestion, so it's a no-op —
-    // never a jump to the player (which is what the old fallback did).
+    // The host swaps the detail view to the chosen film via ?film=. With no
+    // handler there's nowhere to route, so it's a no-op (not a player jump).
     onSelectSuggestion?.(filmId);
   };
 

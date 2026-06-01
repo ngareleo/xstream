@@ -177,10 +177,9 @@ impl From<&ScanSnapshot> for LibraryScanProgress {
     fn from(snap: &ScanSnapshot) -> Self {
         Self {
             scanning: snap.scanning,
-            // The scanner reports the raw DB id, but the client matches this
-            // against the global `Library.id` from the query. Encode it the
-            // same way every other id crosses the GraphQL boundary, else the
-            // per-row scan spinner never finds its library.
+            // Scanner reports the raw DB id; the client matches the global
+            // `Library.id`, so encode it like every other id at the GraphQL
+            // boundary or the per-row scan spinner never finds its library.
             library_id: snap
                 .library_id
                 .as_deref()

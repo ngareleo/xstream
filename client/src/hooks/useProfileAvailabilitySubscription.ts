@@ -23,11 +23,9 @@ export interface ProfileAvailabilitySnapshot {
 
 /**
  * Subscribe to profileAvailabilityUpdated and call `onUpdate` per library.
- * The server emits one frame per library from current DB status on connect
- * (so the Profiles page reconciles its pills immediately), then one frame
- * each time the periodic probe detects a reachability flip. This keeps the
- * status pill live without re-querying the (potentially blocking) library
- * list.
+ * The server emits one frame per library from current DB status on connect,
+ * then one per reachability flip — so the status pill stays live without
+ * re-querying the library list.
  *
  * Pass a stable callback (e.g. via useCallback) to avoid re-subscribing.
  */

@@ -42,14 +42,9 @@ interface PersistedIdentity {
   email: string | null;
 }
 
-/**
- * Read the user identity from the Supabase session the SDK persisted to
- * localStorage, without asking the SDK to validate or refresh it. The key is
- * `sb-<project-ref>-auth-token`; its JSON holds the session (v2 stores it at
- * the top level, older builds under `currentSession`). Returns `null` when no
- * session is stored — which is the case after an explicit `signOut()`, since
- * the SDK clears the key.
- */
+/** Identity from the Supabase session the SDK persisted to localStorage
+ *  (`sb-*-auth-token`), read without validation or refresh. `null` after an
+ *  explicit signOut, which clears the key. */
 function readPersistedIdentity(): PersistedIdentity | null {
   try {
     for (let i = 0; i < window.localStorage.length; i += 1) {
@@ -70,17 +65,9 @@ function readPersistedIdentity(): PersistedIdentity | null {
   return null;
 }
 
-/**
- * Hydrate the Supabase session from localStorage and mirror into `userContext`.
- *
- * Offline-first: if the SDK can't produce a live session (access token expired
- * AND the refresh failed — e.g. the app booted with no network), we still
- * rehydrate the identity from the *persisted* session rather than treating the
- * user as signed-out. The server soft-fails on token expiry (signature-only
- * verification), and `autoRefreshToken` upgrades the token once connectivity
- * returns, so a stale cached session is enough to keep an offline user in the
- * app instead of bouncing them to `/signin` on every restart.
- */
+/** Hydrate the Supabase session into `userContext`, falling back to the
+ *  persisted (possibly-expired) session when offline. See
+ *  docs/architecture/Identity/02-Session-And-Refresh.md. */
 export async function restoreSession(): Promise<Session | null> {
   try {
     const supabase = getSupabase();

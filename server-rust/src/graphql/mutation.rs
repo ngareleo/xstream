@@ -158,10 +158,8 @@ impl Mutation {
         Ok(Library::from_row(&updated))
     }
 
-    /// Manual re-link: fetch the exact OMDb record for `imdb_id` and persist
-    /// it for the video — populating `video_metadata` and re-grouping the
-    /// owning Film so the change is visible at both the video and Film level.
-    /// See `services::library_scanner::relink_video_to_imdb`.
+    /// Manual re-link: fetch the OMDb record for `imdb_id` and persist it for
+    /// the video. See `services::library_scanner::relink_video_to_imdb`.
     async fn match_video(
         &self,
         ctx: &Context<'_>,

@@ -260,11 +260,8 @@ impl OmdbClient {
         map_response(parsed)
     }
 
-    /// Fetch a single movie by its canonical IMDb id (`?i=`). Mirrors
-    /// `search` but keyed on the id the user picked from the DetailPane
-    /// re-link picker, so the manual-match path lands the exact title the
-    /// operator chose (not a fuzzy `?t=` title hit). Same failure-shape
-    /// contract as `search`: any error collapses to `None` after a warn.
+    /// Fetch a single movie by its canonical IMDb id (`?i=`). Same
+    /// failure-shape contract as [`search`]: any error collapses to `None`.
     pub async fn fetch_by_imdb_id(&self, imdb_id: &str) -> Option<OmdbResult> {
         let query: Vec<(&str, String)> = vec![("i", imdb_id.to_string())];
         let parsed: OmdbApiResponse = self.request_json(&query, imdb_id).await?;

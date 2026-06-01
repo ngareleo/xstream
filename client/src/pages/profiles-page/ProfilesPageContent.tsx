@@ -107,10 +107,8 @@ export const ProfilesPageContent: FC = () => {
   );
   useLibraryScanSubscription(handleScanUpdate);
 
-  // Live library reachability, keyed by GraphQL library id. The server seeds
-  // current status per library on connect, then pushes each flip — so the
-  // status pill stays accurate without re-running the (potentially blocking)
-  // library query.
+  // Live library reachability, keyed by GraphQL library id; the subscription
+  // seeds current status then pushes each flip.
   const [statusByLibrary, setStatusByLibrary] = useState<Map<string, ProfileAvailabilitySnapshot>>(
     new Map()
   );

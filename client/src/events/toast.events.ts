@@ -1,8 +1,7 @@
 import type { EventWrapper, NovaEvent } from "@nova/types";
 
-/** Cross-cutting "show a transient notification" domain. Any component can
- *  bubble a toast request; the ToastProvider (mounted in AppShell) is the
- *  single consumer. Domain originator — multiple emitters, one handler. */
+/** Cross-cutting "show a transient notification" domain — multiple emitters
+ *  (any component), one consumer (ToastProvider in AppShell). */
 export const TOAST_ORIGINATOR = "toast";
 
 export const ToastEventTypes = {

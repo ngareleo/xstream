@@ -76,10 +76,8 @@ export function timeOfDayGreeting(now: Date): string {
   return strings.greetingEvening;
 }
 
-/** A suggested film: its Film `id` (what the `?film=` param keys on) paired
- *  with the bestCopy Video that backs the FilmTile fragment. Carrying the
- *  Film id is what lets a suggestion click reopen the detail overlay — the
- *  Video id alone doesn't resolve against the film-keyed rows. */
+/** A suggested film: its Film `id` (the `?film=` key) plus the bestCopy Video
+ *  backing the FilmTile fragment. */
 export interface Suggestion {
   filmId: string;
   video: VideoData;

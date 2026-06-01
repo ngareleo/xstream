@@ -449,11 +449,8 @@ async fn match_one_video(ctx: &AppContext, omdb: &OmdbClient, video_id: &str) {
 }
 
 /// Persist an OMDb result for `video`: write the `video_metadata` row and
-/// (for movies) promote/merge the owning Film by imdb_id. Shared by the
-/// scanner's auto-match and the manual re-link mutation so both paths land
-/// identical state. The Film promote is what collapses two encodes of the
-/// same movie into one Film once both match OMDb. Film-link failures are
-/// non-fatal (logged); only the metadata upsert error propagates.
+/// (movies only) promote/merge the owning Film by imdb_id. Film-link failures
+/// are logged, not propagated; only the metadata upsert error propagates.
 async fn persist_match(
     ctx: &AppContext,
     video: &VideoRow,
@@ -519,10 +516,8 @@ async fn persist_match(
     Ok(())
 }
 
-/// Manual re-link entry point (GraphQL `matchVideo`): fetch the exact OMDb
-/// record for `imdb_id` and persist it for `video_id`. Returns the video
-/// row so the resolver can hand a fresh `Video` back to Relay; the enriched
-/// metadata and re-grouped Film are read back through the normal resolvers.
+/// Manual re-link (GraphQL `matchVideo`): fetch the exact OMDb record for
+/// `imdb_id` and persist it for `video_id`, returning the video row.
 pub(crate) async fn relink_video_to_imdb(
     ctx: &AppContext,
     video_id: &str,
@@ -1524,8 +1519,7 @@ mod tests {
             .expect("relink ok");
         assert_eq!(video.id, "vid-R");
 
-        // Metadata row is populated from the exact-id OMDb record (not an
-        // empty stub) — the regression this fix targets.
+        // Populated from the exact-id OMDb record, not an empty stub.
         let m = crate::db::get_metadata_by_video_id(&ctx.db, "vid-R")
             .expect("query")
             .expect("row");

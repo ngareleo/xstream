@@ -56,11 +56,8 @@ impl Subscription {
         stream::iter(vec![initial]).chain(live).boxed()
     }
 
-    /// Live library reachability. Seeds one frame per library from the
-    /// current DB status on connect (so the Profiles page reconciles its
-    /// pills immediately), then forwards each flip the periodic probe loop
-    /// detects. The Profiles query keeps returning cached status with no
-    /// blocking probe; this channel is the out-of-band freshening path.
+    /// Live library reachability: one frame per library from current DB status
+    /// on connect, then each flip the probe loop detects.
     async fn profile_availability_updated(
         &self,
         ctx: &Context<'_>,

@@ -32,11 +32,8 @@ pub struct LibraryScanUpdate {
     pub scanning: bool,
 }
 
-/// A single library's reachability, pushed over the
-/// `profileAvailabilityUpdated` subscription whenever the periodic probe
-/// sees a status flip — plus one frame per library as the initial seed on
-/// connect, so a freshly-mounted Profiles page reconciles immediately.
-/// `libraryId` is the same global `Library.id` the page already holds.
+/// A single library's reachability, pushed over `profileAvailabilityUpdated`.
+/// `libraryId` is the global `Library.id`.
 #[derive(SimpleObject, Clone)]
 pub struct ProfileAvailability {
     pub library_id: ID,
