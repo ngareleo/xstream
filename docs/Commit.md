@@ -15,6 +15,13 @@ Entry shape (each entry ends with the divider line described above):
 
 <!-- ENTRIES BELOW — newest first; each ends with a bare `---` line. The architect's next invocation will treat the no-entries state as the first-run case and prepend a bootstrap entry at HEAD. -->
 
+## 972b597 — 2026-06-01 (poster fallback size upgrade)
+
+**Files:** `docs/architecture/Library-Scan/05-Poster-Caching.md`, `docs/server/GraphQL-Schema/00-Surface.md`
+**Why:** Behavior change in PR `fix/seven-bugs-auth-profiles-detail`: the `posterUrl` fallback now upgrades Amazon CDN URLs to the requested size (via `upgrade_amazon_cdn_url`), eliminating the pixelated-thumbnail window before local cache catch-up.
+
+---
+
 ## 972b597 — 2026-06-01 (local-session auth model)
 
 **Files:** `docs/architecture/Identity/00-System-Overview.md`, `docs/architecture/Identity/01-Sign-In-Flow.md`, `docs/architecture/Identity/02-Session-And-Refresh.md`, `docs/architecture/Identity/03-Telemetry-Correlation.md`, `docs/architecture/Deployment/06-Supabase-Project-Setup.md`, `docs/server/DB-Schema/00-Tables.md`

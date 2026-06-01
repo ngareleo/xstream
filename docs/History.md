@@ -35,6 +35,15 @@ Entry shape (the entry ends with a single line containing exactly three hyphens 
 
 <!-- ENTRIES BELOW — newest first; each ends with a bare three-hyphen divider line. -->
 
+## 2026-06-01 — poster-fallback size upgrade — pre-cache posterUrl now respects requested size
+
+PR `fix/seven-bugs-auth-profiles-detail` optimized the `posterUrl(size:)` resolver's pre-cache fallback path. Previously, when `poster_local_path` was not yet filled (the 15-second window before the worker cached a freshly-matched poster), the fallback returned the raw OMDb URL unchanged, which usually points to a ~300px thumbnail (`SX300`). At hero size (W3200), this looked pixelated until the local cache caught up. The fix applies the same Amazon-CDN rewrite the worker uses — `upgrade_amazon_cdn_url(url, size.width_px())` — so the pre-cache fallback upgrades `SX300` to `SX3200` (or the requested width), and the browser downscales from full resolution. Non-Amazon URLs are unaffected. This makes poster-size behavior uniform whether or not the cache is ready yet, trading a single resolver call for the CDN URL rewrite (negligible cost) to eliminate a noticeable UX gap. The function was made `pub(crate)` so the resolver can share it with the worker.
+
+**Files:** `docs/architecture/Library-Scan/05-Poster-Caching.md`, `docs/server/GraphQL-Schema/00-Surface.md`
+**Related Commit.md entry:** `972b597 (poster fallback size upgrade)`
+
+---
+
 ## 2026-06-01 — local-session auth model — pivot from Supabase-JWT-per-request to per-install HS256 sessions
 
 PR `fix/seven-bugs-auth-profiles-detail` replaced the old "verify Supabase JWT on every HTTP request + soft-fail + 30-day TTL recommendation" model with a two-step scheme: (1) a once-per-~month online exchange at `POST /auth/session` where the Supabase JWT is verified via JWKS and a per-install HS256 local token is minted and stored in a `sessions` table, and (2) fully offline per-request validation (signature + `exp` + `is_session_active` DB lookup) using that local token. The motivating constraint was offline resilience: the old fallback path (`readPersistedIdentity` reading the Supabase `sb-*-auth-token` key) was fragile and required the 30-day JWT TTL hack to be useful. The new model makes offline-first a first-class invariant — `restoreSession()` simply decodes the local token's `exp` with no network. A second concrete gain is revocation: Supabase RS256 JWTs cannot be revoked server-side (only `exp` gates them); the local session model revokes in one SQLite UPDATE. The `sessions` table (`jti, user_id, email, issued_at, expires_at, revoked_at`) is the revocation ledger. All four Identity docs were rewritten to reflect the new lifecycle; `Deployment/06-Supabase-Project-Setup.md` §7 now says Supabase JWT TTL can stay at the default (1 hour is fine). The DB schema doc gained the `sessions` table. `SUMMARY.md` not updated — the streaming pipeline section is unchanged, but the Identity subsystem description in the system overview remained accurate at the "Supabase for auth" level (the pivot is an implementation detail, not a stack change).

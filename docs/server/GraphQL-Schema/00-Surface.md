@@ -140,12 +140,14 @@ type VideoMetadata {
   """
   Poster URL sized to the requested dimension. When the worker has cached
   the poster locally this returns `/poster/<basename>.w{N}.webp` 
-  (same-origin, WebP-encoded); else the OMDb canonical URL (unchanged).
-  The poster_local_path column is internal — `services::poster_cache`
-  resizes and encodes all 4 width variants (240, 400, 800, 1600px).
-  See `docs/architecture/Library-Scan/05-Poster-Caching.md` and
-  `docs/architecture/Library-Scan/05-Poster-Caching.md` § "Client
-  fragment alias convention" for per-fragment size selection.
+  (same-origin, WebP-encoded); else the OMDb URL is upgraded to the requested
+  size via Amazon CDN rewrite (`._V1_SX{width}`, e.g., SX300 → SX3200 for W3200).
+  Non-Amazon URLs are returned unchanged. This pre-cache fallback optimization
+  avoids the pixelated-thumbnail window (fetches at display resolution, not
+  OMDb's default ~300px). The poster_local_path column is internal — 
+  `services::poster_cache` resizes and encodes all 4 width variants (240, 400,
+  800, 1600px). See `docs/architecture/Library-Scan/05-Poster-Caching.md` and
+  § "Client fragment alias convention" for per-fragment size selection.
   """
   posterUrl(size: PosterSize!): String
 }
