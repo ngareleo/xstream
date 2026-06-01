@@ -9,6 +9,8 @@ export type VideoData = FilmData["bestCopy"];
 export interface FilterRow extends FilterableFilm {
   id: string;
   title: string;
+  /** Original-case title for display (the lowercased `title` drives search). */
+  displayTitle: string;
   filename: string;
   director: string;
   genre: string;
@@ -62,6 +64,7 @@ export function toFilterRowFromFilm(film: FilmData): FilterRow {
   return {
     id: film.id,
     title: (film.title || "").toLowerCase(),
+    displayTitle: film.title || best.filename,
     filename: best.filename.toLowerCase(),
     ...filters,
     node: best,

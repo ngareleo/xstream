@@ -8,6 +8,7 @@ import { FlagsTabAsync } from "~/components/flags-tab/FlagsTabAsync.js";
 import { LibraryTab } from "~/components/library-tab/LibraryTab.js";
 import { MetadataTab } from "~/components/metadata-tab/MetadataTab.js";
 import { TraceHistoryTabAsync } from "~/components/trace-history-tab/TraceHistoryTabAsync.js";
+import { useDocumentTitle } from "~/hooks/useDocumentTitle.js";
 
 import { strings } from "./SettingsPage.strings.js";
 import { useSettingsStyles } from "./SettingsPage.styles.js";
@@ -36,6 +37,7 @@ function isSection(value: string | null): value is Section {
 export const SettingsPageContent: FC = () => {
   const styles = useSettingsStyles();
   const [searchParams, setSearchParams] = useSearchParams();
+  useDocumentTitle("Settings");
 
   const rawSection = searchParams.get("section");
   const active: Section = isSection(rawSection) ? rawSection : "account";

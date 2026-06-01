@@ -6,6 +6,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { DetailPane } from "~/components/detail-pane/DetailPane.js";
 import { EmptyLibrariesHero } from "~/components/empty-libraries-hero/EmptyLibrariesHero.js";
 import { ProfilesExplorer } from "~/components/profiles-explorer/ProfilesExplorer.js";
+import { useDocumentTitle } from "~/hooks/useDocumentTitle.js";
 import {
   type LibraryScanSnapshot,
   useLibraryScanSubscription,
@@ -58,6 +59,7 @@ export const ProfilesPageContent: FC = () => {
   const navigate = useNavigate();
   const environment = useRelayEnvironment();
   const [params, setParams] = useSearchParams();
+  useDocumentTitle("Xstream profile");
 
   const filmId = params.get("film");
   const editingFilm = params.get("edit") === "1";

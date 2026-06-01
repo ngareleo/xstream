@@ -4,6 +4,7 @@ import { graphql, useFragment } from "react-relay";
 
 import { Poster } from "~/components/poster/Poster.js";
 import { VideoPlayerAsync } from "~/components/video-player/VideoPlayerAsync.js";
+import { useDocumentTitle } from "~/hooks/useDocumentTitle.js";
 import { IconBack } from "~/lib/icons.js";
 import type { VideoArea_video$key } from "~/relay/__generated__/VideoArea_video.graphql.js";
 import { formatDuration } from "~/utils/formatters.js";
@@ -61,6 +62,7 @@ export const VideoArea: FC<Props> = ({ video, seriesPick, controlsHidden, onBack
   const fadeClass = mergeClasses(styles.fade, controlsHidden && styles.fadeHidden);
   const meta = data.metadata;
   const displayTitle = meta?.title ?? data.title ?? strings.untitled;
+  useDocumentTitle(displayTitle);
   const posterUrl = meta?.heroPoster ?? null;
   const episodeCode = seriesPick
     ? formatEpisodeCode(seriesPick.seasonNumber, seriesPick.episodeNumber)
