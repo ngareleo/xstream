@@ -35,6 +35,15 @@ Entry shape (the entry ends with a single line containing exactly three hyphens 
 
 <!-- ENTRIES BELOW — newest first; each ends with a bare three-hyphen divider line. -->
 
+## 2026-06-01 — PR fix/homepage-bestcopy-crash — Film.bestCopy non-null contract clarification
+
+PR fix/homepage-bestcopy-crash fixes a HomePage crash that occurred when a Film row had zero linked main-copy videos (orphaned films after source unmount or disk wipe). The server fix enforces the non-null contract at the query source: `list_films()` and `count_films()` now filter via `EXISTS (SELECT 1 FROM videos vm WHERE vm.film_id = f.id AND vm.role='main')` so every returned Film is guaranteed playable. The client adds defense-in-depth with a `.filter((edge) => edge.node.bestCopy != null)` guard in `HomeFilmsSection`'s rows useMemo, so partial-data responses or off-disk films never white-screen the page. Three docs were updated to reconcile a prior schema-comment inconsistency: GraphQL-Schema now documents that `bestCopy: Video!` is non-null *because* the films query guarantees it; Film-Entity explains orphaned-film filtering and off-disk scenarios; HomeFilmsSection spec documents the defensive filter. This closes a gap where docs claimed non-null but didn't explain the mechanism — the contract is now load-bearing and visible to future maintainers.
+
+**Files:** `docs/server/GraphQL-Schema/00-Surface.md`, `docs/architecture/Library-Scan/02-Film-Entity.md`, `docs/client/Components/HomeFilmsSection.md`
+**Related Commit.md entry:** `05e9b6a`
+
+---
+
 ## 2026-05-28 — PR #71 — Doppler dev secrets migration: curator reconciliation of all env tooling references
 
 The PR deleted legacy local env tooling (`.env.example`, `scripts/check-env.sh`, `scripts/check-env.ts`, npm `check-env` script, and the `.env` fallback in dev launchers) now that Doppler is the canonical source for dev secrets. Four docs and agent files were reconciled to remove stale references and route operators to Doppler: setup-local skill steps 4–5 now run `doppler login` and `doppler setup`, then `doppler run -- bun run dev` for secret injection; devops agent playbook for "adding a new env var" switched to `doppler secrets set` instead of `.env.example` + `check-env.sh`; debug-backend skill removed `.env.example` from its scan list; Axiom docs updated four key passages: the token table, the dev-flow setup checklist, the bring-up checklist, and env-var injection examples now all reference `doppler run --` and Doppler secrets, not `.env` files. This keeps agent guidance and setup flows coherent with the removed code.

@@ -15,6 +15,13 @@ Entry shape (each entry ends with the divider line described above):
 
 <!-- ENTRIES BELOW — newest first; each ends with a bare `---` line. The architect's next invocation will treat the no-entries state as the first-run case and prepend a bootstrap entry at HEAD. -->
 
+## 05e9b6a — 2026-06-01
+
+**Files:** `docs/server/GraphQL-Schema/00-Surface.md`, `docs/architecture/Library-Scan/02-Film-Entity.md`, `docs/client/Components/HomeFilmsSection.md`
+**Why:** Curator sync for PR fix/homepage-bestcopy-crash: clarified non-null `Film.bestCopy` contract, orphaned-film filtering, and client defensive guard.
+
+---
+
 ## (current HEAD) — 2026-05-28
 
 **Files:** `.claude/skills/setup-local/SKILL.md`, `.claude/agents/devops.md`, `.claude/skills/debug-backend/SKILL.md`, `docs/architecture/Deployment/04-Axiom-Production-Backend.md`
