@@ -203,6 +203,9 @@ type Film implements Node {
   """
   The primary video to display as the poster. Selected via the first role='main'
   video, or the highest-resolution/bitrate video if multiple role='main' exist.
+  Non-null by contract: the `films` query filters to exclude orphaned films
+  (those with no linked role='main' video), guaranteeing every returned Film
+  has a playable bestCopy.
   """
   bestCopy: Video!
   """

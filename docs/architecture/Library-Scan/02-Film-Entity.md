@@ -19,7 +19,7 @@ The scanner identifies duplicates via two keys, applied in order. The first to m
 
 - `id` (global ID)
 - `title`, `year`, `genre`, `director`, `plot` — metadata fields (populated by OMDb)
-- `bestCopy: Video!` — the "main" video to display as the primary poster; selection logic below
+- `bestCopy: Video!` — the "main" video to display as the primary poster; selection logic below. **Non-null by guarantee:** the `films` query filters to exclude orphaned films (rows with no linked `role='main'` video), so every returned Film has a playable `bestCopy`.
 - `copies: [Video!]!` — all videos for this film, ordered by `role` (main first) then resolution (highest first) then bitrate
 - `extras: [Video!]!` — convenience field, same as `copies` filtered to `role='extra'`
 
@@ -68,6 +68,18 @@ Videos linked to a film carry a `role` enum:
 | `'extra'` | Supplementary (trailers, behind-the-scenes, deleted scenes, alternate cuts) | Skipped for playback; visible in UI as "variants" |
 
 When a film has multiple files with `role='main'`, the variant picker (FilmVariants component) surfaces all of them so the user can choose which to play. The chosen copy's ID is stored in the player route (`?film=<id>&copy=<video_id>` or equivalent), and the Play CTA uses that specific video.
+
+## Orphaned films and off-disk handling
+
+**Orphaned films** — films with no linked `role='main'` video — can occur in two scenarios:
+
+1. **Source unmounted mid-scan** — the library path became unreachable (unmounted, network disconnect, permissions loss) after the Film row was created but before videos were assigned. The Film row persists in the DB; its videos are not re-added until the library is re-scanned and comes back online.
+
+2. **Off-disk after a source wipe** — a user manually deletes video files from disk without re-scanning the library. The Film row and video rows remain catalogued in the DB indefinitely (so browse history and watchlist are not lost), but the film cannot be played.
+
+**Query filtering** — the `films` query in `server-rust/src/db/queries/films.rs` includes a WHERE clause that excludes any Film without a linked `role='main'` video. This guarantees that every Film returned to the client has a playable `bestCopy` — orphaned films are hidden from browse/search results. This is a correctness guarantee: treating `bestCopy` as non-null in the GraphQL schema is sound because the query ensures the invariant.
+
+**Client guards** — even with the server filter in place, the client's `HomeFilmsSection` includes a defensive `.filter((edge) => edge.node.bestCopy != null)` in its `rows` useMemo. This protects against partial-data responses or future schema evolution where a Film might arrive without its `bestCopy` field populated. One bad film never white-screens the page.
 
 ## Watchlist and playback progress
 

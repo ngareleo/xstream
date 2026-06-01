@@ -86,11 +86,11 @@ clears all state.
 
 ### Filter derivation
 
-`toFilterRowFromFilm(film)` produces a `FilterRow` (defined in
-`HomeFilmsSection.utils.ts`) from each Film, exposing `title`,
-`filename`, `director`, `genre`, `resolution`, `codec`, `year` for the
-search/filter logic. The `node` field is the `bestCopy` Video — what
-`FilmTile` and `FilmDetailsOverlay` render.
+The `rows` useMemo processes edges in two steps:
+
+1. **Defensive null-check filter:** `.filter((edge) => edge.node.bestCopy != null)` — excludes films whose `bestCopy` is absent. While the server's `films` query already filters to exclude orphaned films (those with no `role='main'` video), this guard protects against partial-data responses or off-disk films and prevents a single bad film from white-screening the page.
+
+2. **FilterRow mapping:** `toFilterRowFromFilm(film)` produces a `FilterRow` (defined in `HomeFilmsSection.utils.ts`) from each Film, exposing `title`, `filename`, `director`, `genre`, `resolution`, `codec`, `year` for the search/filter logic. The `node` field is the guaranteed-non-null `bestCopy` Video — what `FilmTile` and `FilmDetailsOverlay` render.
 
 ## Data
 
