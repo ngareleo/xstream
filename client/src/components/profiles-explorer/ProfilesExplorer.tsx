@@ -1,4 +1,4 @@
-import { type FC, useMemo, useState } from "react";
+import { type FC, useEffect, useMemo, useState } from "react";
 
 import { FilmRow } from "~/components/film-row/FilmRow";
 import { ProfileRow } from "~/components/profile-row/ProfileRow";
@@ -34,13 +34,23 @@ export const ProfilesExplorer: FC<ProfilesExplorerProps> = ({
 }) => {
   const styles = useProfilesExplorerStyles();
 
-  const initialExpanded = useMemo(() => {
-    const set = new Set<string>();
-    if (libraries.length > 0) set.add(libraries[0].id);
-    if (selectedLibraryId) set.add(selectedLibraryId);
-    return set;
-  }, [libraries, selectedLibraryId]);
-  const [expandedIds, setExpandedIds] = useState<Set<string>>(initialExpanded);
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(() =>
+    selectedLibraryId ? new Set([selectedLibraryId]) : new Set()
+  );
+
+  // Auto-expand the profile that holds the selected film. selectedLibraryId
+  // can arrive *after* mount — a film restored from the last visit is set via
+  // the URL param in an effect — so reacting to it here (not just at init) is
+  // what expands the right profile instead of defaulting to the first.
+  useEffect(() => {
+    if (!selectedLibraryId) return;
+    setExpandedIds((prev) => {
+      if (prev.has(selectedLibraryId)) return prev;
+      const next = new Set(prev);
+      next.add(selectedLibraryId);
+      return next;
+    });
+  }, [selectedLibraryId]);
 
   const toggleProfile = (id: string): void => {
     setExpandedIds((prev) => {
