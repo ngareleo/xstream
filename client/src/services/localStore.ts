@@ -26,6 +26,11 @@ export function writeLocal(key: string, value: string | null): void {
   }
 }
 
+/** Remove every app-owned key (the values in {@link LocalStorageKey}). */
+export function clearAppLocal(): void {
+  for (const key of Object.values(LocalStorageKey)) writeLocal(key, null);
+}
+
 /** Every key currently in localStorage; empty when storage is unavailable. */
 export function localKeys(): string[] {
   try {

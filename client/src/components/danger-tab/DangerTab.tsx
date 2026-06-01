@@ -7,6 +7,7 @@ import type { DangerTabWipeAllMutation } from "~/relay/__generated__/DangerTabWi
 import type { DangerTabWipeDbMutation } from "~/relay/__generated__/DangerTabWipeDbMutation.graphql.js";
 import type { DangerTabWipePosterCacheMutation } from "~/relay/__generated__/DangerTabWipePosterCacheMutation.graphql.js";
 import type { DangerTabWipeSegmentCacheMutation } from "~/relay/__generated__/DangerTabWipeSegmentCacheMutation.graphql.js";
+import { clearAppLocal } from "~/services/localStore.js";
 
 import { strings } from "./DangerTab.strings.js";
 import { useDangerTabStyles } from "./DangerTab.styles.js";
@@ -77,6 +78,9 @@ export const DangerTab: FC = () => {
         if (errors && errors.length > 0) {
           setStatus({ key, ok: false, error: errors[0].message, at: new Date() });
         } else {
+          // "Wipe Everything" is a hard reset — also clear the app's
+          // client-side persisted UI state (pane width, last-opened film).
+          if (key === "all") clearAppLocal();
           setStatus({ key, ok: true, at: new Date() });
         }
       };
