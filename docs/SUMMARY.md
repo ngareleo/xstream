@@ -13,7 +13,7 @@ High-resolution media streaming. A Rust server transcodes local video files to f
 | Server runtime | Rust + tokio |
 | HTTP + WS | `axum` + `tower` + `async-graphql` (`graphql-ws` subprotocol) |
 | DB | `rusqlite` (bundled, WAL mode, foreign keys ON) — raw SQL only, no ORM |
-| Video | `tokio::process::Command` spawning the bundled jellyfin-ffmpeg (`scripts/ffmpeg-manifest.json`, per-platform SHA256). VAAPI on Linux; macOS (VideoToolbox) and Windows (D3D11VA / QSV) paths stubbed. |
+| Video | `tokio::process::Command` spawning the bundled jellyfin-ffmpeg (`scripts/ffmpeg-manifest.json`, per-platform SHA256). VAAPI on Linux; macOS/Windows stubs gracefully degrade to software encoding with a warning. |
 | Desktop shell | Tauri v2 — system WebView (WebKit on macOS / Linux, WebView2 on Windows); the Rust server runs as a tokio task in the same process |
 | Client bundler | Rsbuild (run via `bun run`) |
 | UI | React 18 + React Router v6 |
