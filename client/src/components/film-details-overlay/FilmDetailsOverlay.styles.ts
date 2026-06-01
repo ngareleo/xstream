@@ -47,12 +47,21 @@ export const useFilmDetailsOverlayStyles = makeStyles({
     pointerEvents: "none",
     backgroundImage: `linear-gradient(180deg, rgba(5,7,6,0.45) 0%, transparent 25%, transparent 38%, rgba(5,7,6,0.85) 72%, ${tokens.colorBg0} 100%), linear-gradient(90deg, rgba(5,7,6,0.5) 0%, transparent 35%)`,
   },
-  close: {
+  // Top-right cluster: the secondary "Open in Profile" action sits to the
+  // left of the circular close button.
+  topActions: {
     position: "absolute",
     top: "64px",
     right: "28px",
+    zIndex: 4,
+    display: "flex",
+    alignItems: "center",
+    columnGap: "18px",
+  },
+  close: {
     width: "40px",
     height: "40px",
+    flexShrink: 0,
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
@@ -72,7 +81,6 @@ export const useFilmDetailsOverlayStyles = makeStyles({
     borderLeftColor: tokens.colorBorder,
     borderRadius: "50%",
     cursor: "pointer",
-    zIndex: 4,
     transitionProperty: "background-color, border-color",
     transitionDuration: tokens.transition,
     ":hover": {
@@ -407,5 +415,13 @@ export const useFilmDetailsOverlayStyles = makeStyles({
     flexGrow: 1,
     overflowY: "auto",
     overflowX: "hidden",
+  },
+  // Padding for non-SeasonsPanel rail content (the copy picker), which has no
+  // header bar of its own — keeps it off the panel edges.
+  railBody: {
+    paddingTop: "4px",
+    paddingBottom: "16px",
+    paddingLeft: "16px",
+    paddingRight: "16px",
   },
 });

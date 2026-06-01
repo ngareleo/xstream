@@ -5,6 +5,7 @@ export const strings = new LocalizedStrings({
     play: "Play",
     closeAriaLabel: "Close details",
     seasonsAriaLabel: "Seasons and episodes",
+    copiesAriaLabel: "Available copies",
     season: "season",
     seasons: "seasons",
     onDiskFormat: "{onDisk} / {total} on disk",

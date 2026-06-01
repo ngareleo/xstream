@@ -139,6 +139,10 @@ export const FilmDetailsOverlay: FC<FilmDetailsOverlayProps> = ({
     0
   );
   const seasonCount = seasons.length;
+  // Movies with >1 copy show the copy picker in the same right-side rail the
+  // seasons explorer occupies for shows; both narrow the main content column.
+  const hasVariants = !isSeries && variantOptions.length > 1;
+  const hasRail = (isSeries && seasonCount > 0) || hasVariants;
   const resolution = data.nativeResolution
     ? (RESOLUTION_LABEL[data.nativeResolution] ?? null)
     : null;
@@ -189,15 +193,26 @@ export const FilmDetailsOverlay: FC<FilmDetailsOverlayProps> = ({
       <div className={styles.hero}>
         <Poster url={data.metadata?.heroPoster ?? null} alt={altText} className={styles.poster} />
         <div className={styles.gradient} />
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label={strings.closeAriaLabel}
-          className={styles.close}
-        >
-          <IconClose />
-        </button>
-        <div className={mergeClasses(styles.content, isSeries && styles.contentWithRail)}>
+        <div className={styles.topActions}>
+          <button
+            type="button"
+            onClick={openInProfile}
+            aria-label={strings.openInProfile}
+            className={styles.secondaryCta}
+          >
+            <IconFolder />
+            <span>{strings.openInProfile}</span>
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label={strings.closeAriaLabel}
+            className={styles.close}
+          >
+            <IconClose />
+          </button>
+        </div>
+        <div className={mergeClasses(styles.content, hasRail && styles.contentWithRail)}>
           <div className={styles.chips}>
             {resolution && (
               <span className={mergeClasses(styles.chip, styles.chipGreen)}>{resolution}</span>
@@ -238,30 +253,27 @@ export const FilmDetailsOverlay: FC<FilmDetailsOverlayProps> = ({
               <IconPlay />
               <span>{strings.play}</span>
             </button>
-            <button
-              type="button"
-              onClick={openInProfile}
-              aria-label={strings.openInProfile}
-              className={styles.secondaryCta}
-            >
-              <IconFolder />
-              <span>{strings.openInProfile}</span>
-            </button>
             <span className={styles.filename}>{data.filename}</span>
           </div>
-          {variantOptions.length > 1 && (
-            <FilmVariants
-              copies={variantOptions}
-              selectedId={selectedCopyId}
-              onSelect={setSelectedCopyId}
-            />
-          )}
           {suggestions.length > 0 && (
             <div className={styles.scrollHint} aria-hidden="true">
               {strings.scrollHint}
             </div>
           )}
         </div>
+        {hasVariants && (
+          <aside className={styles.seasonsRail} aria-label={strings.copiesAriaLabel}>
+            <div className={styles.seasonsRailScroll}>
+              <div className={styles.railBody}>
+                <FilmVariants
+                  copies={variantOptions}
+                  selectedId={selectedCopyId}
+                  onSelect={setSelectedCopyId}
+                />
+              </div>
+            </div>
+          </aside>
+        )}
         {isSeries && seasonCount > 0 && (
           <aside className={styles.seasonsRail} aria-label={strings.seasonsAriaLabel}>
             <div className={styles.seasonsRailHeader}>
