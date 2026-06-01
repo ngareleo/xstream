@@ -91,16 +91,29 @@ export const useFilmDetailsOverlayStyles = makeStyles({
       borderLeftColor: tokens.colorGreen,
     },
   },
-  content: {
+  // Bottom row: the title/content block (left) and the copies rail (right)
+  // share one flex container so they bottom-align. Right edge matches the
+  // close button (right:28px); pointer-events pass through the empty gap.
+  heroBottom: {
     position: "absolute",
+    top: "120px",
     left: "60px",
-    right: "60px",
+    right: "28px",
     bottom: "72px",
     zIndex: 3,
+    display: "flex",
+    alignItems: "flex-end",
+    justifyContent: "space-between",
+    columnGap: "40px",
+    pointerEvents: "none",
+  },
+  content: {
+    position: "relative",
     display: "flex",
     flexDirection: "column",
     rowGap: "14px",
     maxWidth: "720px",
+    pointerEvents: "auto",
   },
   contentWithRail: {
     maxWidth: "560px",
@@ -358,9 +371,10 @@ export const useFilmDetailsOverlayStyles = makeStyles({
   },
   seasonsRail: {
     position: "absolute",
-    // Clears the top-right action cluster (Open-in-Profile + close, 64–104px).
+    // Clears the top-right action cluster (Open-in-Profile + close, 64–104px);
+    // right edge aligned with the close button (right:28px).
     top: "120px",
-    right: "60px",
+    right: "28px",
     bottom: "72px",
     width: "380px",
     zIndex: 3,
@@ -421,21 +435,19 @@ export const useFilmDetailsOverlayStyles = makeStyles({
   // its content (a handful of copies) instead of stretching full-height, and
   // dropped below the top-right action cluster. Scrolls if a film somehow has
   // many copies.
+  // Copies rail — flex child of heroBottom, bottom-aligned with the content
+  // block. Content-sized (caps at the row height, then scrolls). Rounded,
+  // frosted-glass panel.
   copiesRail: {
-    position: "absolute",
-    // Bottom-anchored to line up with the title/content block on the left
-    // (both sit at bottom:72px); grows upward, capped so it clears the
-    // top-right action cluster.
-    bottom: "72px",
-    right: "60px",
     width: "380px",
-    maxHeight: "calc(100% - 192px)",
-    zIndex: 3,
+    flexShrink: 0,
+    maxHeight: "100%",
+    pointerEvents: "auto",
     display: "flex",
     flexDirection: "column",
-    backgroundColor: "rgba(5, 7, 6, 0.72)",
-    backdropFilter: "blur(14px) saturate(160%)",
-    WebkitBackdropFilter: "blur(14px) saturate(160%)",
+    backgroundColor: "rgba(12, 15, 14, 0.42)",
+    backdropFilter: "blur(26px) saturate(170%)",
+    WebkitBackdropFilter: "blur(26px) saturate(170%)",
     borderTopWidth: "1px",
     borderRightWidth: "1px",
     borderBottomWidth: "1px",
@@ -444,12 +456,12 @@ export const useFilmDetailsOverlayStyles = makeStyles({
     borderRightStyle: "solid",
     borderBottomStyle: "solid",
     borderLeftStyle: "solid",
-    borderTopColor: tokens.colorBorder,
-    borderRightColor: tokens.colorBorder,
-    borderBottomColor: tokens.colorBorder,
-    borderLeftColor: tokens.colorBorder,
-    borderRadius: tokens.radiusSm,
-    boxShadow: "0 16px 40px rgba(0,0,0,0.45)",
+    borderTopColor: "rgba(255,255,255,0.14)",
+    borderRightColor: "rgba(255,255,255,0.10)",
+    borderBottomColor: "rgba(255,255,255,0.08)",
+    borderLeftColor: "rgba(255,255,255,0.10)",
+    borderRadius: "16px",
+    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.10), 0 16px 40px rgba(0,0,0,0.45)",
     overflowY: "auto",
     overflowX: "hidden",
   },

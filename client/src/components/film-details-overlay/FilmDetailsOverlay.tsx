@@ -212,66 +212,68 @@ export const FilmDetailsOverlay: FC<FilmDetailsOverlayProps> = ({
             <IconClose />
           </button>
         </div>
-        <div className={mergeClasses(styles.content, hasRail && styles.contentWithRail)}>
-          <div className={styles.chips}>
-            {resolution && (
-              <span className={mergeClasses(styles.chip, styles.chipGreen)}>{resolution}</span>
-            )}
-            {codec && <span className={styles.chip}>{codec}</span>}
-            {unavailable && (
-              <span className={mergeClasses(styles.chip, styles.chipOffline)}>
-                {strings.offlineChip}
-              </span>
-            )}
-            {data.metadata?.rating !== null && data.metadata?.rating !== undefined && (
-              <span className={styles.rating}>
-                <ImdbBadge />
-                {data.metadata.rating}
-              </span>
-            )}
-          </div>
-          <div className={styles.title}>{titleText}</div>
-          <div className={styles.metaRow}>
-            {[data.metadata?.year, data.metadata?.genre, duration]
-              .filter((v): v is string | number => v !== null && v !== undefined)
-              .join(" · ")}
-          </div>
-          {data.metadata?.director && (
-            <div className={styles.director}>
-              {strings.directedBy}
-              <span className={styles.directorName}>{data.metadata.director}</span>
+        <div className={styles.heroBottom}>
+          <div className={mergeClasses(styles.content, hasRail && styles.contentWithRail)}>
+            <div className={styles.chips}>
+              {resolution && (
+                <span className={mergeClasses(styles.chip, styles.chipGreen)}>{resolution}</span>
+              )}
+              {codec && <span className={styles.chip}>{codec}</span>}
+              {unavailable && (
+                <span className={mergeClasses(styles.chip, styles.chipOffline)}>
+                  {strings.offlineChip}
+                </span>
+              )}
+              {data.metadata?.rating !== null && data.metadata?.rating !== undefined && (
+                <span className={styles.rating}>
+                  <ImdbBadge />
+                  {data.metadata.rating}
+                </span>
+              )}
             </div>
-          )}
-          {data.metadata?.plot && <div className={styles.plot}>{data.metadata.plot}</div>}
-          <div className={styles.actions}>
-            <button
-              type="button"
-              onClick={playWithTransition}
-              aria-disabled={unavailable}
-              className={mergeClasses(styles.playCta, unavailable && styles.playCtaDisabled)}
-            >
-              <IconPlay />
-              <span>{strings.play}</span>
-            </button>
-            <span className={styles.filename}>{data.filename}</span>
-          </div>
-          {suggestions.length > 0 && (
-            <div className={styles.scrollHint} aria-hidden="true">
-              {strings.scrollHint}
+            <div className={styles.title}>{titleText}</div>
+            <div className={styles.metaRow}>
+              {[data.metadata?.year, data.metadata?.genre, duration]
+                .filter((v): v is string | number => v !== null && v !== undefined)
+                .join(" · ")}
             </div>
+            {data.metadata?.director && (
+              <div className={styles.director}>
+                {strings.directedBy}
+                <span className={styles.directorName}>{data.metadata.director}</span>
+              </div>
+            )}
+            {data.metadata?.plot && <div className={styles.plot}>{data.metadata.plot}</div>}
+            <div className={styles.actions}>
+              <button
+                type="button"
+                onClick={playWithTransition}
+                aria-disabled={unavailable}
+                className={mergeClasses(styles.playCta, unavailable && styles.playCtaDisabled)}
+              >
+                <IconPlay />
+                <span>{strings.play}</span>
+              </button>
+              <span className={styles.filename}>{data.filename}</span>
+            </div>
+            {suggestions.length > 0 && (
+              <div className={styles.scrollHint} aria-hidden="true">
+                {strings.scrollHint}
+              </div>
+            )}
+          </div>
+          {hasVariants && (
+            <aside className={styles.copiesRail} aria-label={strings.copiesAriaLabel}>
+              <div className={styles.railBody}>
+                <FilmVariants
+                  copies={variantOptions}
+                  selectedId={selectedCopyId}
+                  onSelect={setSelectedCopyId}
+                />
+              </div>
+            </aside>
           )}
         </div>
-        {hasVariants && (
-          <aside className={styles.copiesRail} aria-label={strings.copiesAriaLabel}>
-            <div className={styles.railBody}>
-              <FilmVariants
-                copies={variantOptions}
-                selectedId={selectedCopyId}
-                onSelect={setSelectedCopyId}
-              />
-            </div>
-          </aside>
-        )}
         {isSeries && seasonCount > 0 && (
           <aside className={styles.seasonsRail} aria-label={strings.seasonsAriaLabel}>
             <div className={styles.seasonsRailHeader}>
