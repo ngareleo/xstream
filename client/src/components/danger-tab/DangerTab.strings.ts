@@ -20,7 +20,7 @@ export const strings = new LocalizedStrings({
     btnIdle: "Wipe",
     btnConfirm: "Click again to confirm",
     btnPending: "Wiping…",
-    statusOk: "Done at {time}",
-    statusErr: "Failed: {error}",
+    toastOkFormat: "{title} — done.",
+    toastFailFormat: "{title} failed: {error}",
   },
 });

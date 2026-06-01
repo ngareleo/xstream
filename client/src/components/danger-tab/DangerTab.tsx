@@ -3,6 +3,7 @@ import { type FC, useCallback, useEffect, useRef, useState } from "react";
 import { graphql, useMutation } from "react-relay";
 
 import { useSettingsTabStyles } from "~/components/settings-tabs/SettingsTabs.styles.js";
+import { useToast } from "~/hooks/useToast.js";
 import type { DangerTabWipeAllMutation } from "~/relay/__generated__/DangerTabWipeAllMutation.graphql.js";
 import type { DangerTabWipeDbMutation } from "~/relay/__generated__/DangerTabWipeDbMutation.graphql.js";
 import type { DangerTabWipePosterCacheMutation } from "~/relay/__generated__/DangerTabWipePosterCacheMutation.graphql.js";
@@ -35,18 +36,19 @@ const WIPE_ALL = graphql`
 
 type WipeKey = "db" | "posters" | "segments" | "all";
 
-interface WipeStatus {
-  key: WipeKey;
-  ok: boolean;
-  error?: string;
-  at: Date;
-}
+const TITLE: Record<WipeKey, string> = {
+  db: strings.wipeDbTitle,
+  posters: strings.wipePostersTitle,
+  segments: strings.wipeSegmentsTitle,
+  all: strings.wipeAllTitle,
+};
 
 const CONFIRM_WINDOW_MS = 3000;
 
 export const DangerTab: FC = () => {
   const tabStyles = useSettingsTabStyles();
   const styles = useDangerTabStyles();
+  const toast = useToast();
 
   const [wipeDb, dbPending] = useMutation<DangerTabWipeDbMutation>(WIPE_DB);
   const [wipePosters, postersPending] = useMutation<DangerTabWipePosterCacheMutation>(WIPE_POSTERS);
@@ -55,7 +57,6 @@ export const DangerTab: FC = () => {
   const [wipeAll, allPending] = useMutation<DangerTabWipeAllMutation>(WIPE_ALL);
 
   const [armed, setArmed] = useState<WipeKey | null>(null);
-  const [status, setStatus] = useState<WipeStatus | null>(null);
   const armedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Auto-disarm: if the user clicks once but doesn't follow through within
@@ -71,21 +72,31 @@ export const DangerTab: FC = () => {
 
   const fire = useCallback(
     (key: WipeKey): void => {
+      const fail = (error: string): void => {
+        toast({
+          variant: "error",
+          message: strings.formatString(strings.toastFailFormat, {
+            title: TITLE[key],
+            error,
+          }) as string,
+        });
+      };
       const onCompleted = (
         _: unknown,
         errors: ReadonlyArray<{ message: string }> | null | undefined
       ): void => {
         if (errors && errors.length > 0) {
-          setStatus({ key, ok: false, error: errors[0].message, at: new Date() });
-        } else {
-          // Hard reset — also clear client-side UI state (pane width, last-opened film).
-          if (key === "all") clearAppLocal();
-          setStatus({ key, ok: true, at: new Date() });
+          fail(errors[0].message);
+          return;
         }
+        // Hard reset — also clear client-side UI state (pane width, last-opened film).
+        if (key === "all") clearAppLocal();
+        toast({
+          variant: "success",
+          message: strings.formatString(strings.toastOkFormat, { title: TITLE[key] }) as string,
+        });
       };
-      const onError = (err: Error): void => {
-        setStatus({ key, ok: false, error: err.message, at: new Date() });
-      };
+      const onError = (err: Error): void => fail(err.message);
       const variables = {};
       switch (key) {
         case "db":
@@ -102,7 +113,7 @@ export const DangerTab: FC = () => {
           break;
       }
     },
-    [wipeDb, wipePosters, wipeSegments, wipeAll]
+    [wipeDb, wipePosters, wipeSegments, wipeAll, toast]
   );
 
   const onClick = (key: WipeKey): void => {
@@ -131,26 +142,11 @@ export const DangerTab: FC = () => {
     const isArmed = armed === key;
     const isPending = pendingFor(key);
     const label = isPending ? strings.btnPending : isArmed ? strings.btnConfirm : strings.btnIdle;
-    const showStatus = status?.key === key;
     return (
       <div className={styles.row}>
         <div>
           <div className={styles.rowTitle}>{title}</div>
           <div className={styles.rowDesc}>{desc}</div>
-          {showStatus && (
-            <div
-              className={mergeClasses(styles.status, !status.ok && styles.statusErr)}
-              role="status"
-            >
-              {status.ok
-                ? strings.formatString(strings.statusOk, {
-                    time: status.at.toLocaleTimeString(),
-                  })
-                : strings.formatString(strings.statusErr, {
-                    error: status.error ?? "unknown",
-                  })}
-            </div>
-          )}
         </div>
         <button
           type="button"
