@@ -13,5 +13,7 @@ export const strings = new LocalizedStrings({
     directedBy: "Directed by ",
     unmatched: "Unmatched file",
     openInProfile: "Open in Profile",
+    offlineChip: "Offline",
+    unavailableToast: "Unavailable — this title's library is offline.",
   },
 });

@@ -47,6 +47,9 @@ const _VIDEO_FRAGMENT = graphql`
     videoStream {
       codec
     }
+    library {
+      status
+    }
     ...FilmTile_video
     ...FilmDetailsOverlay_video
   }

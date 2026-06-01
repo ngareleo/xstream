@@ -9,6 +9,7 @@ import { Poster } from "~/components/poster/Poster";
 import { PosterRow } from "~/components/poster-row/PosterRow";
 import { SeasonsPanel } from "~/components/seasons-panel/SeasonsPanel";
 import { ROUTE_PATHS } from "~/config/routePaths";
+import { useToast } from "~/hooks/useToast";
 import { IconClose, IconPlay, ImdbBadge } from "~/lib/icons";
 import type { FilmDetailsOverlay_video$key } from "~/relay/__generated__/FilmDetailsOverlay_video.graphql";
 import type { FilmTile_video$key } from "~/relay/__generated__/FilmTile_video.graphql";
@@ -26,6 +27,7 @@ export interface OverlayCopy {
   readonly fileSizeBytes: number;
   readonly bitrate: number;
   readonly videoStream: { readonly codec: string } | null | undefined;
+  readonly library: { readonly status: string } | null | undefined;
 }
 
 const OVERLAY_FRAGMENT = graphql`
@@ -48,6 +50,9 @@ const OVERLAY_FRAGMENT = graphql`
     }
     videoStream {
       codec
+    }
+    library {
+      status
     }
     show {
       seasons {
@@ -105,6 +110,7 @@ export const FilmDetailsOverlay: FC<FilmDetailsOverlayProps> = ({
   const data = useFragment(OVERLAY_FRAGMENT, video);
   const styles = useFilmDetailsOverlayStyles();
   const navigate = useNavigate();
+  const toast = useToast();
   const overlayRef = useRef<HTMLDivElement>(null);
   const isSeries = data.mediaType === "TV_SHOWS";
   const sanitisedTitle = data.metadata?.title ?? data.title;
@@ -139,13 +145,28 @@ export const FilmDetailsOverlay: FC<FilmDetailsOverlayProps> = ({
   const codec = data.videoStream?.codec ?? null;
   const duration = data.durationSeconds > 0 ? formatDurationHuman(data.durationSeconds) : null;
 
+  // A copy is unplayable when its owning library is offline (the file is
+  // unreachable). For the picked variant, fall back to the source video's
+  // library when the copy carries none.
+  const selectedCopy = copies?.find((c) => c.id === selectedCopyId);
+  const playStatus = selectedCopy?.library?.status ?? data.library?.status ?? null;
+  const unavailable = playStatus === "OFFLINE";
+
   const playWithTransition = (): void => {
+    if (unavailable) {
+      toast({ variant: "error", message: strings.unavailableToast });
+      return;
+    }
     // Use picker's selected copy or overlay's source video (bestCopy/show).
     const target = selectedCopyId || data.id;
     withViewTransition(() => navigate(`/player/${target}`));
   };
 
   const playEpisode = (seasonNumber: number, episodeNumber: number): void => {
+    if (data.library?.status === "OFFLINE") {
+      toast({ variant: "error", message: strings.unavailableToast });
+      return;
+    }
     navigate(`/player/${data.id}?s=${seasonNumber}&e=${episodeNumber}`);
   };
 
@@ -182,6 +203,11 @@ export const FilmDetailsOverlay: FC<FilmDetailsOverlayProps> = ({
               <span className={mergeClasses(styles.chip, styles.chipGreen)}>{resolution}</span>
             )}
             {codec && <span className={styles.chip}>{codec}</span>}
+            {unavailable && (
+              <span className={mergeClasses(styles.chip, styles.chipOffline)}>
+                {strings.offlineChip}
+              </span>
+            )}
             {data.metadata?.rating !== null && data.metadata?.rating !== undefined && (
               <span className={styles.rating}>
                 <ImdbBadge />
@@ -203,7 +229,12 @@ export const FilmDetailsOverlay: FC<FilmDetailsOverlayProps> = ({
           )}
           {data.metadata?.plot && <div className={styles.plot}>{data.metadata.plot}</div>}
           <div className={styles.actions}>
-            <button type="button" onClick={playWithTransition} className={styles.playCta}>
+            <button
+              type="button"
+              onClick={playWithTransition}
+              aria-disabled={unavailable}
+              className={mergeClasses(styles.playCta, unavailable && styles.playCtaDisabled)}
+            >
               <IconPlay />
               <span>{strings.play}</span>
             </button>

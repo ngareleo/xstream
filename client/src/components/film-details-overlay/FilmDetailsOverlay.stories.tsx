@@ -3,6 +3,7 @@ import type { Meta, StoryObj } from "storybook-react-rsbuild";
 
 import type { FilmDetailsOverlay_video$key } from "~/relay/__generated__/FilmDetailsOverlay_video.graphql";
 import type { FilmDetailsOverlayStoryQuery } from "~/relay/__generated__/FilmDetailsOverlayStoryQuery.graphql";
+import { withNovaEventing } from "~/storybook/withNovaEventing";
 import { withRelay } from "~/storybook/withRelay";
 
 import { FilmDetailsOverlay } from "./FilmDetailsOverlay.js";
@@ -87,7 +88,8 @@ const series = {
 const meta: Meta<WrapperProps> = {
   title: "Components/FilmDetailsOverlay",
   component: FilmDetailsOverlayWrapper,
-  decorators: [withRelay],
+  // FilmDetailsOverlay's Play uses useToast → useNovaEventing.
+  decorators: [withNovaEventing, withRelay],
   parameters: {
     layout: "fullscreen",
     relay: {

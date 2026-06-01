@@ -138,6 +138,13 @@ export const useFilmDetailsOverlayStyles = makeStyles({
     borderBottomColor: tokens.colorGreenDeep,
     borderLeftColor: tokens.colorGreenDeep,
   },
+  chipOffline: {
+    color: tokens.colorRed,
+    borderTopColor: tokens.colorRed,
+    borderRightColor: tokens.colorRed,
+    borderBottomColor: tokens.colorRed,
+    borderLeftColor: tokens.colorRed,
+  },
   rating: {
     display: "inline-flex",
     alignItems: "center",
@@ -241,6 +248,25 @@ export const useFilmDetailsOverlayStyles = makeStyles({
     },
     ":active": {
       transform: "translateY(0) scale(0.98)",
+    },
+  },
+  // Offline copy: rendered visually disabled but still clickable so the click
+  // can surface an explanatory toast. Neutralises the playCta hover lift.
+  playCtaDisabled: {
+    opacity: 0.45,
+    cursor: "not-allowed",
+    ":hover": {
+      transform: "none",
+      color: "rgba(255,255,255,0.55)",
+      backgroundColor: "rgba(255,255,255,0.12)",
+      textShadow: "none",
+    },
+    ":hover svg": {
+      color: "rgba(255,255,255,0.55)",
+      filter: "none",
+    },
+    ":active": {
+      transform: "none",
     },
   },
   openProfileCta: {
