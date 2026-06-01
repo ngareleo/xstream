@@ -55,6 +55,7 @@ All mutations gate on `job_store.is_empty()` and `scan_state.is_scanning()` — 
 **wipeAll button special case:**
 
 - Identical two-click flow, but the mutation is always the last user action in a session (app state is completely cleared, so the UI stale regardless).
+- On successful completion, also clears client-side localStorage via `clearAppLocal()` (removes `PaneWidth`, `ProfilesLastFilm`, and any other app-owned persisted UI state). Server-side wipes (db, posters, segments) complete as with the targeted buttons; only "Wipe Everything" touches the client.
 - Status message is the only feedback before the app goes blank or restarts.
 
 ## Data
