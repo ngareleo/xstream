@@ -10,7 +10,7 @@ import { PosterRow } from "~/components/poster-row/PosterRow";
 import { SeasonsPanel } from "~/components/seasons-panel/SeasonsPanel";
 import { ROUTE_PATHS } from "~/config/routePaths";
 import { useToast } from "~/hooks/useToast";
-import { IconClose, IconPlay, ImdbBadge } from "~/lib/icons";
+import { IconClose, IconFolder, IconPlay, ImdbBadge } from "~/lib/icons";
 import type { FilmDetailsOverlay_video$key } from "~/relay/__generated__/FilmDetailsOverlay_video.graphql";
 import type { FilmTile_video$key } from "~/relay/__generated__/FilmTile_video.graphql";
 import { formatDurationHuman } from "~/utils/formatters";
@@ -238,8 +238,14 @@ export const FilmDetailsOverlay: FC<FilmDetailsOverlayProps> = ({
               <IconPlay />
               <span>{strings.play}</span>
             </button>
-            <button type="button" onClick={openInProfile} className={styles.openProfileCta}>
-              {strings.openInProfile}
+            <button
+              type="button"
+              onClick={openInProfile}
+              aria-label={strings.openInProfile}
+              className={styles.secondaryCta}
+            >
+              <IconFolder />
+              <span>{strings.openInProfile}</span>
             </button>
             <span className={styles.filename}>{data.filename}</span>
           </div>
