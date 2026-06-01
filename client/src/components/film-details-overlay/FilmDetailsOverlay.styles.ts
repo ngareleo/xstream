@@ -47,6 +47,19 @@ export const useFilmDetailsOverlayStyles = makeStyles({
     pointerEvents: "none",
     backgroundImage: `linear-gradient(180deg, rgba(5,7,6,0.45) 0%, transparent 25%, transparent 38%, rgba(5,7,6,0.85) 72%, ${tokens.colorBg0} 100%), linear-gradient(90deg, rgba(5,7,6,0.5) 0%, transparent 35%)`,
   },
+  // Subtle top scrim so the top-right controls (Open-in-Profile + close) stay
+  // legible over bright hero art. Sits above the poster/gradient, below the
+  // controls (which carry z-index 4).
+  topScrim: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    height: "200px",
+    pointerEvents: "none",
+    backgroundImage:
+      "linear-gradient(180deg, rgba(5,7,6,0.6) 0%, rgba(5,7,6,0.25) 40%, transparent 100%)",
+  },
   // Top-right cluster: the secondary "Open in Profile" action sits to the
   // left of the circular close button.
   topActions: {

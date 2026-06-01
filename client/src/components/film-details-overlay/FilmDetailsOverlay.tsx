@@ -193,6 +193,7 @@ export const FilmDetailsOverlay: FC<FilmDetailsOverlayProps> = ({
       <div className={styles.hero}>
         <Poster url={data.metadata?.heroPoster ?? null} alt={altText} className={styles.poster} />
         <div className={styles.gradient} />
+        <div className={styles.topScrim} aria-hidden="true" />
         <div className={styles.topActions}>
           <button
             type="button"
