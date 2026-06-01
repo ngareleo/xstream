@@ -45,7 +45,7 @@ void bootstrapFlagsFromServer().finally(() => {
   // Mint the first user session now so all telemetry from boot carries session.id.
   startSessionTelemetry();
 
-  // Hydrate Supabase session before mount so the first Relay fetch carries the JWT.
+  // Restore the local session before mount so the first Relay fetch carries it.
   void restoreSession().then(() => {
     subscribeToAuthChanges(() => {});
 
