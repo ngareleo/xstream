@@ -140,7 +140,13 @@ pub struct FilmsFilter {
 
 pub fn list_films(db: &Db, limit: i64, filter: FilmsFilter) -> DbResult<Vec<FilmRow>> {
     let mut sql = String::from("SELECT DISTINCT f.* FROM films f");
-    let mut clauses: Vec<String> = Vec::new();
+    // Only surface films that still have a playable main copy. An orphaned
+    // film row (no `role='main'` video linked) makes `Film::best_copy` error,
+    // which crashes clients that treat `bestCopy` as non-null. Excluding them
+    // here keeps the non-null contract sound. No bound params, so `vals`
+    // indexing is unaffected.
+    let mut clauses: Vec<String> =
+        vec!["EXISTS (SELECT 1 FROM videos vm WHERE vm.film_id = f.id AND vm.role = 'main')".into()];
     let mut vals: Vec<Box<dyn ToSql>> = Vec::new();
     if filter.library_id.is_some() {
         sql.push_str(" JOIN videos v ON v.film_id = f.id");
@@ -173,7 +179,10 @@ pub fn list_films(db: &Db, limit: i64, filter: FilmsFilter) -> DbResult<Vec<Film
 
 pub fn count_films(db: &Db, filter: FilmsFilter) -> DbResult<i64> {
     let mut sql = String::from("SELECT COUNT(DISTINCT f.id) FROM films f");
-    let mut clauses: Vec<String> = Vec::new();
+    // Mirror `list_films`: count only films with a playable main copy so the
+    // count matches what the list query returns.
+    let mut clauses: Vec<String> =
+        vec!["EXISTS (SELECT 1 FROM videos vm WHERE vm.film_id = f.id AND vm.role = 'main')".into()];
     let mut vals: Vec<Box<dyn ToSql>> = Vec::new();
     if filter.library_id.is_some() {
         sql.push_str(" JOIN videos v ON v.film_id = f.id");
@@ -366,15 +375,37 @@ mod tests {
     #[test]
     fn list_films_orders_by_title_then_year() {
         let db = fresh_db();
+        seed_library(&db, "lib1");
+        seed_video(&db, "lib1", "va");
+        seed_video(&db, "lib1", "vb");
         let mut a = fixture_film("a", None, Some("alpha|2020"), "Alpha");
         a.year = Some(2020);
         let mut b = fixture_film("b", None, Some("beta|2019"), "Beta");
         b.year = Some(2019);
         upsert_film(&db, &a).expect("a");
         upsert_film(&db, &b).expect("b");
+        // list_films only surfaces films with a linked main copy.
+        assign_video_to_film(&db, "va", "a", "main").expect("assign a");
+        assign_video_to_film(&db, "vb", "b", "main").expect("assign b");
         let films = list_films(&db, 10, FilmsFilter::default()).expect("list");
         let titles: Vec<&str> = films.iter().map(|f| f.title.as_str()).collect();
         assert_eq!(titles, vec!["Alpha", "Beta"]);
+    }
+
+    #[test]
+    fn list_films_excludes_films_without_a_main_copy() {
+        let db = fresh_db();
+        seed_library(&db, "lib1");
+        seed_video(&db, "lib1", "v1");
+        // A film with a main copy is listed…
+        upsert_film(&db, &fixture_film("linked", None, Some("linked|2020"), "Linked")).expect("u");
+        assign_video_to_film(&db, "v1", "linked", "main").expect("assign");
+        // …an orphaned film (no main copy linked) is not.
+        upsert_film(&db, &fixture_film("orphan", None, Some("orphan|2020"), "Orphan")).expect("u");
+        let films = list_films(&db, 10, FilmsFilter::default()).expect("list");
+        let titles: Vec<&str> = films.iter().map(|f| f.title.as_str()).collect();
+        assert_eq!(titles, vec!["Linked"]);
+        assert_eq!(count_films(&db, FilmsFilter::default()).expect("count"), 1);
     }
 
     #[test]

@@ -102,7 +102,15 @@ export const HomeFilmsSection: FC<HomeFilmsSectionProps> = ({ films, tvShowsRow 
   const [params, setParams] = useSearchParams();
 
   const rows = useMemo<FilterRow[]>(
-    () => (data?.edges ?? []).map((edge) => toFilterRowFromFilm(edge.node)),
+    () =>
+      (data?.edges ?? [])
+        // Defensive: a Film whose `bestCopy` is absent — off-disk, or a server
+        // partial-data response where `best_copy` errored — can't render a tile,
+        // and `toFilterRowFromFilm` would dereference it and crash the whole page.
+        // The films query already excludes unlinked films; this guards the
+        // off-disk / partial-response edge so one bad film never white-screens home.
+        .filter((edge) => edge.node.bestCopy != null)
+        .map((edge) => toFilterRowFromFilm(edge.node)),
     [data]
   );
 
