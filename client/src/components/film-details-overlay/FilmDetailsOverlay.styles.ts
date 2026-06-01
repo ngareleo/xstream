@@ -423,7 +423,10 @@ export const useFilmDetailsOverlayStyles = makeStyles({
   // many copies.
   copiesRail: {
     position: "absolute",
-    top: "120px",
+    // Bottom-anchored to line up with the title/content block on the left
+    // (both sit at bottom:72px); grows upward, capped so it clears the
+    // top-right action cluster.
+    bottom: "72px",
     right: "60px",
     width: "380px",
     maxHeight: "calc(100% - 192px)",
