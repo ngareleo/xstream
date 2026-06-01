@@ -35,6 +35,15 @@ Entry shape (the entry ends with a single line containing exactly three hyphens 
 
 <!-- ENTRIES BELOW — newest first; each ends with a bare three-hyphen divider line. -->
 
+## 2026-06-01 — localStorage convention documentation — centralizing storage key ownership and access
+
+Code-review feedback on the `fix/seven-bugs-auth-profiles-detail` PR identified a new client-side local persistence pattern established by the reviewed code: `client/src/services/localStore.ts` is now the single owner of app-owned `localStorage` keys and the safe read/write interface. The module exports `LocalStorageKey` (a const map of static keys like `PaneWidth` and `ProfilesLastFilm`) and two helpers (`readLocal`, `writeLocal`) that are try/catch-guarded against quota and private-browsing errors. This centralizes what used to be scattered direct `localStorage` access and file-local helper pairs (e.g. `featureFlags.ts` had its own `lsGet/lsSet/lsRemove` wrappers). The constraint captured: any new local persistence adds its key to `LocalStorageKey` and routes through the helpers; foreign/SDK-owned stores (Supabase's `sb-*-auth-token` keys) stay outside the pattern since they're not app-keyed values. Convention documented in Client-Conventions § "Local persistence (localStorage)" with a cross-reference to the service module and a non-example (Supabase auth). This unblocks future agents to know the single home for all storage keys and the only way to touch `localStorage` in new code.
+
+**Files:** `docs/code-style/Client-Conventions/00-Patterns.md`
+**Related Commit.md entry:** `972b597 (localStorage pattern documentation)`
+
+---
+
 ## 2026-06-01 — Curator refinement: profile-availability cadence, probe-on-subscribe, logging downgrade
 
 Three code refinements to the profile-availability subsystem required doc updates: the probe loop cadence was set to 2.5 seconds (tighter responsiveness for the Profiles status pill), the `profileAvailabilityUpdated` subscription now spawns a one-shot probe on subscribe so opening the page reflects current truth immediately rather than waiting for the next cycle, and the per-cycle `library.availability_probe` span was removed as a performance optimization (one less exported span every 2.5s) while the per-cycle logs for scan progress (library.scan started, scan_complete, etc.) were downgraded from info to debug level to reduce noise in production — error-level and transition-only logs (offline warn, online-recovery info) remain unchanged and no signal was swallowed. Updated `04-Profile-Availability.md` to reflect the new cadence and subscribe-time probe; removed the `library.availability_probe` span row from `Observability/server/00-Spans.md` since the span no longer exists (the `library.scan` span itself remains unchanged).

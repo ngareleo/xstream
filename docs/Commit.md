@@ -15,6 +15,13 @@ Entry shape (each entry ends with the divider line described above):
 
 <!-- ENTRIES BELOW — newest first; each ends with a bare `---` line. The architect's next invocation will treat the no-entries state as the first-run case and prepend a bootstrap entry at HEAD. -->
 
+## 972b597 — 2026-06-01 (localStorage pattern documentation)
+
+**Files:** `docs/code-style/Client-Conventions/00-Patterns.md`
+**Why:** Documented client localStorage convention post-code-review: new module `services/localStore.ts` owns all app-owned storage keys + safe read/write interface.
+
+---
+
 ## 972b597 — 2026-06-01 (refined docs)
 
 **Files:** `docs/architecture/Library-Scan/04-Profile-Availability.md`, `docs/architecture/Observability/server/00-Spans.md`
