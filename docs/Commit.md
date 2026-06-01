@@ -15,6 +15,13 @@ Entry shape (each entry ends with the divider line described above):
 
 <!-- ENTRIES BELOW — newest first; each ends with a bare `---` line. The architect's next invocation will treat the no-entries state as the first-run case and prepend a bootstrap entry at HEAD. -->
 
+## 972b597 — 2026-06-01 (wipe guard + Reservation leak recording)
+
+**Files:** `docs/client/Components/DangerTab.md`, `docs/architecture/Streaming/06-FfmpegPool.md`, `docs/todo.md`
+**Why:** Bug fix + tech-debt recording from PR `fix/seven-bugs-auth-profiles-detail`. (1) Wipe-database guard was gated on `job_store.is_empty()`, which is a cache that retains completed transcodes for reuse — so finished playbacks left permanent entries until server restart, blocking wipes. Fix: guard now checks `!ctx.pool.has_active_jobs()` (actual running/dying ffmpeg processes) and wipe calls `ctx.job_store.clear()` to delete cached entries alongside DB rows. DangerTab spec updated with this detail. FfmpegPool docs added `has_active_jobs()` method signature and clarified the distinction. (2) Latent Reservation leak: `try_reserve_slot` inserts job id into `inflight`, but `release()` does NOT remove it (no Drop impl); only `run_to_completion` and `kill_job` clear it. Cache-restore path leaks entries, causing `inflight_count` to drift upward and `has_inflight_or_live(id)` false-positives over time. No user-visible breakage yet (wipe guard avoids it, cache-hits return early), but it's a real accounting leak. Recorded as POOL-001 tech-debt in todo.md with suggested RAII fix.
+
+---
+
 ## 972b597 — 2026-06-01 (poster fallback size upgrade)
 
 **Files:** `docs/architecture/Library-Scan/05-Poster-Caching.md`, `docs/server/GraphQL-Schema/00-Surface.md`

@@ -123,6 +123,7 @@ The older fields (`cap.active_jobs_json`, `cap.inflight_ids_json`, `cap.requeste
 impl FfmpegPool {
     pub fn try_reserve_slot(&self, job_id: String) -> Option<Reservation>;
     pub fn has_inflight_or_live(&self, id: &str) -> bool;
+    pub fn has_active_jobs(&self) -> bool;       // true if live.is_empty() is false
     pub fn snapshot_cap(&self) -> CapSnapshot;
     pub fn cap_limit(&self) -> usize;            // TranscodeConfig::max_concurrent_jobs
     pub fn capacity_retry_hint_ms(&self) -> u64; // TranscodeConfig::capacity_retry_hint_ms
@@ -133,6 +134,8 @@ impl FfmpegPool {
 ```
 
 The pool exports no module-private timing constants; all tunables come from `TranscodeConfig` on `AppContext` so callers and tests can read them through one source of truth.
+
+**`has_active_jobs()`** is used by the wipe-database gate to distinguish "no jobs running" (`!has_active_jobs()`) from "job store is empty" (`job_store.is_empty()`). The cache may still hold completed transcodes for reuse by the chunker, so an empty job store does not guarantee all ffmpeg processes have exited — only an empty `live` set does.
 
 ## Exported types
 

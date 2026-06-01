@@ -18,7 +18,7 @@ Four GraphQL mutations, all `Boolean!` returning (always true on success):
 3. **`wipeSegmentCache`** — Delete all transcoded segment files. In-flight transcode jobs will have their output deleted, breaking playback mid-stream.
 4. **`wipeAll`** — Kill all in-flight jobs, then call the above three in sequence. Atomic from the user perspective.
 
-All mutations gate on `job_store.is_empty()` and `scan_state.is_scanning()` — they fail server-side if jobs are running or a library scan is in progress.
+All mutations gate on `!ctx.pool.has_active_jobs()` and `scan_state.is_scanning()` — they fail server-side if jobs are running or a library scan is in progress. **Note:** The guard checks `FfmpegPool::has_active_jobs()` (actual running/dying processes), not `job_store.is_empty()`, because the job store is a cache that also retains **completed** transcodes for reuse by the chunker. A finished playback previously left a permanent entry until server restart. The wipe mutation also calls `ctx.job_store.clear()` to delete the cache since it removes the `transcode_jobs` and `segments` rows the cache mirrors.
 
 ## Layout & styles
 
