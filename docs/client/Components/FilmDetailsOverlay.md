@@ -113,7 +113,11 @@ The seasons-rail branch in this overlay is **deprecated**. TV-show overlays now 
 ##### "Open in Profile" button
 
 - Rendered after the variant selector (and before Play CTA).
-- Mono 12px, `letterSpacing: 0.12em`, uppercase.
+- **Secondary CTA** (`.secondaryCta`) — restrained mono text-link with a folder icon.
+  - `<IconFolder>` (12×12) + `<span>"Open in Profile"</span>` (Mono 11px, uppercase, underlined).
+  - At rest: text `rgba(255,255,255,0.75)`, icon `rgba(255,255,255,0.55)`, underline `rgba(255,255,255,0.25)`.
+  - Hover: text `#fff`, icon `colorGreen`, underline `colorGreen`.
+  - No background or border; transparent background, inline-flex layout with 8px gap.
 - Click: `navigate("/profiles?film=${film.bestCopy.id}")` — opens the Profiles page with the detail pane pre-selected on this film. The Profiles page restores last-opened state from localStorage, so it lands on the correct film.
 
 ##### Play CTA (glass pill)
