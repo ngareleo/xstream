@@ -16,7 +16,7 @@ last_seen_at  TEXT;   -- ISO-8601 of the most recent probe
 
 ## Probe loop
 
-`services::profile_availability::spawn_periodic_availability` ticks every `scan.availability_interval_ms` (defaults to `scan.interval_ms`, which is 30 s). Each tick:
+`services::profile_availability::spawn_periodic_availability` ticks every `scan.availability_interval_ms` (defaults to 2.5 s). Each tick:
 
 1. Read every library row.
 2. For each, `std::fs::metadata(path)` — if it succeeds and is a directory, status is `online`; otherwise `offline`.
@@ -56,7 +56,7 @@ extend type Subscription {
 
 `Library.status` is part of the read (query) surface — every consumer that lists libraries (`profiles`, `Show.profiles`, `Library` node lookup) sees current reachability without a separate query.
 
-`profileAvailabilityUpdated` is the **push** surface: the subscription seeds one frame per library from the current DB status on connect, then streams further frames on every status flip. Clients can hold a `statusByLibrary: Map<string, ProfileAvailability>` and update only the affected row. The `libraryId` field is **globally encoded** (`to_global_id("Library", …)`) so it matches the `id` on `Library` objects returned from queries; matching against a raw integer would silently always miss.
+`profileAvailabilityUpdated` is the **push** surface: the subscription seeds one frame per library from the current DB status on connect, then streams further frames on every status flip. When a client subscribes, a one-shot `probe_once` fires synchronously (after subscription setup), ensuring the Profiles page reflects current truth immediately rather than waiting for the next periodic probe cycle; any status flips detected by this probe arrive on the live stream. The DB seed covers the common no-change case. Clients can hold a `statusByLibrary: Map<string, ProfileAvailability>` and update only the affected row. The `libraryId` field is **globally encoded** (`to_global_id("Library", …)`) so it matches the `id` on `Library` objects returned from queries; matching against a raw integer would silently always miss.
 
 **Implementation:** `server-rust/src/services/availability_state.rs` (`AvailabilityState`) + `server-rust/src/graphql/subscription.rs` (`profileAvailabilityUpdated`). The `ProfileAvailability` GraphQL type lives in `server-rust/src/graphql/types/misc.rs`.
 

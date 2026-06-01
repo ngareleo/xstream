@@ -15,6 +15,13 @@ Entry shape (each entry ends with the divider line described above):
 
 <!-- ENTRIES BELOW — newest first; each ends with a bare `---` line. The architect's next invocation will treat the no-entries state as the first-run case and prepend a bootstrap entry at HEAD. -->
 
+## 972b597 — 2026-06-01 (refined docs)
+
+**Files:** `docs/architecture/Library-Scan/04-Profile-Availability.md`, `docs/architecture/Observability/server/00-Spans.md`
+**Why:** Curator refinement for PR `fix/seven-bugs-auth-profiles-detail`: reconcile docs with three code changes — probe cadence now 2.5s (not 30s), probe-on-subscribe behavior added, per-cycle `library.availability_probe` span removed (logging downgraded to debug).
+
+---
+
 ## 972b597 — 2026-06-01
 
 **Files:** `docs/architecture/Identity/02-Session-And-Refresh.md`, `docs/architecture/Deployment/06-Supabase-Project-Setup.md`, `docs/architecture/Library-Scan/04-Profile-Availability.md`, `docs/architecture/Library-Scan/02-Film-Entity.md`, `docs/server/GraphQL-Schema/00-Surface.md`, `docs/client/Components/ProfileRow.md`, `docs/client/Components/ProfilesExplorer.md`, `docs/client/Components/Profiles.md`, `docs/client/Components/DetailPane.md`, `docs/client/Components/FilmDetailsOverlay.md`, `docs/client/Components/HomeFilmsSection.md`, `docs/client/Components/AppShell.md`, `docs/client/Components/Toast.md` (new), `docs/client/Components/README.md`, `docs/code-style/Client-Conventions/02-Nova-Eventing.md`, `docs/INDEX.md`
