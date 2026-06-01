@@ -101,14 +101,27 @@ async function exchangeForLocalSession(supabaseAccessToken: string): Promise<boo
   }
 }
 
-/** Restore identity from the local session token (validated offline). Resolves
- *  `true` when a valid, unexpired session is present. See
- *  docs/architecture/Identity/02-Session-And-Refresh.md. */
+/** Restore identity on boot. Prefers the local session token (validated
+ *  offline). Falls back to minting one from a still-live Supabase session —
+ *  this seamlessly migrates a user who was signed in before the local-session
+ *  model existed, and requires connectivity. Resolves `true` when signed in.
+ *  See docs/architecture/Identity/02-Session-And-Refresh.md. */
 export async function restoreSession(): Promise<boolean> {
   const claims = validLocalClaims();
-  if (!claims) return false;
-  setUserContext(claims.sub, claims.email);
-  return true;
+  if (claims) {
+    setUserContext(claims.sub, claims.email);
+    return true;
+  }
+  // No (valid) local token. If Supabase still holds a session, exchange it for
+  // one now — covers first boot after upgrading and the just-signed-up case.
+  try {
+    const { data } = await getSupabase().auth.getSession();
+    const accessToken = data.session?.access_token;
+    if (accessToken) return await exchangeForLocalSession(accessToken);
+  } catch (err) {
+    log().warn("restoreSession: Supabase fallback failed", { error: errorMessage(err) });
+  }
+  return false;
 }
 
 /** The Bearer token attached to every server request — the local session. */
