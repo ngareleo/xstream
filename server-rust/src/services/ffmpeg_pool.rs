@@ -146,6 +146,15 @@ impl FfmpegPool {
         self.inner.config.max_concurrent_jobs
     }
 
+    /// True when an ffmpeg process is running (or being killed). This is the
+    /// real "is a transcode active" signal — unlike the job_store, which also
+    /// caches *completed* jobs for reuse. Tracks `live` only: the brief
+    /// inflight reservation window has no process yet, and isn't reliably
+    /// cleared on the cache-restore `Reservation::release` path.
+    pub fn has_active_jobs(&self) -> bool {
+        !self.inner.live.is_empty()
+    }
+
     pub fn capacity_retry_hint_ms(&self) -> u64 {
         self.inner.config.capacity_retry_hint_ms
     }
@@ -461,6 +470,17 @@ mod tests {
         let _r = pool.try_reserve_slot("a".into()).expect("slot");
         assert!(pool.has_inflight_or_live("a"));
         assert!(!pool.has_inflight_or_live("b"));
+    }
+
+    #[test]
+    fn has_active_jobs_is_false_when_no_process_is_live() {
+        // The wipe guard relies on this: an idle pool reports no active jobs
+        // even though the job_store may still cache completed transcodes, and
+        // a bare reservation (no spawned process) does not count as active.
+        let pool = FfmpegPool::new(cfg(2));
+        assert!(!pool.has_active_jobs());
+        let _r = pool.try_reserve_slot("a".into()).expect("slot");
+        assert!(!pool.has_active_jobs());
     }
 
     #[test]
