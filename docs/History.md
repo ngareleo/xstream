@@ -35,6 +35,15 @@ Entry shape (the entry ends with a single line containing exactly three hyphens 
 
 <!-- ENTRIES BELOW — newest first; each ends with a bare three-hyphen divider line. -->
 
+## 2026-06-01 — VideoArea backdrop latch — one-directional state prevents poster flash during stalls and seeks
+
+PR `fix/seven-bugs-auth-profiles-detail` fixed a flashing-poster UX regression by replacing a playback-status check with a one-directional `hasPlayed` latch. Previously, the backdrop poster was unmounted whenever `playStatus !== "playing"`, but the status legitimately drops back to "loading" during mid-playback stalls (when `stallTracker` fires) and user seeks (when the player seeks the video). This caused the backdrop to flash back behind the letterboxed video on every stall/seek, breaking the "poster is pre-playback only" affordance. The fix latches a `hasPlayed` boolean — set true on the first "playing" transition via the `onStatusChange` callback — and renders the poster only when `!hasPlayed`. Once set, the latch never resets during the session, keeping the poster hidden through any number of stalls and seeks. The latch only clears when VideoArea remounts (route change) or is destroyed, so multi-episode TV series playback keeps the poster hidden across episode switches (same VideoArea instance stays mounted). This is a load-bearing invariant: removing the latch or forgetting it during refactors silently reintroduces the poster-flashing bug with no console warning. The spec was updated to articulate the latch, its one-directionality, and the remount-only reset behavior so future edits preserve it.
+
+**Files:** `docs/client/Components/VideoArea.md`
+**Related Commit.md entry:** `972b597 (VideoArea backdrop latch invariant)`
+
+---
+
 ## 2026-06-01 — FilmDetailsOverlay key invariant documentation — remount pattern prevents stale state on suggestion click
 
 PR `fix/seven-bugs-auth-profiles-detail` added `key={filmId}` to the `<FilmDetailsOverlay>` render in HomeFilmsSection to fix a subtle state-reuse bug. When a user clicked a "You might also like" suggestion, the URL param changed (`?film=<newId>`), but React reused the same overlay DOM instance instead of remounting it. The local state (`selectedCopyId`, seeded on mount by `useState(data.id)`) remained pointing at the *previous* film's ID, so the Play button navigated to the wrong movie. The key forces a fresh remount when `filmId` changes, resetting all per-film UI state to initial values tied to the new film. The pattern is a load-bearing invariant — removing it (or forgetting it during refactors) silently reintroduces the bug with no console warning. Specs updated in both HomeFilmsSection and FilmDetailsOverlay to articulate the pattern, its purpose, and why it matters. This is one of the "React key prevents stale state" class of bugs that's easy to miss during code review if not explicitly documented.

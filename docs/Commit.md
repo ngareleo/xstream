@@ -15,6 +15,13 @@ Entry shape (each entry ends with the divider line described above):
 
 <!-- ENTRIES BELOW — newest first; each ends with a bare `---` line. The architect's next invocation will treat the no-entries state as the first-run case and prepend a bootstrap entry at HEAD. -->
 
+## 972b597 — 2026-06-01 (VideoArea backdrop latch invariant)
+
+**Files:** `docs/client/Components/VideoArea.md`
+**Why:** Spec update for PR `fix/seven-bugs-auth-profiles-detail`: documented the `hasPlayed` state latch that prevents the backdrop poster from reappearing during mid-playback stalls/seeks. The latch is one-directional (set on first "playing" transition, never resets downward) and only clears on VideoArea remount or route change. Critical invariant for maintaining stable UX across episode chains and playback interruptions.
+
+---
+
 ## 972b597 — 2026-06-01 (FilmDetailsOverlay key + remount invariant)
 
 **Files:** `docs/client/Components/FilmDetailsOverlay.md`, `docs/client/Components/HomeFilmsSection.md`
